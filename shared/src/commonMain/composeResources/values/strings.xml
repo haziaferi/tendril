@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Workbench UI port (Milestone 3, tendril-windows-spec.md §6 step 3) — only the strings the
+         moved nav shell / Pages / PageDetail / PageDatabase screens actually reference. Every
+         other app string (Settings, Calendar, Tasks & Habits, notifications, widgets) stays in
+         `Tendril android/app`'s own strings.xml, since those screens aren't ported yet. -->
+    <string name="nav_pages">Pages</string>
+    <string name="nav_calendar">Calendar</string>
+    <string name="nav_tasks_habits">Tasks</string>
+    <string name="nav_road_map">Road Map</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="empty_pages_message">No pages yet</string>
+    <string name="empty_pages_cta">New page</string>
+    <string name="empty_trash_message">Trash is empty</string>
+</resources>

@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Noema — navigation layout options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=Spectral:wght@400;500;600&family=Cormorant:wght@300;400;500&family=DM+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --radius:4px;
+  --space:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+button,input{font:inherit;color:inherit;border:none;background:none;cursor:pointer;-webkit-appearance:none;appearance:none;}
+input{cursor:text;}
+html,body{height:100%;}
+body{
+  background:#e8e6df;
+  font-family:'DM Sans',sans-serif;
+  color:#1b1b18;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:28px 12px 60px;
+  min-height:100vh;
+}
+
+/* ---------- page chrome (outside the phone) ---------- */
+.lab-header{max-width:900px;width:100%;text-align:center;margin-bottom:22px;}
+.lab-header .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8a887f;font-weight:500;}
+.lab-header h1{font-family:'Syne',sans-serif;font-size:26px;font-weight:600;margin-top:6px;color:#1b1b18;}
+.lab-header p{font-size:13.5px;color:#6b6a63;margin-top:6px;max-width:560px;margin-left:auto;margin-right:auto;line-height:1.5;}
+
+.switcher{
+  display:flex;
+  gap:6px;
+  background:#dedbd2;
+  padding:5px;
+  border-radius:12px;
+  margin-bottom:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+  max-width:640px;
+}
+.switcher button{
+  appearance:none;border:none;background:transparent;cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
+  padding:9px 16px;border-radius:8px;color:#6b6a63;
+  transition:background .15s ease, color .15s ease;
+  white-space:nowrap;
+}
+.switcher button.active{background:#1b1b18;color:#fff;}
+.switcher button:not(.active):hover{background:#cfccc1;color:#1b1b18;}
+
+.variant-caption{
+  font-size:12.5px;color:#7a786f;text-align:center;max-width:420px;margin-bottom:22px;line-height:1.5;
+  min-height:32px;
+}
+.variant-caption b{color:#1b1b18;font-weight:500;}
+
+/* ---------- phone frame ---------- */
+.phone-wrap{position:relative;}
+.phone{
+  width:375px;height:812px;
+  border-radius:46px;
+  background:#000;
+  padding:12px;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.12);
+  position:relative;
+}
+.phone-inner{
+  width:100%;height:100%;
+  border-radius:36px;
+  overflow:hidden;
+  position:relative;
+  background:var(--bg);
+  display:flex;
+  flex-direction:column;
+}
+.notch{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  width:120px;height:26px;background:#000;border-radius:14px;z-index:50;
+}
+
+.statusbar{
+  height:46px;flex:0 0 46px;
+  display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 26px 6px;
+  font-size:13px;font-weight:500;color:var(--text);
+  font-family:'DM Sans',sans-serif;
+}
+.statusbar .icons{display:flex;gap:5px;align-items:center;color:var(--text);}
+
+.screen{
+  flex:1 1 auto;
+  position:relative;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.page-scroll{
+  flex:1 1 auto;
+  overflow-y:auto;
+  overflow-x:hidden;
+  position:relative;
+  -ms-overflow-style:none;
+  scrollbar-width:none;
+}
+.page-scroll::-webkit-scrollbar{display:none;}
+
+.gesture-home{
+  flex:0 0 22px;display:flex;align-items:center;justify-content:center;background:var(--bg);
+}
+.gesture-home::after{content:'';width:120px;height:4px;border-radius:3px;background:var(--text);opacity:.35;}
+
+/* ---------- in-app navigation chrome ---------- */
+.app-nav.persistent{flex:0 0 auto;width:100%;}
+.app-nav.floating{position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;pointer-events:none;z-index:30;}
+.app-nav.floating > *{pointer-events:auto;}
+
+/* workbench: persistent bottom tab bar */
+.nav-tabs{display:flex;border-top:1px solid var(--border);background:var(--surface);width:100%;}
+.nav-tabs .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 0 8px;color:var(--text-faint);font-size:10.5px;}
+.tab-ic{display:flex;align-items:center;justify-content:center;padding:3px 12px;border-radius:9px;}
+.tab-ic svg{width:20px;height:20px;display:block;}
+.nav-tabs .tab.active{color:var(--accent-strong);}
+.nav-tabs .tab.active .tab-ic{background:var(--accent-soft);}
+
+/* ledger: slimmer, quieter persistent bar */
+.nav-ledger{display:flex;border-top:1px solid var(--border);background:var(--surface);width:100%;padding-top:2px;}
+.nav-ledger .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 0 9px;color:var(--text-faint);font-size:9.5px;position:relative;}
+.nav-ledger .tab-ic svg{width:18px;height:18px;}
+.nav-ledger .tab.active{color:var(--text);}
+.nav-ledger .tab.active::after{content:'';position:absolute;bottom:0;left:38%;right:38%;height:2px;background:var(--accent);border-radius:2px;}
+
+/* deck: floating capsule dock */
+.dock{display:flex;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:6px;box-shadow:0 12px 26px -8px rgba(0,0,0,.55);}
+.dot{width:34px;height:34px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);}
+.dot svg{width:17px;height:17px;}
+.dot.active{background:var(--accent-strong);color:var(--on-accent);}
+
+/* atelier: thin hairline + ticks, edge swipe hints */
+.nav-hairline{display:flex;justify-content:center;}
+.hairline-track{display:flex;align-items:center;gap:13px;background:var(--surface);padding:10px 18px;border-radius:20px;border:1px solid var(--border);box-shadow:0 10px 24px -10px rgba(0,0,0,.25);}
+.tick{width:6px;height:6px;border-radius:50%;background:var(--text-faint);opacity:.5;}
+.tick.active{background:var(--accent);opacity:1;width:16px;border-radius:3px;}
+.edge-nav{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;color:var(--text-faint);opacity:.45;display:flex;align-items:center;justify-content:center;z-index:25;}
+.edge-nav svg{width:16px;height:16px;}
+.edge-nav.left{left:0;}
+.edge-nav.right{right:0;}
+
+.phone-inner[data-variant="workbench"]{
+  --radius:4px;--card-radius:6px;--font-mono:'JetBrains Mono',monospace;--unit:8px;
+  --font-display:'DM Sans',sans-serif;--font-body:'DM Sans',sans-serif;
+}
+/* workbench colour themes: 4 hues x light/dark, fully independent of typography */
+.phone-inner[data-variant="workbench"][data-color="ink"][data-mode="light"]{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface-2:#F1F0EC;--surface-3:#E8E6DE;
+  --text:#1B1B18;--text-dim:#6B6A63;--text-faint:#9C9A91;
+  --accent:#4A5568;--accent-strong:#333D4D;--on-accent:#FFFFFF;--accent-soft:#E7EAEE;--accent-soft-text:#3D4759;
+  --border:#E4E2DA;
+}
+.phone-inner[data-variant="workbench"][data-color="ink"][data-mode="dark"]{
+  --bg:#121316;--surface:#1B1D21;--surface-2:#24262B;--surface-3:#2D3036;
+  --text:#EDEDEF;--text-dim:#9B9DA3;--text-faint:#6A6C72;
+  --accent:#8792A6;--accent-strong:#A9B3C4;--on-accent:#12131A;--accent-soft:#262A33;--accent-soft-text:#9BAAC2;
+  --border:#2A2D33;
+}
+.phone-inner[data-variant="workbench"][data-color="clay"][data-mode="light"]{
+  --bg:#FAF6EF;--surface:#FFFFFF;--surface-2:#F1E9DC;--surface-3:#E8DDC9;
+  --text:#2A2320;--text-dim:#7A6B5C;--text-faint:#B0A08D;
+  --accent:#A87249;--accent-strong:#8A5D3B;--on-accent:#FFFFFF;--accent-soft:#F3E4D3;--accent-soft-text:#7A4E2E;
+  --border:#EBDFCC;
+}
+.phone-inner[data-variant="workbench"][data-color="clay"][data-mode="dark"]{
+  --bg:#1A1512;--surface:#221C18;--surface-2:#2B241F;--surface-3:#342C25;
+  --text:#F2EAE1;--text-dim:#B0A190;--text-faint:#776A5A;
+  --accent:#D4A57C;--accent-strong:#E8C39D;--on-accent:#1A1310;--accent-soft:#33281F;--accent-soft-text:#E0B98E;
+  --border:#362E27;
+}
+.phone-inner[data-variant="workbench"][data-color="moss"][data-mode="light"]{
+  --bg:#F8FAF7;--surface:#FFFFFF;--surface-2:#EBF0E9;--surface-3:#DEE7DC;
+  --text:#1E241F;--text-dim:#5E6B5F;--text-faint:#96A392;
+  --accent:#6E8C70;--accent-strong:#48624A;--on-accent:#FFFFFF;--accent-soft:#E4ECE3;--accent-soft-text:#3C5240;
+  --border:#E2E9E0;
+}
+.phone-inner[data-variant="workbench"][data-color="moss"][data-mode="dark"]{
+  --bg:#141813;--surface:#1C211B;--surface-2:#232A22;--surface-3:#2C332A;
+  --text:#E9EFE7;--text-dim:#9DAA9A;--text-faint:#6B766A;
+  --accent:#93AC93;--accent-strong:#B3C7B1;--on-accent:#131A13;--accent-soft:#253026;--accent-soft-text:#A9C2A8;
+  --border:#2A322A;
+}
+.phone-inner[data-variant="workbench"][data-color="mauve"][data-mode="light"]{
+  --bg:#FAF6F8;--surface:#FFFFFF;--surface-2:#F1E7EC;--surface-3:#E8D9E1;
+  --text:#241E22;--text-dim:#7A6B72;--text-faint:#B09CA7;
+  --accent:#A9708D;--accent-strong:#7D4D64;--on-accent:#FFFFFF;--accent-soft:#F0DEE6;--accent-soft-text:#7A4A5E;
+  --border:#EBD9E1;
+}
+.phone-inner[data-variant="workbench"][data-color="mauve"][data-mode="dark"]{
+  --bg:#18131A;--surface:#211A23;--surface-2:#29212C;--surface-3:#322933;
+  --text:#F0E6EB;--text-dim:#AC9AA5;--text-faint:#77636D;
+  --accent:#CC93AC;--accent-strong:#E0AFC4;--on-accent:#18121A;--accent-soft:#322730;--accent-soft-text:#DBA9BE;
+  --border:#362B38;
+}
+/* workbench typography: one serif, one sans, independent of colour */
+.phone-inner[data-variant="workbench"][data-font="sans"]{
+  --font-display:'DM Sans',sans-serif;--font-body:'DM Sans',sans-serif;
+}
+.phone-inner[data-variant="workbench"][data-font="serif"]{
+  --font-display:'Source Serif 4',serif;--font-body:'Source Serif 4',serif;
+}
+.phone-inner[data-variant="ledger"]{
+  --bg:#F6F1E9;--surface:#FFFFFF;--surface-2:#EDE6D8;--surface-3:#E4DAC5;
+  --text:#24201A;--text-dim:#75695A;--text-faint:#A69C8C;
+  --accent:#8B7355;--accent-strong:#6B5940;--on-accent:#FFFFFF;--accent-soft:#EFE6D4;--accent-soft-text:#5E4C34;
+  --border:#E2D8C6;--radius:2px;--card-radius:2px;
+  --font-display:'Spectral',serif;--font-body:'DM Sans',sans-serif;--font-mono:'JetBrains Mono',monospace;
+  --unit:8px;
+}
+.phone-inner[data-variant="deck"]{
+  --bg:#121214;--surface:#1B1B1E;--surface-2:#232327;--surface-3:#2B2B30;
+  --text:#EDEDEA;--text-dim:#9B9B96;--text-faint:#68686A;
+  --accent:#8CA0BE;--accent-strong:#AAC0DD;--on-accent:#12161B;--accent-soft:#1F262E;--accent-soft-text:#9FB4CE;
+  --border:#2A2A2E;--radius:2px;--card-radius:3px;
+  --font-display:'Syne',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'JetBrains Mono',monospace;
+  --unit:7px;
+}
+.phone-inner[data-variant="atelier"]{
+  --bg:#FCFCFA;--surface:#FFFFFF;--surface-2:#F5F4F0;--surface-3:#EDECE6;
+  --text:#242420;--text-dim:#6E6E64;--text-faint:#A5A499;
+  --accent:#8FA593;--accent-strong:#4F6558;--on-accent:#FFFFFF;--accent-soft:#EDF1EC;--accent-soft-text:#3E5245;
+  --border:#EAE9E3;--radius:4px;--card-radius:4px;
+  --font-display:'Cormorant',serif;--font-body:'DM Sans',sans-serif;--font-mono:'JetBrains Mono',monospace;
+  --unit:10px;
+}
+
+/* ---------- icon helper ---------- */
+.icn{width:1em;height:1em;display:inline-block;vertical-align:-0.15em;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+
+footer.lab-footer{max-width:640px;text-align:center;margin-top:24px;font-size:12px;color:#8a887f;line-height:1.6;}
+
+/* ===== typography helpers ===== */
+.serif{font-family:var(--font-display);}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+.ok{color:var(--accent-strong);}
+
+/* ===== topbar ===== */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px var(--unit) 10px calc(var(--unit) * 2.2);gap:8px;position:sticky;top:0;background:var(--bg);z-index:5;}
+.tb-left{display:flex;align-items:center;gap:8px;}
+.tb-title{font-family:var(--font-display);font-size:19px;font-weight:600;color:var(--text);}
+.tb-title.serif{font-weight:500;font-size:20px;}
+.tb-title.mono{font-size:15px;letter-spacing:.02em;}
+.tb-actions{display:flex;align-items:center;gap:2px;padding-right:calc(var(--unit) * 1.2);}
+.tb-spacer{flex:1;}
+.tb-sync-dot,.sync-badge{color:var(--accent);display:inline-flex;}
+.tb-sync-dot svg,.sync-badge svg{width:15px;height:15px;}
+.tb-sync-text{font-size:11px;color:var(--text-faint);padding-right:calc(var(--unit) * 1.2);}
+.tb-stats{font-size:11px;color:var(--text-dim);}
+.crumb{font-family:var(--font-display);font-size:15px;color:var(--accent-strong);font-weight:500;}
+.icon-btn{width:34px;height:34px;border-radius:50%;border:none;background:none;color:var(--text-dim);display:inline-flex;align-items:center;justify-content:center;}
+.icon-btn svg{width:19px;height:19px;}
+.icon-btn:active{background:var(--surface-2);}
+
+/* ===== chips / segments ===== */
+.chip-row{display:flex;gap:6px;padding:2px calc(var(--unit) * 2.2) 12px;}
+.chip{border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-size:12.5px;font-family:var(--font-body);padding:6px 13px;border-radius:14px;}
+.chip.active{background:var(--text);color:var(--bg);border-color:var(--text);}
+
+.seg-row{display:flex;background:var(--surface-2);border-radius:10px;padding:3px;margin:2px calc(var(--unit) * 2.2) 14px;}
+.seg{flex:1;border:none;background:none;padding:8px 0;font-size:12.5px;font-family:var(--font-body);color:var(--text-dim);border-radius:8px;}
+.seg.active{background:var(--surface);color:var(--text);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.06);}
+.seg-row.ledger{background:none;border-bottom:1px solid var(--border);border-radius:0;padding:0 calc(var(--unit) * 2.2) 0;margin-bottom:14px;}
+.seg-row.ledger .seg{border-radius:0;padding:9px 0;border-bottom:2px solid transparent;}
+.seg-row.ledger .seg.active{background:none;border-bottom:2px solid var(--accent);color:var(--text);}
+.seg-row.deck{background:var(--surface);border:1px solid var(--border);}
+.seg-row.deck .seg{font-family:var(--font-mono);font-size:11.5px;}
+.seg-row.deck .seg.active{background:var(--accent-soft);color:var(--accent-soft-text);box-shadow:none;}
+
+.min-switch{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 0 20px;font-size:12.5px;color:var(--text-faint);}
+.min-switch-item{border:none;background:none;color:var(--text-faint);font-family:var(--font-display);font-size:14px;padding:2px 0;}
+.min-switch-item.active{color:var(--text);font-weight:500;border-bottom:1px solid var(--accent);}
+.min-switch-dot{color:var(--text-faint);}
+
+/* ===== fab / add controls ===== */
+.fab{position:absolute;right:18px;bottom:88px;width:50px;height:50px;border-radius:50%;background:var(--accent-strong);color:var(--on-accent);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px -4px rgba(0,0,0,.35);z-index:6;}
+.fab svg{width:22px;height:22px;}
+.fab.soft{background:var(--surface);color:var(--accent-strong);border:1px solid var(--border);box-shadow:0 4px 14px -6px rgba(0,0,0,.2);}
+.text-add{display:flex;align-items:center;gap:6px;margin:6px calc(var(--unit) * 2.2) 18px;background:none;border:none;color:var(--accent-strong);font-family:var(--font-body);font-size:13px;padding:6px 0;}
+.text-add svg{width:15px;height:15px;}
+.text-add.cal-add{margin-top:12px;}
+.deck-add{position:absolute;right:14px;bottom:78px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;}
+.atelier-footlink{text-align:center;font-size:11.5px;color:var(--text-faint);padding:4px 0 90px;}
+
+/* ===== PAGES: workbench grid ===== */
+.pages-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:2px calc(var(--unit) * 2.2) 100px;}
+.page-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:9px 10px;display:flex;align-items:center;gap:9px;position:relative;min-width:0;overflow:hidden;}
+.pc-icon{color:var(--accent);flex:none;display:flex;}
+.pc-icon svg{width:18px;height:18px;display:block;}
+.pc-text{flex:1;min-width:0;}
+.pc-title{font-size:13.5px;font-weight:500;color:var(--text);line-height:1.25;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pc-meta{font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cat-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent);}
+.cat-dot.personal{background:var(--text-faint);}
+.undated-check{width:16px;height:16px;border-radius:5px;border:1.4px solid var(--border-strong,var(--text-faint));display:inline-block;flex:none;}
+.undated-check.lg{width:20px;height:20px;margin-bottom:0;margin-right:2px;}
+.habit-check{width:16px;height:16px;border-radius:50%;border:1.4px solid var(--accent);display:inline-block;flex:none;}
+
+/* ===== PAGES: ledger rows ===== */
+.ledger-group{padding:0 calc(var(--unit) * 2.2) 6px;}
+.ledger-heading{font-family:var(--font-display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:10px 0 6px;}
+.ledger-row{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--border);}
+.lr-icon{color:var(--accent);flex:none;}
+.lr-icon svg{width:16px;height:16px;}
+.lr-title{flex:1;font-size:13.5px;color:var(--text);}
+.lr-meta{font-size:11px;color:var(--text-faint);}
+.task-row.ledger-row{gap:10px;}
+
+/* ===== PAGES: deck table ===== */
+.deck-table-head{display:flex;padding:2px calc(var(--unit) * 2.2) 6px;font-size:10px;letter-spacing:.06em;color:var(--text-faint);gap:8px;}
+.deck-table-head span:first-child{flex:1;}
+.deck-table-head span:not(:first-child){flex:none;min-width:52px;text-align:right;}
+.deck-table{padding:0 calc(var(--unit) * 2.2) 90px;}
+.deck-row{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--border);}
+.dr-icon{color:var(--accent);flex:none;display:flex;}
+.dr-icon svg{width:14px;height:14px;}
+.dr-title{flex:1;font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dr-kind,.dr-meta{font-size:10.5px;color:var(--text-faint);flex:none;min-width:44px;text-align:right;}
+
+
+/* ===== PAGES: atelier soft stack ===== */
+.atelier-stack{display:flex;flex-direction:column;gap:14px;padding:4px calc(var(--unit) * 2.4) 110px;}
+.soft-card{display:flex;align-items:center;gap:14px;padding:16px 4px;border-bottom:1px solid var(--border);}
+.sc-icon{color:var(--accent-strong);flex:none;}
+.sc-icon svg{width:19px;height:19px;}
+.sc-body{flex:1;}
+.sc-title{font-family:var(--font-display);font-size:16px;font-weight:400;color:var(--text);margin-bottom:3px;}
+.sc-meta{font-size:11.5px;color:var(--text-faint);}
+.sc-chev{color:var(--text-faint);}
+
+/* ===== CALENDAR: month grid ===== */
+.month-grid{padding:0 calc(var(--unit) * 1.6) 100px;}
+.mg-head-row{display:grid;grid-template-columns:repeat(7,1fr);padding:0 4px 6px;}
+.mg-head{text-align:center;font-size:10.5px;color:var(--text-faint);font-weight:500;}
+.mg-body{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.mg-cell{aspect-ratio:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;padding-top:6px;border-radius:8px;color:var(--text);}
+.mg-cell.out{color:var(--text-faint);opacity:.4;}
+.mg-cell.today .mg-day{background:var(--accent-strong);color:var(--on-accent);border-radius:50%;}
+.mg-day{font-size:12.5px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+.mg-marks{display:flex;gap:2px;align-items:center;min-height:6px;}
+.mg-bar{width:9px;height:3px;border-radius:2px;background:var(--accent-soft-text);opacity:.55;}
+.mg-dot{width:4px;height:4px;border-radius:50%;background:var(--accent);}
+.mg-count{font-size:9px;color:var(--accent-strong);}
+.mg-habit-tick{width:3px;height:3px;border-radius:50%;background:var(--accent-strong);opacity:.5;margin-left:2px;}
+
+/* ===== CALENDAR: habits toggle ===== */
+.habits-toggle{display:flex;align-items:center;gap:6px;margin:2px calc(var(--unit) * 2.2) 14px;padding:6px 12px;border-radius:14px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-size:12px;}
+.habits-toggle svg{width:14px;height:14px;}
+.habits-toggle.on{background:var(--accent-soft);color:var(--accent-soft-text);border-color:transparent;}
+
+/* ===== CALENDAR: day agenda ===== */
+.day-label{padding:0 calc(var(--unit) * 2.2) 10px;font-family:var(--font-display);font-size:14px;color:var(--text-dim);}
+.agenda-list{padding:0 calc(var(--unit) * 2.2) 100px;display:flex;flex-direction:column;}
+.agenda-row{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border);}
+.agenda-row .ar-time{font-size:11.5px;color:var(--text-faint);width:44px;flex:none;line-height:1.3;}
+.agenda-row .ar-end{font-size:10px;color:var(--text-faint);}
+.agenda-row .ar-title{flex:1;font-size:13.5px;color:var(--text);}
+.agenda-row.kind-task .ar-title{color:var(--accent-strong);}
+.agenda-row.habit-highlight,.agenda-row.kind-habit{background:var(--accent-soft);border-radius:8px;border-bottom-color:transparent;margin:2px 0;padding-left:10px;}
+.agenda-row.ledger{border-bottom:1px solid var(--border);}
+.agenda-row.ledger .ar-bar{width:2px;height:18px;background:var(--accent);opacity:.4;flex:none;}
+.agenda-row.ledger.habit-highlight .ar-bar,.agenda-row.ledger.kind-habit .ar-bar{opacity:1;}
+.agenda-row.deck{gap:10px;}
+.agenda-row.deck .ar-time,.agenda-row.deck .ar-end{color:var(--text-faint);}
+.agenda-row.deck .ar-title{font-size:12.5px;}
+.agenda-row.atelier{padding:16px 4px;}
+.agenda-row.atelier .ar-title{font-family:var(--font-display);font-size:15.5px;}
+.agenda-row.workbench .ar-time{text-align:center;}
+
+/* ===== CALENDAR: week views ===== */
+.week-strip{display:flex;gap:10px;padding:0 calc(var(--unit) * 2.2) 100px;overflow-x:auto;}
+.ws-card{flex:0 0 118px;background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:10px;}
+.ws-head{display:flex;justify-content:space-between;margin-bottom:8px;}
+.ws-day{font-size:11px;color:var(--text-faint);}
+.ws-num{font-size:12.5px;font-weight:500;}
+.ws-chip{font-size:10.5px;background:var(--accent-soft);color:var(--accent-soft-text);padding:4px 6px;border-radius:6px;margin-bottom:4px;}
+.ws-empty{font-size:11px;color:var(--text-faint);}
+
+.week-ledger{padding:0 calc(var(--unit) * 2.2) 100px;}
+.wl-day{border-bottom:1px solid var(--border);padding:10px 0;}
+.wl-head{margin-bottom:6px;}
+.wl-name{font-family:var(--font-display);font-size:13px;color:var(--text-dim);}
+.wl-item{display:flex;gap:10px;padding:4px 0;}
+.wl-item .ar-time{font-size:11px;color:var(--text-faint);width:40px;}
+.wl-item .ar-title{font-size:13px;}
+.wl-empty{font-size:11.5px;color:var(--text-faint);}
+
+.week-grid-deck{display:flex;padding:0 8px 90px;gap:1px;overflow-x:auto;}
+.wg-hours{display:flex;flex-direction:column;padding-top:24px;flex:0 0 26px;}
+.wg-hour{height:26px;font-size:9px;color:var(--text-faint);}
+.wg-col{flex:0 0 40px;}
+.wg-day{text-align:center;font-size:10px;color:var(--text-faint);padding-bottom:4px;}
+.wg-cell{height:26px;border-top:1px solid var(--border);position:relative;}
+.wg-block{position:absolute;inset:1px;background:var(--accent-soft);color:var(--accent-soft-text);font-size:8px;border-radius:2px;overflow:hidden;padding:1px 2px;}
+
+.week-pills{display:flex;gap:6px;padding:0 calc(var(--unit) * 2.4) 16px;}
+.week-pill{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:8px 0;color:var(--text-dim);font-size:10px;}
+.wp-n{font-size:13px;color:var(--text);font-weight:500;}
+.wp-dot{width:3px;height:3px;border-radius:50%;background:var(--accent);}
+
+/* ===== TASKS & HABITS ===== */
+.task-group{padding:0 calc(var(--unit) * 2.2) 6px;}
+.task-group-head{font-family:var(--font-display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);padding:14px 0 8px;}
+.task-group-list{display:flex;flex-direction:column;}
+.pages-grid .task-card{grid-column:span 1;}
+
+.undated-block{padding:6px calc(var(--unit) * 2.2) 2px;}
+.undated-head{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--text-dim);font-size:12.5px;padding:8px 0;width:100%;}
+.undated-arrow{width:13px;height:13px;color:var(--text-faint);}
+.undated-count{margin-left:auto;background:var(--surface-2);color:var(--text-dim);font-size:10.5px;padding:2px 7px;border-radius:8px;}
+.undated-list{padding:2px 0 8px 20px;}
+.undated-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.undated-title{font-size:12.5px;color:var(--text-dim);}
+
+.habit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:2px calc(var(--unit) * 2.2) 100px;}
+.habit-tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:12px;}
+.ht-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.ht-streak{font-size:11px;color:var(--accent-strong);background:var(--accent-soft);padding:2px 7px;border-radius:8px;}
+.ht-title{font-size:13px;font-weight:500;margin-bottom:3px;}
+.ht-meta{font-size:11px;color:var(--text-faint);}
+
+.habit-list{padding:0 calc(var(--unit) * 2.2) 100px;}
+.streak-dot{margin-left:6px;color:var(--text-faint);font-size:10.5px;}
+
+.stone-strip{display:flex;gap:12px;padding:8px calc(var(--unit) * 2.4) 100px;overflow-x:auto;}
+.stone-card{flex:0 0 108px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:16px 8px;background:var(--surface-2);border-radius:16px;}
+.stone-ring{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--accent-strong);font-family:var(--font-display);}
+.stone-title{font-family:var(--font-display);font-size:13px;}
+.stone-meta{font-size:10.5px;color:var(--text-faint);}
+
+/* ===== MIND MAP ===== */
+.map-canvas-wrap{position:relative;margin:4px calc(var(--unit) * 1.6) 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);}
+.map-canvas-wrap.deck{background:var(--bg);border-color:var(--border);}
+.map-canvas-wrap.atelier{border:none;background:none;}
+.map-svg{width:100%;height:260px;display:block;}
+.map-link{stroke:var(--border-strong,var(--border));stroke-width:1;opacity:.9;}
+.map-node circle{fill:var(--surface);stroke:var(--accent);stroke-width:1.6;}
+.map-node.focus circle{fill:var(--accent);stroke:var(--accent);}
+.map-node.center circle{fill:var(--accent);stroke:var(--accent);}
+.map-node .map-label{font-size:8px;fill:var(--text-dim);font-family:var(--font-body);}
+.map-node.focus .map-label,.map-node.center .map-label{fill:var(--text);font-weight:500;}
+.map-hud{position:absolute;top:8px;right:10px;font-size:9.5px;color:var(--text-faint);}
+.map-list{padding:4px calc(var(--unit) * 2.2) 100px;}
+.map-list-heading{font-family:var(--font-display);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);padding:6px 0;}
+.map-list-row{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--border);}
+.map-hint{text-align:center;font-size:11px;color:var(--text-faint);padding:2px 0 100px;}
+
+/* workbench: full-bleed road map + collapsible drawer */
+.map-page-wrap{height:100%;display:flex;flex-direction:column;position:relative;}
+.map-fullbleed{flex:1 1 auto;min-height:0;padding:0 calc(var(--unit) * 1.6);}
+.map-canvas-wrap.full{margin:0;height:100%;border:none;border-radius:0;background:none;}
+.map-canvas-wrap.full .map-svg{height:100%;}
+.map-canvas-wrap.workbench.full .map-label{font-size:9.5px;}
+.map-drawer{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);border-radius:16px 16px 0 0;box-shadow:0 -8px 24px -14px rgba(0,0,0,.25);max-height:44px;overflow:hidden;transition:max-height .25s cubic-bezier(.2,.8,.3,1);z-index:15;}
+.map-drawer.expanded{max-height:58%;}
+.map-drawer-head{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px 9px;}
+.map-drawer-handle{position:absolute;top:6px;left:50%;transform:translateX(-50%);width:32px;height:3px;border-radius:2px;background:var(--border);}
+.map-drawer-label{font-size:12.5px;font-weight:500;color:var(--text);}
+.map-drawer-count{font-size:10.5px;color:var(--text-faint);background:var(--surface-2);padding:2px 7px;border-radius:8px;}
+.map-drawer-chev{margin-left:auto;color:var(--text-faint);width:14px;height:14px;}
+.map-drawer-list{padding:0 16px 14px;overflow-y:auto;}
+
+.outline-row{display:flex;align-items:center;gap:9px;padding:10px 2px;border-bottom:1px solid var(--border);position:relative;}
+.outline-stem{width:10px;height:1px;background:var(--border-strong,var(--border));flex:none;}
+.outline-arrow{margin-left:auto;color:var(--text-faint);width:13px;height:13px;}
+.outline-note{padding:12px calc(var(--unit) * 2.2) 100px;font-size:11px;color:var(--text-faint);}
+
+/* ===== SETTINGS ===== */
+.settings-section{padding:6px calc(var(--unit) * 2.2) 4px;}
+.settings-section-title{font-family:var(--font-display);font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--text-faint);padding:12px 0 8px;}
+.settings-list{display:flex;flex-direction:column;}
+.settings-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);}
+.sr-icon{color:var(--accent);flex:none;}
+.sr-icon svg{width:17px;height:17px;}
+.sr-body{flex:1;}
+.sr-title{font-size:13px;color:var(--text);}
+.sr-sub{font-size:11px;color:var(--text-faint);margin-top:1px;}
+.ok-icon{color:var(--accent-strong);width:15px;height:15px;}
+.settings-field{padding:10px 0;border-bottom:1px solid var(--border);}
+.settings-field label{display:block;font-size:11.5px;color:var(--text-faint);margin-bottom:6px;}
+.settings-version{text-align:center;font-size:10.5px;color:var(--text-faint);padding:20px 0 100px;}
+
+.theme-picker{display:flex;gap:8px;padding:4px 0 16px;}
+.theme-swatch{flex:1;padding:10px 0;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-size:12px;}
+.theme-swatch.active{border-color:var(--accent);color:var(--accent-strong);background:var(--accent-soft);}
+.settings-subhead{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);padding:6px 0 8px;}
+.settings-row-toggle{width:100%;text-align:left;}
+.appearance-expanded{padding-top:2px;}
+.theme-color-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:16px;}
+.theme-color-btn{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-size:12.5px;}
+.theme-color-btn.active{border-color:var(--accent);color:var(--text);background:var(--accent-soft);}
+.theme-color-dot{width:12px;height:12px;border-radius:50%;flex:none;}
+
+.folder-picker{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text);}
+.folder-picker svg:first-child{color:var(--accent);width:16px;height:16px;}
+.folder-picker span{flex:1;}
+.folder-picker svg:last-child{color:var(--text-faint);width:15px;height:15px;}
+
+.switch{width:34px;height:20px;border-radius:10px;background:var(--surface-3,var(--surface-2));position:relative;display:inline-block;flex:none;}
+.switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s;}
+.switch.on{background:var(--accent);}
+.switch.on::after{left:16px;background:#fff;}
+
+/* ===== SHEET OVERLAY ===== */
+.sheet-overlay{position:absolute;inset:0;z-index:60;}
+.sheet-scrim{position:absolute;inset:0;background:rgba(0,0,0,0);transition:background .2s;}
+.sheet-overlay.open .sheet-scrim{background:rgba(0,0,0,.42);}
+.sheet-panel{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:18px 18px 0 0;padding:16px 20px calc(16px + 26px);max-height:76%;overflow-y:auto;transform:translateY(100%);transition:transform .25s cubic-bezier(.2,.8,.3,1);border-top:1px solid var(--border);}
+.sheet-overlay.open .sheet-panel{transform:translateY(0);}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.sheet-title{font-family:var(--font-display);font-size:17px;font-weight:500;color:var(--text);}
+.sheet-actions{display:flex;flex-direction:column;gap:2px;margin-bottom:6px;}
+.sheet-actions.two{flex-direction:row;gap:8px;}
+.sheet-action{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:none;border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--text);flex:1;}
+.sheet-action svg{width:16px;height:16px;color:var(--accent);}
+.sheet-divider{height:1px;background:var(--border);margin:14px 0;}
+.sheet-sub{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);margin-bottom:6px;}
+.sheet-list-row{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);}
+.sheet-list-row svg{width:16px;height:16px;color:var(--accent);}
+.sheet-input{width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px;font-size:13.5px;font-family:var(--font-body);background:var(--surface);color:var(--text);margin-bottom:12px;}
+.sheet-cta{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent-strong);color:var(--on-accent);border:none;border-radius:var(--radius);padding:13px;font-size:13.5px;font-weight:500;margin-top:6px;}
+.sheet-cta svg{width:15px;height:15px;}
+.preview-meta{font-size:12px;color:var(--text-faint);margin-bottom:14px;}
+.preview-block{height:12px;border-radius:3px;background:var(--surface-2);margin-bottom:10px;}
+.preview-block.short{width:60%;}
+
+</style>
+</head>
+<body>
+
+<div class="lab-header">
+  <div class="eyebrow">Noema — navigation prototype</div>
+  <h1>Four navigation systems, one app</h1>
+  <p>Same five pages, same feature set — each variant reorganizes the information architecture and chrome around a different working style. Tap the tabs below to switch variants, then tap inside the phone to move between pages.</p>
+</div>
+
+<div class="switcher" id="variant-switcher"></div>
+<div class="variant-caption" id="variant-caption"></div>
+
+<div class="phone-wrap">
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="phone-inner" id="phone-inner" data-variant="workbench">
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="icons">
+          <svg class="icn" viewBox="0 0 24 24"><path d="M2 8a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor" stroke="none"/></svg>
+          <svg class="icn" viewBox="0 0 24 24"><rect x="2" y="9" width="18" height="6" rx="1.5"/><rect x="21" y="11" width="1.5" height="2" fill="currentColor" stroke="none"/><rect x="4" y="11" width="12" height="2" fill="currentColor" stroke="none"/></svg>
+        </span>
+      </div>
+      <div class="screen" id="screen"></div>
+      <div class="gesture-home"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="lab-footer">Fonts load from Google Fonts on open. Everything else — layout, icons, interactions — is self-contained in this file.</footer>
+
+<svg width="0" height="0" style="position:absolute">
+<defs>
+<symbol id="i-pages" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="16" y2="16"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1.5"/><line x1="3" y1="9.5" x2="21" y2="9.5"/><line x1="7.5" y1="3" x2="7.5" y2="7"/><line x1="16.5" y1="3" x2="16.5" y2="7"/></symbol>
+<symbol id="i-tasks" viewBox="0 0 24 24"><rect x="4" y="5" width="4" height="4" rx="1"/><path d="M4.8 7l1 1 1.7-2"/><line x1="11" y1="7" x2="20" y2="7"/><rect x="4" y="15" width="4" height="4" rx="1"/><line x1="11" y1="17" x2="20" y2="17"/></symbol>
+<symbol id="i-habit" viewBox="0 0 24 24"><path d="M12 21c-4 0-6-2.7-6-6 0-3 2-4.8 3-7 .6 1.5 1.4 2 2 1.3-.6-2.6 0-5 3-6.3-.6 2 0 3.6 1.6 5C17.4 9 18 10.8 18 13c0 4-2.2 8-6 8z"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="12" cy="13" r="2.4"/><circle cx="7" cy="19" r="2.4"/><line x1="7.8" y1="8.7" x2="10.4" y2="11.6"/><line x1="15.9" y1="7.6" x2="13.4" y2="11.4"/><line x1="10.6" y1="15" x2="8.2" y2="17.4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M21 12h-2.4M5.4 12H3M18.1 5.9l-1.7 1.7M7.6 16.4l-1.7 1.7M18.1 18.1l-1.7-1.7M7.6 7.6L5.9 5.9"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><line x1="20" y1="20" x2="15.8" y2="15.8"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></symbol>
+<symbol id="i-sync" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7"/><path d="M17.5 3.5v3.3h-3.3M6.5 20.5v-3.3h3.3"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><polyline points="15 6 9 12 15 18"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><polyline points="4 12.5 9.5 18 20 6"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M9.5 14.5l5-5"/><path d="M8 16a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 0 1 5 0"/><path d="M16 8a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5 0"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 7.5V19l-4 2v-8.5z"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20l1-4.2L15.8 5 19 8.2 8.2 19z"/><line x1="14" y1="6.8" x2="17.2" y2="10"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><line x1="12" y1="16" x2="12" y2="4"/><polyline points="7 8.5 12 4 17 8.5"/><line x1="5" y1="20" x2="19" y2="20"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="16"/><polyline points="7 11.5 12 16 17 11.5"/><line x1="5" y1="20" x2="19" y2="20"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-4.5a6 6 0 0 1 12 0V16l1.5 2.5h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><line x1="11" y1="12" x2="20" y2="3"/><line x1="16" y1="7" x2="19" y2="10"/><line x1="18.5" y1="4.5" x2="21" y2="7"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><line x1="12" y1="7" x2="12" y2="12"/><line x1="12" y1="12" x2="15.3" y2="14"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/><line x1="8.5" y1="6" x2="20" y2="6"/><line x1="8.5" y1="12" x2="20" y2="12"/><line x1="8.5" y1="18" x2="20" y2="18"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 6 4h6v16H6c-1.3 0-2-.7-2-1.5z"/><path d="M20 5.5c0-.8-.7-1.5-2-1.5h-6v16h6c1.3 0 2-.7 2-1.5z"/></symbol>
+<symbol id="i-plane" viewBox="0 0 24 24"><path d="M3 13l18-8-7 18-2.5-7.5z"/><line x1="11.5" y1="12.5" x2="21" y2="5"/></symbol>
+<symbol id="i-cup" viewBox="0 0 24 24"><path d="M5 8h11v6a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 9.5h1.5a2.3 2.3 0 0 1 0 4.6H16"/><line x1="7" y1="4.5" x2="7" y2="6.5"/><line x1="10.5" y1="3.5" x2="10.5" y2="6"/></symbol>
+<symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5S6 10.8 6 15a6 6 0 0 0 12 0c0-4.2-6-11.5-6-11.5z"/></symbol>
+<symbol id="i-dumbbell" viewBox="0 0 24 24"><line x1="7" y1="12" x2="17" y2="12"/><rect x="3" y="9" width="3" height="6" rx="1"/><rect x="18" y="9" width="3" height="6" rx="1"/><rect x="7.5" y="10" width="2" height="4" rx=".5"/><rect x="14.5" y="10" width="2" height="4" rx=".5"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><line x1="4" y1="12" x2="18" y2="12"/><polyline points="13 7 18 12 13 17"/></symbol>
+<symbol id="i-home-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.5A3.8 3.8 0 0 0 7 18z"/></symbol>
+</defs>
+</svg>
+
+<script>
+/* ============ DATA ============ */
+const DATA = {
+  pages: [
+    {id:'roadmap', title:'Product roadmap', kind:'page', cat:'Work', meta:'6 sub-pages', updated:'2h ago'},
+    {id:'design-system', title:'Design system', kind:'database', cat:'Work', meta:'48 entries', updated:'yesterday'},
+    {id:'meeting-notes', title:'Meeting notes', kind:'page', cat:'Work', meta:'14 sub-pages', updated:'yesterday'},
+    {id:'okrs', title:'Q3 OKRs', kind:'database', cat:'Work', meta:'12 entries', updated:'3d ago'},
+    {id:'reading', title:'Reading list', kind:'database', cat:'Personal', meta:'23 entries', updated:'5d ago'},
+    {id:'recipes', title:'Recipes', kind:'database', cat:'Personal', meta:'31 entries', updated:'1w ago'},
+    {id:'travel', title:'Travel: Japan', kind:'page', cat:'Personal', meta:'9 sub-pages', updated:'5d ago'},
+    {id:'journal', title:'Journal', kind:'page', cat:'Personal', meta:'128 entries', updated:'today'},
+  ],
+  mindmapLinks: [
+    ['roadmap','design-system'],['roadmap','okrs'],['roadmap','meeting-notes'],
+    ['meeting-notes','okrs'],['design-system','meeting-notes'],
+    ['journal','reading'],['journal','travel'],['journal','recipes']
+  ],
+  tasksDated: [
+    {id:'t1', title:'Reply to Priya re: contract', due:'Today', time:'14:00', project:'Work'},
+    {id:'t2', title:'Finish onboarding flow spec', due:'Tomorrow', time:null, project:'Roadmap'},
+    {id:'t3', title:'Book flight to Osaka', due:'Wed', time:null, project:'Travel'},
+    {id:'t4', title:'Review Q3 OKR draft', due:'Fri', time:null, project:'OKRs'},
+    {id:'t9', title:'Plan Q4 kickoff offsite', due:'Jul 28', time:null, project:'Roadmap'},
+  ],
+  tasksUndated: [
+    {id:'t5', title:'Buy anniversary gift', project:'Personal'},
+    {id:'t6', title:'Read ch.4 \u2014 Design of Everyday Things', project:'Reading'},
+    {id:'t7', title:'Call plumber', project:'Home'},
+    {id:'t8', title:'Renew passport', project:'Personal'},
+  ],
+  habits: [
+    {id:'h1', title:'Morning meditation', time:'07:00', dur:15, freq:'Daily', streak:12},
+    {id:'h2', title:'Drink water', time:null, dur:null, freq:'Daily', streak:34},
+    {id:'h3', title:'Strength training', time:null, dur:45, freq:'3x / week', streak:5},
+    {id:'h4', title:'Stretch', time:null, dur:10, freq:'Daily', streak:20},
+    {id:'h5', title:'Read', time:'21:30', dur:30, freq:'Daily', streak:8},
+    {id:'h6', title:'Evening journal', time:'22:00', dur:10, freq:'Daily', streak:12},
+  ],
+  events: [
+    {id:'e1', title:'Standup', start:'9:00', end:'9:15', type:'event'},
+    {id:'e2', title:'Design review', start:'11:00', end:'12:00', type:'event'},
+    {id:'e3', title:'Reply to Priya re: contract', start:'14:00', end:'14:15', type:'task'},
+    {id:'e4', title:'Dentist', start:'16:30', end:'17:15', type:'event'},
+  ],
+  weekDays: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+  weekEvents:{
+    Mon:[{t:'9:00',title:'Standup'}], Tue:[{t:'10:00',title:'Team sync'}],
+    Wed:[{t:'11:00',title:'Design review'},{t:'16:30',title:'Dentist'}],
+    Thu:[], Fri:[{t:'15:00',title:'Q3 OKR review'}], Sat:[], Sun:[]
+  }
+};
+
+/* ============ MAP COORDS (viewBox 0 0 300 210) ============ */
+const MAP_COORDS = {
+  workbench:{
+    roadmap:{x:58,y:48}, 'design-system':{x:132,y:36}, 'meeting-notes':{x:96,y:86}, okrs:{x:168,y:76},
+    journal:{x:228,y:150}, reading:{x:168,y:176}, travel:{x:256,y:104}, recipes:{x:118,y:186}
+  },
+  deck:{
+    roadmap:{x:40,y:32}, 'design-system':{x:142,y:20}, 'meeting-notes':{x:88,y:72}, okrs:{x:192,y:56},
+    journal:{x:252,y:172}, reading:{x:160,y:188}, travel:{x:280,y:112}, recipes:{x:98,y:178}
+  },
+  atelier:{
+    journal:{x:150,y:108},
+    reading:{x:228,y:108}, travel:{x:208,y:172}, recipes:{x:140,y:190},
+    roadmap:{x:75,y:172}, 'design-system':{x:58,y:108}, 'meeting-notes':{x:85,y:48}, okrs:{x:160,y:32}
+  }
+};
+
+/* ============ STATE ============ */
+const VARIANTS = ['workbench','ledger','deck','atelier'];
+const PAGE_ORDER = ['pages','calendar','taskshabits','map','settings'];
+const PAGE_LABEL = {pages:'Pages', calendar:'Calendar', taskshabits:'Tasks & habits', map:'Road map', settings:'Settings'};
+const PAGE_ICON  = {pages:'pages', calendar:'calendar', taskshabits:'tasks', map:'map', settings:'settings'};
+
+const state = {
+  variant: 'workbench',
+  page: {workbench:'pages', ledger:'pages', deck:'pages', atelier:'pages'},
+  sub: {workbench:'tasks', ledger:'tasks', deck:'tasks', atelier:'tasks'},
+  showHabits: {workbench:false, ledger:false, deck:false, atelier:false},
+  calView: {workbench:'day', ledger:'week', deck:'week', atelier:'day'},
+  undatedOpen: {workbench:false, ledger:false, deck:false, atelier:false},
+  undatedOpenTH: {workbench:false, ledger:false, deck:false, atelier:false},
+  mapFocus: {workbench:null, ledger:null, deck:null, atelier:null},
+  mapDrawerOpen: {workbench:false, ledger:false, deck:false, atelier:false},
+  taskFilter: {workbench:'today', ledger:'today', deck:'today', atelier:'today'},
+  calSettingsOpen: {workbench:false, ledger:false, deck:false, atelier:false},
+  thSettingsOpen: {workbench:false, ledger:false, deck:false, atelier:false},
+  pageCat: {workbench:'all', ledger:'all', deck:'all', atelier:'all'},
+  colorTheme: 'ink',
+  themeMode: 'light',
+  typeface: 'sans',
+  appearanceOpen: false,
+};
+
+const COLOR_THEME_META = {
+  ink:{label:'Ink', dotLight:'#4A5568', dotDark:'#8792A6'},
+  clay:{label:'Clay', dotLight:'#A87249', dotDark:'#D4A57C'},
+  moss:{label:'Moss', dotLight:'#6E8C70', dotDark:'#93AC93'},
+  mauve:{label:'Mauve', dotLight:'#A9708D', dotDark:'#CC93AC'},
+};
+
+const VARIANT_META = {
+  workbench:{label:'Workbench', caption:'<b>Persistent</b> bottom tabs, <b>structured</b> cards and grids \u2014 everything in reach, nothing hidden.'},
+  ledger:{label:'Ledger', caption:'Tabs stay put, but content turns into a <b>flowing, document-like</b> canvas \u2014 quieter, less boxy.'},
+  deck:{label:'Deck', caption:'Chrome shrinks to a single floating dock. What is left is <b>dense, technical, dark</b> \u2014 built for fast scanning.'},
+  atelier:{label:'Atelier', caption:'The <b>airiest</b> option \u2014 chrome nearly disappears, pages are stepped between, everything breathes.'},
+};
+
+/* ============ HELPERS ============ */
+function icon(name, cls){ return '<svg class="icn ' + (cls||'') + '"><use href="#i-' + name + '"/></svg>'; }
+function iconBtn(name, action){ return '<button class="icon-btn" data-action="' + (action||name) + '" aria-label="' + name + '">' + icon(name) + '</button>'; }
+function kindIcon(k){ return k==='database' ? 'database' : 'pages'; }
+function nodeById(id){ return DATA.pages.find(function(p){ return p.id===id; }); }
+function syncBadge(){ return '<span class="sync-badge" title="Synced">' + icon('sync') + '</span>'; }
+
+/* ============ SHEETS ============ */
+function openSheet(html){
+  closeSheet();
+  const screen = document.getElementById('screen');
+  const div = document.createElement('div');
+  div.className = 'sheet-overlay';
+  div.innerHTML = '<div class="sheet-scrim" data-action="close-sheet"></div><div class="sheet-panel">' + html + '</div>';
+  screen.appendChild(div);
+  requestAnimationFrame(function(){ div.classList.add('open'); });
+}
+function closeSheet(){
+  const el = document.querySelector('.sheet-overlay');
+  if(el){ el.classList.remove('open'); setTimeout(function(){ el.remove(); }, 180); }
+}
+function sheetHeader(title){
+  return '<div class="sheet-head"><span class="sheet-title">' + title + '</span><button class="icon-btn" data-action="close-sheet" aria-label="close">' + icon('x') + '</button></div>';
+}
+
+/* ============ NAV CHROME ============ */
+function navChrome(v, current){
+  if(v==='workbench' || v==='ledger'){
+    const cls = v==='workbench' ? 'nav-tabs' : 'nav-ledger';
+    const items = PAGE_ORDER.map(function(p){
+      return '<button class="tab ' + (p===current?'active':'') + '" data-page="' + p + '">' +
+        '<span class="tab-ic">' + icon(PAGE_ICON[p]) + '</span>' +
+        '<span class="tab-label">' + PAGE_LABEL[p] + '</span></button>';
+    }).join('');
+    return '<div class="app-nav persistent ' + cls + '">' + items + '</div>';
+  }
+  if(v==='deck'){
+    const items = PAGE_ORDER.map(function(p){
+      return '<button class="dot ' + (p===current?'active':'') + '" data-page="' + p + '" aria-label="' + PAGE_LABEL[p] + '">' + icon(PAGE_ICON[p]) + '</button>';
+    }).join('');
+    return '<div class="app-nav floating"><div class="dock">' + items + '</div></div>';
+  }
+  // atelier
+  const ticks = PAGE_ORDER.map(function(p){
+    return '<button class="tick ' + (p===current?'active':'') + '" data-page="' + p + '" aria-label="' + PAGE_LABEL[p] + '"></button>';
+  }).join('');
+  return '<button class="edge-nav left" data-nav="prev" aria-label="Previous page">' + icon('chevron-left') + '</button>' +
+    '<button class="edge-nav right" data-nav="next" aria-label="Next page">' + icon('chevron-right') + '</button>' +
+    '<div class="app-nav floating nav-hairline"><div class="hairline-track">' + ticks + '</div></div>';
+}
+
+/* ============ RENDER DISPATCH ============ */
+function render(){
+  const v = state.variant;
+  const page = state.page[v];
+  const phoneInner = document.getElementById('phone-inner');
+  phoneInner.setAttribute('data-variant', v);
+  phoneInner.setAttribute('data-color', state.colorTheme);
+  phoneInner.setAttribute('data-mode', state.themeMode);
+  phoneInner.setAttribute('data-font', state.typeface);
+  let content = '';
+  if(page==='pages') content = renderPages(v);
+  else if(page==='calendar') content = renderCalendar(v);
+  else if(page==='taskshabits') content = renderTasksHabits(v);
+  else if(page==='map') content = renderMap(v);
+  else if(page==='settings') content = renderSettings(v);
+  const screen = document.getElementById('screen');
+  screen.innerHTML = '<div class="page-scroll">' + content + '</div>' + navChrome(v, page);
+  const scroller = screen.querySelector('.page-scroll');
+  if(scroller) scroller.scrollTop = 0;
+  updateSwitcherUI();
+}
+
+function updateSwitcherUI(){
+  document.querySelectorAll('.switcher button').forEach(function(b){
+    b.classList.toggle('active', b.dataset.variant===state.variant);
+  });
+  document.getElementById('variant-caption').innerHTML = VARIANT_META[state.variant].caption;
+}
+
+/* ============ PAGE 1: PAGES (Notion-like) ============ */
+function pageCard(p){
+  return '<div class="page-card" data-action="open-page" data-id="' + p.id + '">' +
+    '<div class="pc-icon">' + icon(kindIcon(p.kind)) + '</div>' +
+    '<div class="pc-text"><div class="pc-title">' + p.title + '</div><div class="pc-meta">' + p.meta + '</div></div>' +
+    '<span class="cat-dot ' + p.cat.toLowerCase() + '"></span></div>';
+}
+function pageRow(p){
+  return '<div class="ledger-row" data-action="open-page" data-id="' + p.id + '">' +
+    '<span class="lr-icon">' + icon(kindIcon(p.kind)) + '</span>' +
+    '<span class="lr-title">' + p.title + '</span>' +
+    '<span class="lr-meta">' + p.meta + '</span></div>';
+}
+function pageTableRow(p){
+  return '<div class="deck-row" data-action="open-page" data-id="' + p.id + '">' +
+    '<span class="dr-icon">' + icon(kindIcon(p.kind)) + '</span>' +
+    '<span class="dr-title">' + p.title + '</span>' +
+    '<span class="dr-kind mono">' + p.kind + '</span>' +
+    '<span class="dr-meta mono">' + p.meta + '</span></div>';
+}
+function pageSoftCard(p){
+  return '<div class="soft-card" data-action="open-page" data-id="' + p.id + '">' +
+    '<div class="sc-icon">' + icon(kindIcon(p.kind)) + '</div>' +
+    '<div class="sc-body"><div class="sc-title">' + p.title + '</div><div class="sc-meta">' + p.cat + ' \u00b7 ' + p.meta + '</div></div>' +
+    icon('chevron-right','sc-chev') + '</div>';
+}
+
+function pagesActionSheet(){
+  return sheetHeader('Add to workspace') +
+    '<div class="sheet-actions">' +
+    '<button class="sheet-action" data-action="close-sheet">' + icon('pages') + '<span>New page</span></button>' +
+    '<button class="sheet-action" data-action="close-sheet">' + icon('database') + '<span>New database</span></button>' +
+    '<button class="sheet-action" data-action="close-sheet">' + icon('folder') + '<span>New folder</span></button>' +
+    '</div>' +
+    '<div class="sheet-divider"></div>' +
+    '<div class="sheet-sub">Import</div>' +
+    '<div class="sheet-list">' +
+    '<div class="sheet-list-row" data-action="close-sheet">' + icon('download') + '<span>Import from Notion</span></div>' +
+    '<div class="sheet-list-row" data-action="close-sheet">' + icon('download') + '<span>Import markdown / HTML</span></div>' +
+    '<div class="sheet-list-row" data-action="close-sheet">' + icon('upload') + '<span>Export workspace</span></div>' +
+    '<div class="sheet-list-row" data-action="close-sheet">' + icon('upload') + '<span>Export page as PDF</span></div>' +
+    '</div>';
+}
+function pagePreviewSheet(id){
+  const p = nodeById(id);
+  if(!p) return sheetHeader('Page');
+  return sheetHeader(p.title) +
+    '<div class="preview-meta">' + p.cat + ' \u00b7 ' + p.kind + ' \u00b7 updated ' + p.updated + '</div>' +
+    '<div class="preview-block"></div><div class="preview-block short"></div><div class="preview-block"></div>' +
+    '<button class="sheet-cta" data-action="close-sheet">' + icon('arrow-right') + '<span>Open page</span></button>';
+}
+
+function renderPages(v){
+  const cat = state.pageCat[v];
+  const filtered = cat==='all' ? DATA.pages : DATA.pages.filter(function(p){ return p.cat.toLowerCase()===cat; });
+  const work = DATA.pages.filter(function(p){ return p.cat==='Work'; });
+  const personal = DATA.pages.filter(function(p){ return p.cat==='Personal'; });
+
+  if(v==='workbench'){
+    return '<div class="topbar">' +
+        '<div class="tb-left"><span class="tb-title">Noema</span>' + syncBadge() + '</div>' +
+        '<div class="tb-actions">' + iconBtn('search') + iconBtn('more','open-pages-menu') + '</div>' +
+      '</div>' +
+      '<div class="chip-row">' +
+        '<button class="chip ' + (cat==='all'?'active':'') + '" data-action="filter-cat" data-cat="all">All</button>' +
+        '<button class="chip ' + (cat==='work'?'active':'') + '" data-action="filter-cat" data-cat="work">Work</button>' +
+        '<button class="chip ' + (cat==='personal'?'active':'') + '" data-action="filter-cat" data-cat="personal">Personal</button>' +
+      '</div>' +
+      '<div class="pages-grid">' + filtered.map(pageCard).join('') + '</div>' +
+      '<button class="fab" data-action="open-pages-menu" aria-label="New">' + icon('plus') + '</button>';
+  }
+  if(v==='ledger'){
+    return '<div class="topbar ledger-top">' +
+        '<span class="tb-title serif">Noema</span>' +
+        '<span class="tb-sync-dot" title="Synced">' + icon('sync') + '</span>' +
+        '<span class="tb-spacer"></span>' +
+        iconBtn('search') + iconBtn('more','open-pages-menu') +
+      '</div>' +
+      '<div class="ledger-group"><div class="ledger-heading">Work</div>' + work.map(pageRow).join('') + '</div>' +
+      '<div class="ledger-group"><div class="ledger-heading">Personal</div>' + personal.map(pageRow).join('') + '</div>' +
+      '<button class="text-add" data-action="open-pages-menu">' + icon('plus') + '<span>New page</span></button>';
+  }
+  if(v==='deck'){
+    return '<div class="topbar deck-top">' +
+        '<span class="tb-title mono">noema</span>' +
+        '<div class="tb-stats mono">8 pages &middot; <span class="ok">synced 2m ago</span></div>' +
+        '<div class="tb-actions">' + iconBtn('search') + iconBtn('more','open-pages-menu') + iconBtn('plus','open-pages-menu') + '</div>' +
+      '</div>' +
+      '<div class="deck-table-head mono"><span>name</span><span>kind</span><span>meta</span></div>' +
+      '<div class="deck-table">' + DATA.pages.map(pageTableRow).join('') + '</div>';
+  }
+  // atelier
+  return '<div class="topbar atelier-top">' +
+      '<span class="crumb">Pages</span>' +
+      '<span class="tb-sync-text">Synced &middot; 2m ago</span>' +
+    '</div>' +
+    '<div class="atelier-stack">' + DATA.pages.map(pageSoftCard).join('') + '</div>' +
+    '<button class="fab soft" data-action="open-pages-menu" aria-label="New">' + icon('plus') + '</button>' +
+    '<div class="atelier-footlink" data-action="open-pages-menu">Import &amp; export</div>';
+}
+
+/* ============ PAGE 2: CALENDAR ============ */
+const MONTH_GRID = [
+  [{d:28,out:true},{d:29,out:true},{d:30,out:true},{d:1},{d:2},{d:3},{d:4}],
+  [{d:5},{d:6},{d:7},{d:8},{d:9,ev:2},{d:10},{d:11}],
+  [{d:12},{d:13},{d:14},{d:15},{d:16,today:true,ev:4},{d:17},{d:18}],
+  [{d:19},{d:20},{d:21},{d:22,ev:1},{d:23},{d:24},{d:25}],
+  [{d:26},{d:27,ev:3},{d:28},{d:29},{d:30},{d:1,out:true},{d:2,out:true}],
+];
+const WEEKDAYS_FULL = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function timeToMinutes(t){ const parts = t.split(':'); return parseInt(parts[0],10)*60 + parseInt(parts[1],10); }
+function minutesToTime(m){ const hh = Math.floor(m/60), mm = m%60; return (hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm; }
+
+function agendaItems(showHabits){
+  let items = DATA.events.map(function(e){ return {kind:e.type, title:e.title, start:e.start, end:e.end}; });
+  if(showHabits){
+    DATA.habits.filter(function(hb){ return hb.time; }).forEach(function(hb){
+      const sm = timeToMinutes(hb.time);
+      items.push({kind:'habit', title:hb.title, start:hb.time, end:minutesToTime(sm+hb.dur)});
+    });
+  }
+  items.sort(function(a,b){ return timeToMinutes(a.start) - timeToMinutes(b.start); });
+  return items;
+}
+
+function calendarTopbar(v){
+  const titles = {workbench:'Calendar', ledger:'Calendar', deck:'calendar', atelier:'Calendar'};
+  if(v==='ledger'){
+    return '<div class="topbar ledger-top"><span class="tb-title serif">' + titles[v] + '</span><span class="tb-spacer"></span>' + iconBtn('sync') + iconBtn('more','open-cal-settings') + '</div>';
+  }
+  if(v==='deck'){
+    return '<div class="topbar deck-top"><span class="tb-title mono">' + titles[v] + '</span><div class="tb-stats mono">google &middot; <span class="ok">synced</span></div><div class="tb-actions">' + iconBtn('more','open-cal-settings') + '</div></div>';
+  }
+  if(v==='atelier'){
+    return '<div class="topbar atelier-top"><span class="crumb">Calendar</span>' + iconBtn('more','open-cal-settings') + '</div>';
+  }
+  return '<div class="topbar"><div class="tb-left"><span class="tb-title">Calendar</span>' + syncBadge() + '</div><div class="tb-actions">' + iconBtn('more','open-cal-settings') + '</div></div>';
+}
+
+function calendarViewSwitcher(v){
+  const view = state.calView[v];
+  const opts = ['day','week','month'];
+  const labels = {day:'Day', week:'Week', month:'Month'};
+  if(v==='atelier'){
+    return '<div class="min-switch">' + opts.map(function(o){ return '<button class="min-switch-item ' + (view===o?'active':'') + '" data-action="set-cal-view" data-view="' + o + '">' + labels[o] + '</button>'; }).join('<span class="min-switch-dot">&middot;</span>') + '</div>';
+  }
+  const cls = v==='deck' ? 'seg-row deck' : (v==='ledger' ? 'seg-row ledger' : 'seg-row');
+  return '<div class="' + cls + '">' + opts.map(function(o){ return '<button class="seg ' + (view===o?'active':'') + '" data-action="set-cal-view" data-view="' + o + '">' + labels[o] + '</button>'; }).join('') + '</div>';
+}
+
+function showHabitsButton(v){
+  const on = state.showHabits[v];
+  return '<button class="habits-toggle ' + (on?'on':'') + '" data-action="toggle-show-habits">' + icon('habit') + '<span>' + (on?'Habits shown':'Show habits') + '</span></button>';
+}
+
+function monthGridHTML(v){
+  const showH = state.showHabits[v];
+  const head = WEEKDAYS_FULL.map(function(d){ return '<div class="mg-head">' + (v==='deck'? d[0] : d.slice(0,2)) + '</div>'; }).join('');
+  const cells = MONTH_GRID.map(function(row){
+    return row.map(function(c){
+      const cls = ['mg-cell'];
+      if(c.out) cls.push('out');
+      if(c.today) cls.push('today');
+      let marks = '';
+      if(c.ev){
+        if(v==='deck') marks += '<span class="mg-count mono">' + c.ev + '</span>';
+        else if(v==='atelier') marks += '<span class="mg-dot"></span>';
+        else if(v==='ledger') marks += '<span class="mg-dot"></span>';
+        else marks += Array.from({length:Math.min(c.ev,3)}).map(function(){ return '<span class="mg-bar"></span>'; }).join('');
+      }
+      if(showH && !c.out) marks += '<span class="mg-habit-tick"></span>';
+      return '<button class="' + cls.join(' ') + '" data-action="select-day" data-day="' + c.d + '">' +
+        '<span class="mg-day">' + c.d + '</span><span class="mg-marks">' + marks + '</span></button>';
+    }).join('');
+  }).join('');
+  return '<div class="month-grid"><div class="mg-head-row">' + head + '</div><div class="mg-body">' + cells + '</div></div>';
+}
+
+function eventRowGeneric(v, item){
+  const kindCls = 'kind-' + item.kind;
+  if(v==='ledger'){
+    return '<div class="agenda-row ledger ' + kindCls + '" data-action="open-event" data-title="' + item.title + '"><span class="ar-time">' + item.start + '</span><span class="ar-bar"></span><span class="ar-title">' + item.title + '</span></div>';
+  }
+  if(v==='deck'){
+    return '<div class="agenda-row deck ' + kindCls + '" data-action="open-event" data-title="' + item.title + '"><span class="ar-time mono">' + item.start + '</span><span class="ar-title">' + item.title + '</span><span class="ar-end mono">' + item.end + '</span></div>';
+  }
+  if(v==='atelier'){
+    return '<div class="agenda-row atelier ' + kindCls + '" data-action="open-event" data-title="' + item.title + '"><span class="ar-time">' + item.start + '</span><span class="ar-title">' + item.title + '</span></div>';
+  }
+  return '<div class="agenda-row workbench ' + kindCls + '" data-action="open-event" data-title="' + item.title + '"><span class="ar-time">' + item.start + '<br><span class="ar-end">' + item.end + '</span></span><span class="ar-title">' + item.title + '</span></div>';
+}
+
+function dayViewHTML(v, label){
+  const items = agendaItems(state.showHabits[v]);
+  return '<div class="day-label">' + label + '</div><div class="agenda-list">' + items.map(function(it){ return eventRowGeneric(v,it); }).join('') + '</div>';
+}
+
+function weekViewHTML(v){
+  if(v==='deck'){
+    const hours = ['9','10','11','12','13','14','15','16','17'];
+    const blocks = {Mon:[{h:9,title:'Standup'}], Wed:[{h:11,title:'Design review'},{h:16,title:'Dentist'}], Fri:[{h:15,title:'Q3 review'}]};
+    const cols = DATA.weekDays.map(function(day){
+      const items = blocks[day] || [];
+      return '<div class="wg-col"><div class="wg-day mono">' + day.slice(0,2) + '</div>' +
+        hours.map(function(hh){
+          const hit = items.find(function(it){ return String(it.h)===hh; });
+          return '<div class="wg-cell">' + (hit ? '<div class="wg-block" data-action="open-event" data-title="' + hit.title + '">' + hit.title + '</div>' : '') + '</div>';
+        }).join('') + '</div>';
+    }).join('');
+    return '<div class="week-grid-deck"><div class="wg-hours mono">' + hours.map(function(hh){ return '<div class="wg-hour">' + hh + '</div>'; }).join('') + '</div>' + cols + '</div>';
+  }
+  if(v==='ledger'){
+    return '<div class="week-ledger">' + DATA.weekDays.map(function(day){
+      const evs = DATA.weekEvents[day] || [];
+      return '<div class="wl-day"><div class="wl-head"><span class="wl-name">' + day + '</span></div>' +
+        (evs.length ? evs.map(function(e){ return '<div class="wl-item" data-action="open-event" data-title="' + e.title + '"><span class="ar-time">' + e.t + '</span><span class="ar-title">' + e.title + '</span></div>'; }).join('') : '<div class="wl-empty">No events</div>') +
+        '</div>';
+    }).join('') + '</div>';
+  }
+  if(v==='atelier'){
+    return '<div class="week-pills">' + DATA.weekDays.map(function(day,i){
+      const has = (DATA.weekEvents[day]||[]).length>0;
+      return '<button class="week-pill" data-action="select-weekday" data-day="' + day + '"><span>' + day[0] + '</span><span class="wp-n">' + (12+i) + '</span>' + (has?'<span class="wp-dot"></span>':'') + '</button>';
+    }).join('') + '</div>' + dayViewHTML('atelier','Fri 16');
+  }
+  // workbench: horizontal day cards
+  return '<div class="week-strip">' + DATA.weekDays.map(function(day,i){
+    const evs = DATA.weekEvents[day] || [];
+    return '<div class="ws-card"><div class="ws-head"><span class="ws-day">' + day + '</span><span class="ws-num">' + (12+i) + '</span></div>' +
+      (evs.length ? evs.map(function(e){ return '<div class="ws-chip">' + e.t + ' &middot; ' + e.title + '</div>'; }).join('') : '<div class="ws-empty">&mdash;</div>') +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+function quickAddControl(v){
+  if(v==='ledger') return '<button class="text-add cal-add" data-action="open-quick-add">' + icon('plus') + '<span>Quick add</span></button>';
+  if(v==='deck') return '<button class="icon-btn deck-add" data-action="open-quick-add" aria-label="Quick add">' + icon('plus') + '</button>';
+  if(v==='atelier') return '<button class="fab soft" data-action="open-quick-add" aria-label="Quick add">' + icon('plus') + '</button>';
+  return '<button class="fab" data-action="open-quick-add" aria-label="Quick add">' + icon('plus') + '</button>';
+}
+
+function quickAddSheet(){
+  return sheetHeader('Quick add') +
+    '<input class="sheet-input" placeholder="Dentist tomorrow 4pm" />' +
+    '<div class="sheet-actions two">' +
+      '<button class="sheet-action" data-action="close-sheet">' + icon('calendar') + '<span>Event</span></button>' +
+      '<button class="sheet-action" data-action="close-sheet">' + icon('tasks') + '<span>Task</span></button>' +
+    '</div>' +
+    '<button class="sheet-cta" data-action="close-sheet"><span>Add</span></button>';
+}
+function eventDetailSheet(title){
+  return sheetHeader(title || 'Event') +
+    '<div class="preview-meta">Today &middot; 14:00 &ndash; 14:15</div>' +
+    '<div class="sheet-actions two">' +
+      '<button class="sheet-action" data-action="close-sheet">' + icon('edit') + '<span>Edit</span></button>' +
+      '<button class="sheet-action" data-action="close-sheet">' + icon('x') + '<span>Delete</span></button>' +
+    '</div>';
+}
+
+function renderCalendarSettings(v){
+  return '<div class="topbar"><button class="icon-btn" data-action="close-cal-settings" aria-label="back">' + icon('chevron-left') + '</button><span class="tb-title">Calendar settings</span><span></span></div>' +
+    '<div class="settings-list">' +
+      '<div class="settings-row"><div class="sr-icon">' + icon('cloud') + '</div><div class="sr-body"><div class="sr-title">Sync with Google Calendar</div><div class="sr-sub">Two-way sync for events</div></div><span class="switch on"></span></div>' +
+      '<div class="settings-field"><label>Google OAuth client ID</label><input class="sheet-input" placeholder="xxxxxxxx.apps.googleusercontent.com" /></div>' +
+      '<div class="settings-row"><div class="sr-icon">' + icon('check') + '</div><div class="sr-body"><div class="sr-title">Set as default calendar</div><div class="sr-sub">Handle .ics links system-wide</div></div><span class="switch on"></span></div>' +
+      '<div class="settings-row"><div class="sr-icon">' + icon('clock') + '</div><div class="sr-body"><div class="sr-title">Week starts on</div><div class="sr-sub">Monday</div></div>' + icon('chevron-right') + '</div>' +
+    '</div>';
+}
+
+function renderCalendar(v){
+  if(state.calSettingsOpen[v]) return renderCalendarSettings(v);
+  const view = state.calView[v];
+  const top = calendarTopbar(v);
+  const switcher = calendarViewSwitcher(v);
+  const habitsBtn = showHabitsButton(v);
+  let body = '';
+  if(view==='month') body = monthGridHTML(v);
+  else if(view==='week') body = weekViewHTML(v);
+  else body = dayViewHTML(v, 'Fri 16');
+  const quickAdd = quickAddControl(v);
+  return top + switcher + habitsBtn + body + quickAdd;
+}
+
+/* ============ PAGE 3: TASKS & HABITS ============ */
+function thTopbar(v){
+  if(v==='ledger') return '<div class="topbar ledger-top"><span class="tb-title serif">Tasks &amp; habits</span><span class="tb-spacer"></span>' + iconBtn('more','open-th-settings') + '</div>';
+  if(v==='deck') return '<div class="topbar deck-top"><span class="tb-title mono">tasks + habits</span><div class="tb-stats mono">4 open</div><div class="tb-actions">' + iconBtn('more','open-th-settings') + '</div></div>';
+  if(v==='atelier') return '<div class="topbar atelier-top"><span class="crumb">Tasks &amp; habits</span>' + iconBtn('more','open-th-settings') + '</div>';
+  return '<div class="topbar"><div class="tb-left"><span class="tb-title">Tasks &amp; habits</span></div><div class="tb-actions">' + iconBtn('more','open-th-settings') + '</div></div>';
+}
+function thSubSwitch(v){
+  const sub = state.sub[v];
+  const opts = [['tasks','Tasks'],['habits','Habits'],['merged','Merged']];
+  if(v==='atelier'){
+    return '<div class="min-switch">' + opts.map(function(o){ return '<button class="min-switch-item ' + (sub===o[0]?'active':'') + '" data-action="set-th-sub" data-sub="' + o[0] + '">' + o[1] + '</button>'; }).join('<span class="min-switch-dot">&middot;</span>') + '</div>';
+  }
+  const cls = v==='deck' ? 'seg-row deck' : (v==='ledger' ? 'seg-row ledger' : 'seg-row');
+  return '<div class="' + cls + '">' + opts.map(function(o){ return '<button class="seg ' + (sub===o[0]?'active':'') + '" data-action="set-th-sub" data-sub="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
+}
+
+function undatedToggle(v, open, action){
+  const arrow = open ? 'chevron-down' : 'chevron-right';
+  const list = DATA.tasksUndated.map(function(t){
+    return '<div class="undated-row" data-action="noop"><span class="undated-check"></span><span class="undated-title">' + t.title + '</span></div>';
+  }).join('');
+  return '<div class="undated-block">' +
+    '<button class="undated-head" data-action="' + action + '">' + icon(arrow,'undated-arrow') + '<span>Undated</span><span class="undated-count">' + DATA.tasksUndated.length + '</span></button>' +
+    (open ? '<div class="undated-list">' + list + '</div>' : '') +
+    '</div>';
+}
+
+function taskRow(v, t){
+  const timeStr = t.time ? t.time : t.due;
+  if(v==='ledger') return '<div class="ledger-row task-row" data-action="noop"><span class="undated-check"></span><span class="lr-title">' + t.title + '</span><span class="lr-meta">' + timeStr + '</span></div>';
+  if(v==='deck') return '<div class="deck-row task-row" data-action="noop"><span class="undated-check"></span><span class="dr-title">' + t.title + '</span><span class="dr-meta mono">' + t.project + '</span><span class="dr-meta mono">' + timeStr + '</span></div>';
+  if(v==='atelier') return '<div class="soft-card task-row" data-action="noop"><span class="undated-check lg"></span><div class="sc-body"><div class="sc-title">' + t.title + '</div><div class="sc-meta">' + t.project + ' &middot; ' + timeStr + '</div></div></div>';
+  return '<div class="page-card task-card" data-action="noop"><span class="undated-check"></span><div class="pc-text"><div class="pc-title">' + t.title + '</div><div class="pc-meta">' + t.project + ' &middot; ' + timeStr + '</div></div></div>';
+}
+
+const TASK_BUCKET = {Today:'today', Tomorrow:'week', Wed:'week', Fri:'week', 'Jul 28':'month'};
+const TASK_FILTER_RANK = {today:0, week:1, month:2};
+function taskInFilter(due, filter){ return TASK_FILTER_RANK[TASK_BUCKET[due]] <= TASK_FILTER_RANK[filter]; }
+
+function taskFilterBar(v){
+  const f = state.taskFilter[v];
+  const opts = [['today','Today'],['week','This week'],['month','This month']];
+  return '<div class="chip-row">' + opts.map(function(o){
+    return '<button class="chip ' + (f===o[0]?'active':'') + '" data-action="set-task-filter" data-filter="' + o[0] + '">' + o[1] + '</button>';
+  }).join('') + '</div>';
+}
+
+function tasksView(v){
+  const filter = state.taskFilter[v];
+  const visible = DATA.tasksDated.filter(function(t){ return taskInFilter(t.due, filter); });
+  const groups = {};
+  visible.forEach(function(t){ (groups[t.due] = groups[t.due]||[]).push(t); });
+  const order = ['Today','Tomorrow','Wed','Fri','Jul 28'];
+  const body = order.filter(function(g){ return groups[g]; }).map(function(g){
+    return '<div class="task-group"><div class="task-group-head">' + g + '</div>' + (v==='workbench' ? '<div class="pages-grid">' : '<div class="task-group-list">') + groups[g].map(function(t){ return taskRow(v,t); }).join('') + '</div></div>';
+  }).join('');
+  return taskFilterBar(v) + undatedToggle(v, state.undatedOpenTH[v], 'toggle-undated-th') + body;
+}
+
+function habitCard(v, hb){
+  const timeStr = hb.time ? (hb.time + ' &middot; ' + hb.dur + 'm') : hb.freq;
+  if(v==='ledger') return '<div class="ledger-row habit-row" data-action="noop"><span class="habit-check"></span><span class="lr-title">' + hb.title + '</span><span class="lr-meta">' + timeStr + '</span><span class="streak-dot mono">' + hb.streak + '</span></div>';
+  if(v==='deck') return '<div class="deck-row habit-row" data-action="noop"><span class="habit-check"></span><span class="dr-title">' + hb.title + '</span><span class="dr-meta mono">' + timeStr + '</span><span class="dr-meta mono">&#215;' + hb.streak + '</span></div>';
+  if(v==='atelier') return '<div class="stone-card" data-action="noop"><div class="stone-ring">' + hb.streak + '</div><div class="stone-title">' + hb.title + '</div><div class="stone-meta">' + timeStr + '</div></div>';
+  return '<div class="habit-tile" data-action="noop"><div class="ht-top"><span class="habit-check"></span><span class="ht-streak">' + hb.streak + '</span></div><div class="ht-title">' + hb.title + '</div><div class="ht-meta">' + timeStr + '</div></div>';
+}
+
+function habitsView(v){
+  if(v==='atelier') return '<div class="stone-strip">' + DATA.habits.map(function(hb){ return habitCard(v,hb); }).join('') + '</div>';
+  if(v==='workbench') return '<div class="habit-grid">' + DATA.habits.map(function(hb){ return habitCard(v,hb); }).join('') + '</div>';
+  return '<div class="habit-list">' + DATA.habits.map(function(hb){ return habitCard(v,hb); }).join('') + '</div>';
+}
+
+function mergedRow(v, item){
+  const highlight = item.kind==='habit' ? ' habit-highlight' : '';
+  if(v==='ledger') return '<div class="agenda-row ledger' + highlight + '" data-action="noop"><span class="ar-time">' + (item.time||'\u2014') + '</span><span class="ar-bar"></span><span class="ar-title">' + item.title + '</span></div>';
+  if(v==='deck') return '<div class="agenda-row deck' + highlight + '" data-action="noop"><span class="ar-time mono">' + (item.time||'\u2014') + '</span><span class="ar-title">' + item.title + '</span></div>';
+  if(v==='atelier') return '<div class="agenda-row atelier' + highlight + '" data-action="noop"><span class="ar-time">' + (item.time||'\u2014') + '</span><span class="ar-title">' + item.title + '</span></div>';
+  return '<div class="agenda-row workbench' + highlight + '" data-action="noop"><span class="ar-time">' + (item.time||'\u2014') + '</span><span class="ar-title">' + item.title + '</span></div>';
+}
+
+function mergedView(v){
+  const todayItems = [
+    {time:'07:00', title:'Morning meditation', kind:'habit'},
+    {time:'14:00', title:'Reply to Priya re: contract', kind:'task'},
+    {time:'21:30', title:'Read', kind:'habit'},
+    {time:'22:00', title:'Evening journal', kind:'habit'},
+  ];
+  const laterGroups = [
+    {label:'Tomorrow', items:[{time:null,title:'Finish onboarding flow spec',kind:'task'}]},
+    {label:'Wed', items:[{time:null,title:'Book flight to Osaka',kind:'task'}]},
+    {label:'Fri', items:[{time:null,title:'Review Q3 OKR draft',kind:'task'}]},
+  ];
+  const todayBlock = '<div class="task-group"><div class="task-group-head">Today</div>' + todayItems.map(function(it){ return mergedRow(v,it); }).join('') + '</div>';
+  const laterBlock = laterGroups.map(function(g){ return '<div class="task-group"><div class="task-group-head">' + g.label + '</div>' + g.items.map(function(it){ return mergedRow(v,it); }).join('') + '</div>'; }).join('');
+  return undatedToggle(v, state.undatedOpen[v], 'toggle-undated-merged') + todayBlock + laterBlock;
+}
+
+function thAddSheet(){
+  const sub = state.sub[state.variant];
+  const label = sub==='habits' ? 'New habit' : 'New task';
+  return sheetHeader(label) +
+    '<input class="sheet-input" placeholder="' + (sub==='habits' ? 'Evening walk' : 'Send invoice to client') + '" />' +
+    (sub==='habits' ? '<div class="sheet-actions two"><button class="sheet-action" data-action="close-sheet">' + icon('clock') + '<span>Set time</span></button><button class="sheet-action" data-action="close-sheet">' + icon('sync') + '<span>Frequency</span></button></div>'
+      : '<div class="sheet-actions two"><button class="sheet-action" data-action="close-sheet">' + icon('calendar') + '<span>Set deadline</span></button><button class="sheet-action" data-action="close-sheet">' + icon('folder') + '<span>Project</span></button></div>') +
+    '<button class="sheet-cta" data-action="close-sheet"><span>Add</span></button>';
+}
+
+function thAddControl(v){
+  if(v==='ledger') return '<button class="text-add cal-add" data-action="open-th-add">' + icon('plus') + '<span>Add</span></button>';
+  if(v==='deck') return '<button class="icon-btn deck-add" data-action="open-th-add" aria-label="Add">' + icon('plus') + '</button>';
+  if(v==='atelier') return '<button class="fab soft" data-action="open-th-add" aria-label="Add">' + icon('plus') + '</button>';
+  return '<button class="fab" data-action="open-th-add" aria-label="Add">' + icon('plus') + '</button>';
+}
+
+function renderTasksHabitsSettings(v){
+  return '<div class="topbar"><button class="icon-btn" data-action="close-th-settings" aria-label="back">' + icon('chevron-left') + '</button><span class="tb-title">Tasks &amp; habits settings</span><span></span></div>' +
+    '<div class="settings-list">' +
+      '<div class="settings-field"><label>Habit sync folder</label><div class="folder-picker" data-action="noop">' + icon('folder') + '<span>/Noema/Habits</span>' + icon('chevron-right') + '</div></div>' +
+      '<div class="settings-row"><div class="sr-icon">' + icon('link') + '</div><div class="sr-body"><div class="sr-title">Sync task deadlines to calendar</div><div class="sr-sub">Two-way, on add or edit</div></div><span class="switch on"></span></div>' +
+      '<div class="settings-row"><div class="sr-icon">' + icon('list') + '</div><div class="sr-body"><div class="sr-title">Default view</div><div class="sr-sub">Tasks</div></div>' + icon('chevron-right') + '</div>' +
+    '</div>';
+}
+
+function renderTasksHabits(v){
+  if(state.thSettingsOpen[v]) return renderTasksHabitsSettings(v);
+  const sub = state.sub[v];
+  let body;
+  if(sub==='tasks') body = tasksView(v);
+  else if(sub==='habits') body = habitsView(v);
+  else body = mergedView(v);
+  const addCtrl = sub==='habits' || sub==='tasks' ? thAddControl(v) : '';
+  return thTopbar(v) + thSubSwitch(v) + body + addCtrl;
+}
+
+/* ============ PAGE 4: ROAD MAP ============ */
+function mapTopbar(v){
+  if(v==='deck') return '<div class="topbar deck-top"><span class="tb-title mono">road map</span><div class="tb-actions">' + iconBtn('search') + '</div></div>';
+  if(v==='atelier') return '<div class="topbar atelier-top"><span class="crumb">Road map</span>' + iconBtn('search') + '</div>';
+  if(v==='ledger') return '<div class="topbar ledger-top"><span class="tb-title serif">Road map</span><span class="tb-spacer"></span>' + iconBtn('search') + '</div>';
+  return '<div class="topbar"><div class="tb-left"><span class="tb-title">Road map</span></div><div class="tb-actions">' + iconBtn('search') + '</div></div>';
+}
+
+function mapNodeSheet(id){
+  const p = nodeById(id);
+  if(!p) return sheetHeader('Node');
+  return sheetHeader(p.title) +
+    '<div class="preview-meta">' + p.cat + ' &middot; ' + p.kind + ' &middot; ' + p.meta + '</div>' +
+    '<button class="sheet-cta" data-action="goto-pages"><span>Open page</span>' + icon('arrow-right') + '</button>';
+}
+
+function renderMapCanvas(v, full){
+  const coords = MAP_COORDS[v];
+  const focus = state.mapFocus[v];
+  const linksSvg = DATA.mindmapLinks.map(function(l){
+    const ca = coords[l[0]], cb = coords[l[1]];
+    if(!ca || !cb) return '';
+    return '<line x1="' + ca.x + '" y1="' + ca.y + '" x2="' + cb.x + '" y2="' + cb.y + '" class="map-link"/>';
+  }).join('');
+  const nodesSvg = DATA.pages.map(function(p){
+    const c = coords[p.id];
+    if(!c) return '';
+    const isFocus = focus===p.id;
+    const isCenter = v==='atelier' && p.id==='journal';
+    const r = v==='deck' ? 9 : (v==='workbench' ? 13 : (isCenter ? 15 : 12));
+    let label = p.title;
+    if(v==='deck' && label.length>14) label = label.slice(0,13) + '\u2026';
+    return '<g class="map-node ' + (isFocus?'focus':'') + ' ' + (isCenter?'center':'') + '" data-action="focus-node" data-id="' + p.id + '">' +
+      '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + r + '"></circle>' +
+      '<text x="' + c.x + '" y="' + (c.y + r + 12) + '" text-anchor="middle" class="map-label">' + label + '</text></g>';
+  }).join('');
+  const hud = v==='deck' ? '<div class="map-hud mono">8 nodes &middot; 100%</div>' : '';
+  return '<div class="map-canvas-wrap ' + v + (full?' full':'') + '"><svg viewBox="0 0 300 224" class="map-svg" preserveAspectRatio="xMidYMid meet">' + linksSvg + nodesSvg + '</svg>' + hud + '</div>';
+}
+
+function renderMapDrawer(v){
+  const open = state.mapDrawerOpen[v];
+  const rows = DATA.pages.map(function(p){
+    return '<div class="map-list-row" data-action="focus-node" data-id="' + p.id + '"><span class="lr-icon">' + icon(kindIcon(p.kind)) + '</span><span class="lr-title">' + p.title + '</span></div>';
+  }).join('');
+  return '<div class="map-drawer ' + (open?'expanded':'') + '">' +
+    '<button class="map-drawer-head" data-action="toggle-map-drawer">' +
+      '<span class="map-drawer-handle"></span>' +
+      '<span class="map-drawer-label">All pages</span>' +
+      '<span class="map-drawer-count">' + DATA.pages.length + '</span>' +
+      icon(open?'chevron-down':'chevron-right','map-drawer-chev') +
+    '</button>' +
+    '<div class="map-drawer-list">' + rows + '</div>' +
+  '</div>';
+}
+
+function renderMapListPanel(){
+  return '<div class="map-list"><div class="map-list-heading">All pages</div>' + DATA.pages.map(function(p){
+    return '<div class="map-list-row" data-action="focus-node" data-id="' + p.id + '"><span class="lr-icon">' + icon(kindIcon(p.kind)) + '</span><span class="lr-title">' + p.title + '</span></div>';
+  }).join('') + '</div>';
+}
+
+function renderMapOutline(v){
+  const clusters = [
+    {name:'Work', ids:['roadmap','design-system','meeting-notes','okrs']},
+    {name:'Personal', ids:['journal','reading','travel','recipes']},
+  ];
+  return mapTopbar(v) + clusters.map(function(c){
+    return '<div class="ledger-group"><div class="ledger-heading">' + c.name + '</div>' + c.ids.map(function(id){
+      const p = nodeById(id);
+      return '<div class="outline-row" data-action="focus-node" data-id="' + id + '"><span class="outline-stem"></span><span class="lr-icon">' + icon(kindIcon(p.kind)) + '</span><span class="lr-title">' + p.title + '</span>' + icon('arrow-right','outline-arrow') + '</div>';
+    }).join('') + '</div>';
+  }).join('') + '<div class="outline-note">Linked pages share indentation &middot; tap to open</div>';
+}
+
+function renderMap(v){
+  if(v==='ledger') return renderMapOutline(v);
+  if(v==='workbench'){
+    return '<div class="map-page-wrap">' + mapTopbar(v) +
+      '<div class="map-fullbleed">' + renderMapCanvas(v, true) + '</div>' +
+      renderMapDrawer(v) +
+    '</div>';
+  }
+  const top = mapTopbar(v);
+  const canvas = renderMapCanvas(v);
+  const hint = v==='atelier' ? '<div class="map-hint">Tap a node to bring it into focus</div>' : '';
+  return top + canvas + hint;
+}
+
+/* ============ PAGE 5: SETTINGS ============ */
+function settingsTopbar(v){
+  if(v==='ledger') return '<div class="topbar ledger-top"><span class="tb-title serif">Settings</span></div>';
+  if(v==='deck') return '<div class="topbar deck-top"><span class="tb-title mono">settings</span></div>';
+  if(v==='atelier') return '<div class="topbar atelier-top"><span class="crumb">Settings</span></div>';
+  return '<div class="topbar"><div class="tb-left"><span class="tb-title">Settings</span></div></div>';
+}
+
+function settingsSection(title, rows){
+  return '<div class="settings-section"><div class="settings-section-title">' + title + '</div><div class="settings-list">' + rows.join('') + '</div></div>';
+}
+function srow(iconName, title, sub, right){
+  return '<div class="settings-row" data-action="noop"><div class="sr-icon">' + icon(iconName) + '</div><div class="sr-body"><div class="sr-title">' + title + '</div><div class="sr-sub">' + sub + '</div></div>' + (right || icon('chevron-right')) + '</div>';
+}
+
+function workbenchAppearanceSection(){
+  const open = state.appearanceOpen;
+  const colorGrid = '<div class="theme-color-grid">' + Object.keys(COLOR_THEME_META).map(function(c){
+    const m = COLOR_THEME_META[c];
+    const dot = state.themeMode==='dark' ? m.dotDark : m.dotLight;
+    return '<button class="theme-color-btn ' + (state.colorTheme===c?'active':'') + '" data-action="set-color-theme" data-color="' + c + '">' +
+      '<span class="theme-color-dot" style="background:' + dot + '"></span>' + m.label + '</button>';
+  }).join('') + '</div>';
+  const modeRow = '<div class="theme-picker"><button class="theme-swatch ' + (state.themeMode==='light'?'active':'') + '" data-action="set-theme-mode" data-mode="light">Light</button><button class="theme-swatch ' + (state.themeMode==='dark'?'active':'') + '" data-action="set-theme-mode" data-mode="dark">Dark</button></div>';
+  const fontRow = '<div class="theme-picker"><button class="theme-swatch ' + (state.typeface==='sans'?'active':'') + '" data-action="set-typeface" data-font="sans">Sans</button><button class="theme-swatch ' + (state.typeface==='serif'?'active':'') + '" data-action="set-typeface" data-font="serif">Serif</button></div>';
+  const summary = COLOR_THEME_META[state.colorTheme].label + ' \u00b7 ' + (state.themeMode==='light'?'Light':'Dark') + ' \u00b7 ' + (state.typeface==='sans'?'Sans':'Serif');
+  const toggleRow = '<div class="settings-list"><button class="settings-row settings-row-toggle" data-action="toggle-appearance">' +
+      '<div class="sr-icon">' + icon('contrast') + '</div>' +
+      '<div class="sr-body"><div class="sr-title">Appearance</div><div class="sr-sub">' + summary + '</div></div>' +
+      icon(open ? 'chevron-down' : 'chevron-right') +
+    '</button></div>';
+  const expanded = open ? (
+    '<div class="appearance-expanded">' +
+      '<div class="settings-subhead">Colour</div>' + colorGrid +
+      '<div class="settings-subhead">Mode</div>' + modeRow +
+      '<div class="settings-subhead">Typeface</div>' + fontRow +
+    '</div>'
+  ) : '';
+  return '<div class="settings-section"><div class="settings-section-title">Appearance</div>' + toggleRow + expanded + '</div>';
+}
+
+function renderSettings(v){
+  const appearance = v==='workbench' ? workbenchAppearanceSection() :
+    '<div class="settings-section"><div class="settings-section-title">Appearance</div>' +
+    '<div class="theme-picker"><button class="theme-swatch light active" data-action="noop">Light</button><button class="theme-swatch dark" data-action="noop">Dark</button><button class="theme-swatch system" data-action="noop">System</button></div></div>';
+  const integrations = settingsSection('Integrations', [
+    '<div class="settings-field"><label>Anthropic API key</label><input class="sheet-input" type="password" placeholder="sk-ant-...' + '" /></div>',
+    srow('cloud','Google account','you@gmail.com &middot; connected', icon('check','ok-icon')),
+  ]);
+  const permissions = settingsSection('Permissions', [
+    srow('shield','Shizuku', 'Enables export &amp; habit-folder sync', '<span class="switch on"></span>'),
+  ]);
+  const data = settingsSection('Data', [
+    srow('download','Import all data', 'From a Noema or Notion backup'),
+    srow('upload','Export all data', 'Every page, task, habit and event'),
+    srow('clock','Automatic backup', 'Weekly, to habit sync folder'),
+  ]);
+  const about = settingsSection('General', [
+    srow('bell','Notifications', 'Events, task deadlines, habit reminders'),
+    srow('list','Language', 'English (US)'),
+    srow('database','Storage used', '84 MB of on-device data'),
+  ]);
+  return settingsTopbar(v) + appearance + integrations + permissions + data + about + '<div class="settings-version">Noema 1.0 (build 42)</div>';
+}
+
+/* ============ INTERACTIONS ============ */
+function handleAction(action, el){
+  const v = state.variant;
+  if(action==='noop'){ return; }
+  if(action==='close-sheet'){ closeSheet(); return; }
+  if(action==='open-pages-menu'){ openSheet(pagesActionSheet()); return; }
+  if(action==='open-page'){ openSheet(pagePreviewSheet(el.dataset.id)); return; }
+  if(action==='filter-cat'){ state.pageCat[v] = el.dataset.cat; render(); return; }
+  if(action==='open-cal-settings'){ state.calSettingsOpen[v] = true; render(); return; }
+  if(action==='close-cal-settings'){ state.calSettingsOpen[v] = false; render(); return; }
+  if(action==='set-cal-view'){ state.calView[v] = el.dataset.view; render(); return; }
+  if(action==='toggle-show-habits'){ state.showHabits[v] = !state.showHabits[v]; render(); return; }
+  if(action==='select-day'){ state.calView[v] = 'day'; render(); return; }
+  if(action==='select-weekday'){ return; }
+  if(action==='open-quick-add'){ openSheet(quickAddSheet()); return; }
+  if(action==='open-event'){ openSheet(eventDetailSheet(el.dataset.title)); return; }
+  if(action==='open-th-settings'){ state.thSettingsOpen[v] = true; render(); return; }
+  if(action==='close-th-settings'){ state.thSettingsOpen[v] = false; render(); return; }
+  if(action==='set-th-sub'){ state.sub[v] = el.dataset.sub; render(); return; }
+  if(action==='toggle-undated-th'){ state.undatedOpenTH[v] = !state.undatedOpenTH[v]; render(); return; }
+  if(action==='toggle-undated-merged'){ state.undatedOpen[v] = !state.undatedOpen[v]; render(); return; }
+  if(action==='open-th-add'){ openSheet(thAddSheet()); return; }
+  if(action==='focus-node'){ state.mapFocus[v] = el.dataset.id; render(); openSheet(mapNodeSheet(el.dataset.id)); return; }
+  if(action==='toggle-map-drawer'){ state.mapDrawerOpen[v] = !state.mapDrawerOpen[v]; render(); return; }
+  if(action==='set-task-filter'){ state.taskFilter[v] = el.dataset.filter; render(); return; }
+  if(action==='goto-pages'){ closeSheet(); state.page[v] = 'pages'; render(); return; }
+  if(action==='set-color-theme'){ state.colorTheme = el.dataset.color; render(); return; }
+  if(action==='set-theme-mode'){ state.themeMode = el.dataset.mode; render(); return; }
+  if(action==='set-typeface'){ state.typeface = el.dataset.font; render(); return; }
+  if(action==='toggle-appearance'){ state.appearanceOpen = !state.appearanceOpen; render(); return; }
+}
+
+function initInteractions(){
+  document.body.addEventListener('click', function(e){
+    const swatch = e.target.closest('.theme-swatch');
+    if(swatch && swatch.dataset.action==='noop'){
+      swatch.parentElement.querySelectorAll('.theme-swatch').forEach(function(s){ s.classList.remove('active'); });
+      swatch.classList.add('active');
+      return;
+    }
+    const sw = e.target.closest('.switch');
+    if(sw && !e.target.closest('[data-action="close-cal-settings"]')){
+      sw.classList.toggle('on');
+      return;
+    }
+    const variantBtn = e.target.closest('.switcher button');
+    if(variantBtn){
+      state.variant = variantBtn.dataset.variant;
+      render();
+      return;
+    }
+    const pageBtn = e.target.closest('[data-page]');
+    if(pageBtn){
+      state.page[state.variant] = pageBtn.dataset.page;
+      render();
+      return;
+    }
+    const navBtn = e.target.closest('[data-nav]');
+    if(navBtn){
+      const v = state.variant;
+      const idx = PAGE_ORDER.indexOf(state.page[v]);
+      const dir = navBtn.dataset.nav==='next' ? 1 : -1;
+      const next = (idx + dir + PAGE_ORDER.length) % PAGE_ORDER.length;
+      state.page[v] = PAGE_ORDER[next];
+      render();
+      return;
+    }
+    const actionEl = e.target.closest('[data-action]');
+    if(actionEl){
+      handleAction(actionEl.dataset.action, actionEl);
+      return;
+    }
+  });
+}
+
+/* ============ INIT ============ */
+function buildSwitcher(){
+  const el = document.getElementById('variant-switcher');
+  el.innerHTML = VARIANTS.map(function(v){
+    return '<button class="' + (v===state.variant?'active':'') + '" data-variant="' + v + '">' + VARIANT_META[v].label + '</button>';
+  }).join('');
+}
+
+function init(){
+  buildSwitcher();
+  initInteractions();
+  render();
+}
+init();
+
+</script>
+</body>
+</html>

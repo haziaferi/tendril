@@ -1,0 +1,202 @@
+package com.tendril.app.domain
+
+import com.tendril.app.data.completion.EntryCompletion
+import com.tendril.app.data.completion.EntryCompletionDao
+import com.tendril.app.data.entry.Entry
+import com.tendril.app.data.entry.EntryDao
+import com.tendril.app.data.entry.EntryKind
+import com.tendril.app.data.entry.EntrySource
+import com.tendril.app.data.entry.EntryStatus
+import com.tendril.app.data.entry.RecurrenceRule
+import com.tendril.app.data.entry.intervalToPeriod
+import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.pagedatabase.PageDatabase
+import com.tendril.app.data.pagedatabase.PageDatabaseDao
+import com.tendril.app.data.pagedatabase.PropertyValue
+import com.tendril.app.data.pagedatabase.PropertyValueDao
+import com.tendril.app.data.pagedatabase.formatIntervalValue
+import com.tendril.app.data.pagedatabase.parseIntervalValue
+import java.time.Instant
+import java.time.LocalDate
+
+enum class BindingRole { DONE, DEADLINE, RECURRENCE }
+
+/**
+ * §5.2/§5.2.1 — the database-level Sync-to-Tasks toggle plus the `bindProperty`/
+ * `unbindProperty` operations named there. Every linked Entry carries `sourceRowId` (§4),
+ * the FK [ResolveEntryUseCase] and the Row checkbox both read/write through, and
+ * `source = DATABASE_SYNC` to distinguish it from a manually-created Entry.
+ *
+ * Once bound, a role's property is a *live proxy*: its display value is always read from
+ * the linked Entry (§5.2.1), never re-stored in `property_values` — that table is cleared
+ * for a role's property on bind and repopulated only on unbind ("crystallizing" it back
+ * into an ordinary stored column, frozen at the Entry's state at that instant).
+ */
+class DatabaseSyncManager(
+    private val pageDao: PageDao,
+    private val pageDatabaseDao: PageDatabaseDao,
+    private val propertyValueDao: PropertyValueDao,
+    private val entryDao: EntryDao,
+    private val completionDao: EntryCompletionDao,
+    private val resolveEntryUseCase: ResolveEntryUseCase,
+) {
+    /**
+     * Turns Sync-to-Tasks on: records the three bindings and creates one linked Entry per
+     * selected row in [rowIds] (an "All" shortcut is just every row's id, §5.5), seeding each
+     * from whatever the bound properties already hold (§5.2.1). Rows that already carry a
+     * live Entry are skipped, not duplicated — safe to call again after a partial run.
+     */
+    suspend fun enableSync(
+        database: PageDatabase,
+        donePropertyId: Long,
+        deadlinePropertyId: Long?,
+        recurrencePropertyId: Long?,
+        rowIds: List<Long>,
+        now: Instant = Instant.now(),
+    ): PageDatabase {
+        for (rowId in rowIds) {
+            if (entryDao.getBySourceRowId(rowId) != null) continue
+            val row = pageDao.getById(rowId) ?: continue
+
+            val checked = propertyValueDao.getForPropertyAndRow(donePropertyId, rowId)?.value == "true"
+            val startDate = deadlinePropertyId
+                ?.let { propertyValueDao.getForPropertyAndRow(it, rowId)?.value }
+                ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            val recurrenceRule = recurrencePropertyId
+                ?.let { propertyValueDao.getForPropertyAndRow(it, rowId)?.value }
+                ?.let(::parseIntervalValue)
+                ?.let { (count, unit) -> RecurrenceRule.Elastic(intervalToPeriod(count, unit)) }
+
+            val entryId = entryDao.insert(
+                Entry(
+                    title = row.title,
+                    kind = EntryKind.TASK,
+                    startDate = startDate,
+                    startTime = null,
+                    endDate = null,
+                    endTime = null,
+                    recurrenceRule = recurrenceRule,
+                    status = if (checked) EntryStatus.DONE else EntryStatus.PENDING,
+                    sourceRowId = rowId,
+                    source = EntrySource.DATABASE_SYNC,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+            // §5.2.1 — a seeded DONE also writes one EntryCompletion row, `resolvedAt`
+            // approximate (the moment of binding, not the row's real historical completion
+            // time, which isn't recoverable).
+            if (checked) {
+                completionDao.insert(
+                    EntryCompletion(entryId = entryId, occurrenceDate = startDate ?: LocalDate.now(), resolvedAt = now, status = EntryStatus.DONE)
+                )
+            }
+        }
+        for (propertyId in listOfNotNull(donePropertyId, deadlinePropertyId, recurrencePropertyId)) {
+            propertyValueDao.deleteAllForProperty(propertyId)
+        }
+
+        val updated = database.copy(
+            syncToTasks = true,
+            donePropertyId = donePropertyId,
+            deadlinePropertyId = deadlinePropertyId,
+            recurrencePropertyId = recurrencePropertyId,
+            updatedAt = now,
+        )
+        pageDatabaseDao.update(updated)
+        return updated
+    }
+
+    /** §5.5 — bulk-cleanup: every row's linked Entry goes to Trash (restorable), bindings clear. */
+    suspend fun disableSync(database: PageDatabase, now: Instant = Instant.now()): PageDatabase {
+        for (row in pageDao.getRowsOf(database.id)) {
+            entryDao.getBySourceRowId(row.id)?.let { resolveEntryUseCase.trash(it.id, now) }
+        }
+        val updated = database.copy(syncToTasks = false, donePropertyId = null, deadlinePropertyId = null, recurrencePropertyId = null, updatedAt = now)
+        pageDatabaseDao.update(updated)
+        return updated
+    }
+
+    /**
+     * §5.2.1 `bindProperty` — binds [propertyId] to [role] on an already-syncing database (a
+     * post-hoc bind of a previously-unbound optional role, or the "new" half of a rebind).
+     * Crystallizes whatever was previously bound to this role first, then seeds every row's
+     * Entry from the new property's existing stored values, then clears them (live proxy from
+     * here on).
+     */
+    suspend fun bindProperty(database: PageDatabase, role: BindingRole, propertyId: Long, now: Instant = Instant.now()): PageDatabase {
+        val rows = pageDao.getRowsOf(database.id)
+        val oldPropertyId = database.propertyIdFor(role)
+        if (oldPropertyId != null) crystallize(rows, oldPropertyId, role, now)
+
+        for (row in rows) {
+            val entry = entryDao.getBySourceRowId(row.id) ?: continue
+            val newValue = propertyValueDao.getForPropertyAndRow(propertyId, row.id)?.value
+            val updatedEntry = when (role) {
+                BindingRole.DONE -> entry.copy(status = if (newValue == "true") EntryStatus.DONE else EntryStatus.PENDING, updatedAt = now)
+                BindingRole.DEADLINE -> entry.copy(startDate = newValue?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, updatedAt = now)
+                BindingRole.RECURRENCE -> entry.copy(
+                    recurrenceRule = newValue?.let(::parseIntervalValue)?.let { (count, unit) -> RecurrenceRule.Elastic(intervalToPeriod(count, unit)) },
+                    updatedAt = now,
+                )
+            }
+            entryDao.update(updatedEntry)
+        }
+        propertyValueDao.deleteAllForProperty(propertyId)
+
+        val updated = database.withPropertyIdFor(role, propertyId).copy(updatedAt = now)
+        pageDatabaseDao.update(updated)
+        return updated
+    }
+
+    /** §5.2.1 `unbindProperty` — the reverse: crystallizes the role's current Entry-derived
+     * value back into an ordinary stored column and stops proxying. */
+    suspend fun unbindProperty(database: PageDatabase, role: BindingRole, now: Instant = Instant.now()): PageDatabase {
+        val propertyId = database.propertyIdFor(role) ?: return database
+        crystallize(pageDao.getRowsOf(database.id), propertyId, role, now)
+        val updated = database.withPropertyIdFor(role, null).copy(updatedAt = now)
+        pageDatabaseDao.update(updated)
+        return updated
+    }
+
+    /** §5.2.1 rebind — `unbindProperty` immediately followed by `bindProperty`, as one atomic
+     * action. No Entry is ever deleted or recreated (`sourceRowId` is untouched throughout). */
+    suspend fun rebindProperty(database: PageDatabase, role: BindingRole, newPropertyId: Long, now: Instant = Instant.now()): PageDatabase =
+        bindProperty(unbindProperty(database, role, now), role, newPropertyId, now)
+
+    /** A live-proxy property's `property_values` rows are already empty (cleared on bind) —
+     * this only ever writes fresh rows, one per Row that has a linked Entry, never needs to
+     * clear first. */
+    private suspend fun crystallize(rows: List<com.tendril.app.data.page.Page>, propertyId: Long, role: BindingRole, now: Instant) {
+        for (row in rows) {
+            val entry = entryDao.getBySourceRowId(row.id) ?: continue
+            val frozen = when (role) {
+                BindingRole.DONE -> (entry.status == EntryStatus.DONE).toString()
+                BindingRole.DEADLINE -> entry.startDate?.toString()
+                BindingRole.RECURRENCE -> (entry.recurrenceRule as? RecurrenceRule.Elastic)?.period?.let {
+                    // Period doesn't carry back which single IntervalUnit it was entered as;
+                    // re-derive the closest whole-unit (n, unit) pair the same way it must have
+                    // been entered, since Elastic recurrence here only ever comes from one.
+                    when {
+                        it.months != 0 -> formatIntervalValue(it.months, com.tendril.app.data.entry.IntervalUnit.MONTH)
+                        it.days % 7 == 0 && it.days != 0 -> formatIntervalValue(it.days / 7, com.tendril.app.data.entry.IntervalUnit.WEEK)
+                        else -> formatIntervalValue(it.days, com.tendril.app.data.entry.IntervalUnit.DAY)
+                    }
+                }
+            }
+            if (frozen != null) propertyValueDao.insert(PropertyValue(propertyId = propertyId, rowPageId = row.id, value = frozen))
+        }
+    }
+
+    private fun PageDatabase.propertyIdFor(role: BindingRole): Long? = when (role) {
+        BindingRole.DONE -> donePropertyId
+        BindingRole.DEADLINE -> deadlinePropertyId
+        BindingRole.RECURRENCE -> recurrencePropertyId
+    }
+
+    private fun PageDatabase.withPropertyIdFor(role: BindingRole, propertyId: Long?): PageDatabase = when (role) {
+        BindingRole.DONE -> copy(donePropertyId = propertyId)
+        BindingRole.DEADLINE -> copy(deadlinePropertyId = propertyId)
+        BindingRole.RECURRENCE -> copy(recurrencePropertyId = propertyId)
+    }
+}

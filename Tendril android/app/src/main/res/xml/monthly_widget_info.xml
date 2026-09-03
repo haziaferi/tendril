@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §8.1 — Monthly grid's three density tiers span roughly 4×2 (dots) up to 4×5 (wrap);
+     minHeight starts at the dots tier, resizable taller to reach one/wrap. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="120dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="120dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:previewImage="@mipmap/ic_launcher"
+    android:configure="com.tendril.app.widget.AppWidgetConfigureActivity"
+    android:initialLayout="@layout/widget_loading" />

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §8.1 — "resizable from 1×1 up to 2×2+." minResizeWidth/Height matches the 1×1 floor;
+     no maxResizeWidth/Height cap, since the number never distorts past its fixed size. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="60dp"
+    android:minHeight="60dp"
+    android:minResizeWidth="60dp"
+    android:minResizeHeight="60dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:previewImage="@mipmap/ic_launcher"
+    android:configure="com.tendril.app.widget.AppWidgetConfigureActivity"
+    android:initialLayout="@layout/widget_loading" />

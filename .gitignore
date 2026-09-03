@@ -1,0 +1,51 @@
+# Tendril monorepo — "Tendril android", "Tendril windows" and "shared" in one tree.
+# `shared` stays a sibling of its consumers, never nested under them (spec §11/§12.5):
+# both settings.gradle.kts files resolve it as includeBuild("../shared"), so one clone
+# has to reproduce that arrangement exactly.
+
+# --- Signing material. Never commit. ------------------------------------------
+# "Tendril android/keystores/my-shared-debug.keystore" was covered by nothing
+# before this file existed.
+keystores/
+*.keystore
+*.jks
+*.p12
+*.pepk
+
+# --- Machine-specific -----------------------------------------------------------
+# local.properties pins sdk.dir to an absolute path on one machine; the file even
+# says so. Not portable, not shared.
+local.properties
+*.local.properties
+
+# --- Gradle and build output ----------------------------------------------------
+.gradle/
+build/
+captures/
+.cxx/
+.externalNativeBuild/
+*.hprof
+
+# JVM crash debris. The Kotlin/Gradle daemon drops these next to the build it died
+# in — 9 MB of them were sitting in shared/ and Tendril android/ already.
+replay_pid*.log
+hs_err_pid*.log
+core.*
+
+# Wrapper jar is intentionally NOT ignored: it is what makes ./gradlew work on a
+# fresh clone.
+
+# --- IDE ------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.kotlin/
+
+# --- Local agent/tool state -----------------------------------------------------
+.claude/
+
+# --- OS -------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

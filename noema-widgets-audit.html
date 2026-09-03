@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Noema — widgets audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{ --radius:4px; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+button,input{font:inherit;color:inherit;border:none;background:none;cursor:pointer;-webkit-appearance:none;appearance:none;}
+html,body{height:100%;}
+body{
+  background:#e8e6df;
+  font-family:'DM Sans',sans-serif;
+  color:#1b1b18;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:28px 12px 60px;
+  min-height:100vh;
+}
+
+/* ---------- page chrome ---------- */
+.lab-header{max-width:900px;width:100%;text-align:center;margin-bottom:22px;}
+.lab-header .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8a887f;font-weight:500;}
+.lab-header h1{font-family:'DM Sans',sans-serif;font-size:24px;font-weight:600;margin-top:6px;color:#1b1b18;}
+.lab-header p{font-size:13.5px;color:#6b6a63;margin-top:6px;max-width:600px;margin-left:auto;margin-right:auto;line-height:1.5;}
+
+/* ---------- control panel ---------- */
+.controls{
+  width:100%;max-width:960px;
+  background:#fff;border:1px solid #e4e2da;border-radius:14px;
+  padding:16px 18px;margin-bottom:26px;
+  display:flex;flex-wrap:wrap;gap:22px;
+  align-items:flex-start;
+}
+.ctrl-group{display:flex;flex-direction:column;gap:8px;}
+.ctrl-label{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:#9c9a91;font-weight:500;}
+.ctrl-row{display:flex;gap:6px;flex-wrap:wrap;}
+.ctrl-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 12px;border-radius:8px;border:1px solid #e4e2da;background:#faf9f7;
+  font-size:12px;color:#6b6a63;
+}
+.ctrl-btn.active{background:#1b1b18;color:#fff;border-color:#1b1b18;}
+.ctrl-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+.opacity-group{flex:1;min-width:200px;}
+.accent2-group{flex:1;min-width:200px;}
+.ctrl-swatch-preview{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:4px;vertical-align:-1px;border:1px solid rgba(0,0,0,.1);}
+.dual-slider-row{margin-bottom:8px;}
+.dual-slider-row:last-child{margin-bottom:0;}
+.mini-label{display:flex;justify-content:space-between;font-size:11px;color:#6b6a63;margin-bottom:3px;}
+.dual-slider-row input[type=range]{width:100%;accent-color:#4a5568;}
+.opacity-row{display:flex;align-items:center;gap:10px;}
+.opacity-row input[type=range]{flex:1;accent-color:#4a5568;}
+.opacity-val{font-size:12px;color:#6b6a63;width:38px;text-align:right;font-variant-numeric:tabular-nums;}
+.audit-readout{display:flex;align-items:center;gap:7px;font-size:11px;margin-top:8px;line-height:1.4;}
+.audit-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.audit-readout.pass{color:#3d6b4a;}
+.audit-readout.pass .audit-dot{background:#4a9560;}
+.audit-readout.fail{color:#9c4a3a;}
+.audit-readout.fail .audit-dot{background:#c85a42;}
+
+/* ---------- home screen backdrop ---------- */
+.home-wrap{position:relative;}
+.homescreen{
+  width:390px;height:844px;
+  border-radius:46px;
+  background:#000;
+  padding:12px;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.12);
+  position:relative;
+}
+.homescreen-inner{
+  width:100%;height:100%;border-radius:36px;overflow:hidden;position:relative;
+  background:
+    radial-gradient(circle at 25% 18%, rgba(255,255,255,.20), transparent 42%),
+    radial-gradient(circle at 78% 12%, rgba(255,214,170,.28), transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(160,190,220,.30), transparent 45%),
+    radial-gradient(circle at 15% 80%, rgba(200,170,210,.25), transparent 45%),
+    linear-gradient(160deg, #6b7f9e 0%, #8891ab 30%, #a99cae 65%, #c9a893 100%);
+}
+.notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:120px;height:26px;background:#000;border-radius:14px;z-index:50;}
+.statusbar{
+  position:absolute;top:0;left:0;right:0;height:46px;z-index:20;
+  display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 6px;
+  font-size:13px;font-weight:500;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+.gesture-home{position:absolute;bottom:10px;left:0;right:0;display:flex;align-items:center;justify-content:center;z-index:20;}
+.gesture-home::after{content:'';width:120px;height:4px;border-radius:3px;background:#fff;opacity:.75;}
+
+.widget-field{position:absolute;top:64px;left:14px;right:14px;bottom:34px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;}
+.widget-field::-webkit-scrollbar{display:none;}
+.field-row{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;}
+.field-label{
+  font-family:'DM Sans',sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4);opacity:.85;margin-bottom:-4px;
+}
+
+/* ---------- widget base ---------- */
+.widget{
+  border-radius:20px;
+  overflow:hidden;
+  position:relative;
+  box-shadow:0 10px 24px -10px rgba(0,0,0,.35);
+  font-family:var(--w-font-body);
+  color:var(--w-text);
+}
+.widget-bg{position:absolute;inset:0;background:var(--w-bg);}
+.widget-content{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;}
+
+/* ---------- date widget ---------- */
+.w-date-content{align-items:center;justify-content:center;text-align:center;padding:6px;}
+.w-date-num{font-size:30px;font-weight:600;color:var(--w-accent2);line-height:1;}
+.w-date-month{font-size:10.5px;color:var(--w-text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
+
+/* ---------- monthly widget ---------- */
+.w-m-titlebar{display:flex;align-items:center;justify-content:space-between;padding:9px 12px 4px;flex:0 0 auto;}
+.w-chevron{color:var(--w-text-faint);font-size:14px;line-height:1;}
+.w-m-title{font-size:12.5px;font-weight:600;color:var(--w-text);}
+.w-m-headrow{display:grid;grid-template-columns:repeat(7,1fr);padding:2px 8px;flex:0 0 auto;}
+.w-m-head{text-align:center;font-size:8.5px;color:var(--w-accent2);}
+.w-m-grid{display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(5,1fr);flex:1;padding:0 6px 6px;gap:1px;min-height:0;}
+.w-m-cell{display:flex;flex-direction:column;align-items:center;padding-top:2px;overflow:hidden;gap:1px;}
+.w-m-cell.out{opacity:.32;}
+.w-m-daynum{font-size:9.5px;color:var(--w-text);width:15px;height:15px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;}
+.w-m-cell.today .w-m-daynum{background:var(--w-accent-strong);color:var(--w-on-accent);font-weight:600;}
+.w-m-dot{width:4px;height:4px;border-radius:50%;background:var(--w-accent);margin-top:1px;flex:none;}
+.w-m-chip{font-size:6.8px;line-height:1.25;background:var(--w-accent-soft);color:var(--w-accent-soft-text);border-radius:2px;padding:1px 2px;width:100%;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:none;}
+.w-m-chip.wrap{font-size:8px;line-height:1.25;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;text-overflow:ellipsis;padding:2px 3px;}
+.density-wrap .w-m-cell{padding-top:4px;gap:2px;}
+.w-m-more{font-size:6.3px;color:var(--w-text-dim);flex:none;}
+
+/* density: compact (dots) gets a bit more top padding since cells are short */
+.density-dots .w-m-cell{padding-top:4px;}
+
+/* ---------- list / agenda widget ---------- */
+.w-l-titlebar{padding:10px 14px 2px;font-size:12.5px;font-weight:600;color:var(--w-text);flex:0 0 auto;}
+.w-l-scroll{flex:1;overflow-y:auto;padding:0 14px 10px;min-height:0;}
+.w-l-scroll::-webkit-scrollbar{display:none;}
+.w-l-day{font-size:9.5px;font-weight:600;color:var(--w-accent2);text-transform:uppercase;letter-spacing:.05em;padding:8px 0 4px;}
+.w-l-row{display:flex;gap:10px;padding:3px 0;}
+.w-l-time{font-size:10.5px;color:var(--w-accent2);width:36px;flex:none;font-variant-numeric:tabular-nums;}
+.w-l-title{font-size:11.5px;color:var(--w-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+</style>
+</head>
+<body>
+
+<div class="lab-header">
+  <div class="eyebrow">Noema — widgets audit</div>
+  <h1>Three home-screen widgets, one system</h1>
+  <p>Same colour / mode / typeface controls as the app, plus a background-opacity slider like Fossify Calendar's. The monthly grid is shown at three heights to audit exactly how far event text can go before it needs to fall back to a dot.</p>
+</div>
+
+<div class="controls" id="controls"></div>
+
+<div class="home-wrap">
+  <div class="homescreen">
+    <div class="notch"></div>
+    <div class="homescreen-inner" id="homescreen-inner">
+      <div class="statusbar"><span>9:41</span><span>&#9679;&#9679;&#9679;</span></div>
+      <div class="widget-field" id="widget-field"></div>
+      <div class="gesture-home"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ PALETTES (copied exactly from the app) ============ */
+const PALETTES = {
+  ink:{
+    light:{bg:'#FFFFFF',surface2:'#F1F0EC',text:'#1B1B18',textDim:'#6B6A63',textFaint:'#959389',accent:'#4A5568',accentStrong:'#333D4D',onAccent:'#FFFFFF',accentSoft:'#E7EAEE',accentSoftText:'#3D4759',border:'#E4E2DA',baseHue:188.0,baseSat:0.169,baseL:0.349},
+    dark:{bg:'#1B1D21',surface2:'#24262B',text:'#EDEDEF',textDim:'#9B9DA3',textFaint:'#6A6C72',accent:'#8792A6',accentStrong:'#A9B3C4',onAccent:'#12131A',accentSoft:'#262A33',accentSoftText:'#9BAAC2',border:'#2A2D33',baseHue:187.7,baseSat:0.148,baseL:0.59},
+  },
+  clay:{
+    light:{bg:'#FFFFFF',surface2:'#F1E9DC',text:'#2A2320',textDim:'#7A6B5C',textFaint:'#A28F79',accent:'#A87249',accentStrong:'#8A5D3B',onAccent:'#FFFFFF',accentSoft:'#F3E4D3',accentSoftText:'#7A4E2E',border:'#EBDFCC',baseHue:356.2,baseSat:0.394,baseL:0.473},
+    dark:{bg:'#221C18',surface2:'#2B241F',text:'#F2EAE1',textDim:'#B0A190',textFaint:'#776A5A',accent:'#D4A57C',accentStrong:'#E8C39D',onAccent:'#1A1310',accentSoft:'#33281F',accentSoftText:'#E0B98E',border:'#362E27',baseHue:358.0,baseSat:0.506,baseL:0.659},
+  },
+  moss:{
+    light:{bg:'#FFFFFF',surface2:'#EBF0E9',text:'#1E241F',textDim:'#5E6B5F',textFaint:'#889783',accent:'#6E8C70',accentStrong:'#48624A',onAccent:'#FFFFFF',accentSoft:'#E4ECE3',accentSoftText:'#3C5240',border:'#E2E9E0',baseHue:94.6,baseSat:0.119,baseL:0.427},
+    dark:{bg:'#1C211B',surface2:'#232A22',text:'#E9EFE7',textDim:'#9DAA9A',textFaint:'#6B766A',accent:'#93AC93',accentStrong:'#B3C7B1',onAccent:'#131A13',accentSoft:'#253026',accentSoftText:'#A9C2A8',border:'#2A322A',baseHue:88.8,baseSat:0.131,baseL:0.625},
+  },
+  mauve:{
+    light:{bg:'#FFFFFF',surface2:'#F1E7EC',text:'#241E22',textDim:'#7A6B72',textFaint:'#A38C99',accent:'#A9708D',accentStrong:'#7D4D64',onAccent:'#FFFFFF',accentSoft:'#F0DEE6',accentSoftText:'#7A4A5E',border:'#EBD9E1',baseHue:359.0,baseSat:0.250,baseL:0.514},
+    dark:{bg:'#211A23',surface2:'#29212C',text:'#F0E6EB',textDim:'#AC9AA5',textFaint:'#77636D',accent:'#CC93AC',accentStrong:'#E0AFC4',onAccent:'#18121A',accentSoft:'#322730',accentSoftText:'#DBA9BE',border:'#362B38',baseHue:3.2,baseSat:0.358,baseL:0.688},
+  },
+};
+// each theme/mode carries its own exact baseL; only the safe-extreme target is shared per mode
+const SAFE_L = { light:0.12, dark:0.88 };
+const COLOR_LABELS = {ink:'Ink', clay:'Clay', moss:'Moss', mauve:'Mauve'};
+const FONTS = { sans:"'DM Sans',sans-serif", serif:"'Source Serif 4',serif" };
+
+/* ============ STATE ============ */
+const state = { color:'ink', mode:'light', font:'sans', opacity:88, shade:0, hueOffset:0 };
+
+/* ============ SAMPLE DATA ============ */
+const WEEKDAYS = ['M','T','W','T','F','S','S'];
+const MONTH_GRID = [
+  [{d:28,out:true},{d:29,out:true},{d:30,out:true},{d:1},{d:2},{d:3},{d:4}],
+  [{d:5},{d:6},{d:7},{d:8},{d:9},{d:10},{d:11}],
+  [{d:12},{d:13},{d:14},{d:15},{d:16,today:true},{d:17},{d:18}],
+  [{d:19},{d:20},{d:21},{d:22},{d:23},{d:24},{d:25}],
+  [{d:26},{d:27},{d:28},{d:29},{d:30},{d:1,out:true},{d:2,out:true}],
+];
+const MONTH_EVENTS = {
+  9:['Team sync','Grocery run'],
+  14:['Reply to Priya'],
+  16:['Standup','Design review','Dentist','Coffee w/ Sam'],
+  22:['Book flight'],
+  27:['Q3 OKR review','Call plumber','Pack for trip'],
+};
+const AGENDA = [
+  {day:'Fri 16', items:[
+    {t:'07:00', title:'Morning meditation'},
+    {t:'09:00', title:'Standup'},
+    {t:'11:00', title:'Design review'},
+    {t:'14:00', title:'Reply to Priya re: contract'},
+    {t:'16:30', title:'Dentist'},
+    {t:'21:30', title:'Read'},
+  ]},
+  {day:'Sat 17', items:[
+    {t:'10:00', title:'Farmers market'},
+    {t:'13:00', title:'Lunch with Mary'},
+  ]},
+  {day:'Sun 18', items:[
+    {t:'09:00', title:'Long run'},
+    {t:'18:00', title:'Family dinner'},
+  ]},
+];
+
+/* ============ COLOR HELPERS ============ */
+function hexToRgb(hex){
+  const h = hex.replace('#','');
+  return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) };
+}
+function rgba(hex, alphaPct){
+  const c = hexToRgb(hex);
+  return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + (alphaPct/100) + ')';
+}
+function pal(){ return PALETTES[state.color][state.mode]; }
+
+// HSL (h in degrees, s/l in 0..1) -> #RRGGBB
+function hslToHex(hDeg, s, l){
+  const h = ((hDeg % 360) + 360) % 360 / 360;
+  function hue2rgb(p,q,t){
+    if(t<0) t+=1; if(t>1) t-=1;
+    if(t<1/6) return p+(q-p)*6*t;
+    if(t<1/2) return q;
+    if(t<2/3) return p+(q-p)*(2/3-t)*6;
+    return p;
+  }
+  let r,g,b;
+  if(s===0){ r=g=b=l; }
+  else{
+    const q = l<0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l-q;
+    r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
+  }
+  const toHex = v => Math.round(v*255).toString(16).padStart(2,'0').toUpperCase();
+  return '#'+toHex(r)+toHex(g)+toHex(b);
+}
+
+// accent2 is no longer a fixed swatch: shade interpolates lightness from the original
+// vivid tone toward the mode's verified-safe extreme (dark in light mode, light in dark
+// mode); hueOffset rotates within roughly a quarter of the wheel around the theme's own
+// accent2 hue, since hue itself was found to cost nothing once lightness is in a safe band.
+function currentAccent2(){
+  const p = pal();
+  const l = p.baseL + (SAFE_L[state.mode] - p.baseL) * (state.shade/100);
+  const h = p.baseHue + state.hueOffset;
+  return hslToHex(h, p.baseSat, l);
+}
+
+/* ============ LIVE CONTRAST AUDIT (same math as the offline audit) ============ */
+function relLum(rgb){
+  function f(c){ c=c/255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+  return 0.2126*f(rgb.r) + 0.7152*f(rgb.g) + 0.0722*f(rgb.b);
+}
+function crRatio(rgbA, rgbB){
+  const la = relLum(rgbA), lb = relLum(rgbB);
+  const hi = Math.max(la,lb), lo = Math.min(la,lb);
+  return (hi+0.05) / (lo+0.05);
+}
+function compositeRgb(fgHex, bgRgb, alphaPct){
+  const fg = hexToRgb(fgHex);
+  const a = alphaPct/100;
+  return { r: a*fg.r + (1-a)*bgRgb.r, g: a*fg.g + (1-a)*bgRgb.g, b: a*fg.b + (1-a)*bgRgb.b };
+}
+// worst-case wallpaper brackets: pure white and pure black behind the translucent widget
+const WALLPAPER_BRACKETS = { white:{r:255,g:255,b:255}, black:{r:0,g:0,b:0} };
+// real thresholds per role, based on actual rendered font size in this widget set
+// (accent is only ever used at 30px/600 for the date number -> legitimate large-text 3:1 exemption;
+//  every other role is used well under the 18pt/14pt-bold large-text cutoff -> needs 4.5:1)
+const ROLE_THRESHOLD = { text:4.5, textDim:4.5, textFaint:3.0, accent:3.0, accentStrong:4.5, accent2:4.5 };
+
+function worstCaseContrast(role){
+  const p = pal();
+  const textHex = role === 'accent2' ? currentAccent2() : p[role];
+  const textRgb = hexToRgb(textHex);
+  let worst = Infinity;
+  Object.keys(WALLPAPER_BRACKETS).forEach(function(wp){
+    const bgComposite = compositeRgb(p.bg, WALLPAPER_BRACKETS[wp], state.opacity);
+    const cr = crRatio(textRgb, bgComposite);
+    if(cr < worst) worst = cr;
+  });
+  return worst;
+}
+function liveAuditSummary(){
+  const roles = Object.keys(ROLE_THRESHOLD);
+  const rows = roles.map(function(role){
+    const cr = worstCaseContrast(role);
+    const threshold = ROLE_THRESHOLD[role];
+    return { role, cr, threshold, pass: cr >= threshold };
+  });
+  const allPass = rows.every(function(r){ return r.pass; });
+  return { rows, allPass };
+}
+
+
+/* ============ WIDGET CSS-VAR APPLICATION ============ */
+function widgetStyleAttr(extra){
+  const p = pal();
+  const bgAlpha = rgba(p.bg, state.opacity);
+  return 'style="' +
+    '--w-bg:' + bgAlpha + ';' +
+    '--w-text:' + p.text + ';' +
+    '--w-text-dim:' + p.textDim + ';' +
+    '--w-text-faint:' + p.textFaint + ';' +
+    '--w-accent:' + p.accent + ';' +
+    '--w-accent-strong:' + p.accentStrong + ';' +
+    '--w-accent2:' + currentAccent2() + ';' +
+    '--w-on-accent:' + p.onAccent + ';' +
+    '--w-accent-soft:' + p.accentSoft + ';' +
+    '--w-accent-soft-text:' + p.accentSoftText + ';' +
+    '--w-border:' + p.border + ';' +
+    '--w-font-body:' + FONTS[state.font] + ';' +
+    (extra || '') +
+    '"';
+}
+
+/* ============ ICON ============ */
+function dotIcon(){ return '<svg width="1em" height="1em" viewBox="0 0 24 24" style="display:inline-block;vertical-align:-0.15em;"><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>'; }
+
+/* ============ DATE WIDGET ============ */
+function renderDateWidget(w, h, sizeLabel){
+  return '<div class="widget w-date" ' + widgetStyleAttr('width:' + w + 'px;height:' + h + 'px;') + '>' +
+    '<div class="widget-bg"></div>' +
+    '<div class="widget-content w-date-content">' +
+      '<div class="w-date-num">16</div>' +
+      '<div class="w-date-month">Jul</div>' +
+    '</div></div>';
+}
+
+/* ============ MONTHLY WIDGET ============ */
+function monthDayCell(cell, density){
+  const events = !cell.out ? (MONTH_EVENTS[cell.d]||[]) : [];
+  let marks = '';
+  if(events.length){
+    if(density==='dots'){
+      marks = '<span class="w-m-dot"></span>';
+    } else if(density==='one'){
+      marks = '<span class="w-m-chip">' + events[0] + '</span>';
+      if(events.length > 1){
+        marks += '<span class="w-m-more">+' + (events.length - 1) + '</span>';
+      }
+    } else if(density==='wrap'){
+      marks = '<span class="w-m-chip wrap">' + events[0] + '</span>';
+      if(events.length > 1){
+        marks += '<span class="w-m-more">+' + (events.length - 1) + '</span>';
+      }
+    }
+  }
+  const cls = 'w-m-cell' + (cell.out?' out':'') + (cell.today?' today':'');
+  return '<div class="' + cls + '"><span class="w-m-daynum">' + cell.d + '</span>' + marks + '</div>';
+}
+
+function renderMonthlyWidget(density, heightPx, label){
+  const head = WEEKDAYS.map(function(w){ return '<span class="w-m-head">' + w + '</span>'; }).join('');
+  const rows = MONTH_GRID.map(function(row){
+    return row.map(function(c){ return monthDayCell(c, density); }).join('');
+  }).join('');
+  return '<div class="widget w-monthly density-' + density + '" ' + widgetStyleAttr('width:338px;height:' + heightPx + 'px;') + '>' +
+    '<div class="widget-bg"></div>' +
+    '<div class="widget-content">' +
+      '<div class="w-m-titlebar"><span class="w-chevron">&#8249;</span><span class="w-m-title">July</span><span class="w-chevron">&#8250;</span></div>' +
+      '<div class="w-m-headrow">' + head + '</div>' +
+      '<div class="w-m-grid density-' + density + '">' + rows + '</div>' +
+    '</div></div>';
+}
+
+/* ============ LIST / AGENDA WIDGET ============ */
+function renderListWidget(heightPx, label){
+  const body = AGENDA.map(function(g){
+    return '<div class="w-l-day">' + g.day + '</div>' +
+      g.items.map(function(it){
+        return '<div class="w-l-row"><span class="w-l-time">' + it.t + '</span><span class="w-l-title">' + it.title + '</span></div>';
+      }).join('');
+  }).join('');
+  return '<div class="widget w-list" ' + widgetStyleAttr('width:338px;height:' + heightPx + 'px;') + '>' +
+    '<div class="widget-bg"></div>' +
+    '<div class="widget-content">' +
+      '<div class="w-l-titlebar">Agenda</div>' +
+      '<div class="w-l-scroll">' + body + '</div>' +
+    '</div></div>';
+}
+
+/* ============ CONTROLS ============ */
+function renderControls(){
+  const colorRow = Object.keys(COLOR_LABELS).map(function(c){
+    const dot = PALETTES[c][state.mode].accent;
+    return '<button class="ctrl-btn ' + (state.color===c?'active':'') + '" data-set="color" data-val="' + c + '"><span class="ctrl-dot" style="background:' + dot + '"></span>' + COLOR_LABELS[c] + '</button>';
+  }).join('');
+  const modeRow = ['light','dark'].map(function(m){
+    return '<button class="ctrl-btn ' + (state.mode===m?'active':'') + '" data-set="mode" data-val="' + m + '">' + (m==='light'?'Light':'Dark') + '</button>';
+  }).join('');
+  const fontRow = ['sans','serif'].map(function(f){
+    return '<button class="ctrl-btn ' + (state.font===f?'active':'') + '" data-set="font" data-val="' + f + '">' + (f==='sans'?'Sans':'Serif') + '</button>';
+  }).join('');
+
+  document.getElementById('controls').innerHTML =
+    '<div class="ctrl-group"><span class="ctrl-label">Colour</span><div class="ctrl-row">' + colorRow + '</div></div>' +
+    '<div class="ctrl-group"><span class="ctrl-label">Mode</span><div class="ctrl-row">' + modeRow + '</div></div>' +
+    '<div class="ctrl-group"><span class="ctrl-label">Typeface</span><div class="ctrl-row">' + fontRow + '</div></div>' +
+    '<div class="ctrl-group accent2-group">' +
+      '<span class="ctrl-label">Date / time colour <span class="ctrl-swatch-preview" id="accent2-preview"></span></span>' +
+      '<div class="dual-slider-row">' +
+        '<label class="mini-label">Shade <span id="shade-val">' + state.shade + '%</span></label>' +
+        '<input type="range" id="shade-slider" min="0" max="100" step="10" value="' + state.shade + '">' +
+      '</div>' +
+      '<div class="dual-slider-row">' +
+        '<label class="mini-label">Hue <span id="hue-val">' + (state.hueOffset>0?'+':'') + state.hueOffset + '&deg;</span></label>' +
+        '<input type="range" id="hue-slider" min="-90" max="90" step="10" value="' + state.hueOffset + '">' +
+      '</div>' +
+    '</div>' +
+    '<div class="ctrl-group opacity-group"><span class="ctrl-label">Background opacity</span>' +
+      '<div class="opacity-row"><input type="range" id="opacity-slider" min="0" max="100" step="10" value="' + state.opacity + '"><span class="opacity-val" id="opacity-val">' + state.opacity + '%</span></div>' +
+      '<div class="audit-readout" id="audit-readout"></div>' +
+    '</div>';
+
+  document.getElementById('opacity-slider').addEventListener('input', function(e){
+    state.opacity = parseInt(e.target.value, 10);
+    document.getElementById('opacity-val').textContent = state.opacity + '%';
+    renderAuditReadout();
+    renderWidgets();
+  });
+  document.getElementById('shade-slider').addEventListener('input', function(e){
+    state.shade = parseInt(e.target.value, 10);
+    document.getElementById('shade-val').textContent = state.shade + '%';
+    updateAccent2Preview();
+    renderAuditReadout();
+    renderWidgets();
+  });
+  document.getElementById('hue-slider').addEventListener('input', function(e){
+    state.hueOffset = parseInt(e.target.value, 10);
+    document.getElementById('hue-val').innerHTML = (state.hueOffset>0?'+':'') + state.hueOffset + '&deg;';
+    updateAccent2Preview();
+    renderAuditReadout();
+    renderWidgets();
+  });
+  document.querySelectorAll('[data-set]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state[btn.dataset.set] = btn.dataset.val;
+      renderControls();
+      renderWidgets();
+    });
+  });
+  updateAccent2Preview();
+  renderAuditReadout();
+}
+
+function updateAccent2Preview(){
+  const el = document.getElementById('accent2-preview');
+  if(el) el.style.background = currentAccent2();
+}
+
+function renderAuditReadout(){
+  const el = document.getElementById('audit-readout');
+  if(!el) return;
+  const audit = liveAuditSummary();
+  if(audit.allPass){
+    const minCr = Math.min.apply(null, audit.rows.map(function(r){ return r.cr; }));
+    el.className = 'audit-readout pass';
+    el.innerHTML = '<span class="audit-dot"></span>Readable against any wallpaper, worst case ' + minCr.toFixed(1) + ':1';
+  } else {
+    const worst = audit.rows.slice().sort(function(a,b){ return (a.cr/a.threshold) - (b.cr/b.threshold); })[0];
+    el.className = 'audit-readout fail';
+    el.innerHTML = '<span class="audit-dot"></span>Low contrast risk &middot; "' + worst.role + '" text ' + worst.cr.toFixed(1) + ':1 (needs ' + worst.threshold + ':1) against a busy wallpaper';
+  }
+}
+
+/* ============ MAIN RENDER ============ */
+function renderWidgets(){
+  const field = document.getElementById('widget-field');
+  field.innerHTML =
+    '<div class="field-row">' +
+      '<div><div class="field-label">Date &middot; 1&times;1</div>' + renderDateWidget(78, 78) + '</div>' +
+      '<div><div class="field-label">Date &middot; 2&times;1</div>' + renderDateWidget(164, 78) + '</div>' +
+      '<div><div class="field-label">Date &middot; 2&times;2</div>' + renderDateWidget(164, 164) + '</div>' +
+    '</div>' +
+    '<div class="field-row"><div style="width:100%">' +
+      '<div class="field-label">Monthly &middot; compact (4&times;2) &mdash; dots only</div>' + renderMonthlyWidget('dots', 168) +
+    '</div></div>' +
+    '<div class="field-row"><div style="width:100%">' +
+      '<div class="field-label">Monthly &middot; standard (4&times;3.5) &mdash; one title, truncated</div>' + renderMonthlyWidget('one', 272) +
+    '</div></div>' +
+    '<div class="field-row"><div style="width:100%">' +
+      '<div class="field-label">Monthly &middot; tall (4&times;5) &mdash; one entry, wrapped to two lines</div>' + renderMonthlyWidget('wrap', 380) +
+    '</div></div>' +
+    '<div class="field-row"><div style="width:100%">' +
+      '<div class="field-label">Agenda list &middot; compact (4&times;2)</div>' + renderListWidget(168) +
+    '</div></div>' +
+    '<div class="field-row"><div style="width:100%">' +
+      '<div class="field-label">Agenda list &middot; tall (4&times;4)</div>' + renderListWidget(320) +
+    '</div></div>';
+}
+
+function init(){
+  renderControls();
+  renderWidgets();
+}
+init();
+
+</script>
+</body>
+</html>

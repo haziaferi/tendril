@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Window-level shell theme only — actual palette/typography (§2.3) is applied entirely
+         in Compose via TendrilTheme, not through XML style attributes. -->
+    <style name="Theme.Tendril" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@android:color/transparent</item>
+        <item name="android:navigationBarColor" tools:targetApi="21">@android:color/transparent</item>
+    </style>
+
+    <!-- Launch splash: the Tendril mark on its own plate colour, handed back to
+         Theme.Tendril as soon as the first frame is ready. core-splashscreen backports
+         this to API 30, below the platform's own API 31 splash. -->
+    <style name="Theme.Tendril.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Tendril</item>
+    </style>
+</resources>

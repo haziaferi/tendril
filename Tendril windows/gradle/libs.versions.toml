@@ -1,0 +1,14 @@
+[versions]
+kotlin = "2.4.10"
+composeMultiplatform = "1.12.0"
+kotlinxCoroutines = "1.11.0"
+
+[libraries]
+# Milestone 3 — the ported ViewModels' `viewModelScope` needs `Dispatchers.Main.immediate`,
+# which isn't available on desktop without this (see Main.kt's App() doc comment).
+kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

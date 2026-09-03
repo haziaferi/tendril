@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Ink-dark plate colour of the Tendril mark (shared Palette.kt §2.3), reused by the adaptive icon
+         background and the launch splash so the two read as the same surface. -->
+    <color name="ic_launcher_background">#1B1D21</color>
+    <color name="splash_background">#1B1D21</color>
+</resources>

@@ -1,0 +1,140 @@
+package com.tendril.app.sync
+
+import com.tendril.app.data.entry.Entry
+import com.tendril.app.data.entry.EntryDao
+import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitDao
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import java.time.Instant
+import java.time.LocalDate
+
+/**
+ * In-memory doubles for the sync tests. Deliberately hand-written rather than mocked: these
+ * three are what the assertions are actually about, so their behaviour should be readable in
+ * one place instead of scattered across `every { } returns` stanzas.
+ */
+
+/** Backing store for [SyncFileStore], with a record of what was deleted so a test can assert
+ * that an unreadable conflict file was *left alone* — the whole point of the SYNC-01 fix. */
+class InMemorySyncFileStore(
+    private val root: MutableMap<String, ByteArray> = linkedMapOf(),
+    private val pages: MutableMap<String, ByteArray> = linkedMapOf(),
+) : SyncFileStore {
+
+    val deletedRootNames = mutableListOf<String>()
+    val deletedPageNames = mutableListOf<String>()
+
+    fun putRoot(name: String, content: String) { root[name] = content.toByteArray(Charsets.UTF_8) }
+    fun putRootBytes(name: String, bytes: ByteArray) { root[name] = bytes }
+    fun putPage(name: String, content: String) { pages[name] = content.toByteArray(Charsets.UTF_8) }
+    fun putPageBytes(name: String, bytes: ByteArray) { pages[name] = bytes }
+
+    fun rootNames(): Set<String> = root.keys.toSet()
+    fun pageNames(): Set<String> = pages.keys.toSet()
+
+    override suspend fun readRoot(name: String): ByteArray? = root[name]
+    override suspend fun writeRoot(name: String, bytes: ByteArray) { root[name] = bytes }
+    override suspend fun listRoot(): List<String> = root.keys.toList()
+    override suspend fun deleteRoot(name: String) {
+        if (root.remove(name) != null) deletedRootNames += name
+    }
+
+    override suspend fun readPage(name: String): ByteArray? = pages[name]
+    override suspend fun writePage(name: String, bytes: ByteArray) { pages[name] = bytes }
+    override suspend fun listPages(): List<String> = pages.keys.toList()
+    override suspend fun deletePage(name: String) {
+        if (pages.remove(name) != null) deletedPageNames += name
+    }
+}
+
+/** Autoincrementing in-memory [EntryDao]. Only the members the sync paths touch have real
+ * behaviour; the observe/query members the orchestrator never calls return empties. */
+class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
+    private val rows = linkedMapOf<Long, Entry>()
+    private var nextId = 1L
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) } }
+
+    override suspend fun insert(entry: Entry): Long {
+        val id = nextId++
+        rows[id] = entry.copy(id = id)
+        return id
+    }
+
+    override suspend fun update(entry: Entry) { rows[entry.id] = entry }
+    override suspend fun getAll(): List<Entry> = rows.values.toList()
+    override suspend fun getById(id: Long): Entry? = rows[id]
+    override suspend fun getByUid(uid: String): Entry? = rows.values.firstOrNull { it.uid == uid }
+    override suspend fun getByGoogleEventId(googleEventId: String): Entry? =
+        rows.values.firstOrNull { it.googleEventId == googleEventId }
+
+    /** Column-scoped like the real query — touches `providerEventId` and nothing else, so a
+     * test can still catch a whole-row write clobbering a concurrent change. */
+    override suspend fun setProviderEventId(id: Long, providerEventId: Long?) {
+        rows[id]?.let { rows[id] = it.copy(providerEventId = providerEventId) }
+    }
+
+    override suspend fun setGoogleEventId(id: Long, googleEventId: String?) {
+        rows[id]?.let { rows[id] = it.copy(googleEventId = googleEventId) }
+    }
+
+    override suspend fun getBySourceRowId(rowPageId: Long): Entry? =
+        rows.values.firstOrNull { it.sourceRowId == rowPageId && it.deletedAt == null }
+
+    override suspend fun getInRange(from: LocalDate, to: LocalDate): List<Entry> =
+        rows.values.filter { it.startDate != null && it.startDate!! >= from && it.startDate!! <= to }
+
+    override suspend fun getAllSchedulableTasks(): List<Entry> = emptyList()
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt, updatedAt = deletedAt) }
+    }
+
+    override suspend fun restore(id: Long, restoredAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = null, updatedAt = restoredAt) }
+    }
+
+    override suspend fun deleteForever(id: Long) { rows.remove(id) }
+    override suspend fun deleteAll() { rows.clear() }
+
+    override fun observeById(id: Long): Flow<Entry?> = flowOf(rows[id])
+    override fun observeBySourceRowIds(rowPageIds: List<Long>): Flow<List<Entry>> = flowOf(emptyList())
+    override fun observeTasks(): Flow<List<Entry>> = flowOf(rows.values.toList())
+    override fun observeDated(): Flow<List<Entry>> = flowOf(rows.values.toList())
+    override fun observeOnDate(date: LocalDate): Flow<List<Entry>> = flowOf(emptyList())
+    override fun observeTrash(): Flow<List<Entry>> = flowOf(emptyList())
+}
+
+/** Autoincrementing in-memory [HabitDao], same shape as [FakeEntryDao]. */
+class FakeHabitDao(seed: List<Habit> = emptyList()) : HabitDao {
+    private val rows = linkedMapOf<Long, Habit>()
+    private var nextId = 1L
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) } }
+
+    override suspend fun insert(habit: Habit): Long {
+        val id = nextId++
+        rows[id] = habit.copy(id = id)
+        return id
+    }
+
+    override suspend fun update(habit: Habit) { rows[habit.id] = habit }
+    override suspend fun getById(id: Long): Habit? = rows[id]
+    override suspend fun getByUid(uid: String): Habit? = rows.values.firstOrNull { it.uid == uid }
+    override suspend fun getAll(): List<Habit> = rows.values.toList()
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt, updatedAt = deletedAt) }
+    }
+
+    override suspend fun restore(id: Long, restoredAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = null, updatedAt = restoredAt) }
+    }
+
+    override suspend fun deleteForever(id: Long) { rows.remove(id) }
+    override suspend fun deleteAll() { rows.clear() }
+
+    override fun observeActive(): Flow<List<Habit>> = flowOf(rows.values.filter { it.deletedAt == null })
+    override fun observeTrash(): Flow<List<Habit>> = flowOf(rows.values.filter { it.deletedAt != null })
+}

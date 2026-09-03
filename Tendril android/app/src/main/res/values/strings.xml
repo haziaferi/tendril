@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tendril</string>
+
+    <!-- Bottom navigation destinations (Workbench shell, spec §1 / §2.2) -->
+    <string name="nav_pages">Pages</string>
+    <string name="nav_calendar">Calendar</string>
+    <string name="nav_tasks_habits">Tasks</string>
+    <string name="nav_road_map">Road Map</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Settings → Appearance (spec §2.3) -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_appearance_summary_template">%1$s · %2$s · %3$s</string>
+    <string name="settings_theme_ink">Ink</string>
+    <string name="settings_theme_clay">Clay</string>
+    <string name="settings_theme_moss">Moss</string>
+    <string name="settings_theme_mauve">Mauve</string>
+    <string name="settings_mode_light">Light</string>
+    <string name="settings_mode_dark">Dark</string>
+    <string name="settings_typeface_sans">Sans</string>
+    <string name="settings_typeface_serif">Serif</string>
+
+    <!-- Settings → Sync folder (SAF, spec §3.5 / §9.3) -->
+    <string name="settings_sync_folder">Sync folder permission</string>
+    <string name="settings_sync_folder_summary_unset">No folder selected yet</string>
+    <string name="settings_sync_folder_summary_set">Granted: %1$s</string>
+    <string name="settings_sync_folder_choose">Choose folder</string>
+    <string name="settings_sync_folder_change">Change folder</string>
+
+    <!-- Shared empty-state copy (spec §2.5) -->
+    <string name="empty_pages_message">No pages yet</string>
+    <string name="empty_pages_cta">New page</string>
+    <string name="empty_tasks_message">Nothing due</string>
+    <string name="empty_tasks_cta">Add a task</string>
+    <string name="empty_habits_message">No habits yet</string>
+    <string name="empty_habits_cta">Add a habit</string>
+    <string name="empty_road_map_message">Nothing to map yet</string>
+    <string name="empty_road_map_cta">Mention another page to get started</string>
+    <string name="empty_trash_message">Trash is empty</string>
+
+    <!-- Content descriptions for icon-only controls (accessibility scope, spec §2.4) -->
+    <string name="cd_expand_appearance">Expand appearance settings</string>
+    <string name="cd_collapse_appearance">Collapse appearance settings</string>
+
+    <!-- Notifications (spec §9.7) -->
+    <string name="notification_overdue_text">Overdue</string>
+    <string name="notification_reminder_text">Upcoming</string>
+    <string name="action_done">Done</string>
+    <string name="action_skip">Skip</string>
+
+    <!-- Tasks & Habits (spec §3.3) -->
+    <string name="taskshabits_tab_tasks">Tasks</string>
+    <string name="taskshabits_tab_habits">Habits</string>
+    <string name="taskshabits_tab_merged">Merged</string>
+    <string name="taskshabits_filter_today">Today</string>
+    <string name="taskshabits_filter_week">This week</string>
+    <string name="taskshabits_filter_month">This month</string>
+    <string name="taskshabits_undated_toggle">Undated</string>
+    <string name="taskshabits_add_task">Add task</string>
+    <string name="taskshabits_add_habit">Add habit</string>
+
+    <!-- Entry Trash (spec §5.5.1) -->
+    <string name="trash_entries_title">Trash</string>
+    <string name="trash_entries_open">Trash</string>
+
+    <!-- Reminders (spec §5.4) -->
+    <string name="reminders_title">Reminders</string>
+    <string name="reminders_empty">No reminders yet</string>
+    <string name="reminders_add">Add reminder</string>
+    <string name="reminders_open">Reminders</string>
+
+    <!-- Calendar (spec §3.2) -->
+    <string name="calendar_view_day">Day</string>
+    <string name="calendar_view_week">Week</string>
+    <string name="calendar_view_month">Month</string>
+    <string name="calendar_quick_add_hint">Quick add…</string>
+
+    <!-- Widget picker labels (spec §8.1) — the launcher groups all four receivers under the
+         app name already, so each receiver's own label names what it actually shows rather
+         than repeating "Tendril" four times in the picker. -->
+    <string name="widget_label_date">Date</string>
+    <string name="widget_label_monthly_grid">Monthly Grid</string>
+    <string name="widget_label_agenda">Agenda</string>
+    <string name="widget_label_habits">Habits</string>
+</resources>
