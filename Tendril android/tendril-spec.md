@@ -50,6 +50,7 @@ second copy of the reasoning.
 | 2026-08-30 (following day, pass 3) | Milestone 1 verified live on-screen (a real screenshot of the running "Tendril (desktop preview)" window, confirming the seeded pages render — not just the log-based smoke test the previous entry recorded), then closed. Desktop Companion content graduated out of this file into its own `tendril-windows-spec.md` (in `Tendril windows\`), per the user's explicit request and §12.4's graduation trigger — the former §12.1–§12.5 moved there as §1–§6, this file's §12 shrank to a pointer plus a new anti-drift rule (repeated verbatim in both files): any change touching `shared\` code gets a same-day Revision Log entry in *both* files, so the two documents can't silently diverge on the model they share. This rule is the actual mitigation for the drift risk §12.4's original scoring table penalized a full split for — the split itself doesn't prevent drift, the rule does. | §11, §12 |
 | 2026-08-30 (following day, pass 4) | Anti-drift-rule entry: Milestone 2 (folder-sync-on-desktop) implemented — full reasoning and detail in `tendril-windows-spec.md` §7, not repeated here per that file's §0. Summary only, since this touches `shared\`: Android's `SnapshotSyncManager`/`SnapshotEncryption` moved into a new `shared/jvmCommon` intermediate source set (a real Gradle finding — `javax.crypto` isn't visible from true KMP `commonMain` even though both targets are JVM-based) behind a new `SyncFileStore` interface, with `AndroidSafSyncFileStore`/`DesktopFileSyncFileStore` platform implementations; `Tendril android`'s two deleted files' logic is now `SnapshotSyncOrchestrator`, called via `AndroidSafSyncFileStore` from `AppContainer.kt`/`SettingsScreen.kt` with no behavior change (`assembleDebug`/`testDebugUnitTest` pass unchanged). | §9.4, §12 |
 | 2026-08-30 (following day, pass 5) | Anti-drift-rule entry: Milestone 3 (Workbench UI port), first slice, implemented — full reasoning and detail in `tendril-windows-spec.md` §8, not repeated here per that file's §0. Summary only, since this touches `shared\`: theming (`ui/theme/`), the nav shell (`ui/nav/WorkbenchScaffold.kt` + new hand-rolled `WorkbenchNavState`, not navigation-compose — still alpha/beta-only for Compose Multiplatform at this project's pin), and the block editor (`PagesScreen`/`PageDetailScreen`/`PageDatabaseScreen` + their ViewModels) moved from `:app` into `shared/src/commonMain/`, now rendering on both Android and desktop from one implementation. New `WorkbenchCore` groups the shared pieces these screens need; `AppContainer.kt` now holds one, `MainActivity.kt` calls a new Android-only `AndroidWorkbenchScaffold` wrapper (holds the `Activity`/`BiometricPrompt` calls the shared file no longer can) instead of the old `WorkbenchScaffold` directly — `assembleDebug`/`testDebugUnitTest` pass unchanged. Calendar/Tasks & Habits/Road Map/Settings/Canvas are not ported this pass (Android-integration-heavy, out of scope) — desktop renders a placeholder for each via `WorkbenchScaffold`'s new slot parameters. | §9.4, §12 |
+| 2026-09-04 | **Corrected:** the 2026-08-30 "No version control" decision is reversed — the project is now under git in a single repository (`haziaferi/tendril`) spanning all three sibling folders. One repo rather than three because both consumers resolve the shared core as `includeBuild("../shared")`, a relative sibling path only a single clone reproduces; a submodule would have to nest `shared\` and break both build files. Revision Log keeps its role for *why*; `git log` covers *what changed when*. Build/setup instructions moved out of this spec into `README.md` at the repository root. | §11 |
 
 ---
 
@@ -2051,12 +2052,26 @@ scaffolding skill before Phase 1 (§9.9) begins, since one may become available 
 See the **Revision Log** at the top of this document for the version history — each entry's full
 reasoning lives in the section it touched, not here.
 
-**No version control (decided 2026-08-30):** this project does not use git at all — there is no git
-account, and after the working tree was physically reorganized outside of git (see the folder layout
-below), tracking was dropped entirely rather than reconciled. This spec file, with its Revision Log at
-the top, is the sole source of truth for what changed and why; there is no `git log` to cross-check
-against. Anyone picking this project up should read the Revision Log, not `git blame`/`git log`, for
-history.
+**Version control (Corrected 2026-09-04 — supersedes "No version control", decided 2026-08-30):**
+this project is now under git, in a single repository at `haziaferi/tendril`, covering all three
+sibling folders. The earlier decision — that the project used no git at all, that there was no git
+account, and that readers should consult the Revision Log rather than `git log` — no longer holds and
+should not be acted on.
+
+One repository rather than three was itself a decision, and the reason is the folder layout below:
+both `Tendril android\` and `Tendril windows\` resolve the shared core as `includeBuild("../shared")`,
+a *relative sibling* path. Only a single repository reproduces that arrangement from one clone. A
+submodule cannot — a submodule must live inside its superproject, which would nest `shared\` under a
+consumer and break both build files. Keeping the three together also keeps cross-cutting changes
+atomic: 33 of 52 Android source files import `shared` packages, so a change routinely spans a DAO
+query and its Android caller, or a use case and its test.
+
+What this does *not* change: the Revision Log stays the index of decisions and reasoning, because a
+commit history records what changed, not why it was chosen over the alternative. Read this file for
+the reasoning and `git log` for the sequence — they answer different questions.
+
+Build and setup instructions deliberately live outside this spec, in `README.md` at the repository
+root. Setup steps are not decisions, and this document is a decisions record.
 
 **Folder layout (2026-08-30):** the project lives across three sibling folders under
 `...\Builds\Tendril\`, not one single project root:
