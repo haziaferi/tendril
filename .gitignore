@@ -3,14 +3,21 @@
 # both settings.gradle.kts files resolve it as includeBuild("../shared"), so one clone
 # has to reproduce that arrangement exactly.
 
-# --- Signing material. Never commit. ------------------------------------------
-# "Tendril android/keystores/my-shared-debug.keystore" was covered by nothing
-# before this file existed.
-keystores/
+# --- Signing material. -----------------------------------------------------------
+# Release keys never go in here.
 *.keystore
 *.jks
 *.p12
 *.pepk
+
+# ...with one deliberate exception. The shared debug keystore is committed on
+# purpose, which is what its name is for: every machine then signs debug builds
+# with the same key, so moving between them doesn't force an uninstall on a
+# signature mismatch. app/build.gradle.kts hard-references it, so without it a
+# fresh clone cannot assemble a debug build at all.
+# Alias androiddebugkey, password "android" — both public by definition, and a
+# debug key cannot sign for Play. This exemption must never be widened.
+!Tendril android/keystores/my-shared-debug.keystore
 
 # --- Machine-specific -----------------------------------------------------------
 # local.properties pins sdk.dir to an absolute path on one machine; the file even
