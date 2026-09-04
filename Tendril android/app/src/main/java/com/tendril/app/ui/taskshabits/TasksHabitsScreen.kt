@@ -52,6 +52,7 @@ import com.tendril.app.R
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.formatHabitDuration
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.reminders.ReminderSheet
 import com.tendril.app.ui.trash.EntryTrashSheet
@@ -294,7 +295,15 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(habit.title, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s) · streak ${habit.streak}",
+                        // §3.3 — time and duration are what distinguish a habit that sits at an
+                        // hour from one that just needs doing sometime today, so both show when
+                        // set and neither takes room when not.
+                        listOfNotNull(
+                            "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
+                            habit.time?.toString(),
+                            habit.duration?.let(::formatHabitDuration),
+                            "streak ${habit.streak}",
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

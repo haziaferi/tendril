@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -55,12 +56,19 @@ class TasksHabitsViewModel(
         }
     }
 
-    fun addHabit(title: String, frequency: HabitFrequency, time: LocalTime?) {
+    fun addHabit(title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration? = null) {
         if (title.isBlank()) return
         viewModelScope.launch {
             val now = Instant.now()
             habitDao.insert(
-                Habit(title = title.trim(), time = time, frequency = frequency, createdAt = now, updatedAt = now)
+                Habit(
+                    title = title.trim(),
+                    time = time,
+                    duration = duration,
+                    frequency = frequency,
+                    createdAt = now,
+                    updatedAt = now,
+                )
             )
         }
     }

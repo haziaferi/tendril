@@ -23,6 +23,25 @@ import java.util.UUID
  */
 data class HabitFrequency(val count: Int, val unit: IntervalUnit)
 
+/**
+ * §3.3 — a habit's optional duration, as it reads next to its time ("9:00 · 20m").
+ *
+ * Kept as a function rather than inlined at the call site because [Habit.duration] had no
+ * consumer at all until now: it round-tripped through the Room converter and the snapshot
+ * mappers and was rendered nowhere, which is how a field stays plumbed and dead. One formatter
+ * means every surface that grows a habit row later shows the same thing.
+ */
+fun formatHabitDuration(duration: java.time.Duration): String {
+    val totalMinutes = duration.toMinutes()
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+        hours > 0 -> "${hours}h"
+        else -> "${minutes}m"
+    }
+}
+
 /** §6.1 — streak-based, missing an instance does not create backlog (the defining test that
  * separates a Habit from a recurring Task). Structurally separate from [com.tendril.app.data.entry.Entry] (§3.3). */
 @Entity(tableName = "habits", indices = [Index("uid", unique = true)])

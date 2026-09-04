@@ -38,6 +38,7 @@ import com.tendril.app.data.entry.intervalToPeriod
 import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -138,13 +139,17 @@ fun AddTaskDialog(
 }
 
 @Composable
-fun AddHabitDialog(onDismiss: () -> Unit, onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?) -> Unit) {
+fun AddHabitDialog(
+    onDismiss: () -> Unit,
+    onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?) -> Unit,
+) {
     var title by remember { mutableStateOf("") }
     var count by remember { mutableStateOf("1") }
     var unit by remember { mutableStateOf(IntervalUnit.DAY) }
     var hasTime by remember { mutableStateOf(false) }
     var time by remember { mutableStateOf(DEFAULT_TIME_OF_DAY) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var durationMinutes by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -182,12 +187,29 @@ fun AddHabitDialog(onDismiss: () -> Unit, onAdd: (title: String, frequency: Habi
                 }
                 if (hasTime) {
                     TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
+                    Spacer(Modifier.height(8.dp))
+                    // §3.3 — "optional time + duration (not required)". Offered only alongside a
+                    // time, because a length with no start is not something any surface can place:
+                    // the calendar overlay (§5.3) and the Merged tab both position a habit by its
+                    // time and would have nowhere to draw a duration without one.
+                    OutlinedTextField(
+                        value = durationMinutes,
+                        onValueChange = { if (it.all(Char::isDigit)) durationMinutes = it },
+                        label = { Text("Duration (minutes, optional)") },
+                        singleLine = true,
+                    )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onAdd(title, HabitFrequency(count.toIntOrNull() ?: 1, unit), if (hasTime) time else null)
+                onAdd(
+                    title,
+                    HabitFrequency(count.toIntOrNull() ?: 1, unit),
+                    if (hasTime) time else null,
+                    // A blank or zero box means "no duration", not a zero-length habit.
+                    durationMinutes.toLongOrNull()?.takeIf { hasTime && it > 0 }?.let(Duration::ofMinutes),
+                )
                 onDismiss()
             }) { Text("Add") }
         },
