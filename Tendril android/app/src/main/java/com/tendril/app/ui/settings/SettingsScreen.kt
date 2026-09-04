@@ -400,8 +400,17 @@ private fun PortableBackupSection(archive: PortableArchive) {
         onResult = { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
             scope.launch {
-                statusMessage = runCatching { archive.export(uri) }
-                    .fold({ "Exported" }, { it.message ?: "Export failed." })
+                statusMessage = runCatching { archive.export(uri) }.fold(
+                    { result ->
+                        if (result.encrypted) {
+                            "Exported — encrypted with your sync passphrase. Anyone opening this " +
+                                "file, including you on another device, will need that passphrase."
+                        } else {
+                            "Exported"
+                        }
+                    },
+                    { it.message ?: "Export failed." },
+                )
             }
         },
     )

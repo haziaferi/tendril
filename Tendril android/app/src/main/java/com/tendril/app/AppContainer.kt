@@ -60,7 +60,12 @@ class AppContainer(context: Context) {
     val syncCoordinator = SyncCoordinator(
         context, syncFolderManager, snapshotSyncOrchestrator, secretStore, syncStatusPreferences,
     )
-    val portableArchive = PortableArchive(context, database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    val portableArchive = PortableArchive(
+        context, database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine,
+        // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
+        // `.tendril` package. "Off" is simply no passphrase set.
+        passphrase = { secretStore.syncPassphrase.value },
+    )
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
         database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,

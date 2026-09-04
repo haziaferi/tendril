@@ -31,14 +31,19 @@ class PortableArchiveTest {
 
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
-    private fun archive(entryDao: FakeEntryDao, habitDao: FakeHabitDao, backing: FakeContentResolverBacking) =
-        PortableArchive(
-            context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
-            entryDao = entryDao,
-            habitDao = habitDao,
-            pageDao = mockk<PageDao>(relaxed = true),
-            pagesSyncEngine = mockk(relaxed = true),
-        )
+    private fun archive(
+        entryDao: FakeEntryDao,
+        habitDao: FakeHabitDao,
+        backing: FakeContentResolverBacking,
+        passphrase: String? = null,
+    ) = PortableArchive(
+        context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
+        entryDao = entryDao,
+        habitDao = habitDao,
+        pageDao = mockk<PageDao>(relaxed = true),
+        pagesSyncEngine = mockk(relaxed = true),
+        passphrase = { passphrase },
+    )
 
     private fun localEntry(uid: String, title: String) = Entry(
         id = 1,
@@ -195,5 +200,133 @@ class PortableArchiveTest {
         archive(restored, FakeHabitDao(), backing).importAdditive(reread)
 
         assertEquals(listOf("Round trip me"), restored.getAll().map { it.title })
+    }
+
+    // -------------------------------------------------- §9.4.2 at-rest export encryption
+
+    /** Reads a written `.tendril` back as raw per-entry bytes, so a test can assert on the
+     * ciphertext rather than only on what round-trips. */
+    private fun unzip(bytes: ByteArray): Map<String, ByteArray> {
+        val out = mutableMapOf<String, ByteArray>()
+        java.util.zip.ZipInputStream(bytes.inputStream()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) out[entry.name] = zip.readBytes()
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        return out
+    }
+
+    @Test
+    fun `with a passphrase set, every payload entry is encrypted and the manifest is not`() = runBlocking {
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+        val source = FakeEntryDao(listOf(localEntry("uid-1", "Medical appointment")))
+
+        val result = archive(source, FakeHabitDao(), backing, passphrase = PASSPHRASE).export(destination)
+
+        assertTrue("export must report that it encrypted", result.encrypted)
+        val written = unzip(backing.bytesWrittenTo(destination))
+        assertTrue(
+            "the manifest stays readable so an importer can say what the file is",
+            !SnapshotEncryption.isEncrypted(written.getValue("manifest.json")),
+        )
+        assertTrue(written.getValue("manifest.json").toString(Charsets.UTF_8).contains("\"encrypted\":true"))
+        for ((name, bytes) in written) {
+            if (name == "manifest.json") continue
+            assertTrue("$name should be ciphertext", SnapshotEncryption.isEncrypted(bytes))
+        }
+        // The point of the exercise: the title must not be sitting in the file in the clear.
+        assertTrue(
+            "no payload may contain the plaintext title",
+            written.filterKeys { it != "manifest.json" }
+                .none { (_, b) -> b.toString(Charsets.UTF_8).contains("Medical appointment") },
+        )
+    }
+
+    @Test
+    fun `an encrypted export round-trips with the same passphrase`() = runBlocking {
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+        val source = FakeEntryDao(listOf(localEntry("uid-1", "Round trip me")))
+        archive(source, FakeHabitDao(), backing, passphrase = PASSPHRASE).export(destination)
+
+        val reread = backing.givenFile(backing.bytesWrittenTo(destination))
+        val restored = FakeEntryDao()
+        archive(restored, FakeHabitDao(), backing, passphrase = PASSPHRASE).importAdditive(reread)
+
+        assertEquals(listOf("Round trip me"), restored.getAll().map { it.title })
+    }
+
+    @Test
+    fun `without a passphrase, an export stays plaintext`() = runBlocking {
+        // §9.4.2 is off by default and this must stay true — encryption follows the toggle,
+        // it isn't switched on by the existence of this code.
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+        val source = FakeEntryDao(listOf(localEntry("uid-1", "Plain as day")))
+
+        val result = archive(source, FakeHabitDao(), backing).export(destination)
+
+        assertTrue(!result.encrypted)
+        val written = unzip(backing.bytesWrittenTo(destination))
+        assertTrue(written.none { (_, b) -> SnapshotEncryption.isEncrypted(b) })
+    }
+
+    @Test
+    fun `a plaintext archive still imports when a passphrase is set`() = runBlocking {
+        // Turning encryption on must not orphan the exports made before it.
+        val backing = FakeContentResolverBacking()
+        val uri = backing.givenFile(validArchiveBytes(entryRecord("uid-1", "Made before encryption")))
+        val restored = FakeEntryDao()
+
+        archive(restored, FakeHabitDao(), backing, passphrase = PASSPHRASE).importAdditive(uri)
+
+        assertEquals(listOf("Made before encryption"), restored.getAll().map { it.title })
+    }
+
+    @Test
+    fun `restoring an encrypted archive with the wrong passphrase changes nothing`() = runBlocking {
+        // The dangerous path: restore wipes before it applies, so an undecryptable archive has
+        // to be refused *before* the delete, not discovered as "nothing decoded" after it.
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+        archive(FakeEntryDao(listOf(localEntry("uid-1", "In the backup"))), FakeHabitDao(), backing, PASSPHRASE)
+            .export(destination)
+        val reread = backing.givenFile(backing.bytesWrittenTo(destination))
+        val local = FakeEntryDao(listOf(localEntry("local-1", "Precious local task")))
+
+        val thrown = assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { archive(local, FakeHabitDao(), backing, passphrase = "a different one").restoreFromBackup(reread) }
+        }
+
+        assertTrue(
+            "the message must point at the passphrase, not at the file: ${thrown.message}",
+            thrown.message!!.contains("passphrase"),
+        )
+        assertEquals(listOf("Precious local task"), local.getAll().map { it.title })
+    }
+
+    @Test
+    fun `importing an encrypted archive with no passphrase set says so`() = runBlocking {
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+        archive(FakeEntryDao(listOf(localEntry("uid-1", "Locked"))), FakeHabitDao(), backing, PASSPHRASE)
+            .export(destination)
+        val reread = backing.givenFile(backing.bytesWrittenTo(destination))
+        val restored = FakeEntryDao()
+
+        val thrown = assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { archive(restored, FakeHabitDao(), backing).importAdditive(reread) }
+        }
+
+        assertTrue(thrown.message!!.contains("Set your sync passphrase"))
+        assertTrue("nothing may have been imported", restored.getAll().isEmpty())
+    }
+
+    private companion object {
+        const val PASSPHRASE = "a shared passphrase"
     }
 }

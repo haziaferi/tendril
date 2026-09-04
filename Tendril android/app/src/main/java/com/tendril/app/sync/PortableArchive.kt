@@ -13,6 +13,7 @@ import java.time.Instant
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import javax.crypto.spec.SecretKeySpec
 
 private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 private const val MANIFEST_NAME = "manifest.json"
@@ -42,8 +43,19 @@ class PortableArchive(
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
     private val pagesSyncEngine: PagesSyncEngine,
+    /**
+     * §9.4.2's passphrase, read fresh at each export/import rather than passed in per call. A
+     * constructor dependency on purpose: this whole gap existed because encryption was
+     * something a call site had to remember, and no call site did — there is nothing to forget
+     * if the class fetches it itself. A supplier rather than the [SecretStore] itself so this
+     * doesn't reach for Android Keystore, which a JVM test has no access to.
+     */
+    private val passphrase: () -> String?,
 ) {
-    suspend fun export(destination: Uri): Unit = withContext(Dispatchers.IO) {
+    /** Null when §9.4.2's toggle is off — "off" is simply "no passphrase set". */
+    private fun keyOrNull(): SecretKeySpec? = passphrase()?.let(SnapshotEncryption::deriveKey)
+
+    suspend fun export(destination: Uri): ExportResult = withContext(Dispatchers.IO) {
         val allEntries = entryDao.getAll()
         val idToUid = allEntries.associate { it.id to it.uid }
         val rowIdToUid = pageDao.getAll().associate { it.id to it.uid }
@@ -52,11 +64,19 @@ class PortableArchive(
         val pageRecords = pagesSyncEngine.exportPages()
         val relations = pagesSyncEngine.exportRelations()
 
+        // §9.4.2 — "a `.tendril` export carries the same at-rest protection as continuous
+        // sync, not a separate case to design." It didn't: this class never referenced
+        // SnapshotEncryption at all, so with the toggle on, an export was the plaintext way
+        // around it, carrying exactly the medical and financial data §9.4.2 names as its
+        // reason for existing.
+        val key = keyOrNull()
+
         val manifest = TendrilManifest(
             appVersion = "0.1.0",
             exportedAtEpochMillis = Instant.now().toEpochMilli(),
             kind = "full",
             includedFiles = listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS) + pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
+            encrypted = key != null,
         )
 
         // Throw rather than no-op if the provider won't give us a stream: an export that
@@ -66,23 +86,25 @@ class PortableArchive(
             ?: error("Couldn't open the chosen file for writing — nothing was exported.")
         out.use { stream ->
             ZipOutputStream(stream).use { zip ->
-                zip.writeEntry(MANIFEST_NAME, json.encodeToString(manifest))
-                zip.writeEntry(FILE_ENTRIES_ACTIVE, json.encodeToString(active.map { it.toSnapshot(idToUid, rowIdToUid) }))
-                zip.writeEntry(FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }))
-                zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }))
-                zip.writeEntry(FILE_RELATIONS, json.encodeToString(relations))
+                // The manifest alone stays plaintext — see TendrilManifest.encrypted for why.
+                zip.writeEntry(MANIFEST_NAME, json.encodeToString(manifest), key = null)
+                zip.writeEntry(FILE_ENTRIES_ACTIVE, json.encodeToString(active.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
+                zip.writeEntry(FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
+                zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }), key)
+                zip.writeEntry(FILE_RELATIONS, json.encodeToString(relations), key)
                 for (record in pageRecords) {
-                    zip.writeEntry("$PAGES_DIR_PREFIX${record.uid}.json", json.encodeToString(record))
+                    zip.writeEntry("$PAGES_DIR_PREFIX${record.uid}.json", json.encodeToString(record), key)
                 }
             }
         }
+        ExportResult(encrypted = key != null)
     }
 
     /** Always additive — reuses the exact per-record last-write-wins merge rule §9.4
      * already defines, never a wholesale replace (§9.4.1's fix for the "one import
      * silently overwrites the other person's data" risk). */
     suspend fun importAdditive(source: Uri): ImportResult = withContext(Dispatchers.IO) {
-        val contents = readZipEntries(source)
+        val contents = readZipEntries(source).readable()
         var entriesFound = 0
         var habitsFound = 0
         pagesSyncEngine.mergePages(decodePages(contents))
@@ -105,7 +127,8 @@ class PortableArchive(
      * An archive carrying no readable records now throws and changes nothing.
      */
     suspend fun restoreFromBackup(source: Uri) = withContext(Dispatchers.IO) {
-        val contents = readZipEntries(source)
+        // Before the decode-then-wipe sequence below, and so before anything is deleted.
+        val contents = readZipEntries(source).readable()
 
         val pageRecords = decodePages(contents)
         val relations = decodeRelations(contents)
@@ -197,9 +220,11 @@ class PortableArchive(
      * total is capped so a malformed or deliberately-inflated zip fails with a message
      * instead of an OutOfMemoryError partway through.
      */
-    private fun readZipEntries(source: Uri): Map<String, String> {
+    private fun readZipEntries(source: Uri): ArchiveContents {
+        val key = keyOrNull()
         val result = mutableMapOf<String, String>()
         var total = 0L
+        var undecryptable = 0
         context.contentResolver.openInputStream(source)?.use { input ->
             ZipInputStream(input).use { zip ->
                 var entry = zip.nextEntry
@@ -210,21 +235,67 @@ class PortableArchive(
                         require(total <= MAX_ARCHIVE_BYTES) {
                             "This archive expands to more than ${MAX_ARCHIVE_BYTES / (1024 * 1024)} MB — too large to import."
                         }
-                        result[entry.name] = bytes.toString(Charsets.UTF_8)
+                        // Per-entry, and driven by the magic prefix rather than the manifest's
+                        // own flag: a plaintext archive still imports with a passphrase set,
+                        // and an encrypted one is recognised even if its manifest is missing.
+                        if (SnapshotEncryption.isEncrypted(bytes)) {
+                            val plain = key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
+                            if (plain == null) undecryptable++ else result[entry.name] = plain.toString(Charsets.UTF_8)
+                        } else {
+                            result[entry.name] = bytes.toString(Charsets.UTF_8)
+                        }
                     }
                     zip.closeEntry()
                     entry = zip.nextEntry
                 }
             }
         }
-        return result
+        return ArchiveContents(result, undecryptable)
     }
 
-    private fun ZipOutputStream.writeEntry(name: String, content: String) {
+    /**
+     * Refuses the archive outright when any entry was encrypted and couldn't be read, instead
+     * of letting it fall through as "nothing decoded".
+     *
+     * That distinction is the whole point on the [restoreFromBackup] path: the existing
+     * readability guard there would have caught an undecryptable archive too, but only by
+     * reporting "this file doesn't contain any readable Tendril data" — which reads as *the
+     * file is wrong* when the truth is *the passphrase is*, and invites someone to go looking
+     * for another backup instead of fixing the passphrase they still have.
+     */
+    private fun ArchiveContents.readable(): Map<String, String> {
+        require(undecryptable == 0) {
+            if (passphrase() == null) {
+                "This export is encrypted (§9.4.2). Set your sync passphrase under Settings → " +
+                    "Sync folder, then import again — nothing has been changed."
+            } else {
+                "This export couldn't be decrypted with your current sync passphrase — it was " +
+                    "most likely made with a different one. Nothing has been changed."
+            }
+        }
+        return texts
+    }
+
+    /** Per-entry rather than one encrypted blob wrapping the whole zip: it matches what
+     * [SnapshotSyncOrchestrator] already does to the same JSON in the sync folder, and it keeps
+     * the archive a real zip whose manifest any reader can still see. */
+    private fun ZipOutputStream.writeEntry(name: String, content: String, key: SecretKeySpec?) {
+        val bytes = content.toByteArray(Charsets.UTF_8)
         putNextEntry(ZipEntry(name))
-        write(content.toByteArray(Charsets.UTF_8))
+        write(if (key == null) bytes else SnapshotEncryption.wrapWithMagic(SnapshotEncryption.encrypt(bytes, key)))
         closeEntry()
     }
 }
 
+/** Whether the package that was just written is encrypted (§9.4.2). Reported to the person
+ * rather than kept internal: §9.4.1's other use for an export is handing a file to someone
+ * else, and an encrypted one is unreadable to them without the passphrase too. Silently
+ * producing a file the recipient can't open is exactly the kind of surprise §9.4.2's own
+ * "state the concrete consequence in plain words" rule exists to prevent. */
+data class ExportResult(val encrypted: Boolean)
+
 data class ImportResult(val hadManifest: Boolean, val entryFilesFound: Int, val habitFilesFound: Int)
+
+/** Decoded archive text plus how many entries were encrypted and unreadable — see
+ * [PortableArchive.readable], which is what turns a non-zero count into a refusal. */
+private class ArchiveContents(val texts: Map<String, String>, val undecryptable: Int)

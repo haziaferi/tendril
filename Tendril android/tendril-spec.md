@@ -64,6 +64,7 @@ second copy of the reasoning.
 | 2026-09-04 (later still) | **Recurring EVENT expansion built — new §4.1.1.** Closes the largest gap the consistency audit above found but did not fix: `RecurrenceRule.Fixed` was only ever written *outward*, to `CalendarContract` (§9.11) and Google (§9.5.1), and nothing read it back, so a weekly meeting appeared once in Tendril's own Calendar while recurring properly in the system calendar Tendril publishes to. Multi-day spans (§4.1 round 1) and exception rows (§4.1 round 3, §9.8 R5) were dead for the same reason — declared, synced, never read. New `EntryOccurrences` expander plus a hand-rolled RRULE parser in `shared\`, consumed by Calendar's Day/Week/Month views, the Agenda and Monthly-grid widgets, and `AlarmScheduler` (which anchored to a series' *first* occurrence, so a recurring EVENT reminded once and then never again). Corrects §4.1's "use an existing RFC5545 library such as `lib-recur`": the only producer of a `Fixed` rule is the Google pull, its subset is small and stable, and a bounded grammar under our own control matched this codebase's own calls elsewhere (§7.4). The subset's limits, and the visible divergence an unsupported rule leaves against the system calendar, are stated in §4.1.1 rather than left to be discovered. §9.8 R3 is now satisfied properly rather than vacuously — expansion reads Room, never `CalendarContract.Instances`. | §3.2, §4.1, §4.1.1, §9.7, §9.11 |
 | 2026-09-04 (last of the day) | **Sync actually runs on its own.** Third and last item the consistency audit found and left open. §9.4 specified a conflict sweep "on resume/launch", an `onStop`/backgrounding flush, and a periodic background pass; none existed — the only caller of `readAndMerge`/`writeSnapshots` in the whole app was the Settings button, so a `.sync-conflict-*` file sat undetected and an editing session reached the folder only if the person remembered to tap. New `SyncCoordinator` (`:app`) is the single place a pass runs from, non-reentrant, always read-merge-then-write, on an application-scoped **non-cancellable** coroutine — the Android SAF write is not atomic, so a pass cancelled by the Activity going away can leave the synced folder with no copy of a file at all. Wired to `onStart` and to `onStop` (skipped on a configuration change — a rotation is not a backgrounding); the Settings button now delegates to it rather than holding a second copy of the same guards. **The 2-second per-page debounce is explicitly still open**, with the reason recorded in §9.4 rather than approximated: it is specified per page, `writeSnapshots` has no per-page mode, and putting a whole-database write on a 2-second typing timer would be worse than the per-mutation write that decision already rejected. | §9.4 |
 | 2026-09-04 (later than the last) | **Trashed Habits are recoverable again.** `HabitDao` had `observeTrash`/`restore`/`deleteForever` from the start and no caller for any of them, so trashing a Habit set `deleted_at`, removed it from the habits list, the Merged view and the quick-check widget, and left no way back — a permanent delete wearing a soft delete's field, against §5.5.1's "a deleted standalone Task/Event **or Habit** is recoverable". The Tasks & Habits Trash sheet (`EntryTrashSheet` → `TasksHabitsTrashSheet`) now lists Entries and Habits in one merged newest-first list through a small `TrashItem` sealed type, so the selection set, bulk Restore / Delete forever and counted confirm are written once rather than twice. Selection is keyed by kind+id, since Entry 3 and Habit 3 are different things. §5.5.1's "one list" is still not satisfied — Pages/Rows keep their own sheet — and that is now recorded there as open, together with the related bug it has to be fixed alongside: restoring a database Row doesn't restore its linked Entry. | §5.5.1 |
+| 2026-09-04 (last, really) | **`.tendril` exports are encrypted when the toggle is on.** §9.4.2 says conflict files *and* portable packages carry the same at-rest protection "not a separate case to design" — but `PortableArchive` never referenced `SnapshotEncryption` at all, so Export was the plaintext way around the toggle, for a file meant to leave the device. Now encrypted per zip entry with the same magic/cipher/fresh-IV scheme as the sync folder; `manifest.json` stays readable on purpose (uids, not titles — see §9.4.2 for the trade) and gains an `encrypted` flag, defaulted so older archives still decode. An undecryptable archive is refused *before* Restore's wipe, with a message naming the passphrase rather than blaming the file. The passphrase now reaches `PortableArchive` as a constructor-supplied supplier, because the gap existed precisely as something a call site had to remember and none did. Also recorded: this cuts against §9.4.1's "send a Page to someone else" — an encrypted export needs the whole sync passphrase to open, so the export confirmation now says so. Six round-trip tests. | §9.4.1, §9.4.2 |
 
 ---
 
@@ -1762,6 +1763,34 @@ permission (§3.5) gains an adjacent **optional passphrase** toggle:
 - **Conflict files (§9.4) and portable export/import packages (§9.4.1 above) are encrypted under the
   same scheme when the toggle is on** — a `.tendril` export carries the same at-rest protection as
   continuous sync, not a separate case to design.
+  - **Implemented 2026-09-04 for the export half.** Conflict files were encrypted from the
+    start; `.tendril` packages were not. `PortableArchive` never referenced `SnapshotEncryption`
+    at all, so with the toggle on, **Export was the plaintext way around it** — carrying exactly
+    the medical (§5.1) and financial (§5.2.2) data this section names as its reason for
+    existing, in a file explicitly meant to be moved off the device.
+  - **Per zip entry, not one encrypted blob around the whole archive**, matching what the sync
+    folder already does to the same JSON: same `TDRLENC1` magic, same AES-256-GCM, same
+    fresh-IV-per-write. That also keeps a `.tendril` a real zip rather than an opaque payload.
+  - **`manifest.json` stays plaintext, deliberately.** It carries no content — an app version,
+    a timestamp, full-vs-partial, and a list of `pages/<uid>.json` names, which are uids rather
+    than titles. Leaving it readable costs a page *count* and an export date to anyone holding
+    the file; it buys an importer that can say "this is encrypted, check your passphrase"
+    instead of "this file is unreadable", and keeps §9.4.1's manifest-driven picker possible
+    for someone who has the passphrase but mistyped it. The manifest also now carries an
+    explicit `encrypted` flag, defaulted false so archives written before this still decode.
+  - **An archive that can't be decrypted is refused before anything changes.** This matters most
+    on the Restore path, which wipes before it applies (§9.4.1): the existing readability guard
+    would have caught it, but only as "this file doesn't contain any readable Tendril data" —
+    which reads as *the file is wrong* when the truth is *the passphrase is*, and sends someone
+    hunting for another backup instead of fixing the passphrase they still have.
+  - **Consequence worth stating, because it cuts against §9.4.1.** That section's other use for
+    an export is "a single Page/Database sent to someone else". With the toggle on, such a file
+    is unreadable to the recipient unless they are also given the passphrase — which is the
+    passphrase to the person's *entire* sync folder, not to that one export. This spec has no
+    per-export key and no reason to invent one for a personal build, so the mitigation is
+    disclosure rather than mechanism: the export confirmation now says the file is encrypted
+    and that opening it elsewhere needs that passphrase. Revisit only if sharing single pages
+    with other people becomes a real habit rather than a stated possibility.
 - **Losing the passphrase** makes the synced snapshot folder unreadable on any new device — Room
   (the live local database, always unaffected by this toggle) is unaffected on devices that already
   have it, but re-establishing sync elsewhere requires either recovering the passphrase or wiping
