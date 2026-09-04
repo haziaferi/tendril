@@ -143,6 +143,7 @@ fun PageDetailScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCheckboxOnlyConfirm by remember { mutableStateOf(false) }
+    var checkboxOnlyRefused by remember { mutableStateOf(false) }
 
     // §3.1.2 — "turning it back off requires a full device unlock" on Android, via
     // [onCheckboxOnlyUnlockRequest] (real `BiometricPrompt`, supplied by the Android call site —
@@ -346,9 +347,29 @@ fun PageDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showCheckboxOnlyConfirm = false; viewModel.activateCheckboxOnly() }) { Text("Turn on") }
+                TextButton(onClick = {
+                    showCheckboxOnlyConfirm = false
+                    // Refused when App Lock is on (audit 4.3). Saying so beats a button that
+                    // looks like it worked and did nothing.
+                    if (!viewModel.activateCheckboxOnly()) checkboxOnlyRefused = true
+                }) { Text("Turn on") }
             },
             dismissButton = { TextButton(onClick = { showCheckboxOnlyConfirm = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (checkboxOnlyRefused) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { checkboxOnlyRefused = false },
+            title = { Text("App Lock is on") },
+            text = {
+                Text(
+                    "Checkbox-only mode shows this page over your lock screen, which would step " +
+                        "around the App Lock you have turned on. Turn App Lock off in Settings first " +
+                        "if you want this page reachable without unlocking.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { checkboxOnlyRefused = false }) { Text("OK") } },
         )
     }
     }

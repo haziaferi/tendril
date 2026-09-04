@@ -80,7 +80,9 @@ class AppContainer(context: Context) {
         database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
     )
     val viewLockState = ViewLockState()
-    val checkboxOnlyState = CheckboxOnlyState()
+    // audit 4.3 — checkbox-only mode draws over the keyguard, so it must refuse to turn on at
+    // all when App Lock is the thing standing in front of the app.
+    val checkboxOnlyState = CheckboxOnlyState { appLockPreferences.enabled.value }
 
     // Milestone 3 (tendril-windows-spec.md §6 step 3) — the slice of this container the ported
     // Workbench UI (nav shell, Pages, PageDetail, PageDatabase — now in `shared`) depends on.

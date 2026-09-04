@@ -95,9 +95,9 @@ class PageDetailViewModel(
     /** No unlock needed to turn on — §3.1.2: "toggling checkbox-only on plus confirming is
      * judged sufficient friction on its own." View-Only still wins if somehow both are toggled
      * at once, since a locked page has nothing to newly protect by going into checkbox-only. */
-    fun activateCheckboxOnly() {
-        if (viewOnlyLocked()) return
-        checkboxOnlyState.activate(pageId)
+    fun activateCheckboxOnly(): Boolean {
+        if (viewOnlyLocked()) return false
+        return checkboxOnlyState.activate(pageId)
     }
 
     /** §3.1.2 — "turning it back off requires a full device unlock." The unlock prompt itself
