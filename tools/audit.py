@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""
+Static hygiene checks for the Tendril repo — the mechanical half of a code audit,
+so review attention goes to the parts that need judgement.
+
+Every check encodes a defect this repository actually had, so a finding here is a
+regression rather than a style opinion. All checks are plain-text analysis: no
+Gradle, no Android SDK, no network — they run in seconds on any machine.
+
+    python3 tools/audit.py            # report; exit 1 if anything is found
+    python3 tools/audit.py -v         # also print what each check scanned
+
+Checks
+  1. commented-out code        a `//` line that is really a statement
+  2. leftover markers          TODO / FIXME / HACK / XXX in a comment
+  3. dead declarations         top-level fun/class/val referenced nowhere else
+  4. unused DAO methods        a @Query/@Insert/... with no production caller
+  5. dangling KDoc links       [Symbol] naming nothing declared or imported
+  6. leaked MutableStateFlow   `val x: StateFlow<T> = _x` without .asStateFlow()
+  7. Regex built per call      allocated in a function body instead of a top-level val
+  8. unguarded throwing I/O    a call to a documented-throwing file API with no try/catch
+
+Things invoked by a framework rather than by name — JUnit tests, Room converters
+and DAOs, Compose @Composable, Android manifest components, `fun main` — are
+excluded from the dead-code checks; they have no in-repo caller by design.
+"""
+from __future__ import annotations
+import argparse, os, re, sys
+from collections import defaultdict
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SKIP_DIRS = {".git", "build", ".gradle", ".idea"}
+TEST_PATH = re.compile(r"/(test|androidTest)/")
+
+
+def rel(p: str) -> str:
+    return os.path.relpath(p, ROOT).replace(os.sep, "/")
+
+
+def walk(exts: tuple[str, ...]) -> list[str]:
+    out = []
+    for base, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        out += [os.path.join(base, f) for f in files if f.endswith(exts)]
+    return sorted(out)
+
+
+def strip_literals(src: str) -> str:
+    """Blank out comments and string literals so searching sees only code."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        if src.startswith('"""', i):
+            j = src.find('"""', i + 3)
+            i = (j + 3) if j != -1 else n
+            out.append('""')
+        elif src[i] == '"':
+            i += 1
+            buf = []
+            while i < n and src[i] != '"':
+                if src[i] == "\\":
+                    i += 2
+                    continue
+                buf.append(src[i])
+                i += 1
+            i += 1
+            # A `${...}` template is code, not text: keep it so that a function called
+            # only from inside a string still counts as referenced.
+            out.append(" ".join(re.findall(r"\$\{([^{}]*)\}", "".join(buf))) or '""')
+        elif src.startswith("//", i):
+            j = src.find("\n", i)
+            i = j if j != -1 else n
+        elif src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            i = (j + 2) if j != -1 else n
+        else:
+            out.append(src[i])
+            i += 1
+    return "".join(out)
+
+
+# --- patterns -----------------------------------------------------------------
+# A commented-out statement, as opposed to prose. Keywords must be followed by the
+# punctuation that makes them code ("for (" is code; "for Toggles" is a sentence).
+CODEY = re.compile(
+    r"^\s*//\s*(?:"
+    r"(?:private |internal |public |override |suspend )*(?:val|var|fun|class|object|interface)\s+\w+\s*[:(=]"
+    r"|import\s+[\w.]+"
+    r"|(?:if|for|while|when)\s*\("
+    r"|return\s+\w+"
+    r"|\w+(?:\.\w+)*\([^)]*\)\s*[;{]?\s*$"
+    r"|\w+(?:\.\w+)*\s*=\s*\w+.*[;)]\s*$"
+    r")"
+)
+MARKER = re.compile(r"^\s*(?://|/?\*+)\s.*\b(FIXME|HACK|XXX|WIP)\b|^\s*(?://|/?\*+)\s*TODO[: ]")
+# Top-level only: column 0, optionally with modifiers. Extension receivers included.
+TOP_DECL = re.compile(
+    r"^(?:(?:private|internal|public|abstract|open|sealed|data|enum|expect|actual|inline|suspend)\s+)*"
+    r"(?:fun|class|object|interface)\s+(?:<[^>]+>\s+)?(?:[\w.]+\.)?(\w+)"
+)
+TOP_VAL = re.compile(r"^(?:(?:private|internal|public|const|expect|actual)\s+)*va[lr]\s+(\w+)")
+DAO_ANN = re.compile(r"^\s*@(?:Query|Insert|Update|Delete|Upsert)\b")
+DAO_FUN = re.compile(r"^\s*(?:suspend\s+)?fun\s+(\w+)")
+KDOC_LINK = re.compile(r"\[([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)*)\]")
+LEAKED_FLOW = re.compile(r"^\s*val\s+\w+\s*:\s*StateFlow<.*>\s*=\s*_\w+\s*$")
+REGEX_IN_BODY = re.compile(r"^\s{8,}[^*/].*\bRegex\(")
+THROWING = re.compile(r"\b(?:importAdditive|restoreFromBackup|readAndMerge|writeSnapshots)\s*\(|\b\w+\.(?:import|export)\s*\(")
+FRAMEWORK_ANN = ("@Test", "@Before", "@After", "@BeforeClass", "@AfterClass", "@RunWith",
+                 "@Composable", "@TypeConverter", "@Dao", "@Database", "@Entity", "@Preview")
+
+
+class Report:
+    def __init__(self):
+        self.items = defaultdict(list)
+
+    def add(self, check, msg):
+        self.items[check].append(msg)
+
+    def emit(self):
+        total = sum(len(v) for v in self.items.values())
+        for check in sorted(self.items):
+            print(f"\n{check}  ({len(self.items[check])})")
+            for r in self.items[check]:
+                print(f"    {r}")
+        print()
+        print(f"FAIL  {total} finding(s)" if total else "PASS  no findings")
+        return 1 if total else 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-v", "--verbose", action="store_true")
+    args = ap.parse_args()
+
+    files = walk((".kt", ".kts"))
+    srcs = {f: open(f, encoding="utf-8").read() for f in files}
+    stripped = {f: strip_literals(s) for f, s in srcs.items()}
+    all_code = "\n".join(stripped.values())
+    manifests = "\n".join(open(f, encoding="utf-8").read() for f in walk((".xml",)))
+    rep = Report()
+
+    if args.verbose:
+        print(f"scanning {len(files)} Kotlin files under {ROOT}")
+
+    # names that KDoc may legitimately reference: anything declared or imported anywhere
+    imported = set(re.findall(r"^import\s+(?:[\w.]+\.)?(\w+)", all_code, re.M))
+    imported |= set(re.findall(r"^import\s+([\w.]+)", all_code, re.M))
+    declared = set(re.findall(r"\b(?:fun|class|object|interface|val|var)\s+(?:<[^>]+>\s+)?(?:[\w.]+\.)?(\w+)", all_code))
+    declared |= set(re.findall(r"^\s*(\w+)\s*[,(]\s*$", all_code, re.M))          # enum members
+    declared |= set(re.findall(r"^\s*(?:val|var)?\s*(\w+)\s*:", all_code, re.M))  # params/properties
+    declared |= set(re.findall(r"[(,]\s*(?:val\s+|var\s+|vararg\s+)?(\w+)\s*:", all_code))  # inline params
+    known = imported | declared | {"Dispatchers", "Boolean", "Int", "Long", "String"}
+
+    for f, src in srcs.items():
+        lines = src.splitlines()
+        is_test = bool(TEST_PATH.search("/" + rel(f)))
+        for i, line in enumerate(lines, 1):
+            if CODEY.match(line):
+                rep.add("commented-out code", f"{rel(f)}:{i}  {line.strip()[:90]}")
+            if MARKER.match(line) and "BlockType" not in line and "TODO only" not in line:
+                rep.add("leftover marker", f"{rel(f)}:{i}  {line.strip()[:90]}")
+            if LEAKED_FLOW.match(line):
+                rep.add("leaked MutableStateFlow", f"{rel(f)}:{i}  {line.strip()[:90]}")
+            if REGEX_IN_BODY.match(line):
+                rep.add("Regex built per call", f"{rel(f)}:{i}  {line.strip()[:90]}")
+            s = line.strip()
+            if s.startswith(("*", "/**")):
+                for m in KDOC_LINK.finditer(line):
+                    parts = m.group(1).split(".")
+                    if not (set(parts) & known) and m.group(1) not in known:
+                        rep.add("dangling KDoc link", f"{rel(f)}:{i}  [{m.group(1)}]")
+            if not is_test and THROWING.search(line) and not s.startswith(("*", "//", "suspend fun", "fun", "private")):
+                window = "\n".join(lines[max(0, i - 14):i + 4])
+                if "runCatching" not in window and "try {" not in window and "catch" not in window:
+                    rep.add("unguarded throwing I/O call", f"{rel(f)}:{i}  {s[:90]}")
+
+    # dead top-level declarations
+    for f, src in srcs.items():
+        if TEST_PATH.search("/" + rel(f)):
+            continue
+        lines = src.splitlines()
+        for i, line in enumerate(lines, 1):
+            m = TOP_DECL.match(line) or TOP_VAL.match(line)
+            if not m:
+                continue
+            prev = "\n".join(lines[max(0, i - 5):i - 1])
+            if any(a in prev for a in FRAMEWORK_ANN):
+                continue
+            name = m.group(1)
+            if len(name) < 4 or name == "main":
+                continue
+            if re.search(rf"\b{re.escape(name)}\b", manifests):   # Android component
+                continue
+            if len(re.findall(rf"\b{re.escape(name)}\b", all_code)) <= 1:
+                rep.add("dead declaration", f"{rel(f)}:{i}  {name}")
+
+    # DAO methods with no production caller
+    for f, src in srcs.items():
+        lines = src.splitlines()
+        for i, line in enumerate(lines):
+            if not DAO_ANN.match(line):
+                continue
+            for j in range(i + 1, min(i + 4, len(lines))):
+                fm = DAO_FUN.match(lines[j])
+                if not fm:
+                    continue
+                name = fm.group(1)
+                callers = [g for g, s in stripped.items()
+                           if g != f and not TEST_PATH.search("/" + rel(g))
+                           and re.search(rf"\.{re.escape(name)}\s*\(", s)]
+                if not callers:
+                    rep.add("unused DAO method", f"{rel(f)}:{j+1}  {name}")
+                break
+
+    return rep.emit()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

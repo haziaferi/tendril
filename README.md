@@ -95,6 +95,24 @@ an API 32 image as well as a current one.
 
 ---
 
+## Checks
+
+```bash
+python3 tools/audit.py        # static hygiene checks; exit 1 on any finding
+```
+
+Needs only Python 3 — no Gradle, no Android SDK, no network — so it runs anywhere in
+seconds, including on a machine that cannot build the app. It checks for commented-out code,
+leftover TODO/FIXME markers, unreferenced declarations and DAO methods, KDoc links naming
+symbols that don't exist, `StateFlow`s that leak their mutable backing, `Regex` allocated per
+call instead of once, and calls to the documented-throwing file APIs with no `try`/`catch`.
+
+Every check corresponds to a defect this repository has actually had, so a finding is a
+regression rather than a style opinion. `.github/workflows/audit.yml` runs it on every push.
+The list and the reasoning behind each check live in the script's own module docstring.
+
+---
+
 ## Documentation
 
 | document | what it is for |
