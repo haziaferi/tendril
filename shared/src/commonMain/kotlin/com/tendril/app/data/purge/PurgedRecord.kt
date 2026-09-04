@@ -10,7 +10,7 @@ import java.time.Instant
 /** What a tombstone is *for*. Only the kinds that actually offer "Delete forever" in the
  * Trash today — a Habit has no such action yet, and speculative enum members are the sort of
  * dead generality this codebase avoids; add HABIT alongside the UI that needs it. */
-enum class PurgedKind { PAGE, ENTRY }
+enum class PurgedKind { PAGE, ENTRY, HABIT }
 
 /**
  * §5.5.1.1 — a tombstone for a record the person deleted *forever* out of the Trash.

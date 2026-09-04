@@ -285,9 +285,14 @@ class SnapshotSyncOrchestrator(
     private suspend fun mergeHabitContent(content: String): Boolean {
         if (content.isBlank()) return false
         val records = runCatching { json.decodeFromString<List<HabitSnapshotRecord>>(content) }.getOrNull() ?: return false
+        val tombstones = purgeRegistry.tombstones(PurgedKind.HABIT)
         for (record in records) {
             val local = habitDao.getByUid(record.uid)
             val remoteUpdatedAt = Instant.ofEpochMilli(record.updatedAt)
+            // §5.5.1.1 — same rule the Entry and Page merges follow. Without it a Habit purged
+            // on any device walks straight back in from another device's habits.json, which is
+            // the resurrection the tombstones exist to stop.
+            if (purgeRegistry.isPurged(PurgedKind.HABIT, record.uid, remoteUpdatedAt, tombstones)) continue
             if (local == null) {
                 habitDao.insert(record.toEntity())
             } else if (remoteUpdatedAt.isAfter(local.updatedAt)) {
@@ -299,8 +304,9 @@ class SnapshotSyncOrchestrator(
 
     /** Cheap enough to run before every write: the magic prefix is the first 8 bytes, and only
      * the fixed root files need checking — per-page files are written with the same key as
-     * these, never independently. */
-    /** The first root snapshot in the folder that is actually encrypted, or null if none is.
+     * these, never independently.
+     *
+     * The first root snapshot in the folder that is actually encrypted, or null if none is.
      * Returns the bytes rather than a bare Boolean so the write guard can try a key against real
      * ciphertext, instead of only asking whether ciphertext exists. */
     private suspend fun firstEncryptedSnapshot(store: SyncFileStore): ByteArray? =

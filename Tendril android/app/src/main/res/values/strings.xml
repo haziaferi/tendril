@@ -62,6 +62,7 @@
 
     <!-- Entry Trash (spec §5.5.1) -->
     <string name="trash_entries_title">Trash</string>
+    <string name="trash_habits_title">Trash</string>
     <string name="trash_entries_open">Trash</string>
 
     <!-- Reminders (spec §5.4) -->

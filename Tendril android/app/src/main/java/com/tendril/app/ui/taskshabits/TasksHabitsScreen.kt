@@ -55,6 +55,7 @@ import com.tendril.app.data.habit.Habit
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.reminders.ReminderSheet
 import com.tendril.app.ui.trash.EntryTrashSheet
+import com.tendril.app.ui.trash.HabitTrashSheet
 import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
@@ -176,7 +177,13 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
     }
 
     if (showTrash) {
-        EntryTrashSheet(container = container, onDismiss = { showTrash = false })
+        // Which Trash the button opens follows the tab, exactly as the add button's label does
+        // above: on Habits it has to be the Habit sheet, or trashed Habits stay unreachable.
+        if (tab == TabSelection.HABITS) {
+            HabitTrashSheet(container = container, onDismiss = { showTrash = false })
+        } else {
+            EntryTrashSheet(container = container, onDismiss = { showTrash = false })
+        }
     }
 }
 

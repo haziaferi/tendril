@@ -45,7 +45,7 @@ class PurgePropagationTest {
         val purgedDao = FakePurgedRecordDao()
         val entryDao = FakeEntryDao()
         val habitDao = FakeHabitDao()
-        val registry = PurgeRegistry(purgedDao, pageDao, entryDao, RecordingEntryScheduleCoordinator())
+        val registry = PurgeRegistry(purgedDao, pageDao, entryDao, habitDao, RecordingEntryScheduleCoordinator())
 
         val engine = PagesSyncEngine(
             pageDao = pageDao,

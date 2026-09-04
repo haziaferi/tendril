@@ -73,7 +73,7 @@ class PageMergeTest {
     private val entryDao = FakeEntryDao()
     private val coordinator = RecordingEntryScheduleCoordinator()
 
-    private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, coordinator)
+    private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), coordinator)
     private val contentRepository = PageContentRepository(blockDao, ftsDao)
 
     private val engine = PagesSyncEngine(
@@ -192,7 +192,7 @@ class PageMergeTest {
         val b = FakePageStore()
         val bPageDao = FakePageDao(b)
         val bPurgedDao = FakePurgedRecordDao()
-        val bRegistry = PurgeRegistry(bPurgedDao, bPageDao, FakeEntryDao(), RecordingEntryScheduleCoordinator())
+        val bRegistry = PurgeRegistry(bPurgedDao, bPageDao, FakeEntryDao(), FakeHabitDao(), RecordingEntryScheduleCoordinator())
         b.seedPage(Page(uid = UID_A, title = "B's newer edit", createdAt = at(3_000L), updatedAt = at(3_000L)))
         bRegistry.adopt(listOf(PurgedRecord(PurgedKind.PAGE, UID_A, at(2_000L))))
         bRegistry.applyToLocalRecords()

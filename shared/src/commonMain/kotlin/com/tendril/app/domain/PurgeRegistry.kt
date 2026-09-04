@@ -2,6 +2,7 @@ package com.tendril.app.domain
 
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
+import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.purge.PurgedRecord
@@ -31,6 +32,7 @@ class PurgeRegistry(
     private val purgedRecordDao: PurgedRecordDao,
     private val pageDao: PageDao,
     private val entryDao: EntryDao,
+    private val habitDao: HabitDao,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
 ) {
     /** Records the tombstone *before* dropping the row, so a crash between the two leaves a
@@ -46,6 +48,14 @@ class PurgeRegistry(
         val entry = entryDao.getById(entryId) ?: return
         purgedRecordDao.insert(PurgedRecord(PurgedKind.ENTRY, entry.uid, now))
         removeEntry(entry)
+    }
+
+    /** Habits need no [removeEntry]-style teardown: they carry no alarms and no Calendar
+     * Provider mirror, so the row is the whole of it. */
+    suspend fun purgeHabit(habitId: Long, now: Instant = Instant.now()) {
+        val habit = habitDao.getById(habitId) ?: return
+        purgedRecordDao.insert(PurgedRecord(PurgedKind.HABIT, habit.uid, now))
+        habitDao.deleteForever(habitId)
     }
 
     /** uid → `purgedAt` for one kind, read once per merge pass rather than queried per record. */
@@ -84,6 +94,10 @@ class PurgeRegistry(
                 PurgedKind.ENTRY -> entryDao.getByUid(tombstone.uid)?.let { entry ->
                     if (entry.updatedAt.isAfter(tombstone.purgedAt)) supersede(tombstone)
                     else removeEntry(entry)
+                }
+                PurgedKind.HABIT -> habitDao.getByUid(tombstone.uid)?.let { habit ->
+                    if (habit.updatedAt.isAfter(tombstone.purgedAt)) supersede(tombstone)
+                    else habitDao.deleteForever(habit.id)
                 }
             }
         }
