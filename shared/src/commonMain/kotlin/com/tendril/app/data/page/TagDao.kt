@@ -36,7 +36,6 @@ interface TagDao {
     @Query("DELETE FROM page_tags WHERE pageId = :pageId")
     suspend fun clearForPage(pageId: Long)
 
-
     /** §3.1.6 filter-chip row — OR semantics (a page matching *any* selected tag shows),
      * matching the spec's consistent bias toward the simplest useful filter model rather
      * than AND/group logic (the same call already made for §5.6's single-condition view filter). */

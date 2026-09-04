@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageFtsDao
+import com.tendril.app.data.page.searchPrefix
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageSearchHit
 import com.tendril.app.data.page.Tag
@@ -84,14 +85,7 @@ class PagesViewModel(
     val searchResults: StateFlow<List<PageSearchHit>> = _searchResults.asStateFlow()
 
     fun onSearchQueryChange(query: String) {
-        viewModelScope.launch {
-            val match = toFtsPrefixQuery(query)
-            _searchResults.value = if (match == null) emptyList()
-            // Belt and braces over [toFtsPrefixQuery]: a MATCH that SQLite still refuses is a
-            // no-results search, never a crashed one. This ran inside viewModelScope with
-            // nothing catching it, so a raw SQLiteException took the app down mid-keystroke.
-            else runCatching { pageFtsDao.search(match) }.getOrDefault(emptyList())
-        }
+        viewModelScope.launch { _searchResults.value = pageFtsDao.searchPrefix(query) }
     }
 
     fun createBlankPage(title: String, onCreated: (Long) -> Unit) {
@@ -150,21 +144,3 @@ class PagesViewModel(
         }
     }
 }
-
-/**
- * FTS4 `MATCH` takes a query *expression*, not a literal — a quote, parenthesis or bare `*`
- * in what someone typed is a syntax error, and interpolating raw input straight into
- * `"$query*"` made that a crash on an ordinary keystroke. Splitting on everything that isn't
- * a letter or digit yields only bare alphanumeric tokens, which are always valid terms; each
- * gets FTS4's `*` prefix operator so search still matches as the person types. Multiple
- * tokens are ANDed, FTS4's default, so extra words narrow rather than widen.
- *
- * Returns null when nothing searchable is left ("", "  ", "???") — the caller shows no
- * results rather than running a query that would match everything.
- */
-private fun toFtsPrefixQuery(raw: String): String? {
-    val terms = raw.split(NON_SEARCHABLE).filter { it.isNotEmpty() }
-    return if (terms.isEmpty()) null else terms.joinToString(" ") { "$it*" }
-}
-
-private val NON_SEARCHABLE = Regex("[^\\p{L}\\p{N}]+")

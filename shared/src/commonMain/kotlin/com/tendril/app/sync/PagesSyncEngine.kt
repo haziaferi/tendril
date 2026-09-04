@@ -40,10 +40,9 @@ private val UUID_PATTERN = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 
 /**
  * §9.4 — completes the Page/Row/Database/Canvas half of snapshot sync (Entry/Habit's half
- * already lived in `SnapshotMappers.kt`, `SnapshotSyncOrchestrator` and `PortableArchive` —
- * backticks, not KDoc links: the latter two live outside `commonMain` and aren't resolvable
- * from here). Shared by both the continuous folder sync and the one-off portable
- * export/import, matching those callers' own "one schema, reused everywhere" rule — the merge
+ * already lived in `SnapshotMappers.kt`, `SnapshotSyncOrchestrator` and `PortableArchive`).
+ * Shared by both the continuous folder sync and the one-off portable export/import, matching
+ * those callers' own "one schema, reused everywhere" rule — the merge
  * algorithm here is intricate enough (five ordered passes, several cross-page FK resolutions)
  * that duplicating it per caller the way the simpler Entry/Habit merges are today would be a
  * real maintenance risk, not just more typing.

@@ -153,8 +153,7 @@ fun CalendarScreen(container: AppContainer, modifier: Modifier = Modifier) {
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
-                    onResolve = viewModel::resolve,
-                    onUnresolve = viewModel::unresolve,
+                    onSetDone = viewModel::setDone,
                     onOpenReminders = { reminderTarget = it },
                 )
                 CalendarView.WEEK -> WeekStripView(
@@ -180,8 +179,7 @@ private fun DayView(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (String) -> Unit,
-    onResolve: (Long, EntryStatus) -> Unit,
-    onUnresolve: (Long) -> Unit,
+    onSetDone: (Long, Boolean) -> Unit,
     onOpenReminders: (Entry) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -222,9 +220,7 @@ private fun DayView(
                         if (entry.status != null) {
                             Checkbox(
                                 checked = entry.status == EntryStatus.DONE,
-                                onCheckedChange = { checked ->
-                                    if (checked) onResolve(entry.id, EntryStatus.DONE) else onUnresolve(entry.id)
-                                },
+                                onCheckedChange = { checked -> onSetDone(entry.id, checked) },
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {

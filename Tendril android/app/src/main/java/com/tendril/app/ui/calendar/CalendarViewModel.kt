@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.entry.EntryKind
-import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.ResolveEntryUseCase
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,15 +44,9 @@ class CalendarViewModel(
         }
     }
 
-    fun resolve(entryId: Long, status: EntryStatus) {
-        viewModelScope.launch { resolveEntryUseCase.resolve(entryId, status) }
-    }
-
-    /** Unchecking is not a resolution — see [ResolveEntryUseCase.unresolve], which names this
-     * checkbox as one of its call sites. Routing it through `resolve(SKIPPED)` instead logged a
-     * completion that never happened, left the Entry SKIPPED rather than PENDING with its alarms
-     * still cancelled, and advanced an Elastic recurrence by another whole period. */
-    fun unresolve(entryId: Long) {
-        viewModelScope.launch { resolveEntryUseCase.unresolve(entryId) }
+    /** §9.8 R1 — the checked/unchecked decision lives in [ResolveEntryUseCase.setDone], not in
+     * each surface's own ViewModel. */
+    fun setDone(entryId: Long, done: Boolean) {
+        viewModelScope.launch { resolveEntryUseCase.setDone(entryId, done) }
     }
 }

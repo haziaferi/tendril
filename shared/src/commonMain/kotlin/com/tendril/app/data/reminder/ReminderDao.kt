@@ -18,5 +18,4 @@ interface ReminderDao {
 
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun delete(id: Long)
-
 }

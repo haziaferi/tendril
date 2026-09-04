@@ -32,7 +32,6 @@ interface BlockDao {
     @Query("SELECT * FROM blocks WHERE id = :id")
     suspend fun getById(id: Long): Block?
 
-
     /** Standalone PAGE_MENTION blocks pointing at [pageId] — the cheap half of the mention
      * edge set (SQL can filter this column directly). */
     @Query("SELECT * FROM blocks WHERE mentionedPageId = :pageId")

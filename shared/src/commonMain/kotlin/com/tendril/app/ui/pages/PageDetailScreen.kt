@@ -547,11 +547,8 @@ private fun blockTextStyle(type: BlockType): androidx.compose.ui.text.TextStyle 
  * change happened, so the edited region is recovered by trimming the common prefix and common
  * suffix — that bracket always contains the real edit, which is all the remap needs.
  *
- * The previous version's first branch (`span.end <= oldText.length && oldText.length <=
- * newText.length`) was true for essentially every insertion, so *no* span ever moved: inserting
- * at the start of a block left every span pointing at the wrong characters, silently
- * re-formatting the wrong text rather than the "dropped rather than corrupted" behaviour the
- * comment promised. Deletions shifted `end` while leaving `start` put, stretching spans.
+ * Do not regress this to a plain `end + delta` shift: that silently re-formats the wrong
+ * characters on any edit that isn't an append.
  */
 private fun remapSpans(spans: List<FormattingSpan>, oldText: String, newText: String): List<FormattingSpan> {
     if (spans.isEmpty() || oldText == newText) return spans
@@ -580,7 +577,9 @@ private fun remapSpans(spans: List<FormattingSpan>, oldText: String, newText: St
             // stop is genuinely ambiguous, so drop it rather than guess.
             else -> null
         }
-    }.filter { it.start >= 0 && it.end <= newText.length && it.start < it.end }
+        // A deletion that removes exactly a span's interior leaves start == end; the other
+        // branches can't produce an out-of-range or empty span.
+    }.filter { it.start < it.end }
 }
 
 @Composable

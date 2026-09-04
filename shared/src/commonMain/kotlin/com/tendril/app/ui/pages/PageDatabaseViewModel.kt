@@ -398,9 +398,7 @@ class PageDatabaseViewModel(
 
     fun toggleDone(entry: Entry, checked: Boolean) {
         if (locked()) return
-        viewModelScope.launch {
-            if (checked) resolveEntryUseCase.resolve(entry.id, EntryStatus.DONE) else resolveEntryUseCase.unresolve(entry.id)
-        }
+        viewModelScope.launch { resolveEntryUseCase.setDone(entry.id, checked) }
     }
 
     fun setDeadline(entry: Entry, date: LocalDate?) {

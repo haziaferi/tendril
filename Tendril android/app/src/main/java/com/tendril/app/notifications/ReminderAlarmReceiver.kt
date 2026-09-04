@@ -37,10 +37,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                     .setContentIntent(contentIntent)
                     .setAutoCancel(true)
                     .build()
-                NotificationManagerCompat.from(context).notify(
-                    NOTIFICATION_ID_BASE + (entryId.toInt() * 1000 + reminderId.toInt()),
-                    notification,
-                )
+                NotificationManagerCompat.from(context).notify(notificationId(entryId, reminderId), notification)
             } finally {
                 pendingResult.finish()
             }
@@ -49,5 +46,12 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         private const val NOTIFICATION_ID_BASE = 20_000_000
+
+        /** Same bit-packing rationale as [AlarmScheduler.reminderRequestCode]: the previous
+         * `entryId * 1000 + reminderId` aliased (entry 1 / reminder 1000 collided with entry 2 /
+         * reminder 0) and overflowed Int well before Room's ids would. Separate ranges instead,
+         * so a reminder can only ever replace or dismiss its own notification. */
+        fun notificationId(entryId: Long, reminderId: Long): Int =
+            NOTIFICATION_ID_BASE + (((entryId and 0x7FFF) shl 15) or (reminderId and 0x7FFF)).toInt()
     }
 }

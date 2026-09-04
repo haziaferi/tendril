@@ -39,11 +39,30 @@ class SnapshotSyncOrchestrator(
     private val pageDao: PageDao,
     private val pagesSyncEngine: PagesSyncEngine,
 ) {
-    /** Runs on [Dispatchers.IO]: file writes go through [SyncFileStore], and deriving the
-     * encryption key is 210,000 PBKDF2 iterations — hundreds of milliseconds that must not
-     * land on a UI thread. Callers can launch this from any scope without wrapping it. */
-    suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null) = withContext(Dispatchers.IO) {
+    /**
+     * One sync: merge in what the folder has, then write back what this device now holds. Both
+     * platforms' "Sync now" buttons were sequencing these two by hand, and each passphrase-taking
+     * call derives its own key — 210,000 PBKDF2 iterations apiece, paid twice for one button
+     * press. Deriving once here halves that and puts the read-before-write ordering in one place.
+     *
+     * Everything below runs on [Dispatchers.IO] — file access plus that key derivation are
+     * hundreds of milliseconds that must not land on a UI thread — so callers can launch this
+     * from any scope without wrapping it.
+     */
+    suspend fun syncNow(store: SyncFileStore, passphrase: String? = null) {
+        // Derived once for both halves. Each half is already on Dispatchers.IO, so there is no
+        // outer withContext here.
         val key = passphrase?.let(SnapshotEncryption::deriveKey)
+        mergeWithKey(store, key)
+        writeWithKey(store, key)
+    }
+
+    /** The write half on its own, for a caller that only needs to publish. [syncNow] is what a
+     * "Sync now" button wants. */
+    suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null) =
+        writeWithKey(store, passphrase?.let(SnapshotEncryption::deriveKey))
+
+    private suspend fun writeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
         // Writing without a key is how encryption is turned *off*, and the write is a full
         // overwrite — so with an encrypted folder and no passphrase to hand, it would replace
         // every snapshot with cleartext and report success. That is reachable without an
@@ -81,9 +100,10 @@ class SnapshotSyncOrchestrator(
      * omitting it, not by this pass inferring absence as intent.
      *
      * Runs on [Dispatchers.IO] for the same reasons as [writeSnapshots]. */
-    suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) = withContext(Dispatchers.IO) {
-        val key = passphrase?.let(SnapshotEncryption::deriveKey)
+    suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) =
+        mergeWithKey(store, passphrase?.let(SnapshotEncryption::deriveKey))
 
+    private suspend fun mergeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
         // Pages first — Entry's sourceRowId resolution below needs every Row's local id to
         // already exist.
         mergePagesDir(store, key)

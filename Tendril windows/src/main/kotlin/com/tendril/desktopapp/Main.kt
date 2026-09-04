@@ -107,6 +107,9 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     }
 }
 
+/** Allocated once rather than per recomposition of the passphrase field it decorates. */
+private val PASSPHRASE_MASK = PasswordVisualTransformation()
+
 @Composable
 private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
     val folderPath by folderManager.folderPath.collectAsState()
@@ -137,10 +140,10 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
             onValueChange = { passphrase = it },
             label = { Text("Passphrase (optional)") },
             singleLine = true,
-            // Masked, matching Android's own two passphrase fields — this one is typed in
-            // whatever room the desktop happens to be in, and it is the key to every synced
-            // snapshot in the folder.
-            visualTransformation = PasswordVisualTransformation(),
+            // This is the key to every snapshot in the folder, typed in whatever room the
+            // desktop happens to be in. Android's two passphrase fields also offer a reveal
+            // toggle; this one doesn't yet.
+            visualTransformation = PASSPHRASE_MASK,
             modifier = Modifier.width(220.dp).padding(horizontal = 8.dp),
         )
 
@@ -156,8 +159,7 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                     // for the rest of the session. Android's own "Sync now" already does this.
                     try {
                         val store = DesktopFileSyncFileStore(path)
-                        orchestrator.readAndMerge(store, passphrase.ifBlank { null })
-                        orchestrator.writeSnapshots(store, passphrase.ifBlank { null })
+                        orchestrator.syncNow(store, passphrase.ifBlank { null })
                         syncError = null
                     } catch (e: Exception) {
                         syncError = e.message ?: "Sync failed."
@@ -173,7 +175,7 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
             it,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
         )
     }
 }

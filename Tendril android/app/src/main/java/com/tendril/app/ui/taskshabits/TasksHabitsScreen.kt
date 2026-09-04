@@ -243,9 +243,7 @@ private fun TaskRow(entry: Entry, viewModel: TasksHabitsViewModel, onOpenReminde
     ) {
         Checkbox(
             checked = entry.status == EntryStatus.DONE,
-            onCheckedChange = { checked ->
-                if (checked) viewModel.resolve(entry.id, EntryStatus.DONE) else viewModel.unresolve(entry.id)
-            },
+            onCheckedChange = { checked -> viewModel.setDone(entry.id, checked) },
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.title, style = MaterialTheme.typography.bodyLarge)

@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
-import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.entry.intervalToPeriod
@@ -288,9 +287,7 @@ class PageDetailViewModel(
     fun toggleRowDone(checked: Boolean) {
         if (contentLocked()) return
         val entry = rowLinkedEntry.value ?: return
-        viewModelScope.launch {
-            if (checked) resolveEntryUseCase.resolve(entry.id, EntryStatus.DONE) else resolveEntryUseCase.unresolve(entry.id)
-        }
+        viewModelScope.launch { resolveEntryUseCase.setDone(entry.id, checked) }
     }
 
     fun setRowDeadline(date: java.time.LocalDate?) {

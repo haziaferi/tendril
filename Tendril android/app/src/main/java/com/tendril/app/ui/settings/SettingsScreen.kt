@@ -313,8 +313,7 @@ private fun SyncFolderSection(
                                     syncError = "Couldn't open the sync folder — try choosing it again."
                                 } else {
                                     syncError = null
-                                    orchestrator.readAndMerge(store, passphrase)
-                                    orchestrator.writeSnapshots(store, passphrase)
+                                    orchestrator.syncNow(store, passphrase)
                                     syncStatus.markSyncedNow()
                                 }
                             } catch (e: Exception) {

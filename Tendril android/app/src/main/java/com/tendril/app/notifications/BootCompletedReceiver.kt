@@ -37,11 +37,10 @@ suspend fun reconcileAlarms(context: Context) {
     // alarm one above. No-ops if permission was never granted; can't request it from a
     // boot-time BroadcastReceiver (no Activity), so a first grant only ever happens from
     // MainActivity's own LaunchedEffect.
-    //
-    // Guarded for the same reason AlarmScheduler checks canScheduleExactAlarms() rather than
-    // trusting the manifest: this runs from MainActivity's launch-time sweep, so a Calendar
-    // Provider that refuses the write — absent or restricted on some devices and work profiles,
-    // where the insert comes back null and `createCalendar` throws — would take the app down on
-    // open. A missing calendar mirror is a degraded integration; a crash on launch is not.
-    runCatching { container.calendarProviderSync.ensureCalendarAndBackfill() }
+    // A Provider that refuses the write no longer throws — CalendarProviderSync reports it as a
+    // null calendar and no-ops, the way it already does for a missing permission — so this
+    // needs no guard of its own. Guarding here instead would have covered only this one of the
+    // four paths into that failure, and a runCatching in a suspend function swallows
+    // CancellationException along with it.
+    container.calendarProviderSync.ensureCalendarAndBackfill()
 }
