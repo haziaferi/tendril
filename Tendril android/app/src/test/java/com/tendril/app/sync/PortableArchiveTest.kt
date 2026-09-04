@@ -233,7 +233,10 @@ class PortableArchiveTest {
             "the manifest stays readable so an importer can say what the file is",
             !SnapshotEncryption.isEncrypted(written.getValue("manifest.json")),
         )
-        assertTrue(written.getValue("manifest.json").toString(Charsets.UTF_8).contains("\"encrypted\":true"))
+        val manifest = json.decodeFromString<TendrilManifest>(
+            written.getValue("manifest.json").toString(Charsets.UTF_8)
+        )
+        assertTrue("the manifest must declare itself encrypted", manifest.encrypted)
         for ((name, bytes) in written) {
             if (name == "manifest.json") continue
             assertTrue("$name should be ciphertext", SnapshotEncryption.isEncrypted(bytes))
@@ -272,7 +275,15 @@ class PortableArchiveTest {
 
         assertTrue(!result.encrypted)
         val written = unzip(backing.bytesWrittenTo(destination))
-        assertTrue(written.none { (_, b) -> SnapshotEncryption.isEncrypted(b) })
+        assertTrue("no entry may be ciphertext", written.none { (_, b) -> SnapshotEncryption.isEncrypted(b) })
+        // `encrypted = false` equals the property's default, and kotlinx.serialization omits
+        // those — so this asserts the default reads back correctly from a manifest that has no
+        // `encrypted` key at all, which is also what every archive written before the field
+        // existed looks like.
+        val manifest = json.decodeFromString<TendrilManifest>(
+            written.getValue("manifest.json").toString(Charsets.UTF_8)
+        )
+        assertTrue("the manifest must not claim encryption", !manifest.encrypted)
     }
 
     @Test
