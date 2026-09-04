@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.tendril.app.ui.taskshabits
 
 import androidx.compose.foundation.horizontalScroll
@@ -17,7 +19,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +54,9 @@ fun AddTaskDialog(
     var hasDate by remember { mutableStateOf(true) }
     var date by remember { mutableStateOf(LocalDate.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var hasTime by remember { mutableStateOf(false) }
+    var time by remember { mutableStateOf(DEFAULT_TIME_OF_DAY) }
+    var showTimePicker by remember { mutableStateOf(false) }
     var repeat by remember { mutableStateOf(RepeatOption.NONE) }
 
     AlertDialog(
@@ -65,6 +72,15 @@ fun AddTaskDialog(
                 }
                 if (hasDate) {
                     TextButton(onClick = { showDatePicker = true }) { Text("Date: $date") }
+                    // Nested under `hasDate`: AlarmScheduler anchors an Entry's alarms to
+                    // start_date + start_time, so a time without a date has nothing to fire on.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Has time", modifier = Modifier.fillMaxWidth().weight(1f))
+                        Switch(checked = hasTime, onCheckedChange = { hasTime = it })
+                    }
+                    if (hasTime) {
+                        TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Text("Repeats", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(8.dp))
@@ -91,7 +107,7 @@ fun AddTaskDialog(
                     RepeatOption.WEEKLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.WEEK))
                     RepeatOption.MONTHLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.MONTH))
                 }
-                onAdd(title, if (hasDate) date else null, null, recurrence)
+                onAdd(title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence)
                 onDismiss()
             }) { Text("Add") }
         },
@@ -111,6 +127,14 @@ fun AddTaskDialog(
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
         ) { DatePicker(state = state) }
     }
+
+    if (showTimePicker) {
+        TimeOfDayDialog(
+            initial = time,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { time = it; showTimePicker = false },
+        )
+    }
 }
 
 @Composable
@@ -118,6 +142,9 @@ fun AddHabitDialog(onDismiss: () -> Unit, onAdd: (title: String, frequency: Habi
     var title by remember { mutableStateOf("") }
     var count by remember { mutableStateOf("1") }
     var unit by remember { mutableStateOf(IntervalUnit.DAY) }
+    var hasTime by remember { mutableStateOf(false) }
+    var time by remember { mutableStateOf(DEFAULT_TIME_OF_DAY) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -145,14 +172,52 @@ fun AddHabitDialog(onDismiss: () -> Unit, onAdd: (title: String, frequency: Habi
                         FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u.name.lowercase(), maxLines = 1) })
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                // A habit's time is what places it in the day — the Merged tab lists exactly
+                // the habits that have one (§3.3). Optional, since a habit with no particular
+                // hour is still a habit.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Has time", modifier = Modifier.fillMaxWidth().weight(1f))
+                    Switch(checked = hasTime, onCheckedChange = { hasTime = it })
+                }
+                if (hasTime) {
+                    TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onAdd(title, HabitFrequency(count.toIntOrNull() ?: 1, unit), null)
+                onAdd(title, HabitFrequency(count.toIntOrNull() ?: 1, unit), if (hasTime) time else null)
                 onDismiss()
             }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+
+    if (showTimePicker) {
+        TimeOfDayDialog(
+            initial = time,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { time = it; showTimePicker = false },
+        )
+    }
+}
+
+/** 9am, matching the default [com.tendril.app.ui.reminders.ReminderSheet] offers for an
+ * all-day reminder's anchor — the same "a sensible hour to mean by default" choice. */
+private val DEFAULT_TIME_OF_DAY: LocalTime = LocalTime.of(9, 0)
+
+/** Both dialogs pick a time the same way, so the wrapper lives here rather than being spelled
+ * out twice. Mirrors the shape ReminderSheet's own anchor picker already uses. */
+@Composable
+private fun TimeOfDayDialog(initial: LocalTime, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
+    val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = { TimePicker(state = state) },
     )
 }

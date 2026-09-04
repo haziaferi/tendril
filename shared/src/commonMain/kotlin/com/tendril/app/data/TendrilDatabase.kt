@@ -27,6 +27,8 @@ import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
 import com.tendril.app.data.page.PageRelationDao
 import com.tendril.app.data.page.PageTag
+import com.tendril.app.data.page.PurgedPage
+import com.tendril.app.data.page.PurgedPageDao
 import com.tendril.app.data.page.Tag
 import com.tendril.app.data.page.TagDao
 import com.tendril.app.data.pagedatabase.PageDatabase
@@ -59,8 +61,9 @@ import kotlinx.coroutines.Dispatchers
         Page::class, Tag::class, PageTag::class, Block::class, PageFtsEntry::class,
         PageDatabase::class, Property::class, PropertyValue::class, PageDatabaseView::class,
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
+        PurgedPage::class,
     ],
-    version = 5, // §3.2/§9.9 — Entry.providerEventId added; destructive pre-v1 migration (§9.10)
+    version = 6, // §5.5.1 — PurgedPage tombstones added; destructive pre-v1 migration (§9.10)
     // No schema-history export while Room migration policy is destructive-only pre-v1
     // (§9.10) — nothing to diff against yet. Revisit alongside the @AutoMigration switch.
     exportSchema = false,
@@ -82,6 +85,7 @@ abstract class TendrilDatabase : RoomDatabase() {
     abstract fun propertyValueDao(): PropertyValueDao
     abstract fun pageDatabaseViewDao(): PageDatabaseViewDao
     abstract fun pageRelationDao(): PageRelationDao
+    abstract fun purgedPageDao(): PurgedPageDao
     abstract fun pageCanvasDao(): PageCanvasDao
     abstract fun canvasNodeDao(): CanvasNodeDao
     abstract fun canvasEdgeDao(): CanvasEdgeDao

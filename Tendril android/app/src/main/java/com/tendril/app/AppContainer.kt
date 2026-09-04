@@ -50,10 +50,13 @@ class AppContainer(context: Context) {
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), pageContentRepository,
+        database.pageRelationDao(), database.purgedPageDao(), pageContentRepository,
     )
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
-    val portableArchive = PortableArchive(context, database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    val portableArchive = PortableArchive(
+        context, database.entryDao(), database.habitDao(), database.pageDao(),
+        database.purgedPageDao(), pagesSyncEngine,
+    )
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
         database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,

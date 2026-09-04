@@ -51,6 +51,7 @@ second copy of the reasoning.
 | 2026-08-30 (following day, pass 4) | Anti-drift-rule entry: Milestone 2 (folder-sync-on-desktop) implemented — full reasoning and detail in `tendril-windows-spec.md` §7, not repeated here per that file's §0. Summary only, since this touches `shared\`: Android's `SnapshotSyncManager`/`SnapshotEncryption` moved into a new `shared/jvmCommon` intermediate source set (a real Gradle finding — `javax.crypto` isn't visible from true KMP `commonMain` even though both targets are JVM-based) behind a new `SyncFileStore` interface, with `AndroidSafSyncFileStore`/`DesktopFileSyncFileStore` platform implementations; `Tendril android`'s two deleted files' logic is now `SnapshotSyncOrchestrator`, called via `AndroidSafSyncFileStore` from `AppContainer.kt`/`SettingsScreen.kt` with no behavior change (`assembleDebug`/`testDebugUnitTest` pass unchanged). | §9.4, §12 |
 | 2026-08-30 (following day, pass 5) | Anti-drift-rule entry: Milestone 3 (Workbench UI port), first slice, implemented — full reasoning and detail in `tendril-windows-spec.md` §8, not repeated here per that file's §0. Summary only, since this touches `shared\`: theming (`ui/theme/`), the nav shell (`ui/nav/WorkbenchScaffold.kt` + new hand-rolled `WorkbenchNavState`, not navigation-compose — still alpha/beta-only for Compose Multiplatform at this project's pin), and the block editor (`PagesScreen`/`PageDetailScreen`/`PageDatabaseScreen` + their ViewModels) moved from `:app` into `shared/src/commonMain/`, now rendering on both Android and desktop from one implementation. New `WorkbenchCore` groups the shared pieces these screens need; `AppContainer.kt` now holds one, `MainActivity.kt` calls a new Android-only `AndroidWorkbenchScaffold` wrapper (holds the `Activity`/`BiometricPrompt` calls the shared file no longer can) instead of the old `WorkbenchScaffold` directly — `assembleDebug`/`testDebugUnitTest` pass unchanged. Calendar/Tasks & Habits/Road Map/Settings/Canvas are not ported this pass (Android-integration-heavy, out of scope) — desktop renders a placeholder for each via `WorkbenchScaffold`'s new slot parameters. | §9.4, §12 |
 | 2026-09-04 | **Corrected:** the 2026-08-30 "No version control" decision is reversed — the project is now under git in a single repository (`haziaferi/tendril`) spanning all three sibling folders. One repo rather than three because both consumers resolve the shared core as `includeBuild("../shared")`, a relative sibling path only a single clone reproduces; a submodule would have to nest `shared\` and break both build files. Revision Log keeps its role for *why*; `git log` covers *what changed when*. Build/setup instructions moved out of this spec into `README.md` at the repository root. | §11 |
+| 2026-09-04 (audit) | Add-dialog time pickers (a Task's time, a Habit's time-of-day) — both dialogs previously hard-passed `null`, so no Habit could reach the Merged tab and no same-day Task ever alarmed. "Delete forever" made to stick: a `PurgedPage` tombstone, local-only, so the purged page's own snapshot file can no longer re-insert it on the next merge | §3.3, §5.5.1, §9.4 |
 
 ---
 
@@ -936,6 +937,31 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   the existing per-record LWW rule. A device that permanently purges an item after 30 days writes
   that as a real hard-delete to its own snapshot file on the next sync pass, same as any other
   mutation.
+
+#### 5.5.1.1 "Delete forever" and snapshot sync (Decided 2026-09-04)
+
+*Problem found during the 2026-09-04 code audit.* §9.4 gives every Page its own snapshot file
+(`pages/<uid>.json`) and merges by inserting any record whose `uid` isn't already local. Purging a
+page from Trash removed the row but not the file, so the very next sync pass read that file and put
+the page straight back — on a single device, with no second device involved. Pruning the file after
+the merge cannot fix it: the merge runs first and has already restored the row.
+
+*Decision:* a purge is **recorded**, not inferred. `deleteForever` writes a `PurgedPage` tombstone
+(`uid`, `purged_at`) in the same step as the row delete; `PagesSyncEngine.mergePages` declines any
+record whose uid is tombstoned; the write pass drops that uid's file from the folder.
+
+*Deliberately local-only* — the tombstone is not written into the sync folder as a snapshot of its
+own. §9.4's merge is documented as additive and non-destructive ("never deletes a local record just
+because it's absent from the remote file"), and a travelling tombstone would make one device's purge
+destroy another device's data. That is a separate product decision, not this one. The consequence is
+that a purge is permanent *on the device that made it*: a peer still holding the page keeps its own
+copy, and this device declines it on every pass rather than resurrecting it. Both devices purging
+ends the exchange.
+
+Two escape hatches, matching §9.4.1's existing Import/Restore split: Restore-from-backup clears every
+tombstone (it is a whole-database replace, and a restore that silently dropped purged pages would be
+worse than useless), and an additive Import lifts the tombstones for exactly the uids its archive
+carries — asking for a page back by name outranks having purged it earlier.
 
 ### 5.6 Database views (Decided 2026-08-08 — reopens and reverses the §10 "decided out of scope" table-only-database limitation)
 

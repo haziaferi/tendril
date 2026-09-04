@@ -89,6 +89,15 @@ class SnapshotSyncOrchestrator(
         for (record in pagesSyncEngine.exportPages()) {
             writePageJsonAtomic(store, "${record.uid}.json", json.encodeToString(record), key)
         }
+
+        // Clear the snapshot files of pages purged here (§5.5.1). Only those: a file is deleted
+        // because this device recorded a deliberate "Delete forever" for that exact uid, never
+        // because a file merely looks unfamiliar. Inferring deletion from absence is what the
+        // conflict sweep in readAndMerge is careful not to do either, and for the same reason.
+        val purgedFiles = pagesSyncEngine.purgedPageFileNames()
+        if (purgedFiles.isNotEmpty()) {
+            store.listPages().filter { it in purgedFiles }.forEach { store.deletePage(it) }
+        }
     }
 
     /** Reads whatever snapshot files exist in the folder (any subset — a fresh install has

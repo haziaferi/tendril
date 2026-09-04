@@ -91,6 +91,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                     core.database.propertyDao(),
                     core.database.pageFtsDao(),
                     core.database.tagDao(),
+                    core.database.purgedPageDao(),
                     core.databaseSyncManager,
                     core.templateManager,
                     core.viewLockState,
@@ -431,7 +432,7 @@ private fun TrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
             text = { Text("This can't be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch { ids.forEach { core.database.pageDao().deleteForever(it) } }
+                    viewModel.deleteForever(ids)
                     selectedIds = selectedIds - ids.toSet()
                     pendingDeleteForever = null
                 }) { Text("Delete forever") }

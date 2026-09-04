@@ -9,6 +9,8 @@ import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.searchPrefix
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.data.page.PurgedPage
+import com.tendril.app.data.page.PurgedPageDao
 import com.tendril.app.data.page.PageSearchHit
 import com.tendril.app.data.page.Tag
 import com.tendril.app.data.page.TagDao
@@ -37,6 +39,7 @@ class PagesViewModel(
     private val propertyDao: PropertyDao,
     private val pageFtsDao: PageFtsDao,
     private val tagDao: TagDao,
+    private val purgedPageDao: PurgedPageDao,
     private val databaseSyncManager: DatabaseSyncManager,
     private val templateManager: TemplateManager,
     private val viewLockState: ViewLockState,
@@ -86,6 +89,22 @@ class PagesViewModel(
 
     fun onSearchQueryChange(query: String) {
         viewModelScope.launch { _searchResults.value = pageFtsDao.searchPrefix(query) }
+    }
+
+    /**
+     * §5.5.1 "Delete forever", from the Trash. Records a [PurgedPage] tombstone in the same step
+     * as the row delete, and never separately from it: the page's own snapshot file is still in
+     * the sync folder, and the next merge re-inserts any uid it doesn't already hold, so a purge
+     * without a tombstone simply doesn't stick.
+     */
+    fun deleteForever(pageIds: List<Long>) {
+        viewModelScope.launch {
+            val now = Instant.now()
+            for (id in pageIds) {
+                pageDao.getById(id)?.let { purgedPageDao.insert(PurgedPage(uid = it.uid, purgedAt = now)) }
+                pageDao.deleteForever(id)
+            }
+        }
     }
 
     fun createBlankPage(title: String, onCreated: (Long) -> Unit) {

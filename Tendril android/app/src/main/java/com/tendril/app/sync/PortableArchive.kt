@@ -5,6 +5,7 @@ import android.net.Uri
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.page.PurgedPageDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -41,6 +42,7 @@ class PortableArchive(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
+    private val purgedPageDao: PurgedPageDao,
     private val pagesSyncEngine: PagesSyncEngine,
 ) {
     suspend fun export(destination: Uri): Unit = withContext(Dispatchers.IO) {
@@ -85,7 +87,12 @@ class PortableArchive(
         val contents = readZipEntries(source)
         var entriesFound = 0
         var habitsFound = 0
-        pagesSyncEngine.mergePages(decodePages(contents))
+        val pageRecords = decodePages(contents)
+        // An Import is a deliberate act, unlike the background sync merge the tombstone exists
+        // to stop (§5.5.1): if the archive carries a page this device once purged, the person
+        // asking for it back outranks that purge. Only the uids actually present are lifted.
+        purgedPageDao.clear(pageRecords.map { it.uid })
+        pagesSyncEngine.mergePages(pageRecords)
         decodeRelations(contents).takeIf { it.isNotEmpty() }?.let { pagesSyncEngine.mergeRelations(it) }
         contents[FILE_ENTRIES_ACTIVE]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
         contents[FILE_ENTRIES_ARCHIVED]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
@@ -120,6 +127,9 @@ class PortableArchive(
 
         entryDao.deleteAll()
         habitDao.deleteAll()
+        // §5.5.1 — Restore is "replace what's here", so past purges stop applying; leaving the
+        // tombstones would silently drop those pages from the archive being restored.
+        purgedPageDao.deleteAll()
         // Pages have no bulk wipe here (matching Entry/Habit's own restore step, one DAO
         // call each) — Restore only ever runs against a fresh/emptied install in practice,
         // so mergePages' whole-record LWW already behaves like a replace in that case.

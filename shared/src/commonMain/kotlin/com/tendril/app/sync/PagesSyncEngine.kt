@@ -17,6 +17,7 @@ import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageRelationDao
 import com.tendril.app.data.page.PageTag
+import com.tendril.app.data.page.PurgedPageDao
 import com.tendril.app.data.page.SpanStyle
 import com.tendril.app.data.page.Tag
 import com.tendril.app.data.page.TagDao
@@ -76,6 +77,7 @@ class PagesSyncEngine(
     private val canvasNodeDao: CanvasNodeDao,
     private val canvasEdgeDao: CanvasEdgeDao,
     private val pageRelationDao: PageRelationDao,
+    private val purgedPageDao: PurgedPageDao,
     private val pageContentRepository: PageContentRepository,
 ) {
     // ---------------------------------------------------------------- export
@@ -204,7 +206,10 @@ class PagesSyncEngine(
      * `Path.resolve` honours `..`. Every uid this app generates is
      * `UUID.randomUUID().toString()`, so nothing legitimate is turned away. */
     suspend fun mergePages(allRecords: List<PageSnapshotRecord>) {
-        val records = allRecords.filter { isSafeUid(it.uid) }
+        // A page purged here stays purged: its own snapshot file is still sitting in the folder,
+        // and without this the very next merge inserts it straight back (§5.5.1, [PurgedPage]).
+        val purged = purgedPageDao.getAllUids().toSet()
+        val records = allRecords.filter { isSafeUid(it.uid) && it.uid !in purged }
         if (records.isEmpty()) return
         val uidToId = pageDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
@@ -380,6 +385,11 @@ class PagesSyncEngine(
     }
 
     private fun isSafeUid(uid: String): Boolean = UUID_PATTERN.matches(uid)
+
+    /** The snapshot files [com.tendril.app.sync.SnapshotSyncOrchestrator] should drop from the
+     * folder on its next write — pages this device purged, whose files nothing else will clear. */
+    suspend fun purgedPageFileNames(): Set<String> =
+        purgedPageDao.getAllUids().mapTo(mutableSetOf()) { "$it.json" }
 
     private fun PageSnapshotRecord.toBareEntity(): Page = Page(
         uid = uid, title = title, icon = icon, kind = PageKind.valueOf(kind),

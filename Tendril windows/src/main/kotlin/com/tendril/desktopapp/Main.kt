@@ -66,7 +66,7 @@ fun main() {
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), core.pageContentRepository,
+        database.pageRelationDao(), database.purgedPageDao(), core.pageContentRepository,
     )
     val orchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
     val folderManager = DesktopSyncFolderManager()
