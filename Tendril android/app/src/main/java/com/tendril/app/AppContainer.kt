@@ -26,6 +26,7 @@ import com.tendril.app.storage.ThemePreferences
 import com.tendril.app.sync.PagesSyncEngine
 import com.tendril.app.sync.PortableArchive
 import com.tendril.app.sync.SnapshotSyncOrchestrator
+import com.tendril.app.sync.SyncCoordinator
 import com.tendril.app.ui.WorkbenchCore
 
 /**
@@ -54,6 +55,11 @@ class AppContainer(context: Context) {
         database.pageRelationDao(), pageContentRepository,
     )
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    /** §9.4's sync triggers — lifecycle and the Settings button both run through this one
+     * place, so they can't overlap and a failure has somewhere to be reported from. */
+    val syncCoordinator = SyncCoordinator(
+        context, syncFolderManager, snapshotSyncOrchestrator, secretStore, syncStatusPreferences,
+    )
     val portableArchive = PortableArchive(context, database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),

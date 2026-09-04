@@ -62,6 +62,7 @@ second copy of the reasoning.
 | 2026-09-04 | **Corrected:** the 2026-08-30 "No version control" decision is reversed — the project is now under git in a single repository (`haziaferi/tendril`) spanning all three sibling folders. One repo rather than three because both consumers resolve the shared core as `includeBuild("../shared")`, a relative sibling path only a single clone reproduces; a submodule would have to nest `shared\` and break both build files. Revision Log keeps its role for *why*; `git log` covers *what changed when*. Build/setup instructions moved out of this spec into `README.md` at the repository root. | §11 |
 | 2026-09-04 (later same day) | **Consistency audit of the whole app against this document — corrections, not new scope.** Nine spec-internal contradictions fixed: §6.2's anchoring rule and §4.1's "elastic" gloss asserted opposite recurrence semantics (§6.2 wins; §4.1's sentence withdrawn, `RecurrenceRule.Elastic` acknowledged as a kept misnomer, and §4.1's justification for event-driven alarms restated on grounds that actually hold); §5.5.1 still carried "auto-purge"/"recoverable for 30 days" in two bullets the 2026-08-08 no-auto-purge correction never reached; §9.10's Acceptance block was printed at the end of §9.11, so §9.10 had none and §9.11 acceptance-tested a different section (both now have their own); §3.6's "widgets show only summary data, not editable content" was written three weeks before §8.1.1 added a widget that writes; §3.4/§10 said the in-page mind-map "does not exist yet / not started" while a full Canvas page kind ships (three Room tables, a screen, snapshot sync) with no Revision Log entry at all — an anti-drift-rule breach, since it lives in `shared\`; §8.1 said "four density tiers" and named three; §8.3 listed the Monthly grid's weekday letters as accent2 while §8.4's own fix #2 reassigns them to `textDim`; §8.3's "rotation preserves lightness" rule never recorded the two palettes darkened to clear AA; §1 still opened "Noema is a personal productivity Android app" and 22 further prose references to the old name survived a Revision Log entry claiming the doc was "retitled throughout"; the reference-artifact list named one file under the wrong name and one that isn't in the repository. Code fixes in the same pass — Room `version` left at 5 after three Canvas tables were added (identity-hash crash on open, which `fallbackToDestructiveMigration` cannot catch); a recurring task resolved late advanced to a date still in the past; unchecking a task in Tasks/Calendar wrote a second terminal resolution instead of undoing; the boot sweep rescheduled TASKs only, losing every EVENT reminder at reboot; an undecryptable sync folder was overwritten rather than left alone; FTS returned trashed pages and mis-ordered `snippet()`'s arguments; the Habits widget wrote to Room with App Lock on. See §11. | title, §1, §3.4, §3.6, §4.1, §5.5.1, §6.2, §8.1, §8.3, §9.10, §9.11, §10, §11, §12 |
 | 2026-09-04 (later still) | **Recurring EVENT expansion built — new §4.1.1.** Closes the largest gap the consistency audit above found but did not fix: `RecurrenceRule.Fixed` was only ever written *outward*, to `CalendarContract` (§9.11) and Google (§9.5.1), and nothing read it back, so a weekly meeting appeared once in Tendril's own Calendar while recurring properly in the system calendar Tendril publishes to. Multi-day spans (§4.1 round 1) and exception rows (§4.1 round 3, §9.8 R5) were dead for the same reason — declared, synced, never read. New `EntryOccurrences` expander plus a hand-rolled RRULE parser in `shared\`, consumed by Calendar's Day/Week/Month views, the Agenda and Monthly-grid widgets, and `AlarmScheduler` (which anchored to a series' *first* occurrence, so a recurring EVENT reminded once and then never again). Corrects §4.1's "use an existing RFC5545 library such as `lib-recur`": the only producer of a `Fixed` rule is the Google pull, its subset is small and stable, and a bounded grammar under our own control matched this codebase's own calls elsewhere (§7.4). The subset's limits, and the visible divergence an unsupported rule leaves against the system calendar, are stated in §4.1.1 rather than left to be discovered. §9.8 R3 is now satisfied properly rather than vacuously — expansion reads Room, never `CalendarContract.Instances`. | §3.2, §4.1, §4.1.1, §9.7, §9.11 |
+| 2026-09-04 (last of the day) | **Sync actually runs on its own.** Third and last item the consistency audit found and left open. §9.4 specified a conflict sweep "on resume/launch", an `onStop`/backgrounding flush, and a periodic background pass; none existed — the only caller of `readAndMerge`/`writeSnapshots` in the whole app was the Settings button, so a `.sync-conflict-*` file sat undetected and an editing session reached the folder only if the person remembered to tap. New `SyncCoordinator` (`:app`) is the single place a pass runs from, non-reentrant, always read-merge-then-write, on an application-scoped **non-cancellable** coroutine — the Android SAF write is not atomic, so a pass cancelled by the Activity going away can leave the synced folder with no copy of a file at all. Wired to `onStart` and to `onStop` (skipped on a configuration change — a rotation is not a backgrounding); the Settings button now delegates to it rather than holding a second copy of the same guards. **The 2-second per-page debounce is explicitly still open**, with the reason recorded in §9.4 rather than approximated: it is specified per page, `writeSnapshots` has no per-page mode, and putting a whole-database write on a 2-second typing timer would be worse than the per-mutation write that decision already rejected. | §9.4 |
 
 ---
 
@@ -1642,6 +1643,48 @@ single-writer Habit-folder case:
   per-mutation write specifically because Pages are the one domain where a single user action
   (typing a sentence) fans out into many rapid mutations, unlike Entry/Habit edits which are already
   one mutation per user action.
+
+- **Implemented 2026-09-04 — the triggers, not the debounce.** Everything above described *when* a
+  sync pass should run, and until now none of it did: the only caller of `readAndMerge`/
+  `writeSnapshots` anywhere in the app was the Settings "Sync now" button. So a `.sync-conflict-*`
+  file sat undetected until someone went looking for it ("Tendril checks for these on
+  resume/launch"), an editing session reached the folder only if the person remembered to tap a
+  button, and the "periodic background sync pass already implied by the 'last synced at' UI" did not
+  exist. Now:
+  - a new `SyncCoordinator` is the one place a pass runs from — the lifecycle triggers and the
+    button both go through it, so they can't overlap and a failure has somewhere to be reported
+    from even when nothing is on screen;
+  - **launch/resume** (`onStart`) runs a pass, which is what performs the conflict sweep;
+  - **`onStop`/backgrounding** runs one too, skipped on a configuration change — a rotation also
+    calls `onStop` and is not a backgrounding;
+  - a pass is always read-merge-**then**-write, never a bare write. That ordering matters:
+    `writeSnapshots` rewrites each domain file wholesale from this device's rows, so writing
+    without merging first would drop records only the other device has. They survive on that
+    device and return on its next pass, but merging first keeps the window as small as this
+    design allows;
+  - the pass runs on an application-scoped, non-cancellable coroutine rather than the Activity's.
+    That is load-bearing rather than tidy: the Android `SyncFileStore` write is **not** atomic
+    (§9.4's "write to a temp file, then rename over the target" is approximated — it renames the
+    existing file aside, moves the temp into place, then deletes the old one), so a write
+    cancelled by the Activity going away can leave the folder with no copy of that file at all,
+    in a folder Syncthing is actively watching.
+
+  **Still not implemented, and deliberately not faked: the 2-second per-page debounce itself.** The
+  flush triggers above are the half that has somewhere to live; the debounce is the half that
+  doesn't yet. It is specified per *page* — "a Page's `pages/<page_id>.json` snapshot" — and
+  `writeSnapshots` has no per-page mode, it rewrites every domain file from scratch. Running that
+  whole-database write on a 2-second timer while someone types would be far worse than the
+  per-mutation write this decision already rejected, for exactly the reason it rejected it. Doing it
+  properly needs a per-page write path in the orchestrator plus a way for the block editor — which
+  lives in `shared/` and knows nothing about SAF or a desktop file store — to reach it. Left open
+  rather than approximated. The practical gap is narrow and self-healing: edits are in Room
+  immediately (§3.1.2), and reach the folder at the next backgrounding.
+
+- **Desktop is still manual (2026-09-04).** `onStart`/`onStop` are Android lifecycle callbacks, and
+  the desktop companion has a more specific reason to stay on its explicit "Sync now" button: its
+  passphrase is session-only and typed into the sync bar, never persisted
+  (`tendril-windows-spec.md` §7), so at launch there is nothing to decrypt an encrypted folder
+  with. An automatic pass there would either do nothing or, without the §9.4.2 guard, do harm.
 
 ### 9.4.1 Portable export/import (Decided 2026-07-16)
 
