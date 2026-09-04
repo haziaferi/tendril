@@ -1,6 +1,7 @@
 package com.tendril.app.notionimport
 
 import com.tendril.app.data.page.BlockType
+import com.tendril.app.domain.MAX_BLOCK_DEPTH
 
 /**
  * §7.4 — intermediate inline-formatting kinds, resolved into a real
@@ -21,9 +22,8 @@ sealed class ParsedSpanKind {
 
 data class ParsedSpan(val start: Int, val end: Int, val kind: ParsedSpanKind)
 
-/** One imported block, pre-Room-id. Nesting from the source (sub-list items, toggle children)
- * is deliberately flattened to a flat top-level sequence in document order — see the note on
- * [NotionMarkdownParser.parse] — so there is no parent/depth field here at all. */
+/** One imported block, pre-Room-id. [depth] is 0 or 1: §3.1.1 nests one level, so anything
+ * more deeply indented in the source arrives clamped rather than dropped. */
 data class ParsedBlock(
     val type: BlockType,
     val content: String = "",
@@ -32,7 +32,26 @@ data class ParsedBlock(
     val codeLanguage: String? = null,
     val calloutIcon: String? = null,
     val imageAssetPath: String? = null,
+    val depth: Int = 0,
 )
+
+/** Columns of leading whitespace before a line counts as nested. Notion exports indent sub-list
+ * and toggle content by four; two is the common Markdown alternative and costs nothing to accept. */
+private const val INDENT_COLUMNS = 2
+
+/** Source indentation, in columns, with tabs widened to four. Measured on the raw line before
+ * it is trimmed — which is where this information used to be thrown away. */
+private fun indentDepthOf(rawLine: String): Int {
+    var columns = 0
+    for (ch in rawLine) {
+        when (ch) {
+            ' ' -> columns += 1
+            '	' -> columns += 4
+            else -> return if (columns >= INDENT_COLUMNS) MAX_BLOCK_DEPTH else 0
+        }
+    }
+    return 0 // whitespace-only line: no block comes from it anyway
+}
 
 /** A 32-character lowercase hex Notion id, as it appears in exported filenames and link hrefs. */
 private val NOTION_ID_REGEX = Regex("([0-9a-fA-F]{32})")
@@ -50,13 +69,14 @@ private val STANDALONE_IMAGE_REGEX = Regex("^!\\[[^]]*]\\(([^)]+)\\)$")
  * app's own `Block`/`FormattingSpan` model already wants, so there's no separate AST schema to
  * adapt or keep in sync.
  *
- * **Nesting is flattened.** Notion's own toggle/nested-list content has no distinct Markdown
- * marker — it degrades to indented plain content (§7.2: "the collapse becomes permanently
- * open"). The in-app block editor's own nested-block rendering isn't built yet either (only
- * `parentBlockId == null` top-level blocks render today) — assigning `parentBlockId` here would
- * make imported content silently disappear from the page, which is worse than the documented
- * degradation. So every block this parser emits is top-level, in source document order; only
- * the *content* of a nested item is preserved, not its indentation level.
+ * **Nesting is now preserved, one level deep.** This used to flatten it, and the reason was
+ * never about the format: the in-app editor filtered children out of its own block list, so
+ * assigning `parentBlockId` would have made imported content silently invisible — worse than
+ * §7.2's documented "the collapse becomes permanently open" degradation. Now that `outlineOf`
+ * draws children, that reason has expired, and one level is exactly what §3.1.1 offers.
+ *
+ * Anything indented more deeply in the source still arrives at depth 1 rather than being
+ * dropped, which keeps the original promise: content survives even when hierarchy cannot.
  */
 object NotionMarkdownParser {
     fun parse(markdown: String): List<ParsedBlock> {
@@ -67,6 +87,7 @@ object NotionMarkdownParser {
         while (i < lines.size) {
             val rawLine = lines[i]
             val line = rawLine.trimStart()
+            val depth = indentDepthOf(rawLine)
 
             when {
                 line.isBlank() -> { i++ }
@@ -122,26 +143,26 @@ object NotionMarkdownParser {
 
                 line.startsWith("> ") || line == ">" -> {
                     val (t, s) = parseInline(line.removePrefix(">").trim())
-                    blocks += ParsedBlock(BlockType.QUOTE, t, s)
+                    blocks += ParsedBlock(BlockType.QUOTE, t, s, depth = depth)
                     i++
                 }
 
                 TODO_ITEM_REGEX.containsMatchIn(line) -> {
                     val checked = line[3].lowercaseChar() == 'x'
                     val (t, s) = parseInline(line.substring(6))
-                    blocks += ParsedBlock(BlockType.TODO, t, s, checked = checked)
+                    blocks += ParsedBlock(BlockType.TODO, t, s, checked = checked, depth = depth)
                     i++
                 }
 
                 line.startsWith("- ") || line.startsWith("* ") -> {
                     val (t, s) = parseInline(line.substring(2))
-                    blocks += ParsedBlock(BlockType.BULLETED_LIST_ITEM, t, s)
+                    blocks += ParsedBlock(BlockType.BULLETED_LIST_ITEM, t, s, depth = depth)
                     i++
                 }
 
                 NUMBERED_ITEM_REGEX.containsMatchIn(line) -> {
                     val (t, s) = parseInline(line.substringAfter(". "))
-                    blocks += ParsedBlock(BlockType.NUMBERED_LIST_ITEM, t, s)
+                    blocks += ParsedBlock(BlockType.NUMBERED_LIST_ITEM, t, s, depth = depth)
                     i++
                 }
 
@@ -170,7 +191,7 @@ object NotionMarkdownParser {
 
                 else -> {
                     val (t, s) = parseInline(line)
-                    blocks += ParsedBlock(BlockType.PARAGRAPH, t, s)
+                    blocks += ParsedBlock(BlockType.PARAGRAPH, t, s, depth = depth)
                     i++
                 }
             }

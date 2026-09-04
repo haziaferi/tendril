@@ -149,6 +149,8 @@ class NotionImporter(
         for (meta in metas) {
             val parsedBlocks = NotionMarkdownParser.parse(meta.text)
             var order = 0
+            // Reset per page, so an indented block never adopts a parent from the previous one.
+            var lastTopLevelBlockId: Long? = null
             for (parsed in parsedBlocks) {
                 val imagePath = parsed.imageAssetPath?.let { relative ->
                     val resolved = resolveRelativePath(meta.path, relative)
@@ -172,7 +174,12 @@ class NotionImporter(
                     }
                     style?.let { FormattingSpan(span.start, span.end, it) }
                 }
-                blockDao.insert(
+                // §3.1.1 — an indented source block hangs off the last top-level one emitted.
+                // Null when none has been yet: a page opening on an indented line has nothing to
+                // hang from, and top-level is the honest place for it. Same rule as
+                // `indentTargetFor`'s, which is what the in-app Indent action uses.
+                val parentId = if (parsed.depth > 0) lastTopLevelBlockId else null
+                val insertedId = blockDao.insert(
                     Block(
                         pageId = meta.roomId,
                         type = parsed.type,
@@ -182,11 +189,13 @@ class NotionImporter(
                         checked = parsed.checked,
                         codeLanguage = parsed.codeLanguage,
                         calloutIcon = parsed.calloutIcon,
+                        parentBlockId = parentId,
                         imagePath = imagePath,
                         createdAt = now,
                         updatedAt = now,
                     )
                 )
+                if (parentId == null) lastTopLevelBlockId = insertedId
             }
             pageContentRepository.rebuildFtsForPage(meta.roomId)
         }

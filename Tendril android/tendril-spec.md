@@ -1200,13 +1200,21 @@ reuse rather than duplicated). Two gaps found only while implementing, not antic
   table. Resolved the same way Callouts already degrade (§7.2): a table imports as a Code block
   holding the raw pipe-table text verbatim — degraded, not lost, consistent with the section's own
   accepted trade-offs elsewhere.
-- **Nesting is flattened, not preserved.** The in-app block editor's own nested-block rendering was
+- **Nesting is flattened, not preserved.** ~~The in-app block editor's own nested-block rendering was
   never actually built (`PageDetailScreen`'s own code comment: "kept out of this MVP render pass
   since no UI path creates toggle children yet") — every block still renders top-level
   (`parentBlockId == null`) only. Assigning `parentBlockId` to imported sub-list/toggle content would
   have made it silently invisible, which is worse than the format's own documented "toggle collapse
   becomes permanently open" degradation (§7.2). Every imported block is top-level, in source order;
-  only the hierarchy is lost, not the content.
+  only the hierarchy is lost, not the content.~~
+  **Superseded — nesting is now preserved, one level deep (§3.1.1).** The condition this decision
+  rested on is gone: `outlineOf` draws children, so a `parentBlockId` no longer makes content
+  invisible. Note where the flattening actually lived — not in the importer but in the *parser*,
+  whose first statement was `rawLine.trimStart()`, so the indentation never reached a decision
+  about `parentBlockId` at all. The promise underneath the original call is kept: anything indented
+  deeper than one level still arrives at depth 1 rather than being dropped, and a page opening on an
+  indented line imports every block. Structural blocks (headings, dividers, code, callouts, images,
+  tables) ignore stray indentation, since §3.1.1's nesting is list items and toggle children.
 
 **Verified**: a synthetic Notion export (nested pages, an internal link, bold/italic/inline-code
 spans, a to-do list, a blockquote, a `<aside>` callout, a fenced code block, a divider, a pipe table,
