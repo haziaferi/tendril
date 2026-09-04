@@ -10,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,6 +63,13 @@ fun WorkbenchScaffold(
     }
     LaunchedEffect(checkboxOnlyPageId, currentPageId) {
         onCheckboxOnlyWindowFlags?.invoke(checkboxOnlyPageId != null && checkboxOnlyPageId == currentPageId)
+    }
+    // The flags are window-level, so they outlive this composable. Without this, leaving the
+    // scaffold while checkbox-only was active (App Lock engaging and swapping in the lock
+    // screen is the reachable case) left `showWhenLocked` set on the Activity — and the next
+    // thing drawn over the keyguard would have been whatever replaced this.
+    DisposableEffect(Unit) {
+        onDispose { onCheckboxOnlyWindowFlags?.invoke(false) }
     }
 
     CompositionLocalProvider(LocalViewOnly provides viewOnly) {

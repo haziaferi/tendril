@@ -44,6 +44,18 @@ class SnapshotSyncOrchestrator(
      * land on a UI thread. Callers can launch this from any scope without wrapping it. */
     suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null) = withContext(Dispatchers.IO) {
         val key = passphrase?.let(SnapshotEncryption::deriveKey)
+        // Writing without a key is how encryption is turned *off*, and the write is a full
+        // overwrite — so with an encrypted folder and no passphrase to hand, it would replace
+        // every snapshot with cleartext and report success. That is reachable without an
+        // attacker: the desktop passphrase box is session-only and optional-looking, so one
+        // "Sync now" before typing it published the whole dataset in the clear, into a folder
+        // Syncthing then replicates everywhere. Refuse instead, and let the caller say so.
+        if (key == null && hasEncryptedSnapshots(store)) {
+            error(
+                "This folder's snapshots are encrypted, and no passphrase was given. " +
+                    "Nothing was written — entering the passphrase would have replaced them with unencrypted copies."
+            )
+        }
         val allEntries = entryDao.getAll()
         val idToUid = allEntries.associate { it.id to it.uid }
         val rowIdToUid = pageDao.getAll().associate { it.id to it.uid }
@@ -185,6 +197,14 @@ class SnapshotSyncOrchestrator(
         }
         return true
     }
+
+    /** Cheap enough to run before every write: the magic prefix is the first 8 bytes, and only
+     * the fixed root files need checking — per-page files are written with the same key as
+     * these, never independently. */
+    private suspend fun hasEncryptedSnapshots(store: SyncFileStore): Boolean =
+        listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS).any { name ->
+            store.readRoot(name)?.let(SnapshotEncryption::isEncrypted) == true
+        }
 
     private suspend fun readRootText(store: SyncFileStore, name: String, key: SecretKeySpec?): String =
         decryptText(store.readRoot(name), key)

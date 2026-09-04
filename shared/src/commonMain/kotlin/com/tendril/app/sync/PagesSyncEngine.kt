@@ -36,6 +36,8 @@ import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.domain.PageContentRepository
 import java.time.Instant
 
+private val UUID_PATTERN = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
 /**
  * §9.4 — completes the Page/Row/Database/Canvas half of snapshot sync (Entry/Habit's half
  * already lived in `SnapshotMappers.kt`, `SnapshotSyncOrchestrator` and `PortableArchive` —
@@ -193,8 +195,17 @@ class PagesSyncEngine(
     // ----------------------------------------------------------------- merge
 
     /** Full folder-wide (or archive-wide) merge in five ordered passes — see the class doc for
-     * why this can't be a simple per-record loop the way Entry/Habit's merge is. */
-    suspend fun mergePages(records: List<PageSnapshotRecord>) {
+     * why this can't be a simple per-record loop the way Entry/Habit's merge is.
+     *
+     * Records whose `uid` isn't a plain UUID are dropped before anything else looks at them.
+     * A page's uid is reflected back out as a *filename* on the next write pass
+     * (`pages/<uid>.json`, see the snapshot orchestrator), and these records arrive from a
+     * file someone was handed — an archive, or whatever a sync peer put in the folder. A uid
+     * of `../../…` therefore escaped the sync folder entirely on the desktop store, whose
+     * `Path.resolve` honours `..`. Every uid this app generates is
+     * `UUID.randomUUID().toString()`, so nothing legitimate is turned away. */
+    suspend fun mergePages(allRecords: List<PageSnapshotRecord>) {
+        val records = allRecords.filter { isSafeUid(it.uid) }
         if (records.isEmpty()) return
         val uidToId = pageDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
@@ -368,6 +379,8 @@ class PagesSyncEngine(
             pageRelationDao.addRelation(fromId, toId, Instant.ofEpochMilli(r.createdAt))
         }
     }
+
+    private fun isSafeUid(uid: String): Boolean = UUID_PATTERN.matches(uid)
 
     private fun PageSnapshotRecord.toBareEntity(): Page = Page(
         uid = uid, title = title, icon = icon, kind = PageKind.valueOf(kind),
