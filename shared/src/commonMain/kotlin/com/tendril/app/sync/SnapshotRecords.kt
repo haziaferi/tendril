@@ -69,10 +69,36 @@ data class HabitSnapshotRecord(
  */
 @Serializable
 data class PurgedRecordSnapshot(
-    /** "PAGE" or "ENTRY", matching `PurgedKind`. */
+    /** "PAGE", "ENTRY" or "HABIT", matching `PurgedKind`. A reader that does not recognise the
+     * value skips the record rather than failing the file, so this list can grow. */
     val kind: String,
     val uid: String,
     val purgedAt: Long,
+)
+
+/**
+ * §9.4.2 — the folder's own identity, written in the clear beside the snapshots.
+ *
+ * Two jobs, and they are the same fact seen from either side. It carries the PBKDF2 [salt], so
+ * the salt no longer has to be a compile-time constant shared by every install; and its mere
+ * presence marks the folder as "this is an encrypted Tendril folder", which is what lets a
+ * reader tell an unencrypted file that *belongs* here from one that was dropped in.
+ *
+ * Deliberately never encrypted: a device that does not yet have the key still has to read the
+ * salt in order to derive it. The salt is not a secret — it defeats precomputation, and does
+ * that in the open.
+ *
+ * [createdAt] exists to settle the bootstrap race the design otherwise has: two devices that
+ * enable encryption before either has synced both mint a salt, and Syncthing hands the loser a
+ * conflict sibling rather than a merge. The earlier one wins, ties broken on the salt bytes, so
+ * every device picks the same winner without needing to talk to any other.
+ */
+@Serializable
+data class SyncMetaRecord(
+    val version: Int = 1,
+    /** Base64, [SnapshotEncryption.SALT_LENGTH_BYTES] of it. */
+    val salt: String,
+    val createdAt: Long,
 )
 
 @Serializable

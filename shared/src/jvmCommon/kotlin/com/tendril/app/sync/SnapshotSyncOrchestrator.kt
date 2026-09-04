@@ -12,6 +12,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import javax.crypto.spec.SecretKeySpec
+import java.util.Base64
 
 private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
@@ -20,6 +21,10 @@ private const val FILE_ENTRIES_ARCHIVED = "entries_archived.json"
 private const val FILE_HABITS = "habits.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
+
+/** §9.4.2 — the folder's salt and its "this folder is encrypted" marker. Always plaintext: a
+ * device without the key still has to read the salt to derive it. */
+private const val FILE_META = "sync_meta.json"
 
 /**
  * §9.4 — the snapshot-file sync engine. Tendril never syncs the live Room database; only these
@@ -55,21 +60,26 @@ class SnapshotSyncOrchestrator(
      * from any scope without wrapping it.
      */
     suspend fun syncNow(store: SyncFileStore, passphrase: String? = null, allowRekey: Boolean = false) {
+        // Salt first: the key cannot be derived until the folder has said which salt it uses.
         // Derived once for both halves rather than once each.
-        val key = deriveKey(passphrase)
+        val salt = resolveSalt(store, mint = passphrase != null)
+        val key = deriveKey(passphrase, salt)
         mergeWithKey(store, key)
-        writeWithKey(store, key, allowRekey)
+        writeWithKey(store, key, allowRekey, salt)
     }
 
     /** The write half on its own, for a caller that only needs to publish. [syncNow] is what a
      * "Sync now" button wants. */
-    suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null, allowRekey: Boolean = false) =
-        writeWithKey(store, deriveKey(passphrase), allowRekey)
+    suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null, allowRekey: Boolean = false) {
+        val salt = resolveSalt(store, mint = passphrase != null)
+        writeWithKey(store, deriveKey(passphrase, salt), allowRekey, salt)
+    }
 
     private suspend fun writeWithKey(
         store: SyncFileStore,
         key: SecretKeySpec?,
         allowRekey: Boolean = false,
+        salt: ByteArray? = null,
     ) = withContext(Dispatchers.IO) {
         // The write is a full overwrite, so whatever it cannot read first, it destroys. Two ways
         // in, and neither needs an attacker:
@@ -108,6 +118,10 @@ class SnapshotSyncOrchestrator(
                 )
             }
         }
+        // Only once the guard above has approved the write. The meta file is the folder's
+        // identity; minting one over a folder this key cannot read would claim it wrongly.
+        if (key != null && salt != null) persistSalt(store, salt)
+
         val allEntries = entryDao.getAll()
         val idToUid = allEntries.associate { it.id to it.uid }
         val rowIdToUid = pageDao.getAll().associate { it.id to it.uid }
@@ -148,7 +162,9 @@ class SnapshotSyncOrchestrator(
      *
      * Runs on [Dispatchers.IO] for the same reasons as [writeSnapshots]. */
     suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) =
-        mergeWithKey(store, deriveKey(passphrase))
+        // mint = false: reading must never write to the folder, and a folder with nothing in it
+        // has nothing to decrypt anyway.
+        mergeWithKey(store, deriveKey(passphrase, resolveSalt(store, mint = false)))
 
     private suspend fun mergeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
         // Tombstones before anything else, and applied before any record file is read: a purge
@@ -309,6 +325,69 @@ class SnapshotSyncOrchestrator(
      * The first root snapshot in the folder that is actually encrypted, or null if none is.
      * Returns the bytes rather than a bare Boolean so the write guard can try a key against real
      * ciphertext, instead of only asking whether ciphertext exists. */
+    /**
+     * The salt this folder derives keys with, in strict precedence:
+     *
+     *  1. `sync_meta.json`, once the folder has one -- the normal case.
+     *  2. Otherwise, if the folder already holds encrypted snapshots, it predates that file and
+     *     was written under [SnapshotEncryption.LEGACY_SALT]. Re-deriving under anything else
+     *     would lock the person out of their own data, so compatibility wins outright.
+     *  3. Otherwise a fresh random salt -- but only on a write ([mint]). A read must not create
+     *     files, and against a folder with nothing in it there is nothing to decrypt anyway.
+     */
+    private suspend fun resolveSalt(store: SyncFileStore, mint: Boolean): ByteArray {
+        readMeta(store)?.let { meta ->
+            val decoded = runCatching { Base64.getDecoder().decode(meta.salt) }.getOrNull()
+            if (decoded != null && decoded.isNotEmpty()) return decoded
+        }
+        if (firstEncryptedSnapshot(store) != null) return SnapshotEncryption.LEGACY_SALT
+        return if (mint) SnapshotEncryption.randomSalt() else SnapshotEncryption.LEGACY_SALT
+    }
+
+    /**
+     * The winning `sync_meta.json`, across the file itself and any Syncthing conflict siblings.
+     *
+     * Two devices that turn encryption on before either has synced both mint a salt, and
+     * Syncthing preserves the loser as a sibling rather than merging the two. Earliest
+     * `createdAt` wins, ties broken on the salt text, so every device reaches the same answer
+     * with nothing to negotiate -- the bootstrap case the audit flagged as the part worth
+     * thinking through. The device that loses finds its own snapshots no longer open under the
+     * winning salt, and the write guard refuses rather than overwriting them.
+     */
+    private suspend fun readMeta(store: SyncFileStore): SyncMetaRecord? =
+        store.listRoot()
+            .filter { it == FILE_META || (it.startsWith("sync_meta.") && it.contains(".sync-conflict-")) }
+            .mapNotNull { name -> store.readRoot(name)?.let(::decodeMeta) }
+            .minWithOrNull(compareBy<SyncMetaRecord>({ it.createdAt }, { it.salt }))
+
+    private fun decodeMeta(bytes: ByteArray): SyncMetaRecord? {
+        if (bytes.isEmpty() || SnapshotEncryption.isEncrypted(bytes)) return null
+        return runCatching { json.decodeFromString<SyncMetaRecord>(bytes.toString(Charsets.UTF_8)) }.getOrNull()
+    }
+
+    /**
+     * Writes the folder's meta file when it is missing or disagrees with the winner, and clears
+     * the conflict siblings that have now been adopted. Converging here rather than at read time
+     * is what keeps [readAndMerge] free of writes.
+     *
+     * A legacy folder -- encrypted, no meta -- gets one written holding
+     * [SnapshotEncryption.LEGACY_SALT] itself. That changes no key and locks nobody out, and it
+     * gives the folder the explicit "this is encrypted" marker it never had.
+     */
+    private suspend fun persistSalt(store: SyncFileStore, salt: ByteArray) {
+        val record = readMeta(store)
+            ?: SyncMetaRecord(
+                salt = Base64.getEncoder().encodeToString(salt),
+                createdAt = Instant.now().toEpochMilli(),
+            )
+        if (store.readRoot(FILE_META)?.let(::decodeMeta) != record) {
+            store.writeRoot(FILE_META, json.encodeToString(record).toByteArray(Charsets.UTF_8))
+        }
+        store.listRoot()
+            .filter { it.startsWith("sync_meta.") && it.contains(".sync-conflict-") }
+            .forEach { store.deleteRoot(it) }
+    }
+
     private suspend fun firstEncryptedSnapshot(store: SyncFileStore): ByteArray? =
         listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS)
             .firstNotNullOfOrNull { name -> store.readRoot(name)?.takeIf(SnapshotEncryption::isEncrypted) }
@@ -339,8 +418,8 @@ class SnapshotSyncOrchestrator(
      * halves each switch to IO on their own, but the derivation happens *before* either, so
      * without this it ran on the UI thread on every press — the one thing this class's own
      * contract promises callers they need not think about. */
-    private suspend fun deriveKey(passphrase: String?): SecretKeySpec? =
-        passphrase?.let { withContext(Dispatchers.IO) { SnapshotEncryption.deriveKey(it) } }
+    private suspend fun deriveKey(passphrase: String?, salt: ByteArray): SecretKeySpec? =
+        passphrase?.let { withContext(Dispatchers.IO) { SnapshotEncryption.deriveKey(it, salt) } }
 
     private suspend fun writeJsonAtomic(store: SyncFileStore, name: String, content: String, key: SecretKeySpec?) {
         store.writeRoot(name, encryptText(content, key))
