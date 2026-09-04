@@ -53,10 +53,32 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE startDate = :date AND deletedAt IS NULL ORDER BY startTime IS NULL, startTime")
     fun observeOnDate(date: LocalDate): Flow<List<Entry>>
 
-    /** §8.1 — the Monthly grid and Agenda widgets' shared data need, a one-shot read (Glance
-     * widgets render from a snapshot on each update, not a live Flow collection). */
-    @Query("SELECT * FROM entries WHERE startDate BETWEEN :from AND :to AND deletedAt IS NULL ORDER BY startDate, startTime")
-    suspend fun getInRange(from: LocalDate, to: LocalDate): List<Entry>
+    /**
+     * §8.1 — the one-shot twin of [observeDated], for the two widgets, which render from a
+     * snapshot on each update rather than collecting a Flow.
+     *
+     * Returns *every* live dated row, not a date window, because that is what recurrence
+     * expansion needs (§4.1.1): a series' stored row sits at its first occurrence, which for a
+     * long-running weekly meeting is nowhere near the fortnight a widget is drawing. This
+     * replaced a `startDate BETWEEN :from AND :to` query that returned nothing for exactly
+     * those series — deleted rather than left in place, since the next caller to reach for it
+     * would reintroduce the same bug. Callers pass the result to
+     * [com.tendril.app.domain.recurrence.EntryOccurrences] with the window they actually want.
+     */
+    @Query("SELECT * FROM entries WHERE startDate IS NOT NULL AND deletedAt IS NULL ORDER BY startDate, startTime")
+    suspend fun getAllDated(): List<Entry>
+
+    /** §4.1's single-occurrence exceptions for one recurring base — a skip tombstone
+     * (`isExceptionSkip`) or a full per-occurrence override. Trashed rows are excluded here:
+     * a trashed *override* means the occurrence reverts to the series' own definition, which
+     * is what the expander does when it finds none. */
+    @Query("SELECT * FROM entries WHERE originalEntryId = :baseEntryId AND deletedAt IS NULL")
+    suspend fun getExceptionsOf(baseEntryId: Long): List<Entry>
+
+    /** Every exception row at once, for the boot/app-open reconciliation sweep — one query
+     * grouped in memory rather than one per Entry (§9.7). */
+    @Query("SELECT * FROM entries WHERE originalEntryId IS NOT NULL AND deletedAt IS NULL")
+    suspend fun getAllExceptions(): List<Entry>
 
     @Query("SELECT * FROM entries WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC")
     fun observeTrash(): Flow<List<Entry>>

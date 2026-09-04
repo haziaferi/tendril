@@ -82,8 +82,13 @@ class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
     override suspend fun getBySourceRowId(rowPageId: Long): Entry? =
         rows.values.firstOrNull { it.sourceRowId == rowPageId && it.deletedAt == null }
 
-    override suspend fun getInRange(from: LocalDate, to: LocalDate): List<Entry> =
-        rows.values.filter { it.startDate != null && it.startDate!! >= from && it.startDate!! <= to }
+    override suspend fun getAllDated(): List<Entry> = rows.values.filter { it.startDate != null }
+
+    override suspend fun getExceptionsOf(baseEntryId: Long): List<Entry> =
+        rows.values.filter { it.originalEntryId == baseEntryId && it.deletedAt == null }
+
+    override suspend fun getAllExceptions(): List<Entry> =
+        rows.values.filter { it.originalEntryId != null && it.deletedAt == null }
 
     override suspend fun getAllSchedulable(): List<Entry> = emptyList()
 

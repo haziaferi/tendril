@@ -30,7 +30,8 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.tendril.app.MainActivity
 import com.tendril.app.TendrilApp
-import com.tendril.app.data.entry.Entry
+import com.tendril.app.domain.recurrence.EntryOccurrence
+import com.tendril.app.domain.recurrence.EntryOccurrences
 import java.time.LocalDate
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
@@ -45,9 +46,13 @@ class AgendaWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as TendrilApp).container
         val today = LocalDate.now()
-        val entries = container.database.entryDao().getInRange(today, today.plusDays(13))
-            .filter { it.startDate != null }
-            .groupBy { it.startDate!! }
+        // getAllDated + expand, not getInRange: a recurring series (§4.1) is anchored at its
+        // first occurrence, which for a long-running weekly meeting is nowhere near the next
+        // fortnight — `startDate BETWEEN` returned nothing for it while the series genuinely
+        // occurs inside the window. Expansion also puts a multi-day event on every day it
+        // covers rather than only its first.
+        val entries = EntryOccurrences
+            .byDay(container.database.entryDao().getAllDated(), today, today.plusDays(13))
             .toSortedMap()
 
         provideContent {
@@ -64,7 +69,7 @@ class AgendaWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 @Composable
-private fun AgendaContent(theme: WidgetTheme, entriesByDay: Map<LocalDate, List<Entry>>) {
+private fun AgendaContent(theme: WidgetTheme, entriesByDay: Map<LocalDate, List<EntryOccurrence>>) {
     Column(modifier = GlanceModifier.fillMaxSize().background(theme.backgroundWithOpacity)) {
         Text(
             text = "Agenda",
@@ -87,15 +92,20 @@ private fun AgendaContent(theme: WidgetTheme, entriesByDay: Map<LocalDate, List<
                             modifier = GlanceModifier.fillMaxWidth().padding(start = 8.dp, top = 6.dp, bottom = 2.dp),
                         )
                     }
-                    items(dayEntries.sortedBy { it.startTime }) { entry ->
+                    // Already ordered by EntryOccurrences.expand; re-sorting on a nullable
+                    // startTime here put untimed entries first or last depending on the
+                    // comparator, inconsistently with every other surface.
+                    items(dayEntries) { occurrence ->
                         Row(modifier = GlanceModifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)) {
                             Text(
-                                text = entry.startTime?.toString() ?: "—",
+                                // "→" on a span's continuation days: the same title on three consecutive
+                                // days needs something saying it started earlier.
+                                text = if (occurrence.isFirstDay) (occurrence.startTime?.toString() ?: "—") else "→",
                                 style = TextStyle(color = ColorProvider(theme.accent2), fontSize = 11.sp),
                                 modifier = GlanceModifier.width(48.dp),
                             )
                             Text(
-                                text = entry.title,
+                                text = occurrence.entry.title,
                                 maxLines = 1,
                                 style = TextStyle(color = ColorProvider(theme.palette.text), fontSize = 12.sp),
                             )

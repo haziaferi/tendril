@@ -43,7 +43,8 @@ class AppContainer(context: Context) {
     val alarmScheduler = AlarmScheduler(context, database.reminderDao())
     val calendarProviderPreferences = CalendarProviderPreferences(context)
     val calendarProviderSync = CalendarProviderSync(context, database.entryDao(), calendarProviderPreferences)
-    val entryScheduleCoordinator = AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync)
+    val entryScheduleCoordinator =
+        AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
     val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), entryScheduleCoordinator)
     val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
     val pagesSyncEngine = PagesSyncEngine(

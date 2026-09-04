@@ -61,6 +61,7 @@ second copy of the reasoning.
 | 2026-08-30 (following day, pass 5) | Anti-drift-rule entry: Milestone 3 (Workbench UI port), first slice, implemented — full reasoning and detail in `tendril-windows-spec.md` §8, not repeated here per that file's §0. Summary only, since this touches `shared\`: theming (`ui/theme/`), the nav shell (`ui/nav/WorkbenchScaffold.kt` + new hand-rolled `WorkbenchNavState`, not navigation-compose — still alpha/beta-only for Compose Multiplatform at this project's pin), and the block editor (`PagesScreen`/`PageDetailScreen`/`PageDatabaseScreen` + their ViewModels) moved from `:app` into `shared/src/commonMain/`, now rendering on both Android and desktop from one implementation. New `WorkbenchCore` groups the shared pieces these screens need; `AppContainer.kt` now holds one, `MainActivity.kt` calls a new Android-only `AndroidWorkbenchScaffold` wrapper (holds the `Activity`/`BiometricPrompt` calls the shared file no longer can) instead of the old `WorkbenchScaffold` directly — `assembleDebug`/`testDebugUnitTest` pass unchanged. Calendar/Tasks & Habits/Road Map/Settings/Canvas are not ported this pass (Android-integration-heavy, out of scope) — desktop renders a placeholder for each via `WorkbenchScaffold`'s new slot parameters. | §9.4, §12 |
 | 2026-09-04 | **Corrected:** the 2026-08-30 "No version control" decision is reversed — the project is now under git in a single repository (`haziaferi/tendril`) spanning all three sibling folders. One repo rather than three because both consumers resolve the shared core as `includeBuild("../shared")`, a relative sibling path only a single clone reproduces; a submodule would have to nest `shared\` and break both build files. Revision Log keeps its role for *why*; `git log` covers *what changed when*. Build/setup instructions moved out of this spec into `README.md` at the repository root. | §11 |
 | 2026-09-04 (later same day) | **Consistency audit of the whole app against this document — corrections, not new scope.** Nine spec-internal contradictions fixed: §6.2's anchoring rule and §4.1's "elastic" gloss asserted opposite recurrence semantics (§6.2 wins; §4.1's sentence withdrawn, `RecurrenceRule.Elastic` acknowledged as a kept misnomer, and §4.1's justification for event-driven alarms restated on grounds that actually hold); §5.5.1 still carried "auto-purge"/"recoverable for 30 days" in two bullets the 2026-08-08 no-auto-purge correction never reached; §9.10's Acceptance block was printed at the end of §9.11, so §9.10 had none and §9.11 acceptance-tested a different section (both now have their own); §3.6's "widgets show only summary data, not editable content" was written three weeks before §8.1.1 added a widget that writes; §3.4/§10 said the in-page mind-map "does not exist yet / not started" while a full Canvas page kind ships (three Room tables, a screen, snapshot sync) with no Revision Log entry at all — an anti-drift-rule breach, since it lives in `shared\`; §8.1 said "four density tiers" and named three; §8.3 listed the Monthly grid's weekday letters as accent2 while §8.4's own fix #2 reassigns them to `textDim`; §8.3's "rotation preserves lightness" rule never recorded the two palettes darkened to clear AA; §1 still opened "Noema is a personal productivity Android app" and 22 further prose references to the old name survived a Revision Log entry claiming the doc was "retitled throughout"; the reference-artifact list named one file under the wrong name and one that isn't in the repository. Code fixes in the same pass — Room `version` left at 5 after three Canvas tables were added (identity-hash crash on open, which `fallbackToDestructiveMigration` cannot catch); a recurring task resolved late advanced to a date still in the past; unchecking a task in Tasks/Calendar wrote a second terminal resolution instead of undoing; the boot sweep rescheduled TASKs only, losing every EVENT reminder at reboot; an undecryptable sync folder was overwritten rather than left alone; FTS returned trashed pages and mis-ordered `snippet()`'s arguments; the Habits widget wrote to Room with App Lock on. See §11. | title, §1, §3.4, §3.6, §4.1, §5.5.1, §6.2, §8.1, §8.3, §9.10, §9.11, §10, §11, §12 |
+| 2026-09-04 (later still) | **Recurring EVENT expansion built — new §4.1.1.** Closes the largest gap the consistency audit above found but did not fix: `RecurrenceRule.Fixed` was only ever written *outward*, to `CalendarContract` (§9.11) and Google (§9.5.1), and nothing read it back, so a weekly meeting appeared once in Tendril's own Calendar while recurring properly in the system calendar Tendril publishes to. Multi-day spans (§4.1 round 1) and exception rows (§4.1 round 3, §9.8 R5) were dead for the same reason — declared, synced, never read. New `EntryOccurrences` expander plus a hand-rolled RRULE parser in `shared\`, consumed by Calendar's Day/Week/Month views, the Agenda and Monthly-grid widgets, and `AlarmScheduler` (which anchored to a series' *first* occurrence, so a recurring EVENT reminded once and then never again). Corrects §4.1's "use an existing RFC5545 library such as `lib-recur`": the only producer of a `Fixed` rule is the Google pull, its subset is small and stable, and a bounded grammar under our own control matched this codebase's own calls elsewhere (§7.4). The subset's limits, and the visible divergence an unsupported rule leaves against the system calendar, are stated in §4.1.1 rather than left to be discovered. §9.8 R3 is now satisfied properly rather than vacuously — expansion reads Room, never `CalendarContract.Instances`. | §3.2, §4.1, §4.1.1, §9.7, §9.11 |
 
 ---
 
@@ -457,7 +458,9 @@ composable ("No pages match '…'").
 
 ### 3.2 Calendar
 
-- Day, Week, Month views; **week starts Monday**; defaults to **Day** view on open
+- Day, Week, Month views; **week starts Monday**; defaults to **Day** view on open. All three draw
+  *occurrences*, not stored rows (§4.1.1) — a recurring EVENT appears on every occurrence in view
+  and a multi-day one on every day it covers, each labelled "day N of M"
 - Create and edit events and tasks directly
 - **System Calendar Provider registration** (Decided wording, 2026-07-13 — replaces the earlier
   "default calendar app" phrasing, which isn't a real Android concept: there's no `RoleManager` role
@@ -715,6 +718,50 @@ as `lib-recur` rather than hand-rolling a parser), and `RecurrenceRule.Elastic(p
 storing an ISO-8601 duration ("P7D") for TASK, parseable natively via `java.time.Period` with no
 extra dependency. A Room `TypeConverter` handles serialization; the type system, not developer
 memory, then enforces that a TASK row can never carry a `Fixed` rule or vice versa.
+
+#### 4.1.1 Occurrence expansion (Implemented 2026-09-04 — the read side `Fixed` never had)
+
+Everything above is about *storing* a recurrence rule, and until now that is all the app did with
+one. `RecurrenceRule.Fixed` was written outward — into `CalendarContract` (§9.11) and the Google
+Calendar API (§9.5.1) — and never read back, so every Tendril surface rendered one stored row on one
+stored day. Three things followed, all with the same root cause:
+
+- **A recurring EVENT appeared once.** A weekly meeting showed a single entry in Tendril's own
+  Calendar while recurring properly in Google Calendar, in any watch face, and in the system
+  calendar **Tendril itself publishes to** — §9.11 defines that mirror's scope as "whatever
+  Tendril's own Calendar screen already shows," and the screen showed strictly less than the mirror
+  did. §9.8 R3's "Room stays authoritative for Tendril's UI" held only vacuously: Room's
+  un-expanded rows were what the UI showed.
+- **Multi-day spans never rendered.** `end_date`/`end_time` (round 1 above) reached the Provider but
+  no Tendril view consulted them, so a three-day offsite appeared on day one.
+- **Exception rows were dead.** `original_entry_id`/`original_occurrence_date`/`is_exception_skip`
+  (round 3 above, §9.8 R5) were declared, round-tripped through snapshots, and never written, read
+  or honoured by anything.
+
+**Decided/Implemented:** a shared `EntryOccurrences` expander in `shared/`, taking stored rows plus
+a date range and returning one occurrence per covered day. Calendar's Day/Week/Month views, the
+Agenda and Monthly-grid widgets, and `AlarmScheduler` all read through it. Nothing reads
+`CalendarContract.Instances` — that would be the second, silently-divergent expander §9.8 R3 exists
+to rule out; this expands Room's own rows, so R3 is satisfied properly rather than vacuously.
+
+**Corrected: hand-rolled, not `lib-recur`.** The paragraph above says to "use an existing RFC5545
+library such as `lib-recur` rather than hand-rolling a parser." That was written in 2026-07-14, when
+the assumption was that Tendril would author arbitrary RRULEs itself. It doesn't: the *only* thing
+that ever constructs a `Fixed` rule is `GoogleEvent.toEntry` (§9.5.1), so the rules this app has to
+read come from one producer emitting a small, stable subset. Weighed against this codebase's
+consistent call elsewhere — hand-rolled Notion Markdown and CSV parsers (§7.4), a hand-rolled nav
+shell — a bounded grammar under our own control won. Supported: `FREQ` (DAILY/WEEKLY/MONTHLY/
+YEARLY), `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY` (plain and ordinal), `BYMONTHDAY`, `BYMONTH`, `WKST`.
+
+**The accepted limitation, stated rather than discovered later.** A rule using a part outside that
+subset (`BYSETPOS`, `BYWEEKNO`, `BYYEARDAY`) is treated as unexpandable and shows its first
+occurrence only. That is deliberate — the alternative, ignoring the unsupported part, *adds*
+occurrences on days the event doesn't happen, and a phantom calendar entry is worse than a missing
+one because a missing one is visibly missing. It does mean such a series can show fewer occurrences
+in Tendril than in the system calendar Tendril published it to. That divergence is cosmetic, not a
+data-integrity problem — the Provider write is still one-directional and Room is still the single
+source of truth (§9.8 R3) — but it is a real, visible gap, and the honest fix if it ever bites is to
+widen the subset, not to start reading `Instances` back.
 
 **Alarm rescheduling must be event-driven, not schedule-ahead (Decided 2026-07-14).** `AlarmManager`
 cannot know a TASK's next occurrence before it exists — elastic recurrence means the interval itself
@@ -1757,6 +1804,19 @@ handling:
   actions — separate from the pre-due reminders above, and what actually drives
   sequential-recurrence advancement (§4) when the person isn't in the app to tap it manually.
 
+**Added 2026-09-04 — alarms follow a recurring EVENT, not just its first occurrence.**
+`AlarmScheduler` anchored every alarm to `entry.start_date`. For a recurring EVENT that is the
+series' *first* occurrence, so once it had passed, the never-schedule-in-the-past rule below
+suppressed everything after it and a weekly meeting reminded exactly once, ever. It now anchors to
+the first occurrence whose start is still in the future, resolved through §4.1.1's expander and
+honouring skip/override exception rows. Only that one occurrence is armed at a time: request codes
+are deterministic in `(entry_id, reminder_id)` alone (below), so two occurrences of one series would
+collide on the same `PendingIntent` and the second would silently replace the first. That is the
+same "only the currently-live occurrence's alarms exist" model this section already settled on for
+elastic TASK recurrence, and it leans on the same backstop — the reconciliation sweep below re-arms
+everything on boot and on app open. A series whose next occurrence passes while the app is never
+opened waits for that sweep; bounded and self-healing, against the previous permanent silence.
+
 **Added 2026-07-14 — `AlarmScheduler`, a required architectural component, not just a permission
 list.** Elastic TASK recurrence (§4.1) means `AlarmManager` can never be handed a whole future
 sequence — only the currently-live occurrence's alarms exist at any time, and every write path that
@@ -2005,7 +2065,11 @@ The actual mechanics behind §3.2's Provider registration bullet, corrected and 
 - **Scope: both TASK and EVENT, whatever Tendril's own Calendar screen already shows** (§4's `WHERE
   start_date IS NOT NULL` rule) — broader than §9.5.1's Google Calendar sync, which is EVENT-only. A
   todo with a date is exactly the kind of thing a widget or watch face should be able to show
-  alongside real events.
+  alongside real events. *(**Note added 2026-09-04:** this sentence was aspirational until §4.1.1.
+  The Provider expands the `RRULE` it is handed, so the mirror showed a recurring EVENT on every
+  occurrence while Tendril's own screen showed it once — the mirror was strictly broader than the
+  scope defining it. With expansion built, the two agree, except for a rule outside §4.1.1's
+  supported subset, where Tendril shows fewer; that residual gap is recorded there.)*
 - **Google-sourced Entries excluded** (`source = GOOGLE_CALENDAR`, §9.5.1) — those already reach the
   system's calendar surfaces through the device's own real Google account sync; mirroring them here
   would just duplicate them.

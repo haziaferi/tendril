@@ -31,8 +31,12 @@ class BootCompletedReceiver : BroadcastReceiver() {
 
 suspend fun reconcileAlarms(context: Context) {
     val container = AppContainer.from(context)
-    container.database.entryDao().getAllSchedulable().forEach { entry ->
-        container.alarmScheduler.rescheduleFor(entry)
+    val entryDao = container.database.entryDao()
+    // One query for every exception row, grouped in memory, rather than one per Entry — the
+    // sweep runs on every app open as well as on boot (§9.7).
+    val exceptionsByBase = entryDao.getAllExceptions().groupBy { it.originalEntryId }
+    entryDao.getAllSchedulable().forEach { entry ->
+        container.alarmScheduler.rescheduleFor(entry, exceptionsByBase[entry.id].orEmpty())
     }
     // §3.2/§9.9 item 3 — Provider registration's own self-healing sweep, riding alongside the
     // alarm one above. No-ops if permission was never granted; can't request it from a
