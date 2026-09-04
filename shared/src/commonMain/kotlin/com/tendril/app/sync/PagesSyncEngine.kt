@@ -55,7 +55,10 @@ private val UUID_PATTERN = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
  * `originalEntryUid` — except for a Page's own tree position (`parentUid`/`databaseUid`),
  * which gets a real two-pass fixup instead of drop-and-heal: unlike a rare recurring-exception
  * backlink, losing a page's parent on every first sync would misplace most of a person's
- * Pages hub, not just one edge case.
+ * Pages hub, not just one edge case. That fixup used to hold only *within* one batch — a parent
+ * arriving in a later one never healed the child, because by then the child was no longer a
+ * winner and Pass 2 skipped it. It now repairs unresolved positions on every pass, for winners
+ * and non-winners alike; see Pass 2 for why the non-winner case fills nulls only.
  *
  * Merge is whole-record LWW: a winning [PageSnapshotRecord] fully replaces its local
  * blocks/tags/property values/database schema/canvas content rather than diffing them in —
@@ -242,13 +245,39 @@ class PagesSyncEngine(
         }
 
         // Pass 2 — every page (and every DATABASE page's PageDatabase shell) in the batch now
-        // has a stable id, so a winner's parent/database FK can resolve for real.
+        // has a stable id, so a parent/database FK can resolve for real.
+        //
+        // This used to run for winners only, and that made a lost parent permanent. A child
+        // arriving before its parent finds `uidToId[parentUid]` empty and drops to root; on the
+        // next pass the parent is finally present, but the child's `updatedAt` is no longer newer
+        // than the local row it just wrote, so it is not a winner, so it is skipped — and nothing
+        // ever revisits it. The class doc's "a real two-pass fixup instead of drop-and-heal" was
+        // true only within a single batch.
+        //
+        // So the loop now visits every record, and does one of two different things:
+        //
+        //  - a winner has its tree position written outright, as before;
+        //  - a non-winner is only *repaired* — a null parent or database that can now resolve is
+        //    filled in, and an already-resolved one is left exactly as it is.
+        //
+        // The asymmetry is the point. Letting a non-winner overwrite a resolved position would
+        // hand a stale record the power to move a page, which is precisely what losing on
+        // `updatedAt` is supposed to deny it. Filling a null takes nothing away from anyone: the
+        // position was unknown, and now it is known.
         for (record in records) {
-            if (record.uid !in wonUids) continue
-            val id = uidToId.getValue(record.uid)
+            val id = uidToId[record.uid] ?: continue
             val parentId = record.parentUid?.let { uidToId[it] }
             val databaseId = record.databaseUid?.let { dbPageUid -> uidToId[dbPageUid]?.let { pageDatabaseDao.getByPageId(it)?.id } }
-            pageDao.updateParentAndDatabase(id, parentId, databaseId)
+            if (record.uid in wonUids) {
+                pageDao.updateParentAndDatabase(id, parentId, databaseId)
+                continue
+            }
+            val local = pageDao.getById(id) ?: continue
+            val healedParent = local.parentId ?: parentId
+            val healedDatabase = local.databaseId ?: databaseId
+            if (healedParent != local.parentId || healedDatabase != local.databaseId) {
+                pageDao.updateParentAndDatabase(id, healedParent, healedDatabase)
+            }
         }
 
         // Pass 3 — Properties/Views for winning DATABASE records. Properties are upserted by

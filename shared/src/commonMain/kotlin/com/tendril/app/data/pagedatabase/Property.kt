@@ -51,6 +51,22 @@ data class PropertyValue(
  * same `"n:UNIT"` shape [Converters] already uses for `HabitFrequency`/`ReminderOffset`. */
 fun formatIntervalValue(count: Int, unit: IntervalUnit): String = "$count:${unit.name}"
 
+/**
+ * A [java.time.Period] as the same `"n:UNIT"` string [formatIntervalValue] produces.
+ *
+ * Period does not carry back which single IntervalUnit it was entered as, so this re-derives the
+ * closest whole-unit pair the way it must have been entered — Elastic recurrence only ever comes
+ * from one. It lives here, next to the format it produces, because it existed twice before and
+ * the two copies had drifted: `DatabaseSyncManager.crystallize` wrote this form while
+ * `PageDatabaseViewModel.valueForCell` returned `Period.toString()`'s "P7D", so a filter on a
+ * bound Recurrence column matched the frozen value or the live proxy but never both.
+ */
+fun formatPeriodAsInterval(period: java.time.Period): String = when {
+    period.months != 0 -> formatIntervalValue(period.months, IntervalUnit.MONTH)
+    period.days % 7 == 0 && period.days != 0 -> formatIntervalValue(period.days / 7, IntervalUnit.WEEK)
+    else -> formatIntervalValue(period.days, IntervalUnit.DAY)
+}
+
 fun parseIntervalValue(value: String): Pair<Int, IntervalUnit>? =
     runCatching {
         val (count, unit) = value.split(":")

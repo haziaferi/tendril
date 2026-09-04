@@ -23,6 +23,7 @@ import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.SortDirection
+import com.tendril.app.data.pagedatabase.formatPeriodAsInterval
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.data.pagedatabase.setValue
@@ -161,7 +162,12 @@ class PageDatabaseViewModel(
         return when (propertyId) {
             db?.donePropertyId -> (row.linkedEntry?.status == EntryStatus.DONE).toString()
             db?.deadlinePropertyId -> row.linkedEntry?.startDate?.toString()
-            db?.recurrencePropertyId -> (row.linkedEntry?.recurrenceRule as? RecurrenceRule.Elastic)?.period?.toString()
+            // §5.2.2 — the same form DatabaseSyncManager.crystallize writes ("1:WEEK"), not
+            // Period.toString()'s "P7D". Two forms for one column meant a view filter matched the
+            // live proxy or the crystallised value but never both, and the displayed text changed
+            // the moment a row was unbound.
+            db?.recurrencePropertyId -> (row.linkedEntry?.recurrenceRule as? RecurrenceRule.Elastic)
+                ?.period?.let(::formatPeriodAsInterval)
             else -> row.values[propertyId]?.value
         }
     }

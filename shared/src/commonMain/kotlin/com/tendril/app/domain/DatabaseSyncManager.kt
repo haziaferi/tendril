@@ -14,7 +14,7 @@ import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
-import com.tendril.app.data.pagedatabase.formatIntervalValue
+import com.tendril.app.data.pagedatabase.formatPeriodAsInterval
 import com.tendril.app.data.pagedatabase.parseIntervalValue
 import java.time.Instant
 import java.time.LocalDate
@@ -173,16 +173,8 @@ class DatabaseSyncManager(
             val frozen = when (role) {
                 BindingRole.DONE -> (entry.status == EntryStatus.DONE).toString()
                 BindingRole.DEADLINE -> entry.startDate?.toString()
-                BindingRole.RECURRENCE -> (entry.recurrenceRule as? RecurrenceRule.Elastic)?.period?.let {
-                    // Period doesn't carry back which single IntervalUnit it was entered as;
-                    // re-derive the closest whole-unit (n, unit) pair the same way it must have
-                    // been entered, since Elastic recurrence here only ever comes from one.
-                    when {
-                        it.months != 0 -> formatIntervalValue(it.months, com.tendril.app.data.entry.IntervalUnit.MONTH)
-                        it.days % 7 == 0 && it.days != 0 -> formatIntervalValue(it.days / 7, com.tendril.app.data.entry.IntervalUnit.WEEK)
-                        else -> formatIntervalValue(it.days, com.tendril.app.data.entry.IntervalUnit.DAY)
-                    }
-                }
+                BindingRole.RECURRENCE -> (entry.recurrenceRule as? RecurrenceRule.Elastic)
+                    ?.period?.let(::formatPeriodAsInterval)
             }
             if (frozen != null) propertyValueDao.insert(PropertyValue(propertyId = propertyId, rowPageId = row.id, value = frozen))
         }
