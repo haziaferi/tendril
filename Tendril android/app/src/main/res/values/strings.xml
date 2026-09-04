@@ -46,6 +46,8 @@
     <!-- Notifications (spec §9.7) -->
     <string name="notification_overdue_text">Overdue</string>
     <string name="notification_reminder_text">Upcoming</string>
+    <string name="notification_habit_reminder_text">Due today</string>
+    <string name="notification_habit_check_off">Check off</string>
     <string name="action_done">Done</string>
     <string name="action_skip">Skip</string>
 

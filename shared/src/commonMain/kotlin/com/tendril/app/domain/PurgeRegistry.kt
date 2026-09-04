@@ -55,6 +55,9 @@ class PurgeRegistry(
     suspend fun purgeHabit(habitId: Long, now: Instant = Instant.now()) {
         val habit = habitDao.getById(habitId) ?: return
         purgedRecordDao.insert(PurgedRecord(PurgedKind.HABIT, habit.uid, now))
+        // The reminder comes down before the row does, for the same reason [removeEntry] tears
+        // an Entry's alarms down first: an alarm outliving its row is a wakeup for nothing.
+        entryScheduleCoordinator.onHabitRemoved(habitId)
         habitDao.deleteForever(habitId)
     }
 
@@ -97,7 +100,10 @@ class PurgeRegistry(
                 }
                 PurgedKind.HABIT -> habitDao.getByUid(tombstone.uid)?.let { habit ->
                     if (habit.updatedAt.isAfter(tombstone.purgedAt)) supersede(tombstone)
-                    else habitDao.deleteForever(habit.id)
+                    else {
+                        entryScheduleCoordinator.onHabitRemoved(habit.id)
+                        habitDao.deleteForever(habit.id)
+                    }
                 }
             }
         }

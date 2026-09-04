@@ -75,6 +75,7 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
                     container.resolveEntryUseCase,
                     container.entryScheduleCoordinator,
                     container.checkInHabitUseCase,
+                    container.alarmScheduler,
                 )
             }
         }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.tendril.app.notifications.AlarmScheduler
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -28,6 +29,7 @@ class TasksHabitsViewModel(
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val checkInHabitUseCase: CheckInHabitUseCase,
+    private val alarmScheduler: AlarmScheduler,
 ) : ViewModel() {
     val tasks: StateFlow<List<Entry>> =
         entryDao.observeTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -69,7 +71,7 @@ class TasksHabitsViewModel(
                     createdAt = now,
                     updatedAt = now,
                 )
-            )
+            ).let { id -> habitDao.getById(id)?.let(alarmScheduler::rescheduleHabit) }
         }
     }
 
@@ -86,16 +88,24 @@ class TasksHabitsViewModel(
     /** §6.1's "no backlog" test — see [CheckInHabitUseCase], shared with the Habits widget
      * (§8) so both surfaces use the exact same streak math. */
     fun checkInHabit(habitId: Long) {
-        viewModelScope.launch { checkInHabitUseCase.checkIn(habitId) }
+        viewModelScope.launch { checkInHabitUseCase.checkIn(habitId); rearm(habitId) }
     }
 
     /** §8.1.1 — reverts today's check-in via the same shared use case the widget's undo
      * action calls, so unchecking here and unchecking there behave identically. */
     fun undoCheckInHabit(habitId: Long) {
-        viewModelScope.launch { checkInHabitUseCase.undoCheckIn(habitId) }
+        viewModelScope.launch { checkInHabitUseCase.undoCheckIn(habitId); rearm(habitId) }
     }
 
     fun trashHabit(habitId: Long) {
-        viewModelScope.launch { habitDao.softDelete(habitId, Instant.now()) }
+        // rescheduleHabit clears the alarm rather than setting one for a trashed habit, so
+        // trash and restore both route through the same single call.
+        viewModelScope.launch { habitDao.softDelete(habitId, Instant.now()); rearm(habitId) }
+    }
+
+    /** §9.7 — every write that moves when a habit is next due re-arms from the row as it now
+     * stands, rather than each call site working out the new trigger for itself. */
+    private suspend fun rearm(habitId: Long) {
+        habitDao.getById(habitId)?.let(alarmScheduler::rescheduleHabit)
     }
 }
