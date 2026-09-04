@@ -29,6 +29,7 @@ import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.domain.indentTargetFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -243,6 +244,27 @@ class PageDetailViewModel(
         if (index < 0 || targetIndex < 0 || targetIndex >= ordered.size) return@launchAndReindex
         val reordered = ordered.toMutableList().apply { add(targetIndex, removeAt(index)) }
         reordered.forEachIndexed { i, b -> if (b.order != i) blockDao.update(b.copy(order = i)) }
+    }
+
+    /**
+     * §3.1.1 — tuck [block] under the nearest preceding top-level sibling. A no-op when there
+     * is none (nothing to tuck under) or when it is already indented, since one level is the
+     * whole of the nesting this spec has.
+     *
+     * `order` is left alone: [outlineOf] draws a child immediately after its parent whatever
+     * its own order says, so re-numbering here would be churn with nothing depending on it.
+     */
+    fun indentBlock(block: Block) = launchAndReindex {
+        val blocks = blockDao.getForPage(pageId)
+        val target = indentTargetFor(block, blocks) ?: return@launchAndReindex
+        blockDao.update(block.copy(parentBlockId = target.id, updatedAt = Instant.now()))
+    }
+
+    /** The inverse, and the escape hatch for a child whose parent went away on another device:
+     * anything indented can always be flattened again. */
+    fun outdentBlock(block: Block) = launchAndReindex {
+        if (block.parentBlockId == null) return@launchAndReindex
+        blockDao.update(block.copy(parentBlockId = null, updatedAt = Instant.now()))
     }
 
     fun searchTagCandidates(query: String) {

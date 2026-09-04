@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FormatIndentDecrease
+import androidx.compose.material.icons.filled.FormatIndentIncrease
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
@@ -82,6 +84,8 @@ import com.tendril.app.data.page.SpanStyle
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
+import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.outlineOf
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
@@ -127,6 +131,9 @@ fun PageDetailScreen(
     val contentLocked = viewOnly || checkboxOnlyActive
     val page by viewModel.page.collectAsState()
     val blocks by viewModel.blocks.collectAsState()
+    // §3.1.1 — the drawn order, with children under their parents. Recomputed only when the
+    // block list itself changes, not on every recomposition.
+    val outline = remember(blocks) { outlineOf(blocks) }
     val tags by viewModel.tags.collectAsState()
     val rowDatabase by viewModel.rowDatabase.collectAsState()
     val rowProperties by viewModel.rowProperties.collectAsState()
@@ -247,16 +254,17 @@ fun PageDetailScreen(
                     }
                     item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
                 }
-                items(blocks, key = { it.id }) { block ->
-                    if (block.parentBlockId == null) {
-                        BlockRow(
-                            block = block,
-                            viewModel = viewModel,
-                            onLongPress = { blockActionSheetFor = block },
-                            onRequestMention = { baseContent -> mentionTarget = block to baseContent },
-                            onOpenPage = onOpenPage,
-                        )
-                    }
+                // Children used to be filtered out here (`if (block.parentBlockId == null)`),
+                // which is why nesting existed in the schema but never on screen.
+                items(outline, key = { it.block.id }) { entry ->
+                    BlockRow(
+                        block = entry.block,
+                        depth = entry.depth,
+                        viewModel = viewModel,
+                        onLongPress = { blockActionSheetFor = entry.block },
+                        onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
+                        onOpenPage = onOpenPage,
+                    )
                 }
                 if (!contentLocked) {
                     item {
@@ -281,6 +289,10 @@ fun PageDetailScreen(
             onDismiss = { blockActionSheetFor = null },
             onMoveUp = { viewModel.moveBlock(block, -1); blockActionSheetFor = null },
             onMoveDown = { viewModel.moveBlock(block, 1); blockActionSheetFor = null },
+            canIndent = indentTargetFor(block, blocks) != null,
+            canOutdent = block.parentBlockId != null,
+            onIndent = { viewModel.indentBlock(block); blockActionSheetFor = null },
+            onOutdent = { viewModel.outdentBlock(block); blockActionSheetFor = null },
             onTurnInto = { type -> viewModel.changeType(block, type); blockActionSheetFor = null },
             onDelete = { viewModel.deleteBlock(block); blockActionSheetFor = null },
         )
@@ -378,6 +390,7 @@ fun PageDetailScreen(
 @Composable
 private fun BlockRow(
     block: Block,
+    depth: Int,
     viewModel: PageDetailViewModel,
     onLongPress: () -> Unit,
     onRequestMention: (baseContent: String) -> Unit,
@@ -403,7 +416,9 @@ private fun BlockRow(
         }
     }
     var showSlashMenu by remember { mutableStateOf(false) }
-    val indent = if (block.parentBlockId != null) 24.dp else 0.dp
+    // Driven by the outline's computed depth rather than by `parentBlockId != null`, so a
+    // grandchild re-attached to its top-level ancestor indents once, not twice.
+    val indent = (24 * depth).dp
     val locked = LocalContentLocked.current
 
     Column {
@@ -476,12 +491,10 @@ private fun BlockRow(
                     )
                 }
 
-                if (block.type == BlockType.TOGGLE && block.toggleExpanded) {
-                    // Child blocks (one level of nesting, §3.1.1) render via the parent
-                    // LazyColumn's flat list filtered by parentBlockId in a real nested
-                    // pass — kept out of this MVP render pass since no UI path creates
-                    // toggle children yet (§3.1.1's nesting is list items primarily).
-                }
+                // Children (one level, §3.1.1) are emitted by `outlineOf` into the same
+                // LazyColumn, immediately after this block and at depth 1 — a collapsed toggle
+                // simply has none emitted. Nothing to render here.
+
             }
         }
     }
@@ -630,6 +643,10 @@ private fun BlockActionSheet(
     onDismiss: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    canIndent: Boolean,
+    canOutdent: Boolean,
+    onIndent: () -> Unit,
+    onOutdent: () -> Unit,
     onTurnInto: (BlockType) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -637,6 +654,10 @@ private fun BlockActionSheet(
         Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
             SheetActionRow(Icons.Filled.ArrowUpward, "Move up", onMoveUp)
             SheetActionRow(Icons.Filled.ArrowDownward, "Move down", onMoveDown)
+            // §3.1.1 — one level, so each is offered only where it would actually do something:
+            // nothing to tuck under, or already tucked under, and the row is simply absent.
+            if (canIndent) SheetActionRow(Icons.Filled.FormatIndentIncrease, "Indent", onIndent)
+            if (canOutdent) SheetActionRow(Icons.Filled.FormatIndentDecrease, "Outdent", onOutdent)
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text("Turn into", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
             listOf(
