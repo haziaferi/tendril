@@ -3,6 +3,9 @@ package com.tendril.app.sync
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.purge.PurgedKind
+import com.tendril.app.data.purge.PurgedRecord
+import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -16,6 +19,7 @@ private const val FILE_ENTRIES_ACTIVE = "entries_active.json"
 private const val FILE_ENTRIES_ARCHIVED = "entries_archived.json"
 private const val FILE_HABITS = "habits.json"
 private const val FILE_RELATIONS = "page_relations.json"
+private const val FILE_PURGED = "purged_records.json"
 
 /**
  * §9.4 — the snapshot-file sync engine. Tendril never syncs the live Room database; only these
@@ -38,6 +42,7 @@ class SnapshotSyncOrchestrator(
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
     private val pagesSyncEngine: PagesSyncEngine,
+    private val purgeRegistry: PurgeRegistry,
 ) {
     /**
      * One sync: merge in what the folder has, then write back what this device now holds. Both
@@ -85,6 +90,10 @@ class SnapshotSyncOrchestrator(
         writeJsonAtomic(store, FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
         writeJsonAtomic(store, FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }), key)
         writeJsonAtomic(store, FILE_RELATIONS, json.encodeToString(pagesSyncEngine.exportRelations()), key)
+        // §5.5.1.1 — the tombstones travel, which is what makes "Delete forever" mean everywhere
+        // rather than only here. Deliberately narrows §9.4's additive-merge rule: absence still
+        // never implies deletion, but an explicit tombstone does.
+        writeJsonAtomic(store, FILE_PURGED, json.encodeToString(purgeRegistry.all().map { it.toSnapshot() }), key)
 
         for (record in pagesSyncEngine.exportPages()) {
             writePageJsonAtomic(store, "${record.uid}.json", json.encodeToString(record), key)
@@ -102,18 +111,25 @@ class SnapshotSyncOrchestrator(
 
     /** Reads whatever snapshot files exist in the folder (any subset — a fresh install has
      * none) plus any Syncthing conflict-marker siblings, and merges every record into Room
-     * per-record last-write-wins on `updatedAt` (§9.4). Never deletes a local record just
-     * because it's absent from the remote file — merge is additive/non-destructive by
-     * design here, matching the spec's Import semantics (§9.4.1); a real hard-delete
-     * ("Delete forever") propagates only via the deleted record's own snapshot re-write
-     * omitting it, not by this pass inferring absence as intent.
+     * per-record last-write-wins on `updatedAt` (§9.4). Absence still never implies deletion —
+     * a record missing from the remote file is treated as "hasn't arrived", not "was deleted",
+     * matching the spec's Import semantics (§9.4.1). A real hard-delete propagates instead as
+     * an explicit tombstone in `purged_records.json` (§5.5.1.1), which is the one signal that
+     * *does* remove local data, and which is compared against the record's own `updatedAt` so
+     * a stale delete can't destroy a newer edit.
      *
      * Runs on [Dispatchers.IO] for the same reasons as [writeSnapshots]. */
     suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) =
         mergeWithKey(store, passphrase?.let(SnapshotEncryption::deriveKey))
 
     private suspend fun mergeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
-        // Pages first — Entry's sourceRowId resolution below needs every Row's local id to
+        // Tombstones before anything else, and applied before any record file is read: a purge
+        // arriving from another device has to be in force *before* the record it kills is
+        // considered, or the two cross in the same pass and the record wins by accident.
+        mergePurgedFile(store, key)
+        purgeRegistry.applyToLocalRecords()
+
+        // Pages next — Entry's sourceRowId resolution below needs every Row's local id to
         // already exist.
         mergePagesDir(store, key)
         mergeRelationsFile(store, FILE_RELATIONS, key)
@@ -137,6 +153,7 @@ class SnapshotSyncOrchestrator(
                     mergeEntryContent(readRootText(store, name, key))
                 name.startsWith("habits") -> mergeHabitContent(readRootText(store, name, key))
                 name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, key))
+                name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, key))
                 else -> false
             }
             if (merged) store.deleteRoot(name)
@@ -167,6 +184,27 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
+    private suspend fun mergePurgedFile(store: SyncFileStore, key: SecretKeySpec?) {
+        mergePurgedContent(readRootText(store, FILE_PURGED, key))
+    }
+
+    /** @return true when the content decoded — see [mergePageContent]. */
+    private suspend fun mergePurgedContent(content: String): Boolean {
+        if (content.isBlank()) return false
+        val records = runCatching { json.decodeFromString<List<PurgedRecordSnapshot>>(content) }.getOrNull() ?: return false
+        // An unrecognised kind is skipped rather than failing the whole file: a newer build may
+        // purge things this one has no concept of, and the rest of the file is still good.
+        purgeRegistry.adopt(records.mapNotNull { it.toEntity() })
+        return true
+    }
+
+    private fun PurgedRecord.toSnapshot() = PurgedRecordSnapshot(kind.name, uid, purgedAt.toEpochMilli())
+
+    private fun PurgedRecordSnapshot.toEntity(): PurgedRecord? {
+        val parsed = runCatching { PurgedKind.valueOf(kind) }.getOrNull() ?: return null
+        return PurgedRecord(parsed, uid, Instant.ofEpochMilli(purgedAt))
+    }
+
     private suspend fun mergeRelationsFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
         mergeRelationsContent(readRootText(store, fileName, key))
     }
@@ -191,9 +229,13 @@ class SnapshotSyncOrchestrator(
         // SnapshotMappers) can resolve once their target has merged in an earlier record.
         val uidToId = entryDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val rowUidToId = pageDao.getAll().associate { it.uid to it.id }
+        val tombstones = purgeRegistry.tombstones(PurgedKind.ENTRY)
         for (record in records) {
-            val local = entryDao.getByUid(record.uid)
             val remoteUpdatedAt = Instant.ofEpochMilli(record.updatedAt)
+            // §5.5.1.1 — an Entry purged on any device stays purged, unless this record is the
+            // newer of the two, in which case the tombstone is superseded and dropped.
+            if (purgeRegistry.isPurged(PurgedKind.ENTRY, record.uid, remoteUpdatedAt, tombstones)) continue
+            val local = entryDao.getByUid(record.uid)
             if (local == null) {
                 val newId = entryDao.insert(record.toEntity(uidToId, rowUidToId))
                 uidToId[record.uid] = newId

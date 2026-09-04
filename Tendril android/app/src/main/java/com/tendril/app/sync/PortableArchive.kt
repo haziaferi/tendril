@@ -5,7 +5,9 @@ import android.net.Uri
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
-import com.tendril.app.data.page.PurgedPageDao
+import com.tendril.app.data.purge.PurgedKind
+import com.tendril.app.data.purge.PurgedRecord
+import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -21,6 +23,7 @@ private const val FILE_ENTRIES_ACTIVE = "entries_active.json"
 private const val FILE_ENTRIES_ARCHIVED = "entries_archived.json"
 private const val FILE_HABITS = "habits.json"
 private const val FILE_RELATIONS = "page_relations.json"
+private const val FILE_PURGED = "purged_records.json"
 private const val PAGES_DIR_PREFIX = "pages/"
 
 /** Ceiling on total inflated bytes from an imported archive — see [PortableArchive.readZipEntries]. */
@@ -42,7 +45,7 @@ class PortableArchive(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
-    private val purgedPageDao: PurgedPageDao,
+    private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
 ) {
     suspend fun export(destination: Uri): Unit = withContext(Dispatchers.IO) {
@@ -53,12 +56,14 @@ class PortableArchive(
         val (active, archived) = allEntries.partition { it.isActive() }
         val pageRecords = pagesSyncEngine.exportPages()
         val relations = pagesSyncEngine.exportRelations()
+        val purged = purgeRegistry.all()
 
         val manifest = TendrilManifest(
             appVersion = "0.1.0",
             exportedAtEpochMillis = Instant.now().toEpochMilli(),
             kind = "full",
-            includedFiles = listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS) + pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
+            includedFiles = listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS, FILE_PURGED) +
+                pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
         )
 
         // Throw rather than no-op if the provider won't give us a stream: an export that
@@ -73,6 +78,9 @@ class PortableArchive(
                 zip.writeEntry(FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }))
                 zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }))
                 zip.writeEntry(FILE_RELATIONS, json.encodeToString(relations))
+                // §5.5.1.1 — without these an export would quietly resurrect everything the
+                // person had deleted forever the moment it was imported anywhere.
+                zip.writeEntry(FILE_PURGED, json.encodeToString(purged.map { PurgedRecordSnapshot(it.kind.name, it.uid, it.purgedAt.toEpochMilli()) }))
                 for (record in pageRecords) {
                     zip.writeEntry("$PAGES_DIR_PREFIX${record.uid}.json", json.encodeToString(record))
                 }
@@ -88,10 +96,13 @@ class PortableArchive(
         var entriesFound = 0
         var habitsFound = 0
         val pageRecords = decodePages(contents)
-        // An Import is a deliberate act, unlike the background sync merge the tombstone exists
-        // to stop (§5.5.1): if the archive carries a page this device once purged, the person
-        // asking for it back outranks that purge. Only the uids actually present are lifted.
-        purgedPageDao.clear(pageRecords.map { it.uid })
+        // Tombstones first and applied before any record, exactly as the folder sync does: an
+        // archive is just another source of the same two facts, and the later of "edited at" and
+        // "purged at" wins either way. This replaces an earlier special case that lifted every
+        // tombstone an import touched — that existed only because tombstones were local and
+        // untimestamped, with no principled way to compare them against a record. Now there is.
+        purgeRegistry.adopt(decodePurged(contents))
+        purgeRegistry.applyToLocalRecords()
         pagesSyncEngine.mergePages(pageRecords)
         decodeRelations(contents).takeIf { it.isNotEmpty() }?.let { pagesSyncEngine.mergeRelations(it) }
         contents[FILE_ENTRIES_ACTIVE]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
@@ -119,6 +130,7 @@ class PortableArchive(
         val activeEntries = decodeEntries(contents[FILE_ENTRIES_ACTIVE])
         val archivedEntries = decodeEntries(contents[FILE_ENTRIES_ARCHIVED])
         val habits = decodeHabits(contents[FILE_HABITS])
+        val purged = decodePurged(contents)
 
         require(
             pageRecords.isNotEmpty() || relations.isNotEmpty() || activeEntries.isNotEmpty() ||
@@ -127,9 +139,13 @@ class PortableArchive(
 
         entryDao.deleteAll()
         habitDao.deleteAll()
-        // §5.5.1 — Restore is "replace what's here", so past purges stop applying; leaving the
-        // tombstones would silently drop those pages from the archive being restored.
-        purgedPageDao.deleteAll()
+        // §5.5.1.1 — Restore is "become exactly what this archive says", so this device's own
+        // purge history is discarded and the archive's adopted in its place. Keeping the local
+        // tombstones would silently drop records the archive still holds.
+        purgeRegistry.clearAll()
+        purgeRegistry.adopt(purged)
+        // Pages are not bulk-wiped above, so an adopted tombstone still has local rows to act on.
+        purgeRegistry.applyToLocalRecords()
         // Pages have no bulk wipe here (matching Entry/Habit's own restore step, one DAO
         // call each) — Restore only ever runs against a fresh/emptied install in practice,
         // so mergePages' whole-record LWW already behaves like a replace in that case.
@@ -154,6 +170,17 @@ class PortableArchive(
     private fun decodeRelations(contents: Map<String, String>): List<PageRelationSnapshotRecord> {
         val content = contents[FILE_RELATIONS]?.takeIf { it.isNotBlank() } ?: return emptyList()
         return runCatching { json.decodeFromString<List<PageRelationSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
+    }
+
+    /** An unrecognised kind is skipped rather than failing the file — a newer build may purge
+     * things this one has no concept of. */
+    private fun decodePurged(contents: Map<String, String>): List<PurgedRecord> {
+        val content = contents[FILE_PURGED]?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val records = runCatching { json.decodeFromString<List<PurgedRecordSnapshot>>(content) }.getOrNull() ?: return emptyList()
+        return records.mapNotNull { record ->
+            runCatching { PurgedKind.valueOf(record.kind) }.getOrNull()
+                ?.let { PurgedRecord(it, record.uid, Instant.ofEpochMilli(record.purgedAt)) }
+        }
     }
 
     private fun decodeEntries(content: String?): List<EntrySnapshotRecord> {

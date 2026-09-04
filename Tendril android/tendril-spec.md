@@ -51,7 +51,8 @@ second copy of the reasoning.
 | 2026-08-30 (following day, pass 4) | Anti-drift-rule entry: Milestone 2 (folder-sync-on-desktop) implemented — full reasoning and detail in `tendril-windows-spec.md` §7, not repeated here per that file's §0. Summary only, since this touches `shared\`: Android's `SnapshotSyncManager`/`SnapshotEncryption` moved into a new `shared/jvmCommon` intermediate source set (a real Gradle finding — `javax.crypto` isn't visible from true KMP `commonMain` even though both targets are JVM-based) behind a new `SyncFileStore` interface, with `AndroidSafSyncFileStore`/`DesktopFileSyncFileStore` platform implementations; `Tendril android`'s two deleted files' logic is now `SnapshotSyncOrchestrator`, called via `AndroidSafSyncFileStore` from `AppContainer.kt`/`SettingsScreen.kt` with no behavior change (`assembleDebug`/`testDebugUnitTest` pass unchanged). | §9.4, §12 |
 | 2026-08-30 (following day, pass 5) | Anti-drift-rule entry: Milestone 3 (Workbench UI port), first slice, implemented — full reasoning and detail in `tendril-windows-spec.md` §8, not repeated here per that file's §0. Summary only, since this touches `shared\`: theming (`ui/theme/`), the nav shell (`ui/nav/WorkbenchScaffold.kt` + new hand-rolled `WorkbenchNavState`, not navigation-compose — still alpha/beta-only for Compose Multiplatform at this project's pin), and the block editor (`PagesScreen`/`PageDetailScreen`/`PageDatabaseScreen` + their ViewModels) moved from `:app` into `shared/src/commonMain/`, now rendering on both Android and desktop from one implementation. New `WorkbenchCore` groups the shared pieces these screens need; `AppContainer.kt` now holds one, `MainActivity.kt` calls a new Android-only `AndroidWorkbenchScaffold` wrapper (holds the `Activity`/`BiometricPrompt` calls the shared file no longer can) instead of the old `WorkbenchScaffold` directly — `assembleDebug`/`testDebugUnitTest` pass unchanged. Calendar/Tasks & Habits/Road Map/Settings/Canvas are not ported this pass (Android-integration-heavy, out of scope) — desktop renders a placeholder for each via `WorkbenchScaffold`'s new slot parameters. | §9.4, §12 |
 | 2026-09-04 | **Corrected:** the 2026-08-30 "No version control" decision is reversed — the project is now under git in a single repository (`haziaferi/tendril`) spanning all three sibling folders. One repo rather than three because both consumers resolve the shared core as `includeBuild("../shared")`, a relative sibling path only a single clone reproduces; a submodule would have to nest `shared\` and break both build files. Revision Log keeps its role for *why*; `git log` covers *what changed when*. Build/setup instructions moved out of this spec into `README.md` at the repository root. | §11 |
-| 2026-09-04 (audit) | Add-dialog time pickers (a Task's time, a Habit's time-of-day) — both dialogs previously hard-passed `null`, so no Habit could reach the Merged tab and no same-day Task ever alarmed. "Delete forever" made to stick: a `PurgedPage` tombstone, local-only, so the purged page's own snapshot file can no longer re-insert it on the next merge | §3.3, §5.5.1, §9.4 |
+| 2026-09-04 (audit) | Add-dialog time pickers (a Task's time, a Habit's time-of-day) — both dialogs previously hard-passed `null`, so no Habit could reach the Merged tab and no same-day Task ever alarmed. "Delete forever" made to stick: a `(kind, uid, purged_at)` tombstone recorded with the row delete, covering Pages and Entries | §3.3, §5.5.1.1, §9.4 |
+| 2026-09-04 (audit, correction) | Purge tombstones **travel** rather than staying local — a local-only tombstone made "Delete forever" unachievable on more than one device, since the next sync restored everything from whichever device hadn't purged. §9.4's additive-merge rule is narrowed accordingly: absence still never implies deletion, an explicit tombstone does, and record-vs-tombstone resolves by later timestamp so a stale delete cannot destroy a newer edit | §5.5.1.1, §9.4, §9.4.1 |
 
 ---
 
@@ -938,30 +939,49 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   that as a real hard-delete to its own snapshot file on the next sync pass, same as any other
   mutation.
 
-#### 5.5.1.1 "Delete forever" and snapshot sync (Decided 2026-09-04)
+#### 5.5.1.1 "Delete forever" and snapshot sync (Decided 2026-09-04; scope corrected same day)
 
-*Problem found during the 2026-09-04 code audit.* §9.4 gives every Page its own snapshot file
-(`pages/<uid>.json`) and merges by inserting any record whose `uid` isn't already local. Purging a
-page from Trash removed the row but not the file, so the very next sync pass read that file and put
-the page straight back — on a single device, with no second device involved. Pruning the file after
-the merge cannot fix it: the merge runs first and has already restored the row.
+*Problem found during the 2026-09-04 code audit.* §9.4's merge inserts any record whose `uid`
+isn't already local, so "Delete forever" didn't stick. A Page has its own snapshot file
+(`pages/<uid>.json`), which put it back on the very next pass **on a single device**, no second
+device involved; an Entry lives in an array file another device rewrites, so it came back from
+there. Pruning the file afterwards cannot fix either — the merge runs first and has already
+restored the row. A purge has to be *recorded*, not inferred from absence.
 
-*Decision:* a purge is **recorded**, not inferred. `deleteForever` writes a `PurgedPage` tombstone
-(`uid`, `purged_at`) in the same step as the row delete; `PagesSyncEngine.mergePages` declines any
-record whose uid is tombstoned; the write pass drops that uid's file from the folder.
+*Decision:* `PurgeRegistry` records a `PurgedRecord` tombstone — `(kind, uid, purged_at)`, keyed
+by kind because Page and Entry uids come from separate spaces — in the same operation that drops
+the row, never as two things a call site must remember to do in order. The merge declines a
+tombstoned uid; the write pass drops that uid's page file.
 
-*Deliberately local-only* — the tombstone is not written into the sync folder as a snapshot of its
-own. §9.4's merge is documented as additive and non-destructive ("never deletes a local record just
-because it's absent from the remote file"), and a travelling tombstone would make one device's purge
-destroy another device's data. That is a separate product decision, not this one. The consequence is
-that a purge is permanent *on the device that made it*: a peer still holding the page keeps its own
-copy, and this device declines it on every pass rather than resurrecting it. Both devices purging
-ends the exchange.
+**Purges propagate (corrected).** The first cut kept tombstones local, on the grounds that §9.4
+calls its merge additive and non-destructive. That was the wrong reading: the rule exists so that
+*absence* is never mistaken for deletion, and a tombstone is precisely the explicit signal that
+distinguishes the two. Keeping it local also made "Delete forever" a lie on any multi-device
+setup — the Trash could never actually be emptied, since the next sync brought everything back
+from whichever device hadn't purged. So the tombstones travel, in `purged_records.json` beside
+the other snapshot files, and are the one signal that removes local data.
 
-Two escape hatches, matching §9.4.1's existing Import/Restore split: Restore-from-backup clears every
-tombstone (it is a whole-database replace, and a restore that silently dropped purged pages would be
-worse than useless), and an additive Import lifts the tombstones for exactly the uids its archive
-carries — asking for a page back by name outranks having purged it earlier.
+**A purge is a timestamped fact, not a veto.** For a given uid the folder can carry both a record
+(`updated_at`) and a tombstone (`purged_at`); the later wins, the same last-write-wins rule §9.4
+already applies everywhere else. A purge therefore removes the record on every device — unless
+some device edited it *after* the purge, never having seen it, in which case that edit resurrects
+it and the tombstone is dropped as superseded. The alternative, letting a stale delete always win,
+silently destroys work someone was still doing.
+
+*Ordering matters:* the tombstone file merges, and is applied to local rows, **before** any record
+file is read. Otherwise a record and the tombstone that kills it cross within one pass and the
+record survives by accident.
+
+*Escape hatches,* matching §9.4.1's existing Import/Restore split: Restore-from-backup discards
+this device's purge history and adopts the archive's, since Restore means "become exactly what
+this archive says"; an additive Import adopts the archive's tombstones under the same
+later-timestamp-wins rule as a folder sync, so an archive holding a page edited after it was
+purged brings that page back, and one holding only an older copy does not.
+
+*Known cost:* tombstones are never garbage-collected — a purge is permanent information, and
+forgetting one lets the record return from any device that still has it. At personal scale this
+is a few dozen bytes per deleted item; if it ever matters, the bound is "older than the oldest
+device's last sync", which this app has no way to know today.
 
 ### 5.6 Database views (Decided 2026-08-08 — reopens and reverses the §10 "decided out of scope" table-only-database limitation)
 

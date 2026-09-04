@@ -61,6 +61,20 @@ data class HabitSnapshotRecord(
     val updatedAt: Long,
 )
 
+/**
+ * §5.5.1.1 — one "deleted forever" fact, as it travels. Carrying [purgedAt] rather than just
+ * the uid is what makes a purge comparable with an edit: the later of the two wins, so a stale
+ * delete can't quietly destroy work a device did after it (see
+ * [com.tendril.app.domain.PurgeRegistry]).
+ */
+@Serializable
+data class PurgedRecordSnapshot(
+    /** "PAGE" or "ENTRY", matching `PurgedKind`. */
+    val kind: String,
+    val uid: String,
+    val purgedAt: Long,
+)
+
 @Serializable
 data class TendrilManifest(
     val appVersion: String,

@@ -91,7 +91,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                     core.database.propertyDao(),
                     core.database.pageFtsDao(),
                     core.database.tagDao(),
-                    core.database.purgedPageDao(),
+                    core.purgeRegistry,
                     core.databaseSyncManager,
                     core.templateManager,
                     core.viewLockState,

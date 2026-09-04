@@ -4,6 +4,7 @@ import com.tendril.app.data.TendrilDatabase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -18,6 +19,9 @@ import com.tendril.app.ui.WorkbenchCore
  */
 class DesktopAppContainer(database: TendrilDatabase) {
     val workbenchCore: WorkbenchCore
+    val purgeRegistry = PurgeRegistry(
+        database.purgedRecordDao(), database.pageDao(), database.entryDao(), NoOpEntryScheduleCoordinator,
+    )
 
     init {
         val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), NoOpEntryScheduleCoordinator)
@@ -29,7 +33,7 @@ class DesktopAppContainer(database: TendrilDatabase) {
         val templateManager = TemplateManager(database.pageDao(), database.blockDao(), database.pageDatabaseDao(), database.propertyDao())
         workbenchCore = WorkbenchCore(
             database, databaseSyncManager, templateManager, ViewLockState(), CheckboxOnlyState(),
-            resolveEntryUseCase, NoOpEntryScheduleCoordinator, pageContentRepository,
+            resolveEntryUseCase, NoOpEntryScheduleCoordinator, pageContentRepository, purgeRegistry,
         )
     }
 }

@@ -27,8 +27,6 @@ import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
 import com.tendril.app.data.page.PageRelationDao
 import com.tendril.app.data.page.PageTag
-import com.tendril.app.data.page.PurgedPage
-import com.tendril.app.data.page.PurgedPageDao
 import com.tendril.app.data.page.Tag
 import com.tendril.app.data.page.TagDao
 import com.tendril.app.data.pagedatabase.PageDatabase
@@ -39,6 +37,8 @@ import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
+import com.tendril.app.data.purge.PurgedRecord
+import com.tendril.app.data.purge.PurgedRecordDao
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
 import kotlinx.coroutines.Dispatchers
@@ -61,9 +61,9 @@ import kotlinx.coroutines.Dispatchers
         Page::class, Tag::class, PageTag::class, Block::class, PageFtsEntry::class,
         PageDatabase::class, Property::class, PropertyValue::class, PageDatabaseView::class,
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
-        PurgedPage::class,
+        PurgedRecord::class,
     ],
-    version = 6, // §5.5.1 — PurgedPage tombstones added; destructive pre-v1 migration (§9.10)
+    version = 7, // §5.5.1.1 — purge tombstones now cover Entries too and travel; destructive (§9.10)
     // No schema-history export while Room migration policy is destructive-only pre-v1
     // (§9.10) — nothing to diff against yet. Revisit alongside the @AutoMigration switch.
     exportSchema = false,
@@ -85,7 +85,7 @@ abstract class TendrilDatabase : RoomDatabase() {
     abstract fun propertyValueDao(): PropertyValueDao
     abstract fun pageDatabaseViewDao(): PageDatabaseViewDao
     abstract fun pageRelationDao(): PageRelationDao
-    abstract fun purgedPageDao(): PurgedPageDao
+    abstract fun purgedRecordDao(): PurgedRecordDao
     abstract fun pageCanvasDao(): PageCanvasDao
     abstract fun canvasNodeDao(): CanvasNodeDao
     abstract fun canvasEdgeDao(): CanvasEdgeDao
