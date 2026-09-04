@@ -54,30 +54,59 @@ class SnapshotSyncOrchestrator(
      * hundreds of milliseconds that must not land on a UI thread — so callers can launch this
      * from any scope without wrapping it.
      */
-    suspend fun syncNow(store: SyncFileStore, passphrase: String? = null) {
+    suspend fun syncNow(store: SyncFileStore, passphrase: String? = null, allowRekey: Boolean = false) {
         // Derived once for both halves rather than once each.
         val key = deriveKey(passphrase)
         mergeWithKey(store, key)
-        writeWithKey(store, key)
+        writeWithKey(store, key, allowRekey)
     }
 
     /** The write half on its own, for a caller that only needs to publish. [syncNow] is what a
      * "Sync now" button wants. */
-    suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null) =
-        writeWithKey(store, deriveKey(passphrase))
+    suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null, allowRekey: Boolean = false) =
+        writeWithKey(store, deriveKey(passphrase), allowRekey)
 
-    private suspend fun writeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
-        // Writing without a key is how encryption is turned *off*, and the write is a full
-        // overwrite — so with an encrypted folder and no passphrase to hand, it would replace
-        // every snapshot with cleartext and report success. That is reachable without an
-        // attacker: the desktop passphrase box is session-only and optional-looking, so one
-        // "Sync now" before typing it published the whole dataset in the clear, into a folder
-        // Syncthing then replicates everywhere. Refuse instead, and let the caller say so.
-        if (key == null && hasEncryptedSnapshots(store)) {
-            error(
-                "This folder's snapshots are encrypted, and no passphrase was given. " +
-                    "Nothing was written — entering the passphrase would have replaced them with unencrypted copies."
-            )
+    private suspend fun writeWithKey(
+        store: SyncFileStore,
+        key: SecretKeySpec?,
+        allowRekey: Boolean = false,
+    ) = withContext(Dispatchers.IO) {
+        // The write is a full overwrite, so whatever it cannot read first, it destroys. Two ways
+        // in, and neither needs an attacker:
+        //
+        //  - No key at all is how encryption is turned *off*. Against an encrypted folder that
+        //    replaces every snapshot with cleartext and reports success — the desktop passphrase
+        //    box is session-only and optional-looking, so one "Sync now" before typing it
+        //    published the whole dataset in the clear, into a folder Syncthing then replicates
+        //    everywhere.
+        //  - A *mistyped* passphrase derives a perfectly valid key, so a null check alone lets it
+        //    straight through. `decryptText` then yields "" for every file (it maps a failed
+        //    decrypt to "nothing to merge" rather than crashing, which is right for reading and
+        //    silent for writing), the merge takes in nothing, and the write re-encrypts the whole
+        //    folder under a key nobody knows. That is the worse of the two: cleartext is at least
+        //    still readable, and this is not.
+        //
+        // One rule covers both — never overwrite an encrypted folder this key cannot open. A
+        // deliberate re-key is the one case that legitimately wants to, and says so via
+        // [allowRekey]; it stays opt-in because the accidental version is indistinguishable from
+        // it here, and only the caller knows which one the person meant.
+        val encryptedSample = firstEncryptedSnapshot(store)
+        if (encryptedSample != null) {
+            if (key == null) {
+                error(
+                    "This folder's snapshots are encrypted, and no passphrase was given. " +
+                        "Nothing was written — writing would have replaced them with unencrypted copies."
+                )
+            }
+            if (!allowRekey && !opens(encryptedSample, key)) {
+                error(
+                    "This folder's snapshots are encrypted, and the passphrase given does not open them. " +
+                        "Nothing was written — writing would have re-encrypted every snapshot under a key " +
+                        "that reads none of the existing ones, losing them on every device. Check the " +
+                        "passphrase; re-key deliberately with allowRekey once the folder has been merged " +
+                        "under its current one."
+                )
+            }
         }
         val allEntries = entryDao.getAll()
         val idToUid = allEntries.associate { it.id to it.uid }
@@ -271,10 +300,17 @@ class SnapshotSyncOrchestrator(
     /** Cheap enough to run before every write: the magic prefix is the first 8 bytes, and only
      * the fixed root files need checking — per-page files are written with the same key as
      * these, never independently. */
-    private suspend fun hasEncryptedSnapshots(store: SyncFileStore): Boolean =
-        listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS).any { name ->
-            store.readRoot(name)?.let(SnapshotEncryption::isEncrypted) == true
-        }
+    /** The first root snapshot in the folder that is actually encrypted, or null if none is.
+     * Returns the bytes rather than a bare Boolean so the write guard can try a key against real
+     * ciphertext, instead of only asking whether ciphertext exists. */
+    private suspend fun firstEncryptedSnapshot(store: SyncFileStore): ByteArray? =
+        listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS)
+            .firstNotNullOfOrNull { name -> store.readRoot(name)?.takeIf(SnapshotEncryption::isEncrypted) }
+
+    /** Whether [key] actually decrypts [encrypted] — one AES-GCM open, no key derivation, so this
+     * costs nothing next to the PBKDF2 the key already came from. */
+    private fun opens(encrypted: ByteArray, key: SecretKeySpec): Boolean =
+        SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(encrypted), key) != null
 
     private suspend fun readRootText(store: SyncFileStore, name: String, key: SecretKeySpec?): String =
         decryptText(store.readRoot(name), key)
