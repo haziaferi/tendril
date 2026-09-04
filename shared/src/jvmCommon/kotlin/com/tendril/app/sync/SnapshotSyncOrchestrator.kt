@@ -55,9 +55,8 @@ class SnapshotSyncOrchestrator(
      * from any scope without wrapping it.
      */
     suspend fun syncNow(store: SyncFileStore, passphrase: String? = null) {
-        // Derived once for both halves. Each half is already on Dispatchers.IO, so there is no
-        // outer withContext here.
-        val key = passphrase?.let(SnapshotEncryption::deriveKey)
+        // Derived once for both halves rather than once each.
+        val key = deriveKey(passphrase)
         mergeWithKey(store, key)
         writeWithKey(store, key)
     }
@@ -65,7 +64,7 @@ class SnapshotSyncOrchestrator(
     /** The write half on its own, for a caller that only needs to publish. [syncNow] is what a
      * "Sync now" button wants. */
     suspend fun writeSnapshots(store: SyncFileStore, passphrase: String? = null) =
-        writeWithKey(store, passphrase?.let(SnapshotEncryption::deriveKey))
+        writeWithKey(store, deriveKey(passphrase))
 
     private suspend fun writeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
         // Writing without a key is how encryption is turned *off*, and the write is a full
@@ -120,7 +119,7 @@ class SnapshotSyncOrchestrator(
      *
      * Runs on [Dispatchers.IO] for the same reasons as [writeSnapshots]. */
     suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) =
-        mergeWithKey(store, passphrase?.let(SnapshotEncryption::deriveKey))
+        mergeWithKey(store, deriveKey(passphrase))
 
     private suspend fun mergeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
         // Tombstones before anything else, and applied before any record file is read: a purge
@@ -292,6 +291,14 @@ class SnapshotSyncOrchestrator(
         val decrypted = key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
         return decrypted?.toString(Charsets.UTF_8) ?: ""
     }
+
+    /** 210k PBKDF2 iterations — hundreds of milliseconds, and both "Sync now" buttons call in
+     * from a `rememberCoroutineScope()`, which is the Main dispatcher. The merge and write
+     * halves each switch to IO on their own, but the derivation happens *before* either, so
+     * without this it ran on the UI thread on every press — the one thing this class's own
+     * contract promises callers they need not think about. */
+    private suspend fun deriveKey(passphrase: String?): SecretKeySpec? =
+        passphrase?.let { withContext(Dispatchers.IO) { SnapshotEncryption.deriveKey(it) } }
 
     private suspend fun writeJsonAtomic(store: SyncFileStore, name: String, content: String, key: SecretKeySpec?) {
         store.writeRoot(name, encryptText(content, key))

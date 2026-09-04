@@ -193,16 +193,24 @@ class PortableArchive(
         return runCatching { json.decodeFromString<List<HabitSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
     }
 
+    /** Deliberately the same rules as `SnapshotSyncOrchestrator`'s entry merge, because an
+     * archive is just another source of the same records — an Entry purged on this device must
+     * not come back through Import when it cannot come back through the folder, and
+     * `providerEventId` is per-device (§3.2) so it is kept from the local row rather than
+     * adopted from an archive some other device wrote. */
     private suspend fun applyEntries(records: List<EntrySnapshotRecord>) {
         if (records.isEmpty()) return
         val uidToId = entryDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val rowUidToId = pageDao.getAll().associate { it.uid to it.id }
+        val tombstones = purgeRegistry.tombstones(PurgedKind.ENTRY)
         for (record in records) {
+            val remoteUpdatedAt = Instant.ofEpochMilli(record.updatedAt)
+            if (purgeRegistry.isPurged(PurgedKind.ENTRY, record.uid, remoteUpdatedAt, tombstones)) continue
             val local = entryDao.getByUid(record.uid)
             if (local == null) {
                 uidToId[record.uid] = entryDao.insert(record.toEntity(uidToId, rowUidToId))
-            } else if (Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) {
-                entryDao.update(record.toEntity(uidToId, rowUidToId).copy(id = local.id))
+            } else if (remoteUpdatedAt.isAfter(local.updatedAt)) {
+                entryDao.update(record.toEntity(uidToId, rowUidToId).copy(id = local.id, providerEventId = local.providerEventId))
             }
         }
     }

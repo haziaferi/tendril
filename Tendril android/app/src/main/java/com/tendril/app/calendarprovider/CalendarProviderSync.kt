@@ -99,10 +99,9 @@ class CalendarProviderSync(
 
     private fun calendarStillExists(id: Long): Boolean {
         val uri = ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, id)
-        context.contentResolver.query(uri, arrayOf(CalendarContract.Calendars._ID), null, null, null)?.use {
-            return it.moveToFirst()
-        }
-        return false
+        val cursor = provider { context.contentResolver.query(uri, arrayOf(CalendarContract.Calendars._ID), null, null, null) }
+            ?: return false
+        return cursor.use { it.moveToFirst() }
     }
 
     private fun createCalendar(): Long? {
@@ -118,11 +117,8 @@ class CalendarProviderSync(
             put(CalendarContract.Calendars.VISIBLE, 1)
             put(CalendarContract.Calendars.SYNC_EVENTS, 1)
         }
-        // A restricted provider both returns null *and* throws (SecurityException,
-        // IllegalArgumentException), so catching only one of the two would still let it through.
-        val result = runCatching {
-            context.contentResolver.insert(asSyncAdapter(CalendarContract.Calendars.CONTENT_URI), values)
-        }.getOrNull() ?: return null
+        val result = provider { context.contentResolver.insert(asSyncAdapter(CalendarContract.Calendars.CONTENT_URI), values) }
+            ?: return null
         return ContentUris.parseId(result)
     }
 
@@ -141,9 +137,9 @@ class CalendarProviderSync(
             val values = entry.toCalendarValues(calendarId)
             val existingId = entry.providerEventId
             if (existingId != null && eventStillExists(existingId)) {
-                context.contentResolver.update(asSyncAdapter(eventUri(existingId)), values, null, null)
+                provider { context.contentResolver.update(asSyncAdapter(eventUri(existingId)), values, null, null) }
             } else {
-                val uri = context.contentResolver.insert(asSyncAdapter(CalendarContract.Events.CONTENT_URI), values)
+                val uri = provider { context.contentResolver.insert(asSyncAdapter(CalendarContract.Events.CONTENT_URI), values) }
                 val newId = uri?.let(ContentUris::parseId)
                 if (newId != null && newId != existingId) {
                     entryDao.setProviderEventId(entry.id, newId)
@@ -156,18 +152,31 @@ class CalendarProviderSync(
         val eventId = entry.providerEventId ?: return
         if (hasPermission()) {
             withContext(Dispatchers.IO) {
-                context.contentResolver.delete(asSyncAdapter(eventUri(eventId)), null, null)
+                provider { context.contentResolver.delete(asSyncAdapter(eventUri(eventId)), null, null) }
             }
         }
         entryDao.setProviderEventId(entry.id, null)
     }
 
     private fun eventStillExists(id: Long): Boolean {
-        context.contentResolver.query(eventUri(id), arrayOf(CalendarContract.Events._ID), null, null, null)?.use {
-            return it.moveToFirst()
-        }
-        return false
+        val cursor = provider { context.contentResolver.query(eventUri(id), arrayOf(CalendarContract.Events._ID), null, null, null) }
+            ?: return false
+        return cursor.use { it.moveToFirst() }
     }
+
+    /**
+     * Every Calendar Provider call goes through here. A restricted provider — a work profile, a
+     * locked-down OEM build, a permission revoked between the check and the write — both returns
+     * null *and* throws (SecurityException, IllegalArgumentException), so a null check alone was
+     * never enough. Reported as a value, so the integration degrades to a no-op the way a missing
+     * permission already does; guarding the calendar row alone left the Events writes throwing out
+     * of [ensureCalendarAndBackfill] and, through it, out of the boot receiver.
+     *
+     * Not a suspend function, deliberately: `runCatching` around a suspend call would swallow
+     * CancellationException. Everything it wraps is a blocking ContentResolver call already on
+     * [Dispatchers.IO], never a suspension point.
+     */
+    private fun <T> provider(call: () -> T): T? = runCatching(call).getOrNull()
 
     private fun eventUri(eventId: Long): Uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
 

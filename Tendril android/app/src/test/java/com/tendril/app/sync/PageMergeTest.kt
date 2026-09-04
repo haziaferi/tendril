@@ -221,10 +221,38 @@ class PageMergeTest {
         purgeRegistry.adopt(listOf(PurgedRecord(PurgedKind.PAGE, UID_A, at(5_000L))))
 
         assertEquals(
-            "two devices purging the same record is not a conflict; the first timestamp keeps winning",
+            "two devices purging the same record is not a conflict; the earlier timestamp wins",
             listOf(at(2_000L)),
             purgedDao.getForKind(PurgedKind.PAGE).map { it.purgedAt },
         )
+    }
+
+    /** The same two tombstones in the other order. Keeping whichever arrived *first* would
+     * leave this device on 5000 and the other on 2000, and a third device's edit at, say, 3000
+     * would then supersede the purge on one and lose to it on the other — the two disagreeing
+     * about whether the page exists, for good. */
+    @Test
+    fun `an earlier tombstone arriving second still wins, so devices cannot diverge`() = runBlocking {
+        purgeRegistry.adopt(listOf(PurgedRecord(PurgedKind.PAGE, UID_A, at(5_000L))))
+        purgeRegistry.adopt(listOf(PurgedRecord(PurgedKind.PAGE, UID_A, at(2_000L))))
+
+        assertEquals(
+            "adoption has to be order-independent or two devices settle on different answers",
+            listOf(at(2_000L)),
+            purgedDao.getForKind(PurgedKind.PAGE).map { it.purgedAt },
+        )
+    }
+
+    @Test
+    fun `one file carrying two tombstones for the same record keeps the earlier`() = runBlocking {
+        purgeRegistry.adopt(
+            listOf(
+                PurgedRecord(PurgedKind.PAGE, UID_A, at(5_000L)),
+                PurgedRecord(PurgedKind.PAGE, UID_A, at(2_000L)),
+            )
+        )
+
+        assertEquals(listOf(at(2_000L)), purgedDao.getForKind(PurgedKind.PAGE).map { it.purgedAt })
     }
 
     @Test

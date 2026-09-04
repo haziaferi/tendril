@@ -107,7 +107,30 @@ class PurgeRegistry(
 
     suspend fun all(): List<PurgedRecord> = purgedRecordDao.getAll()
 
-    suspend fun adopt(records: List<PurgedRecord>) = records.forEach { purgedRecordDao.insert(it) }
+    /**
+     * Takes on tombstones arriving from another device or an archive, keeping the **earliest**
+     * `purgedAt` for any (kind, uid) — which is what [PurgedRecordDao.insert]'s IGNORE was
+     * reaching for but cannot express on its own.
+     *
+     * IGNORE keeps whichever tombstone this device happened to see *first*, which is not the
+     * same thing and is not order-independent: two devices that both purged the same record
+     * each keep their own timestamp, and an edit from a third device landing between the two
+     * then supersedes the purge on one and loses to it on the other — leaving them permanently
+     * disagreeing about whether the record exists. A minimum converges from any order, and it
+     * is the conservative choice of the two: the older the tombstone, the easier it is for a
+     * later edit to supersede it, and destroying live work is the failure this whole comparison
+     * exists to avoid.
+     */
+    suspend fun adopt(records: List<PurgedRecord>) {
+        val existing = purgedRecordDao.getAll().associateBy { it.kind to it.uid }
+        val earliestIncoming = records.groupBy { it.kind to it.uid }.mapValues { (_, group) -> group.minBy { it.purgedAt } }
+        for ((key, record) in earliestIncoming) {
+            val current = existing[key]
+            if (current != null && !record.purgedAt.isBefore(current.purgedAt)) continue
+            if (current != null) purgedRecordDao.clear(record.kind, record.uid)
+            purgedRecordDao.insert(record)
+        }
+    }
 
     /** Restore-from-backup only (§9.4.1) — see [PurgedRecordDao.deleteAll]. */
     suspend fun clearAll() = purgedRecordDao.deleteAll()

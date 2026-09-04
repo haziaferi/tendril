@@ -34,8 +34,10 @@ data class PurgedRecord(
 
 @Dao
 interface PurgedRecordDao {
-    /** IGNORE, not REPLACE: two devices purging the same record is not a conflict, and the
-     * first purge's timestamp is the one that should keep winning comparisons. */
+    /** IGNORE, not REPLACE: purging a record that already carries a tombstone is not a
+     * conflict, and re-recording it must not push the timestamp forward. Choosing *between*
+     * two devices' timestamps for the same record needs a comparison this annotation cannot
+     * express, so [com.tendril.app.domain.PurgeRegistry.adopt] does it. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(record: PurgedRecord)
 
