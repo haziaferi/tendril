@@ -1,8 +1,18 @@
-# Static hygiene checks (tools/audit.py). Deliberately does NOT build the app:
-# the three Gradle builds need the Android SDK and a full dependency download,
-# while these checks are pure text analysis and finish in seconds. They exist to
-# catch the specific defect classes this repo has actually had — see the module
+# Two jobs, because they catch different things and fail at different speeds.
+#
+# `hygiene` is pure text analysis (tools/audit.py) and finishes in seconds. It exists
+# to catch the specific defect classes this repo has actually had — see the module
 # docstring in tools/audit.py for the list and the reason behind each one.
+#
+# `unit-tests` compiles and runs the Android app's unit tests, which pulls in the
+# shared module too. This job used to be deliberately omitted, on the reasoning that
+# a Gradle build needs the Android SDK and a full dependency download while the
+# static checks need neither. That reasoning held right up until a call to a
+# `viewModel` property on a composable that has no such parameter shipped through a
+# green `hygiene` run: the name resolved to an unrelated Compose import, so it read
+# as ordinary property access to every reader and to every text-level check. Only a
+# compiler catches that class. A green check that builds nothing is worse than no
+# check, because it is trusted.
 name: audit
 
 on:
@@ -21,3 +31,27 @@ jobs:
           python-version: "3.12"
       - name: Static hygiene checks
         run: python3 tools/audit.py
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      # No local.properties in the tree (it is gitignored, and points at whatever SDK
+      # the author happens to have); the runner's own ANDROID_HOME is what resolves.
+      # `shared` is reached as a composite build from a sibling directory, so the
+      # checkout has to keep the monorepo's layout — it does, since all three live in
+      # this one repo.
+      - name: Unit tests
+        working-directory: "Tendril android"
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: Test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: "Tendril android/app/build/reports/tests/testDebugUnitTest"
