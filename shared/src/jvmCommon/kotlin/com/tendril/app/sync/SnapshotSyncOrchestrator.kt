@@ -27,6 +27,17 @@ private const val FILE_PURGED = "purged_records.json"
 private const val FILE_META = "sync_meta.json"
 
 /**
+ * §5.2 — marks a page snapshot kept because it *lost* a last-write-wins race.
+ *
+ * Deliberately not Syncthing's own `.sync-conflict-` spelling. Those are Syncthing's to create
+ * and this app's conflict sweep already claims them: a file carrying that marker gets merged and
+ * then deleted once it has, which is exactly the wrong fate for a copy being preserved. A marker
+ * of our own keeps the two apart, and both the pages-dir scan and the sweep skip it — a
+ * preserved loser is evidence, not an input.
+ */
+private const val LOST_MARKER = ".tendril-lost-"
+
+/**
  * §9.4 — the snapshot-file sync engine. Tendril never syncs the live Room database; only these
  * per-domain JSON files inside the synced folder, which an external Syncthing-fork app is already
  * syncing on its own. This class only reads/writes those files (via [SyncFileStore], not any
@@ -147,7 +158,13 @@ class SnapshotSyncOrchestrator(
         // conflict sweep in readAndMerge is careful not to do either, and for the same reason.
         val purgedFiles = pagesSyncEngine.purgedPageFileNames()
         if (purgedFiles.isNotEmpty()) {
-            store.listPages().filter { it in purgedFiles }.forEach { store.deletePage(it) }
+            val purgedUids = purgedFiles.mapTo(mutableSetOf()) { it.removeSuffix(".json") }
+            store.listPages().filter { name ->
+                // The page's own snapshot, and any copy of it preserved by §5.2's lost-race
+                // handling. "Delete forever" that leaves copies of the thing behind is not
+                // delete forever, and a preserved loser is still the person's page content.
+                name in purgedFiles || purgedUids.any { name.startsWith("$it$LOST_MARKER") }
+            }.forEach { store.deletePage(it) }
         }
     }
 
@@ -222,9 +239,38 @@ class SnapshotSyncOrchestrator(
 
     private suspend fun mergePagesDir(store: SyncFileStore, read: ReadKey) {
         val records = store.listPages()
-            .filter { it.endsWith(".json") && !it.contains(".sync-conflict-") }
+            // A preserved loser is not an input: merging it back would either resurrect it or,
+            // once it lost again, write a second copy of itself on every pass.
+            .filter { it.endsWith(".json") && !it.contains(".sync-conflict-") && !it.contains(LOST_MARKER) }
             .mapNotNull { name -> readPageText(store, name, read).takeIf { it.isNotBlank() }?.let { decodePage(it) } }
-        pagesSyncEngine.mergePages(records)
+        preserveLostPages(store, pagesSyncEngine.mergePages(records), read)
+    }
+
+    /**
+     * §5.2 — writes each page record that lost its race, beside the winner that replaced it.
+     *
+     * §9.4 accepts whole-page last-write-wins for v1 and this keeps that: the winner still wins.
+     * It only stops the loser being destroyed unread, which is the part of LWW nobody agreed to.
+     *
+     * Named `<uid>.tendril-lost-<the losing updatedAt>.json`, so preserving the same losing
+     * version twice overwrites one file rather than accumulating copies of it. Encrypted with
+     * the same key as everything else — a plaintext file in an encrypted folder is exactly what
+     * this class now refuses to read (§4.1), and writing one here would mean writing evidence
+     * nothing can pick up again.
+     *
+     * Nothing deletes these. Syncthing's own conflict files behave the same way and are cleaned
+     * up by hand; a copy kept precisely because it was about to be lost is not something to then
+     * expire on a timer without being asked.
+     */
+    private suspend fun preserveLostPages(
+        store: SyncFileStore,
+        lost: List<PageSnapshotRecord>,
+        read: ReadKey,
+    ) {
+        for (record in lost) {
+            val name = "${record.uid}$LOST_MARKER${record.updatedAt}.json"
+            store.writePage(name, encryptText(json.encodeToString(record), read.key))
+        }
     }
 
     private fun decodePage(content: String): PageSnapshotRecord? =

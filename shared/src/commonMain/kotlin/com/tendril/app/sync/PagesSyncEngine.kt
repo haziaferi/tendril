@@ -209,7 +209,22 @@ class PagesSyncEngine(
      * of `../../…` therefore escaped the sync folder entirely on the desktop store, whose
      * `Path.resolve` honours `..`. Every uid this app generates is
      * `UUID.randomUUID().toString()`, so nothing legitimate is turned away. */
-    suspend fun mergePages(allRecords: List<PageSnapshotRecord>) {
+    /**
+     * §5.2 / §9.4 — merges [allRecords], and **returns the records that lost and would otherwise
+     * have been discarded silently**.
+     *
+     * Whole-page LWW is a deliberate v1 decision and this does not change it: the winner still
+     * wins outright. What changes is that the loser stops vanishing. The caller writes each
+     * returned record beside the winner, the way Syncthing itself keeps the copy that lost a
+     * race, so a concurrent edit made on another device is recoverable by hand instead of gone.
+     *
+     * A record is returned only when its content actually *differs* from what this device holds.
+     * Without vector clocks there is no way to tell a genuine concurrent edit from a merely
+     * stale copy of a version we already have — but an identical copy has nothing in it to
+     * preserve, and that check alone is what keeps the folder from filling with duplicates of
+     * itself on every sync. An equal `updatedAt` is the same version and never counts as a loss.
+     */
+    suspend fun mergePages(allRecords: List<PageSnapshotRecord>): List<PageSnapshotRecord> {
         // A purged page stays purged: its own snapshot file is still sitting in the folder, and
         // without this the very next merge inserts it straight back (§5.5.1.1). A record edited
         // after the purge is the one exception, and `isPurged` handles it by superseding.
@@ -217,9 +232,15 @@ class PagesSyncEngine(
         val records = allRecords.filter {
             isSafeUid(it.uid) && !purgeRegistry.isPurged(PurgedKind.PAGE, it.uid, Instant.ofEpochMilli(it.updatedAt), tombstones)
         }
-        if (records.isEmpty()) return
+        if (records.isEmpty()) return emptyList()
         val uidToId = pageDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
+        // Records that lost on timestamp. Whether each is a real loss depends on its content
+        // differing, but that comparison needs exportPages(), which walks every page on the
+        // device -- so it is deferred until something is actually a candidate, and skipped
+        // entirely when nothing is. mergePages runs once per conflict file as well as once per
+        // pass, and paying for a full export each time would make the merge O(files x pages).
+        val candidateLosers = mutableListOf<PageSnapshotRecord>()
 
         // Pass 1 — upsert bare Page rows (tree position deferred to Pass 2); ensure every
         // DATABASE-kind page in the batch has a PageDatabase shell row to hang properties off.
@@ -237,6 +258,8 @@ class PagesSyncEngine(
                 wonUids += record.uid
             } else {
                 id = local.id
+                // Strictly older: an equal timestamp is the same version, not a race.
+                if (remoteUpdatedAt.isBefore(local.updatedAt)) candidateLosers += record
             }
             if (record.kind == PageKind.DATABASE.name && pageDatabaseDao.getByPageId(id) == null) {
                 val now = Instant.ofEpochMilli(record.updatedAt)
@@ -405,6 +428,12 @@ class PagesSyncEngine(
                 }
             }
         }
+
+        // Compared against the page as it stands once the pass is done, which is exactly what
+        // replaced the loser. An identical body has nothing in it to preserve.
+        if (candidateLosers.isEmpty()) return emptyList()
+        val localByUid = exportPages().associateBy { it.uid }
+        return candidateLosers.filter { localByUid[it.uid] != it }
     }
 
     suspend fun mergeRelations(records: List<PageRelationSnapshotRecord>) {
