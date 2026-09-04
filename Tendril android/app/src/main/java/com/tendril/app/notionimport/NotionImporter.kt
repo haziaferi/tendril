@@ -195,7 +195,7 @@ class NotionImporter(
         val importedDatabases = mutableListOf<ImportedDatabase>()
         for (entry in csvEntries) {
             val rows = NotionCsvParser.parse(entry.text)
-            if (rows.size < 1) continue
+            if (rows.isEmpty()) continue
             val headers = rows.first()
             val dataRows = rows.drop(1)
             if (headers.isEmpty()) continue
@@ -242,7 +242,7 @@ class NotionImporter(
             importedDatabases += ImportedDatabase(dbPageId, databaseId, dbTitle)
         }
 
-        val notices = mutableListOf(
+        val notices = listOf(
             "Database views, filters, sorts, live formulas, and comments couldn't be recovered — " +
                 "Notion's own export format doesn't include them, not something a better importer could fix.",
         ) + warnings

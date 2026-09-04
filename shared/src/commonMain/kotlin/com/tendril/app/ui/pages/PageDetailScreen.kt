@@ -541,24 +541,46 @@ private fun blockTextStyle(type: BlockType): androidx.compose.ui.text.TextStyle 
     }
 }
 
-/** Spans are indices into the old content; a naive edit shifts everything after the edit
- * point. Good enough for typing at the end (the common case) — a span whose range no longer
- * makes sense after a mid-text edit is dropped rather than silently corrupted. */
+/**
+ * Spans are (start, end) indices into the block's *old* plain text, so any edit that isn't a
+ * pure append has to move them. `BasicTextField` hands over only the new string, not where the
+ * change happened, so the edited region is recovered by trimming the common prefix and common
+ * suffix — that bracket always contains the real edit, which is all the remap needs.
+ *
+ * The previous version's first branch (`span.end <= oldText.length && oldText.length <=
+ * newText.length`) was true for essentially every insertion, so *no* span ever moved: inserting
+ * at the start of a block left every span pointing at the wrong characters, silently
+ * re-formatting the wrong text rather than the "dropped rather than corrupted" behaviour the
+ * comment promised. Deletions shifted `end` while leaving `start` put, stretching spans.
+ */
 private fun remapSpans(spans: List<FormattingSpan>, oldText: String, newText: String): List<FormattingSpan> {
-    if (spans.isEmpty()) return spans
+    if (spans.isEmpty() || oldText == newText) return spans
+
+    val maxShared = minOf(oldText.length, newText.length)
+    var prefix = 0
+    while (prefix < maxShared && oldText[prefix] == newText[prefix]) prefix++
+    var suffix = 0
+    while (suffix < maxShared - prefix &&
+        oldText[oldText.length - 1 - suffix] == newText[newText.length - 1 - suffix]
+    ) suffix++
+
+    val editEnd = oldText.length - suffix
     val delta = newText.length - oldText.length
-    if (delta == 0) return spans
+
     return spans.mapNotNull { span ->
-        if (span.end <= oldText.length && oldText.length <= newText.length) {
-            // Edit happened at/after the span's end (typical append-while-typing case).
-            span
-        } else if (span.start >= oldText.length) {
-            null
-        } else {
-            val newEnd = (span.end + delta).coerceAtMost(newText.length)
-            if (newEnd <= span.start) null else span.copy(end = newEnd)
+        when {
+            // Entirely before the edit — untouched. Also the append-while-typing case, where
+            // the edit starts at the end of the text and every existing span ends before it.
+            span.end <= prefix -> span
+            // Entirely after the edit — slides by the length change.
+            span.start >= editEnd -> span.copy(start = span.start + delta, end = span.end + delta)
+            // The edit happened strictly inside the span: typing inside a bold run extends it.
+            span.start <= prefix && span.end >= editEnd -> span.copy(end = span.end + delta)
+            // The edit straddles one of the span's boundaries — where it should now start or
+            // stop is genuinely ambiguous, so drop it rather than guess.
+            else -> null
         }
-    }
+    }.filter { it.start >= 0 && it.end <= newText.length && it.start < it.end }
 }
 
 @Composable

@@ -20,9 +20,10 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Shown in place of [com.tendril.app.ui.nav.WorkbenchScaffold] while App Lock (§3.6) is
- * engaged and not yet unlocked this session. A plain retry button rather than
- * auto-relaunching the prompt — if the person dismissed it once, firing it again
- * unprompted on every recomposition would be its own kind of surprising.
+ * engaged and not yet unlocked this session. `MainActivity` fires the BiometricPrompt once on
+ * entering the locked state (a `LaunchedEffect` keyed on the unlocked flag, so it runs on the
+ * transition, not on every recomposition); this button is the manual retry for someone who
+ * dismissed that prompt, which is the only way back in once it's gone.
  */
 @Composable
 fun LockScreen(onUnlockClick: () -> Unit) {

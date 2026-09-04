@@ -49,6 +49,7 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
     val scope = rememberCoroutineScope()
     var importing by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf<NotionImportSummary?>(null) }
+    var importError by remember { mutableStateOf<String?>(null) }
     var pendingBind by remember { mutableStateOf<ImportedDatabase?>(null) }
     var boundDatabaseIds by remember { mutableStateOf(setOf<Long>()) }
 
@@ -58,9 +59,20 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
             if (uri == null) return@rememberLauncherForActivityResult
             importing = true
             scope.launch {
-                summary = importer.import(uri)
-                boundDatabaseIds = emptySet()
-                importing = false
+                // The picker accepts any file, and `import` throws on purpose — an unopenable
+                // stream, an over-cap text payload, or a file that isn't a zip at all. Left
+                // uncaught this crashed the app and stranded `importing` at true, disabling the
+                // button for good. Same runCatching-and-report shape PortableBackupSection uses.
+                try {
+                    summary = importer.import(uri)
+                    boundDatabaseIds = emptySet()
+                    importError = null
+                } catch (e: Exception) {
+                    summary = null
+                    importError = e.message ?: "Import failed — that file couldn't be read as a Notion export."
+                } finally {
+                    importing = false
+                }
             }
         },
     )
@@ -82,6 +94,11 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
         Spacer(Modifier.height(12.dp))
         Button(enabled = !importing, onClick = { importLauncher.launch(arrayOf("application/zip", "*/*")) }) {
             Text(if (importing) "Importing…" else "Choose export .zip")
+        }
+
+        importError?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
 
         summary?.let { result ->

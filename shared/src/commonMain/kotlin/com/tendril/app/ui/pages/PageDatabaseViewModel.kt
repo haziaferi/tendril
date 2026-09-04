@@ -35,6 +35,7 @@ import com.tendril.app.domain.ViewLockState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -65,7 +66,7 @@ class PageDatabaseViewModel(
     private val templateManager: TemplateManager,
     private val viewLockState: ViewLockState,
 ) : ViewModel() {
-    /** §3.1.2 — see [PageDetailViewModel.locked]'s note; the same single enforcement point,
+    /** §3.1.2 — see [PageDetailViewModel.viewOnlyLocked]'s note; the same single enforcement point,
      * duplicated per ViewModel rather than shared, since a Database Row's edits and a plain
      * Page's edits go through two entirely separate ViewModels. */
     private fun locked() = viewLockState.viewOnly.value
@@ -213,12 +214,12 @@ class PageDatabaseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val _pendingSyncEnable = MutableStateFlow(false)
-    val pendingSyncEnable: StateFlow<Boolean> = _pendingSyncEnable
+    val pendingSyncEnable: StateFlow<Boolean> = _pendingSyncEnable.asStateFlow()
     fun requestEnableSync() { _pendingSyncEnable.value = true }
     fun dismissEnableSync() { _pendingSyncEnable.value = false }
 
     private val _pendingSyncDisable = MutableStateFlow(false)
-    val pendingSyncDisable: StateFlow<Boolean> = _pendingSyncDisable
+    val pendingSyncDisable: StateFlow<Boolean> = _pendingSyncDisable.asStateFlow()
     fun requestDisableSync() { _pendingSyncDisable.value = true }
     fun dismissDisableSync() { _pendingSyncDisable.value = false }
 
@@ -247,7 +248,7 @@ class PageDatabaseViewModel(
     data class PendingRebind(val role: BindingRole, val currentPropertyId: Long, val newPropertyId: Long?)
 
     private val _pendingRebind = MutableStateFlow<PendingRebind?>(null)
-    val pendingRebind: StateFlow<PendingRebind?> = _pendingRebind
+    val pendingRebind: StateFlow<PendingRebind?> = _pendingRebind.asStateFlow()
     fun requestRebind(role: BindingRole, currentPropertyId: Long, newPropertyId: Long?) {
         _pendingRebind.value = PendingRebind(role, currentPropertyId, newPropertyId)
     }
@@ -296,7 +297,7 @@ class PageDatabaseViewModel(
      * only ever runs from [confirmDeleteProperty], after the dialog states the consequence
      * (plain deletion, or the bound-property/sync-disable case) in plain language. */
     private val _pendingDeleteProperty = MutableStateFlow<Property?>(null)
-    val pendingDeleteProperty: StateFlow<Property?> = _pendingDeleteProperty
+    val pendingDeleteProperty: StateFlow<Property?> = _pendingDeleteProperty.asStateFlow()
     fun requestDeleteProperty(property: Property) { _pendingDeleteProperty.value = property }
     fun dismissDeleteProperty() { _pendingDeleteProperty.value = null }
     fun confirmDeleteProperty() {
@@ -310,7 +311,7 @@ class PageDatabaseViewModel(
      * bound property (Done/Deadline/Recurrence) never reaches this — [PropertyHeaderCell]
      * hides the menu item for those, since there's no real schema-editable field to convert. */
     private val _pendingTypeChange = MutableStateFlow<Property?>(null)
-    val pendingTypeChange: StateFlow<Property?> = _pendingTypeChange
+    val pendingTypeChange: StateFlow<Property?> = _pendingTypeChange.asStateFlow()
     fun requestChangeType(property: Property) { _pendingTypeChange.value = property }
     fun dismissChangeType() { _pendingTypeChange.value = null }
 
@@ -339,7 +340,7 @@ class PageDatabaseViewModel(
      * level — an orphaned Task pointing at a trashed row would otherwise sit in Tasks/Calendar
      * with nothing behind it. */
     private val _pendingDeleteRow = MutableStateFlow<Page?>(null)
-    val pendingDeleteRow: StateFlow<Page?> = _pendingDeleteRow
+    val pendingDeleteRow: StateFlow<Page?> = _pendingDeleteRow.asStateFlow()
     fun requestDeleteRow(row: Page) { _pendingDeleteRow.value = row }
     fun dismissDeleteRow() { _pendingDeleteRow.value = null }
     fun confirmDeleteRow() {

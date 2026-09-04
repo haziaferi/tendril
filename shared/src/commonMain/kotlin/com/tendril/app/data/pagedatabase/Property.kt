@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 import com.tendril.app.data.entry.IntervalUnit
 import java.util.UUID
 
-/** §4/§7 — the set a Notion CSV export can actually carry, plus the Noema-native `Interval`
+/** §4/§7 — the set a Notion CSV export can actually carry, plus the Tendril-native `Interval`
  * type (§5.2.2), which is never offered in the general "New property" picker outside the
  * recurrence-binding context — enforced by the UI, not the schema. */
 enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL }

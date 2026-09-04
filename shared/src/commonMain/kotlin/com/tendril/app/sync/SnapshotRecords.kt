@@ -50,6 +50,12 @@ data class HabitSnapshotRecord(
     val frequency: String,
     val streak: Int,
     val lastCompletedDate: String? = null,
+    /** §8.1.1's undo-check-in snapshot. Travels with the record because it is per-habit state,
+     * not per-device: omitting it meant a merged habit arrived with the defaults (0 / null), so
+     * the next undo tap on that device reset the streak to zero instead of stepping it back one.
+     * Defaulted, so a snapshot written before this field existed still decodes. */
+    val previousStreak: Int = 0,
+    val previousCompletedDate: String? = null,
     val deletedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long,

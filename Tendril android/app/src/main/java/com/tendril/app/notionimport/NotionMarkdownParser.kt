@@ -37,6 +37,13 @@ data class ParsedBlock(
 /** A 32-character lowercase hex Notion id, as it appears in exported filenames and link hrefs. */
 private val NOTION_ID_REGEX = Regex("([0-9a-fA-F]{32})")
 
+// Hoisted alongside NOTION_ID_REGEX rather than built inside parse()'s per-line loop: each
+// `Regex(...)` there recompiled the pattern once per line of every imported page, and the image
+// one was compiled twice per matching line (once to test, once to capture).
+private val TODO_ITEM_REGEX = Regex("^-\\s\\[( |x|X)]\\s")
+private val NUMBERED_ITEM_REGEX = Regex("^\\d+\\.\\s")
+private val STANDALONE_IMAGE_REGEX = Regex("^!\\[[^]]*]\\(([^)]+)\\)$")
+
 /**
  * §7.4 — the chosen architecture: a hand-rolled, line-oriented streaming state machine, not a
  * generic Markdown AST library. It emits [ParsedBlock]/[ParsedSpan] directly in the shape this
@@ -119,7 +126,7 @@ object NotionMarkdownParser {
                     i++
                 }
 
-                Regex("^-\\s\\[( |x|X)]\\s").containsMatchIn(line) -> {
+                TODO_ITEM_REGEX.containsMatchIn(line) -> {
                     val checked = line[3].lowercaseChar() == 'x'
                     val (t, s) = parseInline(line.substring(6))
                     blocks += ParsedBlock(BlockType.TODO, t, s, checked = checked)
@@ -132,7 +139,7 @@ object NotionMarkdownParser {
                     i++
                 }
 
-                Regex("^\\d+\\.\\s").containsMatchIn(line) -> {
+                NUMBERED_ITEM_REGEX.containsMatchIn(line) -> {
                     val (t, s) = parseInline(line.substringAfter(". "))
                     blocks += ParsedBlock(BlockType.NUMBERED_LIST_ITEM, t, s)
                     i++
@@ -142,8 +149,8 @@ object NotionMarkdownParser {
                 // matching how Notion always exports embedded media (§7.1's per-page assets
                 // folder). The asset's own bytes are extracted separately by [NotionImporter];
                 // this only threads the zip-relative path through.
-                Regex("^!\\[[^]]*]\\(([^)]+)\\)$").matches(line) -> {
-                    val path = Regex("^!\\[[^]]*]\\(([^)]+)\\)$").find(line)!!.groupValues[1]
+                STANDALONE_IMAGE_REGEX.matches(line) -> {
+                    val path = STANDALONE_IMAGE_REGEX.find(line)!!.groupValues[1]
                     blocks += ParsedBlock(BlockType.IMAGE, imageAssetPath = decodeUrlPath(path))
                     i++
                 }

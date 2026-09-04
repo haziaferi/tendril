@@ -38,16 +38,17 @@ import java.time.Instant
 
 /**
  * §9.4 — completes the Page/Row/Database/Canvas half of snapshot sync (Entry/Habit's half
- * already lived in [SnapshotMappers]/[SnapshotSyncManager]/[PortableArchive]). Shared by both
- * the continuous folder sync and the one-off portable export/import, matching those callers'
- * own "one schema, reused everywhere" rule — the merge algorithm here is intricate enough
- * (five ordered passes, several cross-page FK resolutions) that duplicating it per caller the
- * way the simpler Entry/Habit merges are today would be a real maintenance risk, not just
- * more typing.
+ * already lived in `SnapshotMappers.kt`, `SnapshotSyncOrchestrator` and `PortableArchive` —
+ * backticks, not KDoc links: the latter two live outside `commonMain` and aren't resolvable
+ * from here). Shared by both the continuous folder sync and the one-off portable
+ * export/import, matching those callers' own "one schema, reused everywhere" rule — the merge
+ * algorithm here is intricate enough (five ordered passes, several cross-page FK resolutions)
+ * that duplicating it per caller the way the simpler Entry/Habit merges are today would be a
+ * real maintenance risk, not just more typing.
  *
  * Every FK in [PageSnapshotRecord] and friends travels as a `uid`; resolving it back to a
  * local Room id follows the same "drop the link if the target hasn't merged in yet, self-heal
- * on a later sync pass" rule [SnapshotMappers.toEntity] already established for
+ * on a later sync pass" rule `SnapshotMappers.kt`'s `toEntity` already established for
  * `originalEntryUid` — except for a Page's own tree position (`parentUid`/`databaseUid`),
  * which gets a real two-pass fixup instead of drop-and-heal: unlike a rare recurring-exception
  * backlink, losing a page's parent on every first sync would misplace most of a person's

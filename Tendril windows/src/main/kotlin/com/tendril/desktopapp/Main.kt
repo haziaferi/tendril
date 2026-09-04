@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -111,6 +112,7 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
     val folderPath by folderManager.folderPath.collectAsState()
     var passphrase by remember { mutableStateOf("") } // session-only, never persisted (§12.5/Milestone 2)
     var syncing by remember { mutableStateOf(false) }
+    var syncError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Row(
@@ -135,6 +137,10 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
             onValueChange = { passphrase = it },
             label = { Text("Passphrase (optional)") },
             singleLine = true,
+            // Masked, matching Android's own two passphrase fields — this one is typed in
+            // whatever room the desktop happens to be in, and it is the key to every synced
+            // snapshot in the folder.
+            visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.width(220.dp).padding(horizontal = 8.dp),
         )
 
@@ -144,13 +150,31 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                 val path = folderPath ?: return@TextButton
                 syncing = true
                 scope.launch {
-                    val store = DesktopFileSyncFileStore(path)
-                    orchestrator.readAndMerge(store, passphrase.ifBlank { null })
-                    orchestrator.writeSnapshots(store, passphrase.ifBlank { null })
-                    syncing = false
+                    // `syncing` is cleared in a finally, and failures are reported rather than
+                    // thrown on. SyncFileStore's contract is explicit that a write which cannot
+                    // complete throws; without this, one unwritable folder disabled the button
+                    // for the rest of the session. Android's own "Sync now" already does this.
+                    try {
+                        val store = DesktopFileSyncFileStore(path)
+                        orchestrator.readAndMerge(store, passphrase.ifBlank { null })
+                        orchestrator.writeSnapshots(store, passphrase.ifBlank { null })
+                        syncError = null
+                    } catch (e: Exception) {
+                        syncError = e.message ?: "Sync failed."
+                    } finally {
+                        syncing = false
+                    }
                 }
             },
         ) { Text(if (syncing) "Syncing…" else "Sync now") }
+    }
+    syncError?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+        )
     }
 }
 

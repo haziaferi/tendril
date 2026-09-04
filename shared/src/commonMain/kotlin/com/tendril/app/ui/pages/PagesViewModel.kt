@@ -85,7 +85,12 @@ class PagesViewModel(
 
     fun onSearchQueryChange(query: String) {
         viewModelScope.launch {
-            _searchResults.value = if (query.isBlank()) emptyList() else pageFtsDao.search("$query*")
+            val match = toFtsPrefixQuery(query)
+            _searchResults.value = if (match == null) emptyList()
+            // Belt and braces over [toFtsPrefixQuery]: a MATCH that SQLite still refuses is a
+            // no-results search, never a crashed one. This ran inside viewModelScope with
+            // nothing catching it, so a raw SQLiteException took the app down mid-keystroke.
+            else runCatching { pageFtsDao.search(match) }.getOrDefault(emptyList())
         }
     }
 
@@ -145,3 +150,21 @@ class PagesViewModel(
         }
     }
 }
+
+/**
+ * FTS4 `MATCH` takes a query *expression*, not a literal — a quote, parenthesis or bare `*`
+ * in what someone typed is a syntax error, and interpolating raw input straight into
+ * `"$query*"` made that a crash on an ordinary keystroke. Splitting on everything that isn't
+ * a letter or digit yields only bare alphanumeric tokens, which are always valid terms; each
+ * gets FTS4's `*` prefix operator so search still matches as the person types. Multiple
+ * tokens are ANDed, FTS4's default, so extra words narrow rather than widen.
+ *
+ * Returns null when nothing searchable is left ("", "  ", "???") — the caller shows no
+ * results rather than running a query that would match everything.
+ */
+private fun toFtsPrefixQuery(raw: String): String? {
+    val terms = raw.split(NON_SEARCHABLE).filter { it.isNotEmpty() }
+    return if (terms.isEmpty()) null else terms.joinToString(" ") { "$it*" }
+}
+
+private val NON_SEARCHABLE = Regex("[^\\p{L}\\p{N}]+")

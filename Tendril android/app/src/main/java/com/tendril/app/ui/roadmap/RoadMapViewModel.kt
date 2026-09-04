@@ -62,7 +62,7 @@ class RoadMapViewModel(
     private val _allPages = MutableStateFlow(emptyList<Page>())
 
     private val _pageSearchResults = MutableStateFlow<List<Page>>(emptyList())
-    val pageSearchResults: StateFlow<List<Page>> = _pageSearchResults
+    val pageSearchResults: StateFlow<List<Page>> = _pageSearchResults.asStateFlow()
 
     /** The Obsidian "local graph" pattern — closes the "no way to pick which page to focus
      * on" gap: null shows the full graph, non-null shows just that page plus its neighbors
@@ -138,8 +138,8 @@ class RoadMapViewModel(
 
     fun clearPageSearch() { _pageSearchResults.value = emptyList() }
 
-    /** §3.4 — the manual "Relate to…" action, for pages "conceptually connected but [that]
-     * don't reference each other in text." */
+    /** §3.4 — the manual "Relate to…" action, for pages conceptually connected but that
+     * "don't reference each other in text." */
     fun relate(fromPageId: Long, toPageId: Long) {
         viewModelScope.launch {
             relationDao.addRelation(fromPageId, toPageId)

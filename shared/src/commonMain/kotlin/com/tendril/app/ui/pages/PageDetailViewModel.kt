@@ -34,6 +34,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -113,10 +114,10 @@ class PageDetailViewModel(
         tagDao.observeForPage(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _tagCandidates = MutableStateFlow<List<Tag>>(emptyList())
-    val tagCandidates: StateFlow<List<Tag>> = _tagCandidates
+    val tagCandidates: StateFlow<List<Tag>> = _tagCandidates.asStateFlow()
 
     private val _mentionCandidates = MutableStateFlow<List<Page>>(emptyList())
-    val mentionCandidates: StateFlow<List<Page>> = _mentionCandidates
+    val mentionCandidates: StateFlow<List<Page>> = _mentionCandidates.asStateFlow()
 
     /** §5.1 Row-as-page — populated only when this Page is a Database row (`databaseId` set);
      * empty/null for an ordinary Page. */
@@ -141,7 +142,7 @@ class PageDetailViewModel(
      * collapsed by default, and a backlink only changes when some *other* page's content is
      * edited, which this screen has no reason to be watching for. */
     private val _backlinks = MutableStateFlow<List<Backlink>>(emptyList())
-    val backlinks: StateFlow<List<Backlink>> = _backlinks
+    val backlinks: StateFlow<List<Backlink>> = _backlinks.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -260,9 +261,11 @@ class PageDetailViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            val tag = tagDao.findByName(trimmed) ?: trimmed.let {
-                val id = tagDao.insert(Tag(name = it))
-                tagDao.findByName(it)!!
+            val tag = tagDao.findByName(trimmed) ?: run {
+                tagDao.insert(Tag(name = trimmed))
+                // Re-read rather than building a Tag from the returned id: `color` is derived
+                // from the name at construction, so the stored row is the authoritative one.
+                tagDao.findByName(trimmed)!!
             }
             if (tags.value.none { it.id == tag.id }) {
                 tagDao.addToPage(PageTag(pageId = pageId, tagId = tag.id))

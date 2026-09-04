@@ -36,8 +36,6 @@ interface PageDao {
     @Query("SELECT * FROM pages WHERE parentId IS NULL AND isTemplate = 0 AND databaseId IS NULL AND deletedAt IS NULL ORDER BY title")
     fun observeRootPages(): Flow<List<Page>>
 
-    @Query("SELECT * FROM pages WHERE parentId = :parentId AND deletedAt IS NULL ORDER BY title")
-    fun observeChildren(parentId: Long): Flow<List<Page>>
 
     /** Rows of a Database (§5.1) — a Row is a Page with `databaseId` set. */
     @Query("SELECT * FROM pages WHERE databaseId = :databaseId AND deletedAt IS NULL ORDER BY id")

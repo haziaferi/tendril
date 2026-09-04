@@ -48,4 +48,12 @@ class CalendarViewModel(
     fun resolve(entryId: Long, status: EntryStatus) {
         viewModelScope.launch { resolveEntryUseCase.resolve(entryId, status) }
     }
+
+    /** Unchecking is not a resolution — see [ResolveEntryUseCase.unresolve], which names this
+     * checkbox as one of its call sites. Routing it through `resolve(SKIPPED)` instead logged a
+     * completion that never happened, left the Entry SKIPPED rather than PENDING with its alarms
+     * still cancelled, and advanced an Elastic recurrence by another whole period. */
+    fun unresolve(entryId: Long) {
+        viewModelScope.launch { resolveEntryUseCase.unresolve(entryId) }
+    }
 }

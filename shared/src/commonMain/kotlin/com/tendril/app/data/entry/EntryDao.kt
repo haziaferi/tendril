@@ -50,8 +50,6 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE startDate IS NOT NULL AND deletedAt IS NULL ORDER BY startDate, startTime")
     fun observeDated(): Flow<List<Entry>>
 
-    @Query("SELECT * FROM entries WHERE startDate = :date AND deletedAt IS NULL ORDER BY startTime IS NULL, startTime")
-    fun observeOnDate(date: LocalDate): Flow<List<Entry>>
 
     /** §8.1 — the Monthly grid and Agenda widgets' shared data need, a one-shot read (Glance
      * widgets render from a snapshot on each update, not a live Flow collection). */
