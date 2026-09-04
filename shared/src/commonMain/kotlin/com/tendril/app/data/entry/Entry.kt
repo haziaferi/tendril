@@ -37,8 +37,9 @@ data class Entry(
     /** EVENT-only — permanently null for `kind = TASK`. */
     val endTime: LocalTime?,
 
-    /** `Fixed` only legal for EVENT, `Elastic` only legal for TASK (§4.1 R2) — enforced by
-     * [com.tendril.app.domain.ResolveEntryUseCase] and the edit UI, not the type system. */
+    /** `Fixed` only legal for EVENT, `Elastic` only legal for TASK (§4.1 R2) — upheld by the
+     * shape of the create/edit call sites, but not actually checked anywhere; see
+     * [RecurrenceRule]'s own KDoc for which paths bypass it. */
     val recurrenceRule: RecurrenceRule?,
 
     /** Points at the recurring base Entry when this row is a single-occurrence exception
@@ -58,9 +59,18 @@ data class Entry(
     /** Soft-delete (§5.5.1) — null means live; set means Trash. */
     val deletedAt: Instant? = null,
 
-    /** Where this Entry came from — [EntrySource.DATABASE_SYNC] is produced by
-     * [com.tendril.app.domain.DatabaseSyncManager]; [EntrySource.GOOGLE_CALENDAR] and
-     * [EntrySource.NOTION_IMPORT] are reserved for integrations not yet built. */
+    /**
+     * Where this Entry came from. [EntrySource.DATABASE_SYNC] is produced by
+     * [com.tendril.app.domain.DatabaseSyncManager]; [EntrySource.GOOGLE_CALENDAR] by a pull in
+     * `GoogleCalendarSyncEngine` (§9.5.1).
+     *
+     * `GOOGLE_CALENDAR` is load-bearing, not decorative: `CalendarProviderSync` excludes those
+     * rows from the system Calendar Provider mirror (§9.11), on the reasoning that they already
+     * reach the OS through the device's own Google account. Anything that sets this value on a
+     * locally-created Entry therefore removes it from every system calendar surface.
+     * [EntrySource.NOTION_IMPORT] is genuinely unused — the importer creates Pages and Rows, and
+     * any Entry comes later from Sync-to-Tasks, which marks it `DATABASE_SYNC`.
+     */
     val source: EntrySource = EntrySource.MANUAL,
 
     /** Google Calendar sync (§3.2, §9.5), EVENT-only in practice — null until this Entry has

@@ -163,9 +163,20 @@ class GoogleCalendarSyncEngine(
                 remoteUpdatedAt.isAfter(local.updatedAt) -> {
                     // providerEventId is per-device only (§3.2) — preserved, never adopted
                     // from Google's own event data (which has no concept of it).
+                    // `source` and `createdAt` stay local. Push runs before pull with the
+                    // same `since` (§9.5.1), so an event this device *just pushed* comes back
+                    // in the same pass with `updated > since` and wins this comparison. Taking
+                    // Google's values there flipped every manually-created EVENT to
+                    // `source = GOOGLE_CALENDAR` after one sync — which §9.11 then excludes
+                    // from the system Calendar Provider mirror, on the reasoning that
+                    // Google-sourced events already reach the OS through the device's own
+                    // account. A locally-created event doesn't, so it simply vanished from
+                    // every system calendar surface. `createdAt` was overwritten with
+                    // `Instant.now()` the same way.
                     val updated = event.toEntry(eventId).copy(
                         id = local.id, uid = local.uid, sourceRowId = local.sourceRowId,
                         providerEventId = local.providerEventId,
+                        source = local.source, createdAt = local.createdAt,
                     )
                     entryDao.update(updated)
                     // A remote edit can move start_date — exactly §9.7's "every write path
@@ -200,8 +211,16 @@ class GoogleCalendarSyncEngine(
     private suspend fun insertEvent(accessToken: String, body: String): GoogleEvent =
         json.decodeFromString(request("POST", EVENTS_BASE_URL, accessToken, body))
 
+    /**
+     * `events.patch`, not `events.update`. `PUT` is a full replace, and [toGoogleEvent] only
+     * ever sends the four fields Tendril models (summary/start/end/recurrence) — so every push
+     * of a locally-edited event silently cleared its `description`, `location`, `attendees`,
+     * `reminders`, `colorId` and `conferenceData` on Google's copy. §9.5.1 accepts push
+     * overwriting Google "unconditionally" only as the resolution of a genuine *concurrent
+     * edit*; destroying fields this app never modelled, on every push, is not that.
+     */
     private suspend fun updateEvent(accessToken: String, eventId: String, body: String): GoogleEvent =
-        json.decodeFromString(request("PUT", "$EVENTS_BASE_URL/$eventId", accessToken, body))
+        json.decodeFromString(request("PATCH", "$EVENTS_BASE_URL/$eventId", accessToken, body))
 
     private suspend fun deleteEvent(accessToken: String, eventId: String) {
         request("DELETE", "$EVENTS_BASE_URL/$eventId", accessToken)

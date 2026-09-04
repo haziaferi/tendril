@@ -156,8 +156,11 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
             }
 
             when (tab) {
-                TabSelection.TASKS -> TasksList(tasks, filter, showUndated, { showUndated = it }, viewModel) { reminderTarget = it }
-                TabSelection.HABITS -> HabitsList(habits, viewModel)
+                TabSelection.TASKS -> TasksList(
+                    tasks, filter, showUndated, { showUndated = it }, viewModel,
+                    onAdd = { showAddDialog = true },
+                ) { reminderTarget = it }
+                TabSelection.HABITS -> HabitsList(habits, viewModel, onAdd = { showAddDialog = true })
                 TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel) { reminderTarget = it }
             }
         }
@@ -201,6 +204,7 @@ private fun TasksList(
     showUndated: Boolean,
     onShowUndatedChange: (Boolean) -> Unit,
     viewModel: TasksHabitsViewModel,
+    onAdd: () -> Unit,
     onOpenReminders: (Entry) -> Unit,
 ) {
     val dated = tasks.filter { it.startDate != null && inFilterRange(it.startDate, filter) }
@@ -211,6 +215,11 @@ private fun TasksList(
             icon = Icons.Filled.Check,
             message = stringResource(R.string.empty_tasks_message),
             modifier = Modifier.fillMaxSize(),
+            // §2.5 fixes the CTA here as part of the copy ("Nothing due — Add a task"), not
+            // just the message. Both `empty_tasks_cta` and `empty_habits_cta` existed in
+            // strings.xml with no Kotlin reference at all until this was wired up.
+            ctaLabel = stringResource(R.string.empty_tasks_cta),
+            onCta = onAdd,
         )
         return
     }
@@ -243,7 +252,9 @@ private fun TaskRow(entry: Entry, viewModel: TasksHabitsViewModel, onOpenReminde
     ) {
         Checkbox(
             checked = entry.status == EntryStatus.DONE,
-            onCheckedChange = { checked -> viewModel.resolve(entry.id, if (checked) EntryStatus.DONE else EntryStatus.SKIPPED) },
+            onCheckedChange = { checked ->
+                if (checked) viewModel.resolve(entry.id, EntryStatus.DONE) else viewModel.unresolve(entry.id)
+            },
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.title, style = MaterialTheme.typography.bodyLarge)
@@ -262,12 +273,14 @@ private fun TaskRow(entry: Entry, viewModel: TasksHabitsViewModel, onOpenReminde
 }
 
 @Composable
-private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel) {
+private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, onAdd: () -> Unit) {
     if (habits.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.LocalFireDepartment,
             message = stringResource(R.string.empty_habits_message),
             modifier = Modifier.fillMaxSize(),
+            ctaLabel = stringResource(R.string.empty_habits_cta),
+            onCta = onAdd,
         )
         return
     }

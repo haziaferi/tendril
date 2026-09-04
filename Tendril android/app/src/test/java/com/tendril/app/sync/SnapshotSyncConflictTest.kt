@@ -137,6 +137,45 @@ class SnapshotSyncConflictTest {
         assertFalse(store.deletedRootNames.contains(CONFLICT_ENTRIES))
     }
 
+    // ------------------------------------------- the primary files, not just the conflicts
+
+    @Test
+    fun `a wrong passphrase on a primary file is reported, so the caller can refuse to write`() = runBlocking {
+        // The conflict sweep above already refused to *delete* what it couldn't read. The
+        // primary files had no equivalent guard: an undecryptable one merged nothing, and the
+        // caller then wrote its own (empty) state back over the folder — re-encrypted under the
+        // wrong key, destroying the only copy. §9.4.2 promises a lost passphrase leaves the
+        // folder unreadable and recoverable, not overwritten.
+        val entryDao = FakeEntryDao()
+        val store = InMemorySyncFileStore()
+        val key = SnapshotEncryption.deriveKey(PASSPHRASE)
+        store.putRootBytes(
+            "entries_active.json",
+            SnapshotEncryption.wrapWithMagic(
+                SnapshotEncryption.encrypt(entriesJson(entryRecord("uid-1", "Locked away")).toByteArray(), key)
+            ),
+        )
+
+        val result = orchestrator(entryDao, FakeHabitDao()).readAndMerge(store, passphrase = "the wrong one")
+
+        assertTrue(entryDao.getAll().isEmpty())
+        assertTrue("the caller must be told, or it will overwrite the folder", result.passphraseMismatch)
+        assertEquals(1, result.undecryptableFiles)
+    }
+
+    @Test
+    fun `a readable folder reports no mismatch`() = runBlocking {
+        // The guard must not fire on the ordinary path, or every sync would refuse to write.
+        val entryDao = FakeEntryDao()
+        val store = InMemorySyncFileStore()
+        store.putRoot("entries_active.json", entriesJson(entryRecord("uid-1", "Plaintext is fine")))
+
+        val result = orchestrator(entryDao, FakeHabitDao()).readAndMerge(store, passphrase = null)
+
+        assertFalse(result.passphraseMismatch)
+        assertEquals(1, entryDao.getAll().size)
+    }
+
     @Test
     fun `an encrypted conflict file is merged and deleted with the right passphrase`() = runBlocking {
         // The mirror of the two cases above: retention must not become "never delete anything."

@@ -69,6 +69,15 @@ class TasksHabitsViewModel(
         viewModelScope.launch { resolveEntryUseCase.resolve(entryId, status) }
     }
 
+    /** Unchecking is an undo, not a second resolution. [ResolveEntryUseCase.resolve] only
+     * takes a terminal status, so routing "unchecked" to `SKIPPED` logged a *second*
+     * [com.tendril.app.data.completion.EntryCompletion] for one real-world act and, on a
+     * recurring task, advanced `startDate` by another period — the opposite of undoing it.
+     * §5.2 exposes Skipped as its own state, not as the meaning of clearing the box. */
+    fun unresolve(entryId: Long) {
+        viewModelScope.launch { resolveEntryUseCase.unresolve(entryId) }
+    }
+
     fun trashTask(entryId: Long) {
         viewModelScope.launch { resolveEntryUseCase.trash(entryId) }
     }

@@ -61,11 +61,24 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC")
     fun observeTrash(): Flow<List<Entry>>
 
-    /** One-shot, for boot-time/app-open alarm reconciliation (§9.7) — every live TASK that
+    /**
+     * One-shot, for boot-time/app-open alarm reconciliation (§9.7) — every live Entry that
      * could have a scheduled alarm. Rescheduling is idempotent (deterministic request
-     * codes), so calling this reconciliation pass redundantly is always safe. */
-    @Query("SELECT * FROM entries WHERE kind = 'TASK' AND status = 'PENDING' AND startDate IS NOT NULL AND deletedAt IS NULL")
-    suspend fun getAllSchedulableTasks(): List<Entry>
+     * codes), so calling this reconciliation pass redundantly is always safe.
+     *
+     * EVENTs are in scope, not just TASKs. §4 makes reminders apply to either kind ("a
+     * birthday reminder is just as valid as a deadline reminder") and
+     * [com.tendril.app.notifications.AlarmScheduler.rescheduleFor] schedules them for both.
+     * A TASK-only query here meant an EVENT's reminders were armed once, at creation, and
+     * then never re-armed — so every one of them was lost at the first reboot, which is the
+     * exact failure §9.7 says this sweep exists to prevent. Only the TASK branch takes the
+     * `status = PENDING` gate, since an EVENT has no status (§4).
+     */
+    @Query(
+        "SELECT * FROM entries WHERE startDate IS NOT NULL AND deletedAt IS NULL " +
+            "AND (kind = 'EVENT' OR status = 'PENDING')"
+    )
+    suspend fun getAllSchedulable(): List<Entry>
 
     /**
      * Calendar Provider bookkeeping only (§3.2). Deliberately a column-scoped UPDATE rather

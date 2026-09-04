@@ -33,6 +33,30 @@ private const val FILE_RELATIONS = "page_relations.json"
  * be supplied on every device sharing the folder, or their snapshots become unreadable to each
  * other (a plain-language warning for that lives in each platform's own UI, not here).
  */
+/**
+ * What [SnapshotSyncOrchestrator.readAndMerge] found in the folder. [undecryptableFiles] counts
+ * snapshot files that carried [SnapshotEncryption]'s magic prefix but would not decrypt with the
+ * passphrase in hand — a wrong passphrase, or none configured against an encrypted folder.
+ */
+data class SnapshotMergeResult(val undecryptableFiles: Int) {
+    /**
+     * True when the folder holds encrypted snapshots this device cannot read. Callers **must
+     * not** follow such a merge with [SnapshotSyncOrchestrator.writeSnapshots]: nothing was
+     * merged in, so the write would replace every readable file with this device's own state,
+     * re-encrypted under the wrong key. §9.4.2 promises that losing the passphrase leaves the
+     * folder "unreadable" and recoverable by recovering the passphrase — overwriting it makes
+     * that false, and it is the *only* copy on a fresh install. The conflict sweep already
+     * refuses to delete a file it couldn't decrypt for the same reason; the primary files just
+     * had no equivalent guard.
+     */
+    val passphraseMismatch: Boolean get() = undecryptableFiles > 0
+}
+
+/** Mutable counter threaded through one [SnapshotSyncOrchestrator.readAndMerge] pass. */
+private class ReadTally {
+    var undecryptable = 0
+}
+
 class SnapshotSyncOrchestrator(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
@@ -69,16 +93,17 @@ class SnapshotSyncOrchestrator(
      * omitting it, not by this pass inferring absence as intent.
      *
      * Runs on [Dispatchers.IO] for the same reasons as [writeSnapshots]. */
-    suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) = withContext(Dispatchers.IO) {
+    suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null): SnapshotMergeResult = withContext(Dispatchers.IO) {
         val key = passphrase?.let(SnapshotEncryption::deriveKey)
+        val tally = ReadTally()
 
         // Pages first — Entry's sourceRowId resolution below needs every Row's local id to
         // already exist.
-        mergePagesDir(store, key)
-        mergeRelationsFile(store, FILE_RELATIONS, key)
-        mergeEntryFile(store, FILE_ENTRIES_ACTIVE, key)
-        mergeEntryFile(store, FILE_ENTRIES_ARCHIVED, key)
-        mergeHabitFile(store, FILE_HABITS, key)
+        mergePagesDir(store, key, tally)
+        mergeRelationsFile(store, FILE_RELATIONS, key, tally)
+        mergeEntryFile(store, FILE_ENTRIES_ACTIVE, key, tally)
+        mergeEntryFile(store, FILE_ENTRIES_ARCHIVED, key, tally)
+        mergeHabitFile(store, FILE_HABITS, key, tally)
 
         // Syncthing conflict siblings: <name>.sync-conflict-<date>-<deviceID>.json
         //
@@ -93,23 +118,25 @@ class SnapshotSyncOrchestrator(
             if (!name.contains(".sync-conflict-")) return@forEach
             val merged = when {
                 name.startsWith("entries_active") || name.startsWith("entries_archived") ->
-                    mergeEntryContent(readRootText(store, name, key))
-                name.startsWith("habits") -> mergeHabitContent(readRootText(store, name, key))
-                name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, key))
+                    mergeEntryContent(readRootText(store, name, key, tally))
+                name.startsWith("habits") -> mergeHabitContent(readRootText(store, name, key, tally))
+                name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, key, tally))
                 else -> false
             }
             if (merged) store.deleteRoot(name)
         }
         store.listPages().forEach { name ->
             if (!name.contains(".sync-conflict-")) return@forEach
-            if (mergePageContent(readPageText(store, name, key))) store.deletePage(name)
+            if (mergePageContent(readPageText(store, name, key, tally))) store.deletePage(name)
         }
+
+        SnapshotMergeResult(undecryptableFiles = tally.undecryptable)
     }
 
-    private suspend fun mergePagesDir(store: SyncFileStore, key: SecretKeySpec?) {
+    private suspend fun mergePagesDir(store: SyncFileStore, key: SecretKeySpec?, tally: ReadTally) {
         val records = store.listPages()
             .filter { it.endsWith(".json") && !it.contains(".sync-conflict-") }
-            .mapNotNull { name -> readPageText(store, name, key).takeIf { it.isNotBlank() }?.let { decodePage(it) } }
+            .mapNotNull { name -> readPageText(store, name, key, tally).takeIf { it.isNotBlank() }?.let { decodePage(it) } }
         pagesSyncEngine.mergePages(records)
     }
 
@@ -126,8 +153,8 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun mergeRelationsFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
-        mergeRelationsContent(readRootText(store, fileName, key))
+    private suspend fun mergeRelationsFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?, tally: ReadTally) {
+        mergeRelationsContent(readRootText(store, fileName, key, tally))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -138,8 +165,8 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun mergeEntryFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
-        mergeEntryContent(readRootText(store, fileName, key))
+    private suspend fun mergeEntryFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?, tally: ReadTally) {
+        mergeEntryContent(readRootText(store, fileName, key, tally))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -166,8 +193,8 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun mergeHabitFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
-        mergeHabitContent(readRootText(store, fileName, key))
+    private suspend fun mergeHabitFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?, tally: ReadTally) {
+        mergeHabitContent(readRootText(store, fileName, key, tally))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -186,20 +213,25 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun readRootText(store: SyncFileStore, name: String, key: SecretKeySpec?): String =
-        decryptText(store.readRoot(name), key)
+    private suspend fun readRootText(store: SyncFileStore, name: String, key: SecretKeySpec?, tally: ReadTally): String =
+        decryptText(store.readRoot(name), key, tally)
 
-    private suspend fun readPageText(store: SyncFileStore, name: String, key: SecretKeySpec?): String =
-        decryptText(store.readPage(name), key)
+    private suspend fun readPageText(store: SyncFileStore, name: String, key: SecretKeySpec?, tally: ReadTally): String =
+        decryptText(store.readPage(name), key, tally)
 
-    private fun decryptText(bytes: ByteArray?, key: SecretKeySpec?): String {
+    private fun decryptText(bytes: ByteArray?, key: SecretKeySpec?, tally: ReadTally): String {
         if (bytes == null || bytes.isEmpty()) return ""
         if (!SnapshotEncryption.isEncrypted(bytes)) return bytes.toString(Charsets.UTF_8)
         // Encrypted content with no passphrase configured, or the wrong one, decrypts to
         // null — surfaced to the caller as "nothing to merge" rather than a crash; each
         // platform's own UI is where a wrong/missing passphrase gets explained to the person.
         val decrypted = key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
-        return decrypted?.toString(Charsets.UTF_8) ?: ""
+        if (decrypted == null) {
+            // Counted, not just skipped — see [SnapshotMergeResult.passphraseMismatch].
+            tally.undecryptable++
+            return ""
+        }
+        return decrypted.toString(Charsets.UTF_8)
     }
 
     private suspend fun writeJsonAtomic(store: SyncFileStore, name: String, content: String, key: SecretKeySpec?) {

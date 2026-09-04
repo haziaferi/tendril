@@ -165,7 +165,16 @@ class PortableArchive(
             if (local == null) {
                 uidToId[record.uid] = entryDao.insert(record.toEntity(uidToId, rowUidToId))
             } else if (Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) {
-                entryDao.update(record.toEntity(uidToId, rowUidToId).copy(id = local.id))
+                // providerEventId is per-device only (§9.11) and isn't in the snapshot record,
+                // so `toEntity` defaults it to null — a whole-row update then wrote that null
+                // over this device's real CalendarContract row id, orphaning the mirror and
+                // leaving the backfill sweep to insert a duplicate. The two sibling merge
+                // paths (SnapshotSyncOrchestrator, GoogleCalendarSyncEngine) already preserve
+                // it; this one was the outlier.
+                entryDao.update(
+                    record.toEntity(uidToId, rowUidToId)
+                        .copy(id = local.id, providerEventId = local.providerEventId)
+                )
             }
         }
     }

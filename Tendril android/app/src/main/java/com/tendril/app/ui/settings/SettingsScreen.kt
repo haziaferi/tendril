@@ -313,9 +313,18 @@ private fun SyncFolderSection(
                                     syncError = "Couldn't open the sync folder — try choosing it again."
                                 } else {
                                     syncError = null
-                                    orchestrator.readAndMerge(store, passphrase)
-                                    orchestrator.writeSnapshots(store, passphrase)
-                                    syncStatus.markSyncedNow()
+                                    val merge = orchestrator.readAndMerge(store, passphrase)
+                                    if (merge.passphraseMismatch) {
+                                        // Do NOT write. Nothing merged in, so writing would
+                                        // replace the folder's only copy with this device's
+                                        // own state under the wrong key (§9.4.2).
+                                        syncError = "${merge.undecryptableFiles} file(s) in the sync folder " +
+                                            "couldn't be decrypted — check the passphrase. Nothing was written, " +
+                                            "so the folder's contents are untouched."
+                                    } else {
+                                        orchestrator.writeSnapshots(store, passphrase)
+                                        syncStatus.markSyncedNow()
+                                    }
                                 }
                             } catch (e: Exception) {
                                 syncError = e.message ?: "Sync failed."

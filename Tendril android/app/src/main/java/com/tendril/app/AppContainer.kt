@@ -65,10 +65,19 @@ class AppContainer(context: Context) {
     )
     val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao())
     val googleCalendarPreferences = GoogleCalendarPreferences(context)
-    val googleCalendarAuthManager = GoogleCalendarAuthManager(context, googleCalendarPreferences)
-    val googleCalendarSyncEngine = GoogleCalendarSyncEngine(
-        database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
-    )
+    // `by lazy`, not an eager val: GoogleCalendarAuthManager's constructor calls
+    // Identity.getAuthorizationClient(...), so an eager one built a Play Services
+    // authorization client on every cold start whether or not Google Calendar had ever been
+    // connected. No network call was made by that — but §3.5 states the stronger property
+    // outright ("no client/library is constructed at startup"), and this is what makes it true.
+    val googleCalendarAuthManager by lazy { GoogleCalendarAuthManager(context, googleCalendarPreferences) }
+    // Lazy for the same reason — an eager engine forces the auth manager above, which would
+    // put the Play Services client straight back into the startup path.
+    val googleCalendarSyncEngine by lazy {
+        GoogleCalendarSyncEngine(
+            database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
+        )
+    }
     val viewLockState = ViewLockState()
     val checkboxOnlyState = CheckboxOnlyState()
 

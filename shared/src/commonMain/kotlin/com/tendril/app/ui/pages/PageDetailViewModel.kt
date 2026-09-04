@@ -147,7 +147,15 @@ class PageDetailViewModel(
         viewModelScope.launch {
             val mentioningBlocks = contentRepository.mentionsOf(pageId)
             _backlinks.value = mentioningBlocks.mapNotNull { block ->
-                pageDao.getById(block.pageId)?.let { Backlink(it, block) }
+                // §5.5.1 — a trashed page is "invisible everywhere except Trash", the
+                // backlinks panel named alongside FTS and Road Map. `mentionsOf` reads blocks
+                // without joining `pages`, and `getById` has no `deletedAt` filter, so a
+                // trashed page's mentions kept showing up here and stayed tappable. Road Map
+                // already filters the same edge data (RoadMapViewModel.refresh); this is the
+                // second consumer §3.1.5 says should agree with it.
+                pageDao.getById(block.pageId)
+                    ?.takeIf { it.deletedAt == null }
+                    ?.let { Backlink(it, block) }
             }
         }
     }
@@ -156,6 +164,7 @@ class PageDetailViewModel(
      * structure into a brand-new template page; the original page (and this screen's own
      * content) is untouched. */
     fun saveAsTemplate() {
+        if (contentLocked()) return
         val current = page.value ?: return
         viewModelScope.launch { templateManager.saveAsTemplate(current) }
     }

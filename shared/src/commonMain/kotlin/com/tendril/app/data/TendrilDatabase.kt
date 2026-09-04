@@ -60,7 +60,14 @@ import kotlinx.coroutines.Dispatchers
         PageDatabase::class, Property::class, PropertyValue::class, PageDatabaseView::class,
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
     ],
-    version = 5, // §3.2/§9.9 — Entry.providerEventId added; destructive pre-v1 migration (§9.10)
+    // Bump this on ANY change to the entity set or to a column — Room hashes the schema and
+    // compares it against the hash stored in `room_master_table` at open time. A hash that
+    // moved while `version` stayed put throws IllegalStateException ("you've changed schema but
+    // forgot to update the version number") *before* migration runs, so
+    // fallbackToDestructiveMigration below never gets the chance to recover: it only handles
+    // version changes. v6 catches up the three Canvas tables (PageCanvas/CanvasNode/CanvasEdge),
+    // which were added to `entities` while this still read 5.
+    version = 6, // §3.2/§9.9 — v5 Entry.providerEventId; v6 Canvas tables; destructive pre-v1 (§9.10)
     // No schema-history export while Room migration policy is destructive-only pre-v1
     // (§9.10) — nothing to diff against yet. Revisit alongside the @AutoMigration switch.
     exportSchema = false,

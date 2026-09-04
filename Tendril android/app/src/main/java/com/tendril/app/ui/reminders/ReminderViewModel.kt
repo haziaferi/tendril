@@ -18,9 +18,16 @@ import java.time.LocalTime
  * §5.4 — the reminder list for one Entry. Reminders stack with no cap, so this is a plain
  * list-plus-add surface rather than a single-value picker.
  *
- * Every mutation reschedules through [EntryScheduleCoordinator], the one path §9.7 requires
- * of every write that can change which alarms should exist — the sheet never touches
- * AlarmManager itself.
+ * Every mutation reschedules through [EntryScheduleCoordinator], the one path §9.7 requires of
+ * every write that can change which alarms should exist — **with one exception this class is
+ * honest about rather than hiding**: removing a reminder cancels its alarm via [AlarmScheduler]
+ * directly first, because `rescheduleFor` derives what to cancel by re-reading the reminder rows,
+ * and a row already deleted leaves its alarm armed with nothing left to describe it. Earlier text
+ * here claimed "the sheet never touches AlarmManager itself," which the constructor below plainly
+ * contradicts. The real fix is an `onReminderRemoved(entryId, reminderId)` on the coordinator so
+ * this class can drop the [AlarmScheduler] dependency entirely and §9.11's "no call site touches
+ * AlarmScheduler" holds without an asterisk — not done here, since it changes an interface two
+ * platforms implement.
  */
 class ReminderViewModel(
     private val entryId: Long,

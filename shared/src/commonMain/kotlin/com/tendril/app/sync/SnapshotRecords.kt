@@ -50,6 +50,16 @@ data class HabitSnapshotRecord(
     val frequency: String,
     val streak: Int,
     val lastCompletedDate: String? = null,
+    /**
+     * §8.1.1's undo stash. Omitted from this record originally, so a remote-wins habit merge
+     * reset both to their defaults and an undo tapped after a sync round-trip set `streak = 0`
+     * instead of restoring it — exactly the reconstruction failure §8.1.1 says the stash
+     * exists to prevent ("a weekly+ habit's grace period means 'just subtract a day' can't
+     * reconstruct what `lastCompletedDate` actually was"). Defaulted, so older snapshot files
+     * still decode.
+     */
+    val previousStreak: Int = 0,
+    val previousCompletedDate: String? = null,
     val deletedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long,

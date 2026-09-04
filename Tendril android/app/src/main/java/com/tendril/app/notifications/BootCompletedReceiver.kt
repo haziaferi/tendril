@@ -11,7 +11,8 @@ import kotlinx.coroutines.launch
 /**
  * §9.7/§9.8 R4 — alarms do not survive a reboot; without this, every reminder silently
  * stops working after every restart until the app happens to be opened again. Reschedules
- * every live, schedulable TASK from Room — idempotent, so this doubles as the
+ * every live, schedulable Entry from Room (TASK *and* EVENT — §4 gives reminders to
+ * both) — idempotent, so this doubles as the
  * app-open reconciliation sweep too (called again from [com.tendril.app.MainActivity]).
  */
 class BootCompletedReceiver : BroadcastReceiver() {
@@ -30,7 +31,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
 
 suspend fun reconcileAlarms(context: Context) {
     val container = AppContainer.from(context)
-    container.database.entryDao().getAllSchedulableTasks().forEach { entry ->
+    container.database.entryDao().getAllSchedulable().forEach { entry ->
         container.alarmScheduler.rescheduleFor(entry)
     }
     // §3.2/§9.9 item 3 — Provider registration's own self-healing sweep, riding alongside the
