@@ -64,7 +64,7 @@ class SnapshotSyncOrchestrator(
         // Derived once for both halves rather than once each.
         val salt = resolveSalt(store, mint = passphrase != null)
         val key = deriveKey(passphrase, salt)
-        mergeWithKey(store, key)
+        mergeWithKey(store, ReadKey(key, isEncryptedFolder(store)))
         writeWithKey(store, key, allowRekey, salt)
     }
 
@@ -164,22 +164,34 @@ class SnapshotSyncOrchestrator(
     suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) =
         // mint = false: reading must never write to the folder, and a folder with nothing in it
         // has nothing to decrypt anyway.
-        mergeWithKey(store, deriveKey(passphrase, resolveSalt(store, mint = false)))
+        mergeWithKey(store, ReadKey(deriveKey(passphrase, resolveSalt(store, mint = false)), isEncryptedFolder(store)))
 
-    private suspend fun mergeWithKey(store: SyncFileStore, key: SecretKeySpec?) = withContext(Dispatchers.IO) {
+    /**
+     * What a merge pass needs in order to read a file: the key, and whether the folder is known
+     * to be encrypted. The second is a property of the *folder*, not of any one file, which is
+     * exactly why it is resolved once per pass and carried rather than re-derived per read.
+     */
+    private data class ReadKey(val key: SecretKeySpec?, val folderEncrypted: Boolean)
+
+    /** A folder is known to be encrypted if it says so (`sync_meta.json`) or demonstrates it
+     * (ciphertext written before that file existed). */
+    private suspend fun isEncryptedFolder(store: SyncFileStore): Boolean =
+        readMeta(store) != null || firstEncryptedSnapshot(store) != null
+
+    private suspend fun mergeWithKey(store: SyncFileStore, read: ReadKey) = withContext(Dispatchers.IO) {
         // Tombstones before anything else, and applied before any record file is read: a purge
         // arriving from another device has to be in force *before* the record it kills is
         // considered, or the two cross in the same pass and the record wins by accident.
-        mergePurgedFile(store, key)
+        mergePurgedFile(store, read)
         purgeRegistry.applyToLocalRecords()
 
         // Pages next — Entry's sourceRowId resolution below needs every Row's local id to
         // already exist.
-        mergePagesDir(store, key)
-        mergeRelationsFile(store, FILE_RELATIONS, key)
-        mergeEntryFile(store, FILE_ENTRIES_ACTIVE, key)
-        mergeEntryFile(store, FILE_ENTRIES_ARCHIVED, key)
-        mergeHabitFile(store, FILE_HABITS, key)
+        mergePagesDir(store, read)
+        mergeRelationsFile(store, FILE_RELATIONS, read)
+        mergeEntryFile(store, FILE_ENTRIES_ACTIVE, read)
+        mergeEntryFile(store, FILE_ENTRIES_ARCHIVED, read)
+        mergeHabitFile(store, FILE_HABITS, read)
 
         // Syncthing conflict siblings: <name>.sync-conflict-<date>-<deviceID>.json
         //
@@ -194,24 +206,24 @@ class SnapshotSyncOrchestrator(
             if (!name.contains(".sync-conflict-")) return@forEach
             val merged = when {
                 name.startsWith("entries_active") || name.startsWith("entries_archived") ->
-                    mergeEntryContent(readRootText(store, name, key))
-                name.startsWith("habits") -> mergeHabitContent(readRootText(store, name, key))
-                name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, key))
-                name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, key))
+                    mergeEntryContent(readRootText(store, name, read))
+                name.startsWith("habits") -> mergeHabitContent(readRootText(store, name, read))
+                name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, read))
+                name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, read))
                 else -> false
             }
             if (merged) store.deleteRoot(name)
         }
         store.listPages().forEach { name ->
             if (!name.contains(".sync-conflict-")) return@forEach
-            if (mergePageContent(readPageText(store, name, key))) store.deletePage(name)
+            if (mergePageContent(readPageText(store, name, read))) store.deletePage(name)
         }
     }
 
-    private suspend fun mergePagesDir(store: SyncFileStore, key: SecretKeySpec?) {
+    private suspend fun mergePagesDir(store: SyncFileStore, read: ReadKey) {
         val records = store.listPages()
             .filter { it.endsWith(".json") && !it.contains(".sync-conflict-") }
-            .mapNotNull { name -> readPageText(store, name, key).takeIf { it.isNotBlank() }?.let { decodePage(it) } }
+            .mapNotNull { name -> readPageText(store, name, read).takeIf { it.isNotBlank() }?.let { decodePage(it) } }
         pagesSyncEngine.mergePages(records)
     }
 
@@ -228,8 +240,8 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun mergePurgedFile(store: SyncFileStore, key: SecretKeySpec?) {
-        mergePurgedContent(readRootText(store, FILE_PURGED, key))
+    private suspend fun mergePurgedFile(store: SyncFileStore, read: ReadKey) {
+        mergePurgedContent(readRootText(store, FILE_PURGED, read))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -249,8 +261,8 @@ class SnapshotSyncOrchestrator(
         return PurgedRecord(parsed, uid, Instant.ofEpochMilli(purgedAt))
     }
 
-    private suspend fun mergeRelationsFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
-        mergeRelationsContent(readRootText(store, fileName, key))
+    private suspend fun mergeRelationsFile(store: SyncFileStore, fileName: String, read: ReadKey) {
+        mergeRelationsContent(readRootText(store, fileName, read))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -261,8 +273,8 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun mergeEntryFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
-        mergeEntryContent(readRootText(store, fileName, key))
+    private suspend fun mergeEntryFile(store: SyncFileStore, fileName: String, read: ReadKey) {
+        mergeEntryContent(readRootText(store, fileName, read))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -293,8 +305,8 @@ class SnapshotSyncOrchestrator(
         return true
     }
 
-    private suspend fun mergeHabitFile(store: SyncFileStore, fileName: String, key: SecretKeySpec?) {
-        mergeHabitContent(readRootText(store, fileName, key))
+    private suspend fun mergeHabitFile(store: SyncFileStore, fileName: String, read: ReadKey) {
+        mergeHabitContent(readRootText(store, fileName, read))
     }
 
     /** @return true when the content decoded — see [mergePageContent]. */
@@ -397,19 +409,29 @@ class SnapshotSyncOrchestrator(
     private fun opens(encrypted: ByteArray, key: SecretKeySpec): Boolean =
         SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(encrypted), key) != null
 
-    private suspend fun readRootText(store: SyncFileStore, name: String, key: SecretKeySpec?): String =
-        decryptText(store.readRoot(name), key)
+    private suspend fun readRootText(store: SyncFileStore, name: String, read: ReadKey): String =
+        decryptText(store.readRoot(name), read)
 
-    private suspend fun readPageText(store: SyncFileStore, name: String, key: SecretKeySpec?): String =
-        decryptText(store.readPage(name), key)
+    private suspend fun readPageText(store: SyncFileStore, name: String, read: ReadKey): String =
+        decryptText(store.readPage(name), read)
 
-    private fun decryptText(bytes: ByteArray?, key: SecretKeySpec?): String {
+    private fun decryptText(bytes: ByteArray?, read: ReadKey): String {
         if (bytes == null || bytes.isEmpty()) return ""
-        if (!SnapshotEncryption.isEncrypted(bytes)) return bytes.toString(Charsets.UTF_8)
+        if (!SnapshotEncryption.isEncrypted(bytes)) {
+            // audit 4.1 — in a folder known to be encrypted, an unencrypted file did not come
+            // from a device holding the key. Trusting it made AES-GCM's authentication tag worth
+            // nothing at the system level: anyone who could write to the synced folder could
+            // inject records without knowing the passphrase, simply by not encrypting them.
+            //
+            // Refused as "couldn't read this" rather than deleted, which is the same treatment
+            // an undecryptable file gets, and means the conflict sweep leaves it on disk to be
+            // inspected instead of destroying it unread.
+            return if (read.folderEncrypted) "" else bytes.toString(Charsets.UTF_8)
+        }
         // Encrypted content with no passphrase configured, or the wrong one, decrypts to
         // null — surfaced to the caller as "nothing to merge" rather than a crash; each
         // platform's own UI is where a wrong/missing passphrase gets explained to the person.
-        val decrypted = key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
+        val decrypted = read.key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
         return decrypted?.toString(Charsets.UTF_8) ?: ""
     }
 
