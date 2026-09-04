@@ -19,6 +19,8 @@ Checks
   6. leaked MutableStateFlow   `val x: StateFlow<T> = _x` without .asStateFlow()
   7. Regex built per call      allocated in a function body instead of a top-level val
   8. unguarded throwing I/O    a call to a documented-throwing file API with no try/catch
+  9. imported-name shadowed    `viewModel.x` in a function where `viewModel` is only the
+                               imported *function* of that name, never a parameter or local
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -192,6 +194,40 @@ def main() -> int:
                 continue
             if len(re.findall(rf"\b{re.escape(name)}\b", all_code)) <= 1:
                 rep.add("dead declaration", f"{rel(f)}:{i}  {name}")
+
+    # A call on an identifier that is only ever an imported *function* of that name.
+    #
+    # `viewModel.deleteForever(ids)` inside a @Composable that has no `viewModel` parameter
+    # does not read as an error: `androidx.lifecycle.viewmodel.compose.viewModel` is in scope,
+    # so the name resolves and the mistake looks like an ordinary property access. This is the
+    # shape that reached main-branch review twice — a composable was given a call meant for the
+    # screen that owns the view model, and nothing but the compiler objected. Restricted to
+    # names imported from a lowercase final segment (Kotlin's function-naming convention), so
+    # a type used as a qualifier never trips it.
+    for f, src in srcs.items():
+        code = stripped[f]
+        fn_imports = {m.group(1) for m in re.finditer(r"^import\s+[\w.]*\.([a-z]\w*)$", src, re.M)}
+        if not fn_imports:
+            continue
+        for fm in re.finditer(r"^(?:@\w+\s*\n)*(?:(?:private|internal|public|suspend|inline)\s+)*fun\s+[^\n{]*\{", code, re.M):
+            start = fm.end() - 1
+            depth, i = 0, start
+            while i < len(code):
+                if code[i] == "{": depth += 1
+                elif code[i] == "}":
+                    depth -= 1
+                    if depth == 0: break
+                i += 1
+            header, body = fm.group(0), code[start:i]
+            for name in fn_imports:
+                if not re.search(rf"(?<![\w.]){re.escape(name)}\s*\.", body):
+                    continue
+                # In scope if it is a parameter of this function or bound inside its body.
+                if re.search(rf"(?<![\w.]){re.escape(name)}\s*:", header): continue
+                if re.search(rf"\b(?:val|var)\s+{re.escape(name)}\b", body): continue
+                if re.search(rf"(?<![\w.]){re.escape(name)}\s*(?:,|\))\s*->", body): continue
+                line = code[:start].count("\n") + 1
+                rep.add("imported-name shadowed", f"{rel(f)}:{line}  {name} is the imported function here, not a value")
 
     # DAO methods with no production caller
     for f, src in srcs.items():
