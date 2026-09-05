@@ -1,6 +1,5 @@
 package com.tendril.app.domain
 
-import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitDao
 import java.time.Instant
@@ -22,7 +21,7 @@ class CheckInHabitUseCase(private val habitDao: HabitDao) {
         val habit = habitDao.getById(habitId) ?: return
         if (habit.lastCompletedDate == today) return // already checked in today
 
-        val periodDays = periodDays(habit)
+        val periodDays = habitPeriodDays(habit)
         val withinGrace = habit.lastCompletedDate != null &&
             ChronoUnit.DAYS.between(habit.lastCompletedDate, today) <= periodDays + 1
         val newStreak = if (withinGrace) habit.streak + 1 else 1
@@ -55,11 +54,5 @@ class CheckInHabitUseCase(private val habitDao: HabitDao) {
                 updatedAt = Instant.now(),
             )
         )
-    }
-
-    private fun periodDays(habit: Habit) = when (habit.frequency.unit) {
-        IntervalUnit.DAY -> habit.frequency.count
-        IntervalUnit.WEEK -> habit.frequency.count * 7
-        IntervalUnit.MONTH -> habit.frequency.count * 30
     }
 }

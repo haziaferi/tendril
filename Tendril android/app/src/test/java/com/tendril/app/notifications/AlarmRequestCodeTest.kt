@@ -1,5 +1,6 @@
 package com.tendril.app.notifications
 
+import com.tendril.app.notifications.AlarmScheduler.Companion.habitRequestCode
 import com.tendril.app.notifications.AlarmScheduler.Companion.overdueRequestCode
 import com.tendril.app.notifications.AlarmScheduler.Companion.reminderRequestCode
 import org.junit.Assert.assertEquals
@@ -85,11 +86,76 @@ class AlarmRequestCodeTest {
         }
     }
 
+    // ------------------------------------------------------------ habits (audit §3)
+
+    @Test
+    fun `a habit code can never equal an entry code`() {
+        // The hazard that makes habits need a region of their own: habit ids and entry ids are
+        // independent Room sequences, so habit 3 and entry 3 exist at the same time as a matter
+        // of course. Sharing a code with the same receiver would be one alarm, not two -- but
+        // the receivers differ here, so this is belt-and-braces on top of that.
+        val entryCodes = mutableSetOf<Int>()
+        for (entryId in 1L..500L) {
+            entryCodes += overdueRequestCode(entryId)
+            for (reminderId in 0L..20L) entryCodes += reminderRequestCode(entryId, reminderId)
+        }
+        for (habitId in 1L..500L) {
+            assertTrue(
+                "habit $habitId's code collides with an entry code",
+                habitRequestCode(habitId) !in entryCodes,
+            )
+        }
+    }
+
+    @Test
+    fun `habit codes are unique across habit ids`() {
+        val seen = mutableSetOf<Int>()
+        for (habitId in 1L..5000L) {
+            assertTrue("duplicate habit code for habit $habitId", seen.add(habitRequestCode(habitId)))
+        }
+    }
+
+    @Test
+    fun `habit codes keep bit 0 clear, staying out of the reminder range`() {
+        // Reminder codes are defined as odd. A habit code that happened to be odd would be
+        // indistinguishable from one by that rule, whatever the ranges say.
+        for (habitId in 1L..200L) assertEquals(0, habitRequestCode(habitId) and 1)
+    }
+
+    @Test
+    fun `habit codes sit above every possible overdue code`() {
+        // Overdue occupies bits 1-16, so its largest value is 0xFFFF shl 1. The habit base is
+        // far above that; this pins the relationship rather than the constant.
+        val largestOverdue = overdueRequestCode(65_535)
+        for (habitId in 0L..500L) assertTrue(habitRequestCode(habitId) > largestOverdue)
+    }
+
+    @Test
+    fun `habit codes are stable so rescheduling stays idempotent`() {
+        // Every habit write path calls rescheduleHabit; it must replace the alarm, not stack one.
+        assertEquals(habitRequestCode(42), habitRequestCode(42))
+    }
+
+    @Test
+    fun `the check-off action code does not collide with the alarm code`() {
+        // HabitReminderAlarmReceiver derives the action's PendingIntent from `code + 1`, and both
+        // target the same receiver -- so if `code + 1` were another habit's code, arming one
+        // habit's alarm would replace another's check-off button.
+        val codes = (1L..500L).mapTo(mutableSetOf()) { habitRequestCode(it) }
+        for (habitId in 1L..500L) {
+            assertTrue(
+                "habit $habitId's check-off code collides with an alarm code",
+                (habitRequestCode(habitId) + 1) !in codes,
+            )
+        }
+    }
+
     @Test
     fun `codes stay positive`() {
         // A negative request code is legal but makes logs and `adb shell dumpsys alarm` output
         // needlessly hard to read; the bit layout reserves the sign bit to avoid it.
         assertTrue(overdueRequestCode(65_535) > 0)
         assertTrue(reminderRequestCode(32_767, 32_767) > 0)
+        assertTrue(habitRequestCode(32_767) > 0)
     }
 }

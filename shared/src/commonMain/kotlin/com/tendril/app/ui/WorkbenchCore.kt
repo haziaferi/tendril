@@ -5,6 +5,7 @@ import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -30,4 +31,5 @@ class WorkbenchCore(
     val resolveEntryUseCase: ResolveEntryUseCase,
     val entryScheduleCoordinator: EntryScheduleCoordinator,
     val pageContentRepository: PageContentRepository,
+    val purgeRegistry: PurgeRegistry,
 )

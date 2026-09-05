@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FormatIndentDecrease
+import androidx.compose.material.icons.filled.FormatIndentIncrease
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
@@ -82,6 +84,8 @@ import com.tendril.app.data.page.SpanStyle
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
+import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.outlineOf
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
@@ -127,6 +131,9 @@ fun PageDetailScreen(
     val contentLocked = viewOnly || checkboxOnlyActive
     val page by viewModel.page.collectAsState()
     val blocks by viewModel.blocks.collectAsState()
+    // §3.1.1 — the drawn order, with children under their parents. Recomputed only when the
+    // block list itself changes, not on every recomposition.
+    val outline = remember(blocks) { outlineOf(blocks) }
     val tags by viewModel.tags.collectAsState()
     val rowDatabase by viewModel.rowDatabase.collectAsState()
     val rowProperties by viewModel.rowProperties.collectAsState()
@@ -143,6 +150,7 @@ fun PageDetailScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCheckboxOnlyConfirm by remember { mutableStateOf(false) }
+    var checkboxOnlyRefused by remember { mutableStateOf(false) }
 
     // §3.1.2 — "turning it back off requires a full device unlock" on Android, via
     // [onCheckboxOnlyUnlockRequest] (real `BiometricPrompt`, supplied by the Android call site —
@@ -246,16 +254,17 @@ fun PageDetailScreen(
                     }
                     item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
                 }
-                items(blocks, key = { it.id }) { block ->
-                    if (block.parentBlockId == null) {
-                        BlockRow(
-                            block = block,
-                            viewModel = viewModel,
-                            onLongPress = { blockActionSheetFor = block },
-                            onRequestMention = { baseContent -> mentionTarget = block to baseContent },
-                            onOpenPage = onOpenPage,
-                        )
-                    }
+                // Children used to be filtered out here (`if (block.parentBlockId == null)`),
+                // which is why nesting existed in the schema but never on screen.
+                items(outline, key = { it.block.id }) { entry ->
+                    BlockRow(
+                        block = entry.block,
+                        depth = entry.depth,
+                        viewModel = viewModel,
+                        onLongPress = { blockActionSheetFor = entry.block },
+                        onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
+                        onOpenPage = onOpenPage,
+                    )
                 }
                 if (!contentLocked) {
                     item {
@@ -280,6 +289,10 @@ fun PageDetailScreen(
             onDismiss = { blockActionSheetFor = null },
             onMoveUp = { viewModel.moveBlock(block, -1); blockActionSheetFor = null },
             onMoveDown = { viewModel.moveBlock(block, 1); blockActionSheetFor = null },
+            canIndent = indentTargetFor(block, blocks) != null,
+            canOutdent = block.parentBlockId != null,
+            onIndent = { viewModel.indentBlock(block); blockActionSheetFor = null },
+            onOutdent = { viewModel.outdentBlock(block); blockActionSheetFor = null },
             onTurnInto = { type -> viewModel.changeType(block, type); blockActionSheetFor = null },
             onDelete = { viewModel.deleteBlock(block); blockActionSheetFor = null },
         )
@@ -346,9 +359,29 @@ fun PageDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showCheckboxOnlyConfirm = false; viewModel.activateCheckboxOnly() }) { Text("Turn on") }
+                TextButton(onClick = {
+                    showCheckboxOnlyConfirm = false
+                    // Refused when App Lock is on (audit 4.3). Saying so beats a button that
+                    // looks like it worked and did nothing.
+                    if (!viewModel.activateCheckboxOnly()) checkboxOnlyRefused = true
+                }) { Text("Turn on") }
             },
             dismissButton = { TextButton(onClick = { showCheckboxOnlyConfirm = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (checkboxOnlyRefused) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { checkboxOnlyRefused = false },
+            title = { Text("App Lock is on") },
+            text = {
+                Text(
+                    "Checkbox-only mode shows this page over your lock screen, which would step " +
+                        "around the App Lock you have turned on. Turn App Lock off in Settings first " +
+                        "if you want this page reachable without unlocking.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { checkboxOnlyRefused = false }) { Text("OK") } },
         )
     }
     }
@@ -357,6 +390,7 @@ fun PageDetailScreen(
 @Composable
 private fun BlockRow(
     block: Block,
+    depth: Int,
     viewModel: PageDetailViewModel,
     onLongPress: () -> Unit,
     onRequestMention: (baseContent: String) -> Unit,
@@ -382,7 +416,9 @@ private fun BlockRow(
         }
     }
     var showSlashMenu by remember { mutableStateOf(false) }
-    val indent = if (block.parentBlockId != null) 24.dp else 0.dp
+    // Driven by the outline's computed depth rather than by `parentBlockId != null`, so a
+    // grandchild re-attached to its top-level ancestor indents once, not twice.
+    val indent = (24 * depth).dp
     val locked = LocalContentLocked.current
 
     Column {
@@ -455,12 +491,10 @@ private fun BlockRow(
                     )
                 }
 
-                if (block.type == BlockType.TOGGLE && block.toggleExpanded) {
-                    // Child blocks (one level of nesting, §3.1.1) render via the parent
-                    // LazyColumn's flat list filtered by parentBlockId in a real nested
-                    // pass — kept out of this MVP render pass since no UI path creates
-                    // toggle children yet (§3.1.1's nesting is list items primarily).
-                }
+                // Children (one level, §3.1.1) are emitted by `outlineOf` into the same
+                // LazyColumn, immediately after this block and at depth 1 — a collapsed toggle
+                // simply has none emitted. Nothing to render here.
+
             }
         }
     }
@@ -541,24 +575,45 @@ private fun blockTextStyle(type: BlockType): androidx.compose.ui.text.TextStyle 
     }
 }
 
-/** Spans are indices into the old content; a naive edit shifts everything after the edit
- * point. Good enough for typing at the end (the common case) — a span whose range no longer
- * makes sense after a mid-text edit is dropped rather than silently corrupted. */
+/**
+ * Spans are (start, end) indices into the block's *old* plain text, so any edit that isn't a
+ * pure append has to move them. `BasicTextField` hands over only the new string, not where the
+ * change happened, so the edited region is recovered by trimming the common prefix and common
+ * suffix — that bracket always contains the real edit, which is all the remap needs.
+ *
+ * Do not regress this to a plain `end + delta` shift: that silently re-formats the wrong
+ * characters on any edit that isn't an append.
+ */
 private fun remapSpans(spans: List<FormattingSpan>, oldText: String, newText: String): List<FormattingSpan> {
-    if (spans.isEmpty()) return spans
+    if (spans.isEmpty() || oldText == newText) return spans
+
+    val maxShared = minOf(oldText.length, newText.length)
+    var prefix = 0
+    while (prefix < maxShared && oldText[prefix] == newText[prefix]) prefix++
+    var suffix = 0
+    while (suffix < maxShared - prefix &&
+        oldText[oldText.length - 1 - suffix] == newText[newText.length - 1 - suffix]
+    ) suffix++
+
+    val editEnd = oldText.length - suffix
     val delta = newText.length - oldText.length
-    if (delta == 0) return spans
+
     return spans.mapNotNull { span ->
-        if (span.end <= oldText.length && oldText.length <= newText.length) {
-            // Edit happened at/after the span's end (typical append-while-typing case).
-            span
-        } else if (span.start >= oldText.length) {
-            null
-        } else {
-            val newEnd = (span.end + delta).coerceAtMost(newText.length)
-            if (newEnd <= span.start) null else span.copy(end = newEnd)
+        when {
+            // Entirely before the edit — untouched. Also the append-while-typing case, where
+            // the edit starts at the end of the text and every existing span ends before it.
+            span.end <= prefix -> span
+            // Entirely after the edit — slides by the length change.
+            span.start >= editEnd -> span.copy(start = span.start + delta, end = span.end + delta)
+            // The edit happened strictly inside the span: typing inside a bold run extends it.
+            span.start <= prefix && span.end >= editEnd -> span.copy(end = span.end + delta)
+            // The edit straddles one of the span's boundaries — where it should now start or
+            // stop is genuinely ambiguous, so drop it rather than guess.
+            else -> null
         }
-    }
+        // A deletion that removes exactly a span's interior leaves start == end; the other
+        // branches can't produce an out-of-range or empty span.
+    }.filter { it.start < it.end }
 }
 
 @Composable
@@ -588,6 +643,10 @@ private fun BlockActionSheet(
     onDismiss: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    canIndent: Boolean,
+    canOutdent: Boolean,
+    onIndent: () -> Unit,
+    onOutdent: () -> Unit,
     onTurnInto: (BlockType) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -595,6 +654,10 @@ private fun BlockActionSheet(
         Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
             SheetActionRow(Icons.Filled.ArrowUpward, "Move up", onMoveUp)
             SheetActionRow(Icons.Filled.ArrowDownward, "Move down", onMoveDown)
+            // §3.1.1 — one level, so each is offered only where it would actually do something:
+            // nothing to tuck under, or already tucked under, and the row is simply absent.
+            if (canIndent) SheetActionRow(Icons.Filled.FormatIndentIncrease, "Indent", onIndent)
+            if (canOutdent) SheetActionRow(Icons.Filled.FormatIndentDecrease, "Outdent", onOutdent)
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text("Turn into", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
             listOf(

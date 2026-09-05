@@ -101,6 +101,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                     core.database.propertyDao(),
                     core.database.pageFtsDao(),
                     core.database.tagDao(),
+                    core.purgeRegistry,
                     core.databaseSyncManager,
                     core.templateManager,
                     core.viewLockState,
@@ -230,7 +231,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
     }
 
     if (showTrash) {
-        TrashSheet(core = core, onDismiss = { showTrash = false })
+        TrashSheet(core = core, viewModel = viewModel, onDismiss = { showTrash = false })
     }
 }
 
@@ -434,7 +435,7 @@ private fun highlightMatches(snippet: String): AnnotatedString = buildAnnotatedS
 /** §5.5.1 — unified Trash for Page/Row (a Row is a Page with `databaseId` set, §5.1, so one
  * list and one query already cover both without a separate mechanism). */
 @Composable
-private fun TrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
+private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss: () -> Unit) {
     val pages by core.database.pageDao().observeTrash().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
@@ -508,7 +509,7 @@ private fun TrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
             text = { Text("This can't be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch { ids.forEach { core.database.pageDao().deleteForever(it) } }
+                    viewModel.deleteForever(ids)
                     selectedIds = selectedIds - ids.toSet()
                     pendingDeleteForever = null
                 }) { Text("Delete forever") }

@@ -123,9 +123,19 @@ class NotionImporter(
         // made the import O(pages²) on a workspace with thousands of pages.
         data class PageMeta(val notionId: String, val path: String, val roomId: Long, val text: String)
         val metas = mutableListOf<PageMeta>()
+        val skippedFiles = mutableListOf<String>()
 
         for (entry in mdEntries) {
-            val notionId = extractNotionId(entry.path) ?: continue
+            val notionId = extractNotionId(entry.path)
+            if (notionId == null) {
+                // §7.3.7 requires losses to be communicated plainly, and this one used to happen
+                // in total silence. A .md whose filename carries no trailing 32-hex id is
+                // genuinely not a page from this export -- a hand-written note dropped into the
+                // zip, a README -- so skipping it is right. Not saying so is not: the person sees
+                // a success screen and finds out something is missing later, if ever.
+                skippedFiles += entry.path
+                continue
+            }
             val title = titleFromFilename(entry.path)
             val roomId = pageDao.insert(Page(title = title, createdAt = now, updatedAt = now))
             idToTitle[notionId] = title
@@ -151,6 +161,8 @@ class NotionImporter(
         for (meta in metas) {
             val parsedBlocks = NotionMarkdownParser.parse(meta.text)
             var order = 0
+            // Reset per page, so an indented block never adopts a parent from the previous one.
+            var lastTopLevelBlockId: Long? = null
             for (parsed in parsedBlocks) {
                 val imagePath = parsed.imageAssetPath?.let { relative ->
                     val resolved = resolveRelativePath(meta.path, relative)
@@ -183,7 +195,12 @@ class NotionImporter(
                     }
                     style?.let { FormattingSpan(span.start, span.end, it) }
                 }
-                blockDao.insert(
+                // §3.1.1 — an indented source block hangs off the last top-level one emitted.
+                // Null when none has been yet: a page opening on an indented line has nothing to
+                // hang from, and top-level is the honest place for it. Same rule as
+                // `indentTargetFor`'s, which is what the in-app Indent action uses.
+                val parentId = if (parsed.depth > 0) lastTopLevelBlockId else null
+                val insertedId = blockDao.insert(
                     Block(
                         pageId = meta.roomId,
                         type = parsed.type,
@@ -193,11 +210,13 @@ class NotionImporter(
                         checked = parsed.checked,
                         codeLanguage = parsed.codeLanguage,
                         calloutIcon = parsed.calloutIcon,
+                        parentBlockId = parentId,
                         imagePath = imagePath,
                         createdAt = now,
                         updatedAt = now,
                     )
                 )
+                if (parentId == null) lastTopLevelBlockId = insertedId
             }
             pageContentRepository.rebuildFtsForPage(meta.roomId)
         }
@@ -206,7 +225,7 @@ class NotionImporter(
         val importedDatabases = mutableListOf<ImportedDatabase>()
         for (entry in csvEntries) {
             val rows = NotionCsvParser.parse(entry.text)
-            if (rows.size < 1) continue
+            if (rows.isEmpty()) continue
             val headers = rows.first()
             val dataRows = rows.drop(1)
             if (headers.isEmpty()) continue
@@ -262,10 +281,24 @@ class NotionImporter(
                 if (named.isEmpty()) "." else ": $named${if (rest > 0) " and $rest more" else ""}."
         }
 
-        val notices = mutableListOf(
+        // Named rather than merely counted, up to a point: "3 files were skipped" invites the
+        // question this answers directly, and a caller can decide whether one of them mattered.
+        val skippedNotice = if (skippedFiles.isEmpty()) emptyList() else listOf(
+            buildString {
+                append("${skippedFiles.size} file")
+                append(if (skippedFiles.size == 1) " was" else "s were")
+                append(" skipped — their names carry no Notion page id, so they aren't pages from ")
+                append("this export: ")
+                append(skippedFiles.take(5).joinToString(", "))
+                if (skippedFiles.size > 5) append(", and ${skippedFiles.size - 5} more")
+                append(".")
+            }
+        )
+
+        val notices = listOf(
             "Database views, filters, sorts, live formulas, and comments couldn't be recovered — " +
                 "Notion's own export format doesn't include them, not something a better importer could fix.",
-        ) + warnings
+        ) + skippedNotice + warnings
 
         return NotionImportSummary(
             pagesImported = metas.size,

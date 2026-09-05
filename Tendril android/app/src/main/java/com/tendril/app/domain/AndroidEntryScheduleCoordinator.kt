@@ -31,4 +31,10 @@ class AndroidEntryScheduleCoordinator(
         alarmScheduler.cancelAllFor(entry.id)
         calendarProviderSync.removeEntry(entry)
     }
+
+    /** No Calendar Provider half: a Habit is not mirrored there (§3.3 — structurally separate
+     * from Task), so the alarm is the whole of what it leaves behind. */
+    override suspend fun onHabitRemoved(habitId: Long) {
+        alarmScheduler.cancelHabit(habitId)
+    }
 }

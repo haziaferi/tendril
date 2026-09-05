@@ -5,6 +5,9 @@ import android.net.Uri
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.purge.PurgedKind
+import com.tendril.app.data.purge.PurgedRecord
+import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -21,6 +24,7 @@ private const val FILE_ENTRIES_ACTIVE = "entries_active.json"
 private const val FILE_ENTRIES_ARCHIVED = "entries_archived.json"
 private const val FILE_HABITS = "habits.json"
 private const val FILE_RELATIONS = "page_relations.json"
+private const val FILE_PURGED = "purged_records.json"
 private const val PAGES_DIR_PREFIX = "pages/"
 
 /** Ceiling on total inflated bytes from an imported archive — see [PortableArchive.readZipEntries]. */
@@ -42,6 +46,7 @@ class PortableArchive(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
+    private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
     /**
      * §9.4.2's passphrase, read fresh at each export/import rather than passed in per call. A
@@ -63,6 +68,7 @@ class PortableArchive(
         val (active, archived) = allEntries.partition { it.isActive() }
         val pageRecords = pagesSyncEngine.exportPages()
         val relations = pagesSyncEngine.exportRelations()
+        val purged = purgeRegistry.all()
 
         // §9.4.2 — "a `.tendril` export carries the same at-rest protection as continuous
         // sync, not a separate case to design." It didn't: this class never referenced
@@ -75,7 +81,8 @@ class PortableArchive(
             appVersion = "0.1.0",
             exportedAtEpochMillis = Instant.now().toEpochMilli(),
             kind = "full",
-            includedFiles = listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS) + pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
+            includedFiles = listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS, FILE_PURGED) +
+                pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
             encrypted = key != null,
         )
 
@@ -92,6 +99,14 @@ class PortableArchive(
                 zip.writeEntry(FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
                 zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }), key)
                 zip.writeEntry(FILE_RELATIONS, json.encodeToString(relations), key)
+                // §5.5.1.1 — without these an export would quietly resurrect everything the
+                // person had deleted forever the moment it was imported anywhere. Encrypted
+                // with the rest: a tombstone names a uid the person chose to destroy.
+                zip.writeEntry(
+                    FILE_PURGED,
+                    json.encodeToString(purged.map { PurgedRecordSnapshot(it.kind.name, it.uid, it.purgedAt.toEpochMilli()) }),
+                    key,
+                )
                 for (record in pageRecords) {
                     zip.writeEntry("$PAGES_DIR_PREFIX${record.uid}.json", json.encodeToString(record), key)
                 }
@@ -107,7 +122,15 @@ class PortableArchive(
         val contents = readZipEntries(source).readable()
         var entriesFound = 0
         var habitsFound = 0
-        pagesSyncEngine.mergePages(decodePages(contents))
+        val pageRecords = decodePages(contents)
+        // Tombstones first and applied before any record, exactly as the folder sync does: an
+        // archive is just another source of the same two facts, and the later of "edited at" and
+        // "purged at" wins either way. This replaces an earlier special case that lifted every
+        // tombstone an import touched — that existed only because tombstones were local and
+        // untimestamped, with no principled way to compare them against a record. Now there is.
+        purgeRegistry.adopt(decodePurged(contents))
+        purgeRegistry.applyToLocalRecords()
+        pagesSyncEngine.mergePages(pageRecords)
         decodeRelations(contents).takeIf { it.isNotEmpty() }?.let { pagesSyncEngine.mergeRelations(it) }
         contents[FILE_ENTRIES_ACTIVE]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
         contents[FILE_ENTRIES_ARCHIVED]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
@@ -135,6 +158,7 @@ class PortableArchive(
         val activeEntries = decodeEntries(contents[FILE_ENTRIES_ACTIVE])
         val archivedEntries = decodeEntries(contents[FILE_ENTRIES_ARCHIVED])
         val habits = decodeHabits(contents[FILE_HABITS])
+        val purged = decodePurged(contents)
 
         require(
             pageRecords.isNotEmpty() || relations.isNotEmpty() || activeEntries.isNotEmpty() ||
@@ -143,6 +167,13 @@ class PortableArchive(
 
         entryDao.deleteAll()
         habitDao.deleteAll()
+        // §5.5.1.1 — Restore is "become exactly what this archive says", so this device's own
+        // purge history is discarded and the archive's adopted in its place. Keeping the local
+        // tombstones would silently drop records the archive still holds.
+        purgeRegistry.clearAll()
+        purgeRegistry.adopt(purged)
+        // Pages are not bulk-wiped above, so an adopted tombstone still has local rows to act on.
+        purgeRegistry.applyToLocalRecords()
         // Pages have no bulk wipe here (matching Entry/Habit's own restore step, one DAO
         // call each) — Restore only ever runs against a fresh/emptied install in practice,
         // so mergePages' whole-record LWW already behaves like a replace in that case.
@@ -169,6 +200,17 @@ class PortableArchive(
         return runCatching { json.decodeFromString<List<PageRelationSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
     }
 
+    /** An unrecognised kind is skipped rather than failing the file — a newer build may purge
+     * things this one has no concept of. */
+    private fun decodePurged(contents: Map<String, String>): List<PurgedRecord> {
+        val content = contents[FILE_PURGED]?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val records = runCatching { json.decodeFromString<List<PurgedRecordSnapshot>>(content) }.getOrNull() ?: return emptyList()
+        return records.mapNotNull { record ->
+            runCatching { PurgedKind.valueOf(record.kind) }.getOrNull()
+                ?.let { PurgedRecord(it, record.uid, Instant.ofEpochMilli(record.purgedAt)) }
+        }
+    }
+
     private fun decodeEntries(content: String?): List<EntrySnapshotRecord> {
         if (content.isNullOrBlank()) return emptyList()
         return runCatching { json.decodeFromString<List<EntrySnapshotRecord>>(content) }.getOrNull() ?: emptyList()
@@ -179,25 +221,30 @@ class PortableArchive(
         return runCatching { json.decodeFromString<List<HabitSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
     }
 
+    /** Deliberately the same rules as `SnapshotSyncOrchestrator`'s entry merge, because an
+     * archive is just another source of the same records — an Entry purged on this device must
+     * not come back through Import when it cannot come back through the folder, and
+     * `providerEventId` is per-device (§3.2) so it is kept from the local row rather than
+     * adopted from an archive some other device wrote. */
     private suspend fun applyEntries(records: List<EntrySnapshotRecord>) {
         if (records.isEmpty()) return
         val uidToId = entryDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val rowUidToId = pageDao.getAll().associate { it.uid to it.id }
+        val tombstones = purgeRegistry.tombstones(PurgedKind.ENTRY)
         for (record in records) {
+            val remoteUpdatedAt = Instant.ofEpochMilli(record.updatedAt)
+            if (purgeRegistry.isPurged(PurgedKind.ENTRY, record.uid, remoteUpdatedAt, tombstones)) continue
             val local = entryDao.getByUid(record.uid)
             if (local == null) {
                 uidToId[record.uid] = entryDao.insert(record.toEntity(uidToId, rowUidToId))
-            } else if (Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) {
+            } else if (remoteUpdatedAt.isAfter(local.updatedAt)) {
                 // providerEventId is per-device only (§9.11) and isn't in the snapshot record,
                 // so `toEntity` defaults it to null — a whole-row update then wrote that null
                 // over this device's real CalendarContract row id, orphaning the mirror and
                 // leaving the backfill sweep to insert a duplicate. The two sibling merge
                 // paths (SnapshotSyncOrchestrator, GoogleCalendarSyncEngine) already preserve
                 // it; this one was the outlier.
-                entryDao.update(
-                    record.toEntity(uidToId, rowUidToId)
-                        .copy(id = local.id, providerEventId = local.providerEventId)
-                )
+                entryDao.update(record.toEntity(uidToId, rowUidToId).copy(id = local.id, providerEventId = local.providerEventId))
             }
         }
     }

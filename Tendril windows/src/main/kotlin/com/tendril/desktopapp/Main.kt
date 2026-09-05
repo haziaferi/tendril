@@ -66,9 +66,11 @@ fun main() {
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), core.pageContentRepository,
+        database.pageRelationDao(), container.purgeRegistry, core.pageContentRepository,
     )
-    val orchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    val orchestrator = SnapshotSyncOrchestrator(
+        database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, container.purgeRegistry,
+    )
     val folderManager = DesktopSyncFolderManager()
 
     application {
@@ -107,6 +109,9 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     }
 }
 
+/** Allocated once rather than per recomposition of the passphrase field it decorates. */
+private val PASSPHRASE_MASK = PasswordVisualTransformation()
+
 @Composable
 private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
     val folderPath by folderManager.folderPath.collectAsState()
@@ -138,7 +143,10 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
             onValueChange = { passphrase = it },
             label = { Text("Passphrase (optional)") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+            // This is the key to every snapshot in the folder, typed in whatever room the
+            // desktop happens to be in. Android's two passphrase fields also offer a reveal
+            // toggle; this one doesn't yet.
+            visualTransformation = PASSPHRASE_MASK,
             modifier = Modifier.width(220.dp).padding(horizontal = 8.dp),
         )
 
@@ -182,6 +190,14 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
+    }
+    syncError?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        )
     }
 }
 

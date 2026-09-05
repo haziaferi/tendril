@@ -37,7 +37,7 @@ class MainActivity : FragmentActivity() {
 
     // Cleared (locked) on backgrounding only when lock-on-background is actually on;
     // otherwise this stays true across the whole process lifetime once first unlocked.
-    private var isUnlockedForSession = mutableStateOf(true)
+    private val isUnlockedForSession = mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must precede super.onCreate so the splash theme is swapped for Theme.Tendril

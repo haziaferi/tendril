@@ -10,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,8 +61,17 @@ fun WorkbenchScaffold(
             core.checkboxOnlyState.deactivate()
         }
     }
-    LaunchedEffect(checkboxOnlyPageId, currentPageId) {
-        onCheckboxOnlyWindowFlags?.invoke(checkboxOnlyPageId != null && checkboxOnlyPageId == currentPageId)
+    // The single condition the whole mode turns on: this page, showing now, over the keyguard.
+    val bypassingKeyguard = checkboxOnlyPageId != null && checkboxOnlyPageId == currentPageId
+    LaunchedEffect(bypassingKeyguard) {
+        onCheckboxOnlyWindowFlags?.invoke(bypassingKeyguard)
+    }
+    // The flags are window-level, so they outlive this composable. Without this, leaving the
+    // scaffold while checkbox-only was active (App Lock engaging and swapping in the lock
+    // screen is the reachable case) left `showWhenLocked` set on the Activity — and the next
+    // thing drawn over the keyguard would have been whatever replaced this.
+    DisposableEffect(Unit) {
+        onDispose { onCheckboxOnlyWindowFlags?.invoke(false) }
     }
 
     CompositionLocalProvider(LocalViewOnly provides viewOnly) {
@@ -72,7 +82,12 @@ fun WorkbenchScaffold(
             // of what each screen's own TopAppBar already consumes, pushing every header down
             // by a redundant status-bar-height gap.
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = { WorkbenchBottomBar(navState) },
+            // §3.1.2 / audit 4.3 — no bottom bar while the keyguard is being bypassed. It used
+            // to render regardless, so a tap on Settings navigated there *over the lock screen*;
+            // the LaunchedEffect above deactivates on a page change, but it runs after that frame
+            // has already been drawn, which is exactly one frame of Settings too many. Removing
+            // the control removes the path, rather than racing it.
+            bottomBar = { if (!bypassingKeyguard) WorkbenchBottomBar(navState) },
         ) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
                 when (val current = route) {

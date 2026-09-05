@@ -104,6 +104,20 @@ class ResolveEntryUseCase(
         entryScheduleCoordinator.onEntryChanged(updated)
     }
 
+    /**
+     * What a Done checkbox actually means, in one place. Every such checkbox — Tasks, Calendar,
+     * a Database row, a Row's own page — has to pick between [resolve] and [unresolve], and each
+     * surface was making that choice for itself in its own ViewModel or composable; one of them
+     * picked `resolve(SKIPPED)` for the unchecked case, which is a resolution rather than an
+     * undo, so unchecking logged a completion, left the Entry SKIPPED with its alarms cancelled,
+     * and advanced an Elastic recurrence another period. Deciding it here is the same
+     * "centralize the invariant once rather than trust every call site" rule this class's own
+     * doc states (§9.8 R1).
+     */
+    suspend fun setDone(entryId: Long, done: Boolean, now: Instant = Instant.now()) {
+        if (done) resolve(entryId, EntryStatus.DONE, now) else unresolve(entryId, now)
+    }
+
     /** Also centralized here (§5.5.1) — Trash for a standalone Entry cancels its alarms and
      * removes its Provider mirror (§3.2) too. */
     suspend fun trash(entryId: Long, now: Instant = Instant.now()) {

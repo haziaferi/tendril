@@ -1,0 +1,86 @@
+# Three jobs, because they catch different things and fail at different speeds.
+#
+# `hygiene` is pure text analysis (tools/audit.py) and finishes in seconds. It exists
+# to catch the specific defect classes this repo has actually had — see the module
+# docstring in tools/audit.py for the list and the reason behind each one.
+#
+# `unit-tests` compiles and runs the Android app's unit tests, which pulls in the
+# shared module too. This job used to be deliberately omitted, on the reasoning that
+# a Gradle build needs the Android SDK and a full dependency download while the
+# static checks need neither. That reasoning held right up until a call to a
+# `viewModel` property on a composable that has no such parameter shipped through a
+# green `hygiene` run: the name resolved to an unrelated Compose import, so it read
+# as ordinary property access to every reader and to every text-level check. Only a
+# compiler catches that class. A green check that builds nothing is worse than no
+# check, because it is trusted.
+#
+# `cross-pr-conflicts` is advisory and says so in its name. GitHub computes a PR's
+# mergeable/CLEAN status against the *base branch only*, never against another open
+# PR — so two branches can both report CLEAN while conflicting badly with each other,
+# and nothing surfaces it until someone merges the second one. That is not a
+# hypothetical: PR #1 and PR #3 both read CLEAN and conflicted in 18 files, including
+# the three most heavily rewritten files in the sync core and one modify/delete pair
+# where each branch had solved the same problem a different way.
+name: audit
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Static hygiene checks
+        run: python3 tools/audit.py
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      # No local.properties in the tree (it is gitignored, and points at whatever SDK
+      # the author happens to have); the runner's own ANDROID_HOME is what resolves.
+      # `shared` is reached as a composite build from a sibling directory, so the
+      # checkout has to keep the monorepo's layout — it does, since all three live in
+      # this one repo.
+      - name: Unit tests
+        working-directory: "Tendril android"
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: Test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: "Tendril android/app/build/reports/tests/testDebugUnitTest"
+
+  # Advisory on purpose. Two open PRs conflicting is not by itself wrong — stacked or
+  # deliberately sequenced work does it routinely — so this reports rather than blocks.
+  # It is named "advisory" so a green tick here is never mistaken for a gate, which is
+  # the same mistake `hygiene` alone used to invite.
+  cross-pr-conflicts-advisory:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # merge-tree needs both branches' full history; a shallow clone cannot merge.
+          fetch-depth: 0
+      - name: Test-merge against every other open PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MINE: ${{ github.event.pull_request.head.ref }}
+        run: bash .github/scripts/cross-pr-conflicts.sh

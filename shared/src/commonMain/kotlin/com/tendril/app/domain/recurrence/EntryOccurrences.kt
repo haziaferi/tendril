@@ -61,7 +61,7 @@ object EntryOccurrences {
 
     /**
      * Every occurrence-day in `[from, to]` (both inclusive), ordered by day, then timed
-     * entries by time with untimed ones last, then title — the order `EntryDao.observeOnDate`
+     * entries by time with untimed ones last, then title — the order the day views
      * already uses (`ORDER BY startTime IS NULL, startTime`) and the one the Day view was
      * sorting into by hand.
      *

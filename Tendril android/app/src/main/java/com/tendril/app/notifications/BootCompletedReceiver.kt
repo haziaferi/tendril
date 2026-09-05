@@ -42,5 +42,10 @@ suspend fun reconcileAlarms(context: Context) {
     // alarm one above. No-ops if permission was never granted; can't request it from a
     // boot-time BroadcastReceiver (no Activity), so a first grant only ever happens from
     // MainActivity's own LaunchedEffect.
+    // A Provider that refuses a write no longer throws: CalendarProviderSync routes every
+    // ContentResolver call through one guard and no-ops on failure, the way it already does for
+    // a missing permission — so this needs none of its own. Guarding here instead would have
+    // covered only this one of the four paths into that failure, and a runCatching in a suspend
+    // function swallows CancellationException along with it.
     container.calendarProviderSync.ensureCalendarAndBackfill()
 }

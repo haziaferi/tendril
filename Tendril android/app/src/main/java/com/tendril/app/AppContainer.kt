@@ -9,6 +9,7 @@ import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -48,23 +49,30 @@ class AppContainer(context: Context) {
         AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
     val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), entryScheduleCoordinator)
     val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
+    val purgeRegistry = PurgeRegistry(
+        database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
+        entryScheduleCoordinator,
+    )
     val pagesSyncEngine = PagesSyncEngine(
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), pageContentRepository,
+        database.pageRelationDao(), purgeRegistry, pageContentRepository,
     )
-    val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
+        database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, purgeRegistry,
+    )
+    val portableArchive = PortableArchive(
+        context, database.entryDao(), database.habitDao(), database.pageDao(),
+        purgeRegistry, pagesSyncEngine,
+        // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
+        // `.tendril` package. "Off" is simply no passphrase set.
+        passphrase = { secretStore.syncPassphrase.value },
+    )
     /** §9.4's sync triggers — lifecycle and the Settings button both run through this one
      * place, so they can't overlap and a failure has somewhere to be reported from. */
     val syncCoordinator = SyncCoordinator(
         context, syncFolderManager, snapshotSyncOrchestrator, secretStore, syncStatusPreferences,
-    )
-    val portableArchive = PortableArchive(
-        context, database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine,
-        // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
-        // `.tendril` package. "Off" is simply no passphrase set.
-        passphrase = { secretStore.syncPassphrase.value },
     )
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
@@ -91,13 +99,15 @@ class AppContainer(context: Context) {
         )
     }
     val viewLockState = ViewLockState()
-    val checkboxOnlyState = CheckboxOnlyState()
+    // audit 4.3 — checkbox-only mode draws over the keyguard, so it must refuse to turn on at
+    // all when App Lock is the thing standing in front of the app.
+    val checkboxOnlyState = CheckboxOnlyState { appLockPreferences.enabled.value }
 
     // Milestone 3 (tendril-windows-spec.md §6 step 3) — the slice of this container the ported
     // Workbench UI (nav shell, Pages, PageDetail, PageDatabase — now in `shared`) depends on.
     val workbenchCore = WorkbenchCore(
         database, databaseSyncManager, templateManager, viewLockState, checkboxOnlyState,
-        resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository,
+        resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository, purgeRegistry,
     )
 
     companion object {

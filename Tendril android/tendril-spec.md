@@ -65,6 +65,9 @@ second copy of the reasoning.
 | 2026-09-04 (last of the day) | **Sync actually runs on its own.** Third and last item the consistency audit found and left open. §9.4 specified a conflict sweep "on resume/launch", an `onStop`/backgrounding flush, and a periodic background pass; none existed — the only caller of `readAndMerge`/`writeSnapshots` in the whole app was the Settings button, so a `.sync-conflict-*` file sat undetected and an editing session reached the folder only if the person remembered to tap. New `SyncCoordinator` (`:app`) is the single place a pass runs from, non-reentrant, always read-merge-then-write, on an application-scoped **non-cancellable** coroutine — the Android SAF write is not atomic, so a pass cancelled by the Activity going away can leave the synced folder with no copy of a file at all. Wired to `onStart` and to `onStop` (skipped on a configuration change — a rotation is not a backgrounding); the Settings button now delegates to it rather than holding a second copy of the same guards. **The 2-second per-page debounce is explicitly still open**, with the reason recorded in §9.4 rather than approximated: it is specified per page, `writeSnapshots` has no per-page mode, and putting a whole-database write on a 2-second typing timer would be worse than the per-mutation write that decision already rejected. | §9.4 |
 | 2026-09-04 (later than the last) | **Trashed Habits are recoverable again.** `HabitDao` had `observeTrash`/`restore`/`deleteForever` from the start and no caller for any of them, so trashing a Habit set `deleted_at`, removed it from the habits list, the Merged view and the quick-check widget, and left no way back — a permanent delete wearing a soft delete's field, against §5.5.1's "a deleted standalone Task/Event **or Habit** is recoverable". The Tasks & Habits Trash sheet (`EntryTrashSheet` → `TasksHabitsTrashSheet`) now lists Entries and Habits in one merged newest-first list through a small `TrashItem` sealed type, so the selection set, bulk Restore / Delete forever and counted confirm are written once rather than twice. Selection is keyed by kind+id, since Entry 3 and Habit 3 are different things. §5.5.1's "one list" is still not satisfied — Pages/Rows keep their own sheet — and that is now recorded there as open, together with the related bug it has to be fixed alongside: restoring a database Row doesn't restore its linked Entry. | §5.5.1 |
 | 2026-09-04 (last, really) | **`.tendril` exports are encrypted when the toggle is on.** §9.4.2 says conflict files *and* portable packages carry the same at-rest protection "not a separate case to design" — but `PortableArchive` never referenced `SnapshotEncryption` at all, so Export was the plaintext way around the toggle, for a file meant to leave the device. Now encrypted per zip entry with the same magic/cipher/fresh-IV scheme as the sync folder; `manifest.json` stays readable on purpose (uids, not titles — see §9.4.2 for the trade) and gains an `encrypted` flag, defaulted so older archives still decode. An undecryptable archive is refused *before* Restore's wipe, with a message naming the passphrase rather than blaming the file. The passphrase now reaches `PortableArchive` as a constructor-supplied supplier, because the gap existed precisely as something a call site had to remember and none did. Also recorded: this cuts against §9.4.1's "send a Page to someone else" — an encrypted export needs the whole sync passphrase to open, so the export confirmation now says so. Six round-trip tests. | §9.4.1, §9.4.2 |
+| 2026-09-04 (audit) | Add-dialog time pickers (a Task's time, a Habit's time-of-day) — both dialogs previously hard-passed `null`, so no Habit could reach the Merged tab and no same-day Task ever alarmed. "Delete forever" made to stick: a `(kind, uid, purged_at)` tombstone recorded with the row delete, covering Pages and Entries | §3.3, §5.5.1.1, §9.4 |
+| 2026-09-05 | Audit sections 2, 3 and 4 closed in full, plus §5 items 1, 2 and 4 (PR #3). **Security:** the PBKDF2 salt moved into `sync_meta.json` per folder rather than a compile-time constant, and a folder that declares itself encrypted now refuses plaintext — the two are one fix, since the marker is what distinguishes an injected file from a folder mid-migration (§9.4.2). Checkbox-only mode refuses to activate while App Lock is on and hides the nav bar while bypassing the keyguard, App Lock and a keyguard bypass being in direct contradiction (§3.1.2). A write no longer overwrites an encrypted folder whose key it cannot open — a *mistyped* passphrase derives a perfectly valid key, so the previous `key == null` guard passed it straight through and re-encrypted everything under a key nobody knows. **Sync correctness:** a page whose parent arrived in a later batch was orphaned permanently (Pass 2 resolved parents for winners only); repair now runs for every record, but a non-winner may only *fill* an unresolved position, never overwrite one, or a stale record could move a page. Whole-page LWW is unchanged (§9.4) but the losing record is now written beside the winner as `<uid>.tendril-lost-<updatedAt>.json` instead of being discarded unread. Purge tombstones extended to Habits, which had no "Delete forever" at all. **Features:** one level of block nesting now renders (§3.1.1) and Notion import preserves it (§7 — the flattening was never about the format, the editor filtered children out of its own list); `Habit.duration` wired end to end (§3.3); habit reminders implemented on the notification channel that had been created for them and never posted to (§9.7). **Process:** CI compiles and tests the app rather than only reading it — a compile break had shipped through a green static-only check. 204 unit tests. | §3.1.1, §3.1.2, §3.3, §5.5.1, §5.5.1.1, §7, §9.4, §9.4.2, §9.7 |
+| 2026-09-04 (audit, correction) | Purge tombstones **travel** rather than staying local — a local-only tombstone made "Delete forever" unachievable on more than one device, since the next sync restored everything from whichever device hadn't purged. §9.4's additive-merge rule is narrowed accordingly: absence still never implies deletion, an explicit tombstone does, and record-vs-tombstone resolves by later timestamp so a stale delete cannot destroy a newer edit | §5.5.1.1, §9.4, §9.4.1 |
 
 ---
 
@@ -1060,6 +1063,50 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   on this device as much as another. Closing it needs a tombstone the merge can act on, which is a
   format change, not a fix in place.)*
 
+#### 5.5.1.1 "Delete forever" and snapshot sync (Decided 2026-09-04; scope corrected same day)
+
+*Problem found during the 2026-09-04 code audit.* §9.4's merge inserts any record whose `uid`
+isn't already local, so "Delete forever" didn't stick. A Page has its own snapshot file
+(`pages/<uid>.json`), which put it back on the very next pass **on a single device**, no second
+device involved; an Entry lives in an array file another device rewrites, so it came back from
+there. Pruning the file afterwards cannot fix either — the merge runs first and has already
+restored the row. A purge has to be *recorded*, not inferred from absence.
+
+*Decision:* `PurgeRegistry` records a `PurgedRecord` tombstone — `(kind, uid, purged_at)`, keyed
+by kind because Page and Entry uids come from separate spaces — in the same operation that drops
+the row, never as two things a call site must remember to do in order. The merge declines a
+tombstoned uid; the write pass drops that uid's page file.
+
+**Purges propagate (corrected).** The first cut kept tombstones local, on the grounds that §9.4
+calls its merge additive and non-destructive. That was the wrong reading: the rule exists so that
+*absence* is never mistaken for deletion, and a tombstone is precisely the explicit signal that
+distinguishes the two. Keeping it local also made "Delete forever" a lie on any multi-device
+setup — the Trash could never actually be emptied, since the next sync brought everything back
+from whichever device hadn't purged. So the tombstones travel, in `purged_records.json` beside
+the other snapshot files, and are the one signal that removes local data.
+
+**A purge is a timestamped fact, not a veto.** For a given uid the folder can carry both a record
+(`updated_at`) and a tombstone (`purged_at`); the later wins, the same last-write-wins rule §9.4
+already applies everywhere else. A purge therefore removes the record on every device — unless
+some device edited it *after* the purge, never having seen it, in which case that edit resurrects
+it and the tombstone is dropped as superseded. The alternative, letting a stale delete always win,
+silently destroys work someone was still doing.
+
+*Ordering matters:* the tombstone file merges, and is applied to local rows, **before** any record
+file is read. Otherwise a record and the tombstone that kills it cross within one pass and the
+record survives by accident.
+
+*Escape hatches,* matching §9.4.1's existing Import/Restore split: Restore-from-backup discards
+this device's purge history and adopts the archive's, since Restore means "become exactly what
+this archive says"; an additive Import adopts the archive's tombstones under the same
+later-timestamp-wins rule as a folder sync, so an archive holding a page edited after it was
+purged brings that page back, and one holding only an older copy does not.
+
+*Known cost:* tombstones are never garbage-collected — a purge is permanent information, and
+forgetting one lets the record return from any device that still has it. At personal scale this
+is a few dozen bytes per deleted item; if it ever matters, the bound is "older than the oldest
+device's last sync", which this app has no way to know today.
+
 ### 5.6 Database views (Decided 2026-08-08 — reopens and reverses the §10 "decided out of scope" table-only-database limitation)
 
 **Correction, stated plainly** (same practice as the Task/Event and Editing/Viewing corrections
@@ -1313,13 +1360,21 @@ reuse rather than duplicated). Two gaps found only while implementing, not antic
   table. Resolved the same way Callouts already degrade (§7.2): a table imports as a Code block
   holding the raw pipe-table text verbatim — degraded, not lost, consistent with the section's own
   accepted trade-offs elsewhere.
-- **Nesting is flattened, not preserved.** The in-app block editor's own nested-block rendering was
+- **Nesting is flattened, not preserved.** ~~The in-app block editor's own nested-block rendering was
   never actually built (`PageDetailScreen`'s own code comment: "kept out of this MVP render pass
   since no UI path creates toggle children yet") — every block still renders top-level
   (`parentBlockId == null`) only. Assigning `parentBlockId` to imported sub-list/toggle content would
   have made it silently invisible, which is worse than the format's own documented "toggle collapse
   becomes permanently open" degradation (§7.2). Every imported block is top-level, in source order;
-  only the hierarchy is lost, not the content.
+  only the hierarchy is lost, not the content.~~
+  **Superseded — nesting is now preserved, one level deep (§3.1.1).** The condition this decision
+  rested on is gone: `outlineOf` draws children, so a `parentBlockId` no longer makes content
+  invisible. Note where the flattening actually lived — not in the importer but in the *parser*,
+  whose first statement was `rawLine.trimStart()`, so the indentation never reached a decision
+  about `parentBlockId` at all. The promise underneath the original call is kept: anything indented
+  deeper than one level still arrives at depth 1 rather than being dropped, and a page opening on an
+  indented line imports every block. Structural blocks (headings, dividers, code, callouts, images,
+  tables) ignore stray indentation, since §3.1.1's nesting is list items and toggle children.
 
 **Verified**: a synthetic Notion export (nested pages, an internal link, bold/italic/inline-code
 spans, a to-do list, a blockquote, a `<aside>` callout, a fenced code block, a divider, a pipe table,
@@ -1760,6 +1815,21 @@ permission (§3.5) gains an adjacent **optional passphrase** toggle:
   The passphrase itself is never written to disk or synced; only Keystore-backed
   `EncryptedSharedPreferences` (§3.5's existing mechanism) holds it locally per device, re-entered
   once per install.
+- **The PBKDF2 salt lives in the folder, not in the binary** (`sync_meta.json`, added 2026-09-05).
+  The original reasoning above — that a random salt needs a channel to distribute it and Tendril
+  has none — was wrong in one respect: the sync folder *is* the channel, the same one the
+  snapshots travel through. A compile-time salt meant one precomputed table worked against every
+  Tendril install in existence, and two people choosing the same passphrase got byte-identical
+  keys. The meta file is deliberately never encrypted (a device without the key still has to read
+  the salt in order to derive it; a salt is not a secret, it defeats precomputation in the open),
+  and a folder written before it keeps its original salt so it stays readable. Two devices that
+  enable encryption before either has synced both mint one — earliest `createdAt` wins, ties
+  broken on the salt bytes, so every device converges without negotiating.
+- **A folder that says it is encrypted does not accept plaintext** (added 2026-09-05). Until the
+  meta file existed there was no way to tell an injected plaintext file from a folder that had not
+  been encrypted yet, so any non-encrypted file was trusted — which made AES-GCM's authentication
+  tag worth nothing at the system level, since nothing forced a file to be encrypted at all.
+  Anyone who could write to the synced folder could inject records without the passphrase.
 - **Conflict files (§9.4) and portable export/import packages (§9.4.1 above) are encrypted under the
   same scheme when the toggle is on** — a `.tendril` export carries the same at-rest protection as
   continuous sync, not a separate case to design.

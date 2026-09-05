@@ -28,7 +28,6 @@ class InMemorySyncFileStore(
     fun putRoot(name: String, content: String) { root[name] = content.toByteArray(Charsets.UTF_8) }
     fun putRootBytes(name: String, bytes: ByteArray) { root[name] = bytes }
     fun putPage(name: String, content: String) { pages[name] = content.toByteArray(Charsets.UTF_8) }
-    fun putPageBytes(name: String, bytes: ByteArray) { pages[name] = bytes }
 
     fun rootNames(): Set<String> = root.keys.toSet()
     fun pageNames(): Set<String> = pages.keys.toSet()
@@ -107,7 +106,6 @@ class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
     override fun observeBySourceRowIds(rowPageIds: List<Long>): Flow<List<Entry>> = flowOf(emptyList())
     override fun observeTasks(): Flow<List<Entry>> = flowOf(rows.values.toList())
     override fun observeDated(): Flow<List<Entry>> = flowOf(rows.values.toList())
-    override fun observeOnDate(date: LocalDate): Flow<List<Entry>> = flowOf(emptyList())
     override fun observeTrash(): Flow<List<Entry>> = flowOf(emptyList())
 }
 

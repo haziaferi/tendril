@@ -129,7 +129,7 @@ data class RecurrenceSpec(
 }
 
 /**
- * Every occurrence start date of [this] rule anchored at [anchor], restricted to
+ * Every occurrence start date of this rule anchored at [anchor], restricted to
  * `[rangeStart, rangeEnd]` inclusive.
  *
  * Iteration always begins at [anchor], never at [rangeStart], because `COUNT` is defined over

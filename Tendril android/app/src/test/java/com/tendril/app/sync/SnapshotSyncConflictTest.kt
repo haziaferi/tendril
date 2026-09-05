@@ -33,6 +33,7 @@ class SnapshotSyncConflictTest {
             // Neither is asserted on here — the page half of the merge has its own surface.
             pageDao = mockk<PageDao>(relaxed = true),
             pagesSyncEngine = mockk(relaxed = true),
+            purgeRegistry = mockk(relaxed = true),
         )
 
     private fun entryRecord(uid: String, title: String, updatedAt: Long = 1_000L) = EntrySnapshotRecord(

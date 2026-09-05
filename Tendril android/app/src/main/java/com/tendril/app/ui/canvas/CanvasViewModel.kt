@@ -61,7 +61,7 @@ class CanvasViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val _pageSearchResults = MutableStateFlow<List<Page>>(emptyList())
-    val pageSearchResults: StateFlow<List<Page>> = _pageSearchResults
+    val pageSearchResults: StateFlow<List<Page>> = _pageSearchResults.asStateFlow()
 
     init {
         viewModelScope.launch {

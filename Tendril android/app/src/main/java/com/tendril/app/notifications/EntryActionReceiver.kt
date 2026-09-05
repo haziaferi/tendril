@@ -28,7 +28,7 @@ class EntryActionReceiver : BroadcastReceiver() {
                 val container = AppContainer.from(context)
                 val status = if (action == ACTION_DONE) EntryStatus.DONE else EntryStatus.SKIPPED
                 container.resolveEntryUseCase.resolve(entryId, status)
-                NotificationManagerCompat.from(context).cancel(10_000 + entryId.toInt())
+                NotificationManagerCompat.from(context).cancel(OverdueAlarmReceiver.notificationId(entryId))
             } finally {
                 pendingResult.finish()
             }

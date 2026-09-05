@@ -74,26 +74,37 @@ class CalendarProviderSync(
      * per-Entry write below is itself an upsert. */
     suspend fun ensureCalendarAndBackfill() {
         if (!hasPermission()) return
-        ensureCalendar()
+        ensureCalendar() ?: return
         entryDao.getAll()
             .filter { it.deletedAt == null && it.startDate != null && it.source != EntrySource.GOOGLE_CALENDAR }
             .forEach { upsertEntry(it) }
     }
 
-    private suspend fun ensureCalendar(): Long = withContext(Dispatchers.IO) {
+    /**
+     * Null when the Calendar Provider won't give us a calendar — absent, restricted, or simply
+     * refusing the write, as happens on some devices and inside work profiles. That is a
+     * degraded integration, not a fatal condition, so it is reported as a value and every
+     * caller below no-ops on it, exactly as they already do for a missing permission.
+     *
+     * Guarding here rather than at one call site is deliberate: the throw was reachable from
+     * four places — the boot receiver, both of MainActivity's launch-time paths, and
+     * [upsertEntry], which runs on every checkbox tap through
+     * [com.tendril.app.domain.AndroidEntryScheduleCoordinator]. This is where AlarmScheduler
+     * puts its own equivalent check.
+     */
+    private suspend fun ensureCalendar(): Long? = withContext(Dispatchers.IO) {
         preferences.calendarId.value?.takeIf { calendarStillExists(it) }
-            ?: createCalendar().also { preferences.setCalendarId(it) }
+            ?: createCalendar()?.also { preferences.setCalendarId(it) }
     }
 
     private fun calendarStillExists(id: Long): Boolean {
         val uri = ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, id)
-        context.contentResolver.query(uri, arrayOf(CalendarContract.Calendars._ID), null, null, null)?.use {
-            return it.moveToFirst()
-        }
-        return false
+        val cursor = provider { context.contentResolver.query(uri, arrayOf(CalendarContract.Calendars._ID), null, null, null) }
+            ?: return false
+        return cursor.use { it.moveToFirst() }
     }
 
-    private fun createCalendar(): Long {
+    private fun createCalendar(): Long? {
         val values = ContentValues().apply {
             put(CalendarContract.Calendars.ACCOUNT_NAME, ACCOUNT_NAME)
             put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
@@ -106,9 +117,8 @@ class CalendarProviderSync(
             put(CalendarContract.Calendars.VISIBLE, 1)
             put(CalendarContract.Calendars.SYNC_EVENTS, 1)
         }
-        val result = requireNotNull(context.contentResolver.insert(asSyncAdapter(CalendarContract.Calendars.CONTENT_URI), values)) {
-            "Calendar Provider insert returned null — READ_CALENDAR/WRITE_CALENDAR should already be granted here"
-        }
+        val result = provider { context.contentResolver.insert(asSyncAdapter(CalendarContract.Calendars.CONTENT_URI), values) }
+            ?: return null
         return ContentUris.parseId(result)
     }
 
@@ -119,14 +129,17 @@ class CalendarProviderSync(
             if (entry.providerEventId != null) removeEntry(entry)
             return
         }
+        // Resolved before the block rather than inside it: `ensureCalendar` does its own
+        // withContext, and a plain `return` here is unambiguous where a labelled return out of
+        // a lambda whose last expression isn't Unit would not be.
+        val calendarId = ensureCalendar() ?: return
         withContext(Dispatchers.IO) {
-            val calendarId = ensureCalendar()
             val values = entry.toCalendarValues(calendarId)
             val existingId = entry.providerEventId
             if (existingId != null && eventStillExists(existingId)) {
-                context.contentResolver.update(asSyncAdapter(eventUri(existingId)), values, null, null)
+                provider { context.contentResolver.update(asSyncAdapter(eventUri(existingId)), values, null, null) }
             } else {
-                val uri = context.contentResolver.insert(asSyncAdapter(CalendarContract.Events.CONTENT_URI), values)
+                val uri = provider { context.contentResolver.insert(asSyncAdapter(CalendarContract.Events.CONTENT_URI), values) }
                 val newId = uri?.let(ContentUris::parseId)
                 if (newId != null && newId != existingId) {
                     entryDao.setProviderEventId(entry.id, newId)
@@ -139,18 +152,31 @@ class CalendarProviderSync(
         val eventId = entry.providerEventId ?: return
         if (hasPermission()) {
             withContext(Dispatchers.IO) {
-                context.contentResolver.delete(asSyncAdapter(eventUri(eventId)), null, null)
+                provider { context.contentResolver.delete(asSyncAdapter(eventUri(eventId)), null, null) }
             }
         }
         entryDao.setProviderEventId(entry.id, null)
     }
 
     private fun eventStillExists(id: Long): Boolean {
-        context.contentResolver.query(eventUri(id), arrayOf(CalendarContract.Events._ID), null, null, null)?.use {
-            return it.moveToFirst()
-        }
-        return false
+        val cursor = provider { context.contentResolver.query(eventUri(id), arrayOf(CalendarContract.Events._ID), null, null, null) }
+            ?: return false
+        return cursor.use { it.moveToFirst() }
     }
+
+    /**
+     * Every Calendar Provider call goes through here. A restricted provider — a work profile, a
+     * locked-down OEM build, a permission revoked between the check and the write — both returns
+     * null *and* throws (SecurityException, IllegalArgumentException), so a null check alone was
+     * never enough. Reported as a value, so the integration degrades to a no-op the way a missing
+     * permission already does; guarding the calendar row alone left the Events writes throwing out
+     * of [ensureCalendarAndBackfill] and, through it, out of the boot receiver.
+     *
+     * Not a suspend function, deliberately: `runCatching` around a suspend call would swallow
+     * CancellationException. Everything it wraps is a blocking ContentResolver call already on
+     * [Dispatchers.IO], never a suspension point.
+     */
+    private fun <T> provider(call: () -> T): T? = runCatching(call).getOrNull()
 
     private fun eventUri(eventId: Long): Uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
 
