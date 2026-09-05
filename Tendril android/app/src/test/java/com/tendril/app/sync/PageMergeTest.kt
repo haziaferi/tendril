@@ -331,6 +331,26 @@ class PageMergeTest {
     }
 
     @Test
+    fun `a local image reference survives a merge that rebuilds its block`() = runBlocking {
+        val id = localPage(UID_A, "Trip", 1_000L)
+        engine.mergePages(listOf(pageRecord(UID_A, "Trip", updatedAt = 2_000L, blocks = listOf(blockRecord(UID_BLOCK, "caption")))))
+        // Attached after the block exists. `Block.imagePath` points into app-private storage and
+        // is deliberately excluded from the snapshot, so no peer can ever send it back.
+        blockDao.getForPage(id).single().let { blockDao.update(it.copy(imagePath = "/data/app/img-1.png")) }
+
+        // The peer retitles the caption. Its record wins, and Pass 5 rebuilds every block here.
+        engine.mergePages(listOf(pageRecord(UID_A, "Trip", updatedAt = 3_000L, blocks = listOf(blockRecord(UID_BLOCK, "new caption")))))
+
+        val merged = blockDao.getForPage(id).single()
+        assertEquals("the winner's content still applies", "new caption", merged.content)
+        assertEquals(
+            "the merge is the only thing that can carry imagePath across, since the snapshot never holds it",
+            "/data/app/img-1.png",
+            merged.imagePath,
+        )
+    }
+
+    @Test
     fun `a page's parent resolves even when the parent arrives later in the batch`() = runBlocking {
         // Child first: pass 1 gives every page an id, so pass 2 can resolve the FK for real.
         engine.mergePages(

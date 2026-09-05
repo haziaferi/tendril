@@ -406,6 +406,13 @@ class PagesSyncEngine(
             if (record.uid !in wonUids) continue
             val pageId = uidToId.getValue(record.uid)
 
+            // `Block.imagePath` points into this device's app-private storage and is deliberately
+            // excluded from the snapshot (see its own doc comment), so an incoming record can
+            // never carry one. Rebuilding from that record therefore writes null over whatever
+            // was here, and the picture is unlinked with the file still on disk. Held by uid
+            // across the delete-and-reinsert instead -- the block is the same block, and the
+            // remote simply has nothing to say about where this device keeps its copy.
+            val imagePathByUid = blockDao.getForPage(pageId).mapNotNull { b -> b.imagePath?.let { b.uid to it } }.toMap()
             blockDao.deleteForPage(pageId)
             val blockUidToId = mutableMapOf<String, Long>()
             for (b in record.blocks) {
@@ -413,6 +420,7 @@ class PagesSyncEngine(
                     Block(
                         uid = b.uid, pageId = pageId, type = BlockType.valueOf(b.type), order = b.order,
                         parentBlockId = null,
+                        imagePath = imagePathByUid[b.uid],
                         content = b.content,
                         formattingSpans = b.formattingSpans.mapNotNull { it.toEntity(uidToId) },
                         checked = b.checked, codeLanguage = b.codeLanguage, calloutIcon = b.calloutIcon, calloutColor = b.calloutColor,
