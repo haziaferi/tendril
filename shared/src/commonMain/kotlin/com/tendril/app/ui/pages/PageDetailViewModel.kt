@@ -228,6 +228,7 @@ class PageDetailViewModel(
         viewModelScope.launch {
             blockDao.update(block.copy(checked = checked, updatedAt = Instant.now()))
             contentRepository.rebuildFtsForPage(pageId)
+            touch()
         }
     }
 
@@ -297,23 +298,23 @@ class PageDetailViewModel(
                 // from the name at construction, so the stored row is the authoritative one.
                 tagDao.findByName(trimmed)!!
             }
+            // The one page-content mutation here that does not go through a launcher, because
+            // its bump is conditional: picking a tag the page already carries changes nothing,
+            // and bumping anyway would claim authorship of an edit that did not happen — enough
+            // under LWW to beat a real edit sitting unsynced on another device.
             if (tags.value.none { it.id == tag.id }) {
                 tagDao.addToPage(PageTag(pageId = pageId, tagId = tag.id))
+                touch()
             }
         }
     }
 
-    fun removeTag(tag: Tag) {
-        if (contentLocked()) return
-        viewModelScope.launch { tagDao.removeFromPage(pageId, tag.id) }
-    }
+    fun removeTag(tag: Tag) = launchTouching { tagDao.removeFromPage(pageId, tag.id) }
 
     /** Unbound cell edit for this Row — a bound role (Done/Deadline/Recurrence) never reaches
      * this path; those edit through [toggleRowDone]/[setRowDeadline]/[setRowRecurrence]. */
-    fun setRowPropertyValue(property: Property, value: String?) {
-        if (contentLocked()) return
-        viewModelScope.launch { propertyValueDao.setValue(property.id, pageId, value) }
-    }
+    fun setRowPropertyValue(property: Property, value: String?) =
+        launchTouching { propertyValueDao.setValue(property.id, pageId, value) }
 
     fun toggleRowDone(checked: Boolean) {
         if (contentLocked()) return
@@ -349,11 +350,42 @@ class PageDetailViewModel(
         }
     }
 
+    /**
+     * §9.4 — see [PageDao.touch]. Blocks, tags and cell values all travel *inside* this page's
+     * snapshot, and the merge decides whether to apply any of them by looking at the page row
+     * alone. Writing only the child row leaves the exported snapshot claiming, truthfully as far
+     * as the page row knows, that nothing changed — so the peer drops the edit.
+     *
+     * Deliberately alongside [PageContentRepository.rebuildFtsForPage] rather than anywhere
+     * else: the FTS index and the sync timestamp are two derived things with exactly the same
+     * trigger, and keeping them in one place is what makes the next block mutation get both for
+     * free. Everything that mutates this page's content goes through [launchAndReindex] or
+     * [launchTouching], so the bump is part of launching rather than a second call to remember
+     * after it — which is exactly the shape of the bug this fixes, and the shape it would come
+     * back in. Two mutations call this directly and say why at their own site: [setChecked],
+     * whose lock gate is the narrower [viewOnlyLocked] (§3.1.2 keeps a to-do tappable on an
+     * otherwise locked page), and [addTag], whose bump is conditional.
+     */
+    private suspend fun touch() = pageDao.touch(pageId, Instant.now())
+
     private fun launchAndReindex(block: suspend () -> Unit) {
         if (contentLocked()) return
         viewModelScope.launch {
             block()
             contentRepository.rebuildFtsForPage(pageId)
+            touch()
+        }
+    }
+
+    /** The same guarantee for the page-content mutations that are not block edits and so have
+     * no FTS index to rebuild — tags, and this Row's own cell values. Separate launcher rather
+     * than a flag on [launchAndReindex], because "rebuild the index" and "say the page changed"
+     * are two different claims and a boolean at the call site would read as neither. */
+    private fun launchTouching(block: suspend () -> Unit) {
+        if (contentLocked()) return
+        viewModelScope.launch {
+            block()
+            touch()
         }
     }
 }

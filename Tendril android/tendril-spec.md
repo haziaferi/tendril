@@ -71,6 +71,7 @@ second copy of the reasoning.
 | 2026-09-05 (integration) | PR #1's recurring-EVENT expansion (§4.1.1) integrated with the same day's audit pass, which had been developed independently — both branches reported mergeable/CLEAN because GitHub computes that against the base branch and never against another open PR, while conflicting in 18 files. Resolved keeping every feature from both: `.tendril` exports are encrypted *and* carry purge tombstones; the orchestrator's undecryptable-file tally rides on the same threaded value as the folder key, rather than a second plumbing of identical shape through the same nine functions; the desktop keeps its masked passphrase field *and* its "N file(s) couldn't be decrypted" reporting. Three deliberate losses, each because keeping the alternative would have removed a capability: the combined Tasks-and-Habits trash sheet (it purged without recording a tombstone, so "Delete forever" would have stopped propagating), and `EntryDao.getInRange`/`observeOnDate` (a date-window query never returns a recurring series, which is anchored at its first occurrence — expansion replaces both). **Room schema is v8**, a number in neither branch's history: one bumped a shared v5 to 6 for the Canvas tables and the other to 7 for tombstones, and the combined entity set hashes to neither — Room compares that hash *before* migration runs, so an unbumped version throws where `fallbackToDestructiveMigration` cannot reach. | §4.1.1, §5.5.1.1, §9.4, §9.4.1, §9.4.2, §9.10 |
 | 2026-09-05 | Audit sections 2, 3 and 4 closed in full, plus §5 items 1, 2 and 4 (PR #3). **Security:** the PBKDF2 salt moved into `sync_meta.json` per folder rather than a compile-time constant, and a folder that declares itself encrypted now refuses plaintext — the two are one fix, since the marker is what distinguishes an injected file from a folder mid-migration (§9.4.2). Checkbox-only mode refuses to activate while App Lock is on and hides the nav bar while bypassing the keyguard, App Lock and a keyguard bypass being in direct contradiction (§3.1.2). A write no longer overwrites an encrypted folder whose key it cannot open — a *mistyped* passphrase derives a perfectly valid key, so the previous `key == null` guard passed it straight through and re-encrypted everything under a key nobody knows. **Sync correctness:** a page whose parent arrived in a later batch was orphaned permanently (Pass 2 resolved parents for winners only); repair now runs for every record, but a non-winner may only *fill* an unresolved position, never overwrite one, or a stale record could move a page. Whole-page LWW is unchanged (§9.4) but the losing record is now written beside the winner as `<uid>.tendril-lost-<updatedAt>.json` instead of being discarded unread. Purge tombstones extended to Habits, which had no "Delete forever" at all. **Features:** one level of block nesting now renders (§3.1.1) and Notion import preserves it (§7 — the flattening was never about the format, the editor filtered children out of its own list); `Habit.duration` wired end to end (§3.3); habit reminders implemented on the notification channel that had been created for them and never posted to (§9.7). **Process:** CI compiles and tests the app rather than only reading it — a compile break had shipped through a green static-only check. 204 unit tests. | §3.1.1, §3.1.2, §3.3, §5.5.1, §5.5.1.1, §7, §9.4, §9.4.2, §9.7 |
 | 2026-09-04 (audit, correction) | Purge tombstones **travel** rather than staying local — a local-only tombstone made "Delete forever" unachievable on more than one device, since the next sync restored everything from whichever device hadn't purged. §9.4's additive-merge rule is narrowed accordingly: absence still never implies deletion, an explicit tombstone does, and record-vs-tombstone resolves by later timestamp so a stale delete cannot destroy a newer edit | §5.5.1.1, §9.4, §9.4.1 |
+| 2026-09-05 (write path) | **An edit to a cell, a block, a tag, a column or a canvas node now reaches the other device.** §9.4's merge decides per page by last-write-wins on `pages.updated_at`, and outside the merge the only writers of that column were `updateTitle`, `softDelete` and `restore` — so every mutation that changes what travels *inside* a page's snapshot left the timestamp alone. The exported `pages/<page_id>.json` carried new content under an unchanged timestamp, was not newer on the peer, lost, and the passes that apply schema, canvas, blocks, tags and cell values were skipped. Not recorded as a conflict either: an *equal* timestamp is the same version by definition, so no `.tendril-lost` copy was written and the edit vanished with nothing anywhere saying it had existed — then vanished on the editing device too, as soon as the peer made any timestamp-moving edit. `PageDao.touch(id, at)` added, and reached through a launcher rather than a second call — `launchAndReindex`/`launchTouching`, `launchAndTouch(pageIdToBump)`, and one `commit` exit in `DatabaseSyncManager` — so the write and the bump are one operation and there is no bump to forget, which is how this arose in the first place. *Which* page is the load-bearing part and is a required parameter, not a default: a cell hangs off its row's page, a property or view off the database's, a binding change off both. Two documented exceptions keep explicit bumps (`setChecked`, narrower lock gate; `addTag`, conditional). LWW itself is unchanged. Excluded on purpose: the lazy `ensureDefaultView` and `PageCanvas` shell writes, which run on open rather than on an edit and would let a device that merely looked at a page outrank one that had edited it. New `WritePathSyncTest` drives the real ViewModels across two stores rather than hand-building snapshot records — the only arrangement in which the defect is visible, and the reason `PageMergeTest` passed throughout. 256 unit tests. | §9.4 |
 
 ---
 
@@ -1767,6 +1768,68 @@ single-writer Habit-folder case:
   passphrase is session-only and typed into the sync bar, never persisted
   (`tendril-windows-spec.md` §7), so at launch there is nothing to decrypt an encrypted folder
   with. An automatic pass there would either do nothing or, without the §9.4.2 guard, do harm.
+
+- **Fixed 2026-09-05 — the timestamp the merge runs on is now actually written.** Everything above
+  assumes a page whose content changed exports with a newer `updated_at`. Nothing in the app made
+  that true. The merge gates its per-page last-write-wins on `pages.updated_at` alone, and outside
+  the sync engine the only writers of that column were `updateTitle`, `softDelete` and `restore`.
+  Every other mutation wrote only the child row — a cell edit just `property_values`, a block edit
+  just `blocks.updated_at`, a canvas drag just `canvas_nodes` — so `pages/<page_id>.json` went out
+  carrying new content under the timestamp it already had. On the other device that record was not
+  *newer*, so it did not win, so the passes that apply schema, canvas content, blocks, tags and cell
+  values all skipped it.
+
+  It failed silently at both ends. On the editing device the change is in Room and looks saved,
+  because it is — it simply never leaves. On the receiving device an **equal** `updated_at` is the
+  same version by definition, so the record was never treated as a loser either and no
+  `<uid>.tendril-lost-<updatedAt>.json` was written beside the winner. The edit was dropped with
+  nothing anywhere recording that it had existed. Worse, it was then destroyed on the editing device
+  too, the moment the other device made any timestamp-moving edit of its own — a title change, a
+  trash, a restore — because that record legitimately won and the merge replaces a winner's content
+  wholesale.
+
+  `PageDao.touch(id, at)` — a column-scoped `UPDATE pages SET updatedAt`, narrow like
+  `updateParentAndDatabase` so a bump can never carry a stale copy of another field with it — now
+  runs on every write that changes a page's synced payload without rewriting the page row.
+
+  It is reached through a **launcher rather than a second call**, which is the part that matters for
+  it staying fixed. A bump you have to remember to write after the DAO call is the bug this whole
+  entry is about, and it would come back the same way; so each of the four sites that mutate page
+  content now has one entry point that performs the write and the bump together, and nothing else to
+  remember. `PageDetailViewModel` keeps `launchAndReindex` (already there, because the FTS index has
+  exactly the same trigger) and gains `launchTouching` for the mutations with no index to rebuild;
+  `PageDatabaseViewModel` gets `launchAndTouch(pageIdToBump)`; `CanvasViewModel` gets
+  `launchAndTouch`; and `DatabaseSyncManager`'s four binding operations all exit through one
+  `commit`, so writing the `PageDatabase` row and saying its page changed are a single operation.
+
+  **Which** page is the part that is easy to get wrong, so it is a *required parameter* of the
+  database screen's launcher rather than a default: a cell hangs off its **row's** page, a property
+  or a view off the **database's**, and a binding change off both, since crystallizing rewrites
+  every row's stored values. Bumping the database for a cell edit would propagate the schema and
+  still lose the cell.
+
+  Two mutations stay outside a launcher and say so at their own site. `setChecked` is gated by the
+  narrower `viewOnlyLocked` (§3.1.2 keeps a to-do tappable on an otherwise locked page), and
+  `addTag`'s bump is conditional — picking a tag the page already carries changes nothing, and
+  bumping anyway would claim authorship of an edit that did not happen, which is enough under LWW to
+  beat a real edit sitting unsynced on another device.
+
+  **Whole-page LWW is unchanged.** The accepted v1 limitation above stands exactly as written; this
+  only makes the timestamp it depends on tell the truth about what happened.
+
+  Two writes are deliberately excluded: `ensureDefaultView` and the Canvas page's lazy `PageCanvas`
+  shell. Both do write a synced row, but both run on *open* rather than on an edit, and under
+  last-write-wins a bump is a claim of authorship — a device that merely opened a database would
+  then outrank one that had genuinely edited its schema moments earlier and not yet synced. Neither
+  costs anything by staying local, because every device performs the same repair for itself.
+
+  Why a merge suite that covers §9.4 closely could pass throughout is worth recording, since it is
+  the reusable part. `PageMergeTest` builds every record it merges by hand
+  (`pageRecord(uid, title, updatedAt = N)`), which makes it structurally unable to observe the one
+  thing that was wrong: whether the app, having changed a page, produces a record whose timestamp
+  says so. The new `WritePathSyncTest` refuses to build a snapshot record at all — it mutates
+  through the real ViewModels, exports, and merges into a second device's store, which is the only
+  arrangement in which the defect is visible.
 
 ### 9.4.1 Portable export/import (Decided 2026-07-16)
 

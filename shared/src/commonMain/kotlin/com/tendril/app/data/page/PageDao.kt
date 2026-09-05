@@ -55,6 +55,18 @@ interface PageDao {
     @Query("UPDATE pages SET parentId = :parentId, databaseId = :databaseId WHERE id = :id")
     suspend fun updateParentAndDatabase(id: Long, parentId: Long?, databaseId: Long?)
 
+    /** §9.4 snapshot merge — a page's synced payload is far larger than its own row (its
+     * blocks, tags, cell values, database schema, canvas content), but the merge's
+     * last-write-wins gate reads `pages.updatedAt` and nothing else. So any write that changes
+     * that payload without rewriting the row has to move this column as well, or the record
+     * arrives at a peer no newer than the copy already there, loses, and every pass that would
+     * have applied it is skipped. Silently: an *equal* timestamp is the same version by
+     * definition, so it is not recorded as a conflict either and no `.tendril-lost` copy is
+     * written. Column-scoped like [updateParentAndDatabase] rather than a whole-row `update`,
+     * so bumping a timestamp can never carry a stale copy of some other field along with it. */
+    @Query("UPDATE pages SET updatedAt = :at WHERE id = :id")
+    suspend fun touch(id: Long, at: Instant)
+
     @Query("UPDATE pages SET deletedAt = :deletedAt, updatedAt = :deletedAt WHERE id = :id")
     suspend fun softDelete(id: Long, deletedAt: Instant)
 

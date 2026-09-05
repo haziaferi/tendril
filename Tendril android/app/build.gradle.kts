@@ -88,6 +88,11 @@ dependencies {
     // which the sync-conflict tests assert on. The DAOs those tests *do* care about are
     // hand-written in-memory fakes, so the behaviour under test stays readable.
     testImplementation("io.mockk:mockk:1.13.13")
+    // WritePathSyncTest drives the real ViewModels rather than fabricating the snapshot records
+    // they are supposed to produce, and `viewModelScope` dispatches on Dispatchers.Main — which
+    // a JVM unit test has to install for itself. Version-less: coroutines' own BOM aligns every
+    // kotlinx-coroutines-* module, so this tracks whatever `libs.versions.toml` pins for core.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     // On-device tests for the SAF write path — the one thing JVM unit tests can't reach,
     // since DocumentFile's behaviour is what SYNC-02 turns on.
     androidTestImplementation("androidx.test:runner:1.7.0")

@@ -79,9 +79,31 @@ class CanvasViewModel(
         }
     }
 
+    /**
+     * §9.4 — see [PageDao.touch]. Nodes and edges travel *inside* this Canvas page's snapshot,
+     * and the merge decides whether to apply them by looking at the page row alone: a node moved
+     * or renamed without the page row saying so exports under an unchanged timestamp, loses on
+     * the peer for not being newer, and is dropped.
+     *
+     * Every mutation below therefore goes through here rather than `viewModelScope.launch`
+     * directly, the same reason [com.tendril.app.ui.pages.PageDetailViewModel] funnels its block
+     * edits through `launchAndReindex` — a canvas edit that forgets the bump looks completely
+     * saved on this device and simply never arrives on the other one.
+     *
+     * The lazy [PageCanvas] shell in `init` is left out on purpose: it runs on open rather than
+     * on an edit, and a bump is a claim of authorship that would let merely opening a board
+     * outrank a real edit made on another device and not yet synced.
+     */
+    private fun launchAndTouch(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            block()
+            pageDao.touch(pageId, Instant.now())
+        }
+    }
+
     fun addTextNode(x: Float, y: Float) {
         val canvasId = canvas.value?.id ?: return
-        viewModelScope.launch {
+        launchAndTouch {
             val now = Instant.now()
             canvasNodeDao.insert(
                 CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = x, y = y, text = "", createdAt = now, updatedAt = now)
@@ -91,7 +113,7 @@ class CanvasViewModel(
 
     fun addPageEmbedNode(x: Float, y: Float, targetPage: Page) {
         val canvasId = canvas.value?.id ?: return
-        viewModelScope.launch {
+        launchAndTouch {
             val now = Instant.now()
             canvasNodeDao.insert(
                 CanvasNode(
@@ -103,21 +125,21 @@ class CanvasViewModel(
     }
 
     fun moveNode(node: CanvasNode, x: Float, y: Float) {
-        viewModelScope.launch { canvasNodeDao.update(node.copy(x = x, y = y, updatedAt = Instant.now())) }
+        launchAndTouch { canvasNodeDao.update(node.copy(x = x, y = y, updatedAt = Instant.now())) }
     }
 
     fun setNodeText(node: CanvasNode, text: String) {
-        viewModelScope.launch { canvasNodeDao.update(node.copy(text = text, updatedAt = Instant.now())) }
+        launchAndTouch { canvasNodeDao.update(node.copy(text = text, updatedAt = Instant.now())) }
     }
 
     fun deleteNode(node: CanvasNode) {
-        viewModelScope.launch { canvasNodeDao.delete(node.id) }
+        launchAndTouch { canvasNodeDao.delete(node.id) }
     }
 
     fun addEdge(fromNodeId: Long, toNodeId: Long) {
         val canvasId = canvas.value?.id ?: return
         if (fromNodeId == toNodeId) return
-        viewModelScope.launch {
+        launchAndTouch {
             canvasEdgeDao.insert(CanvasEdge(canvasId = canvasId, fromNodeId = fromNodeId, toNodeId = toNodeId))
         }
     }
@@ -128,15 +150,15 @@ class CanvasViewModel(
             CanvasArrowDirection.TWO_WAY -> CanvasArrowDirection.NONE
             CanvasArrowDirection.NONE -> CanvasArrowDirection.ONE_WAY
         }
-        viewModelScope.launch { canvasEdgeDao.update(edge.copy(direction = next)) }
+        launchAndTouch { canvasEdgeDao.update(edge.copy(direction = next)) }
     }
 
     fun setEdgeLabel(edge: CanvasEdge, label: String) {
-        viewModelScope.launch { canvasEdgeDao.update(edge.copy(label = label.ifBlank { null })) }
+        launchAndTouch { canvasEdgeDao.update(edge.copy(label = label.ifBlank { null })) }
     }
 
     fun deleteEdge(edge: CanvasEdge) {
-        viewModelScope.launch { canvasEdgeDao.delete(edge.id) }
+        launchAndTouch { canvasEdgeDao.delete(edge.id) }
     }
 
     fun searchPages(query: String) {
