@@ -72,6 +72,32 @@ class PageDatabaseViewModel(
      * Page's edits go through two entirely separate ViewModels. */
     private fun locked() = viewLockState.viewOnly.value
 
+    /**
+     * §9.4 — see [PageDao.touch]. Every mutation on this screen writes something that travels
+     * *inside* a page's snapshot while leaving the page row alone, so every one of them runs
+     * through here rather than `viewModelScope.launch` directly. The bump is a parameter of
+     * launching, not a second call to remember after it — which is the whole shape of the bug
+     * this fixes, and the shape it would come back in.
+     *
+     * [pageIdToBump] is required rather than defaulting to this screen's own page, because
+     * which page it is is the part that is easy to get wrong: a cell hangs off its **row's**
+     * page, while a property or a view hangs off the **database's**, and the merge gates those
+     * as two separate records with two separate timestamps. Bumping the database for a cell
+     * edit would propagate the schema and still lose the cell.
+     *
+     * Not used by [ensureDefaultView], which does write a synced row but does so on *open*
+     * rather than on an edit. Under last-write-wins a bump is a claim of authorship, and a
+     * device that merely opened a database would then outrank one that had genuinely edited its
+     * schema a moment earlier and not yet synced. The lazily-created view costs nothing by
+     * staying local — every device performs the same repair for itself.
+     */
+    private fun launchAndTouch(pageIdToBump: Long, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            block()
+            pageDao.touch(pageIdToBump, Instant.now())
+        }
+    }
+
     val page: StateFlow<Page?> = pageDao.observeById(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val database: StateFlow<PageDatabase?> =
@@ -132,7 +158,7 @@ class PageDatabaseViewModel(
         val db = database.value ?: return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        viewModelScope.launch {
+        launchAndTouch(pageId) {
             val order = (views.value.maxOfOrNull { it.order } ?: -1) + 1
             val id = pageDatabaseViewDao.insert(PageDatabaseView(databaseId = db.id, name = trimmed, viewType = type, order = order))
             _selectedViewId.value = id
@@ -143,7 +169,7 @@ class PageDatabaseViewModel(
      * properties are untouched (§5.6). */
     fun deleteView(view: PageDatabaseView) {
         if (locked()) return
-        viewModelScope.launch {
+        launchAndTouch(pageId) {
             pageDatabaseViewDao.delete(view.id)
             if (_selectedViewId.value == view.id) _selectedViewId.value = null
         }
@@ -151,7 +177,7 @@ class PageDatabaseViewModel(
 
     fun updateView(view: PageDatabaseView) {
         if (locked()) return
-        viewModelScope.launch { pageDatabaseViewDao.update(view) }
+        launchAndTouch(pageId) { pageDatabaseViewDao.update(view) }
     }
 
     /** A bound property's (Done/Deadline/Recurrence) value is a live proxy read from its
@@ -210,7 +236,8 @@ class PageDatabaseViewModel(
 
     fun moveRowToColumn(row: TableRow, groupPropertyId: Long, option: String) {
         if (locked()) return
-        viewModelScope.launch { propertyValueDao.setValue(groupPropertyId, row.page.id, option) }
+        // A board drag is a cell edit wearing a different gesture, and bumps the same page.
+        launchAndTouch(row.page.id) { propertyValueDao.setValue(groupPropertyId, row.page.id, option) }
     }
 
     /** Gallery view cover (§5.6) — "the first Image block in the row's body." */
@@ -279,7 +306,7 @@ class PageDatabaseViewModel(
         val db = database.value ?: return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        viewModelScope.launch {
+        launchAndTouch(pageId) {
             val order = (properties.value.maxOfOrNull { it.order } ?: -1) + 1
             propertyDao.insert(Property(databaseId = db.id, name = trimmed, type = type, config = config, order = order))
         }
@@ -287,7 +314,7 @@ class PageDatabaseViewModel(
 
     private fun deleteProperty(property: Property) {
         val db = database.value
-        viewModelScope.launch {
+        launchAndTouch(pageId) {
             if (db != null) {
                 when (property.id) {
                     db.donePropertyId -> databaseSyncManager.disableSync(db)
@@ -330,7 +357,7 @@ class PageDatabaseViewModel(
 
     fun confirmChangeType(property: Property, newType: PropertyType) {
         if (locked()) return
-        viewModelScope.launch {
+        launchAndTouch(pageId) {
             // Options only mean anything for Select/Multi-select — carrying them into an
             // unrelated type would just be a stale, invisible leftover.
             val config = if (newType == PropertyType.SELECT || newType == PropertyType.MULTI_SELECT) property.config else null
@@ -400,7 +427,7 @@ class PageDatabaseViewModel(
      * their cells edit through [toggleDone]/[setDeadline]/[setRecurrence] instead. */
     fun setCellValue(property: Property, row: Page, value: String?) {
         if (locked()) return
-        viewModelScope.launch { propertyValueDao.setValue(property.id, row.id, value) }
+        launchAndTouch(row.id) { propertyValueDao.setValue(property.id, row.id, value) }
     }
 
     fun toggleDone(entry: Entry, checked: Boolean) {

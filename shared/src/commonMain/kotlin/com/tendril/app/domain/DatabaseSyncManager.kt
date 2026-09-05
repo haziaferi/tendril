@@ -103,8 +103,9 @@ class DatabaseSyncManager(
             recurrencePropertyId = recurrencePropertyId,
             updatedAt = now,
         )
-        pageDatabaseDao.update(updated)
-        return updated
+        // Rows too, not just the database page: `deleteAllForProperty` above cleared the bound
+        // columns' stored values for *every* row, whatever `rowIds` asked for.
+        return commit(updated, now, touchRows = true)
     }
 
     /** §5.5 — bulk-cleanup: every row's linked Entry goes to Trash (restorable), bindings clear. */
@@ -113,8 +114,9 @@ class DatabaseSyncManager(
             entryDao.getBySourceRowId(row.id)?.let { resolveEntryUseCase.trash(it.id, now) }
         }
         val updated = database.copy(syncToTasks = false, donePropertyId = null, deadlinePropertyId = null, recurrencePropertyId = null, updatedAt = now)
-        pageDatabaseDao.update(updated)
-        return updated
+        // The database page alone: this clears bindings and trashes Entries (their own snapshot
+        // records, with their own timestamps) without rewriting any row's stored cell values.
+        return commit(updated, now, touchRows = false)
     }
 
     /**
@@ -144,9 +146,7 @@ class DatabaseSyncManager(
         }
         propertyValueDao.deleteAllForProperty(propertyId)
 
-        val updated = database.withPropertyIdFor(role, propertyId).copy(updatedAt = now)
-        pageDatabaseDao.update(updated)
-        return updated
+        return commit(database.withPropertyIdFor(role, propertyId).copy(updatedAt = now), now, touchRows = true)
     }
 
     /** §5.2.1 `unbindProperty` — the reverse: crystallizes the role's current Entry-derived
@@ -154,15 +154,34 @@ class DatabaseSyncManager(
     suspend fun unbindProperty(database: PageDatabase, role: BindingRole, now: Instant = Instant.now()): PageDatabase {
         val propertyId = database.propertyIdFor(role) ?: return database
         crystallize(pageDao.getRowsOf(database.id), propertyId, role, now)
-        val updated = database.withPropertyIdFor(role, null).copy(updatedAt = now)
-        pageDatabaseDao.update(updated)
-        return updated
+        return commit(database.withPropertyIdFor(role, null).copy(updatedAt = now), now, touchRows = true)
     }
 
     /** §5.2.1 rebind — `unbindProperty` immediately followed by `bindProperty`, as one atomic
      * action. No Entry is ever deleted or recreated (`sourceRowId` is untouched throughout). */
     suspend fun rebindProperty(database: PageDatabase, role: BindingRole, newPropertyId: Long, now: Instant = Instant.now()): PageDatabase =
         bindProperty(unbindProperty(database, role, now), role, newPropertyId, now)
+
+    /**
+     * The single exit for every binding change — writing the row and saying the page changed are
+     * one operation here, not a write followed by a bump someone has to remember.
+     *
+     * §9.4 (see [com.tendril.app.data.page.PageDao.touch]): a binding change rewrites two kinds
+     * of synced content at once. The database's own snapshot carries `syncToTasks` and the three
+     * role ids, and — through [crystallize], and the clear that follows a bind — the stored cell
+     * values of every row under it change too. Rows are separate snapshot records with separate
+     * timestamps, so bumping the database page alone would propagate the new bindings and strand
+     * every row's crystallized value on this device, the values being the half that cannot be
+     * recomputed from anywhere else. [touchRows] is false only for `disableSync`, which clears
+     * bindings and trashes Entries (their own records, their own timestamps) without rewriting
+     * any row's stored values.
+     */
+    private suspend fun commit(updated: PageDatabase, now: Instant, touchRows: Boolean): PageDatabase {
+        pageDatabaseDao.update(updated)
+        pageDao.touch(updated.pageId, now)
+        if (touchRows) for (row in pageDao.getRowsOf(updated.id)) pageDao.touch(row.id, now)
+        return updated
+    }
 
     /** A live-proxy property's `property_values` rows are already empty (cleared on bind) —
      * this only ever writes fresh rows, one per Row that has a linked Entry, never needs to

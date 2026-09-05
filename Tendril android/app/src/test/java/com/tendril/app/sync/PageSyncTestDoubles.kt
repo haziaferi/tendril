@@ -132,6 +132,12 @@ class FakePageDao(private val store: FakePageStore) : PageDao {
         store.pages[id]?.let { store.pages[id] = it.copy(parentId = parentId, databaseId = databaseId) }
     }
 
+    /** Column-scoped like the real query: a `touch` that rewrote the whole row would hide
+     * exactly the clobbering the narrow `UPDATE` exists to prevent. */
+    override suspend fun touch(id: Long, at: Instant) {
+        store.pages[id]?.let { store.pages[id] = it.copy(updatedAt = at) }
+    }
+
     override suspend fun softDelete(id: Long, deletedAt: Instant) {
         store.pages[id]?.let { store.pages[id] = it.copy(deletedAt = deletedAt, updatedAt = deletedAt) }
     }
