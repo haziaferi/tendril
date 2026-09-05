@@ -21,7 +21,7 @@ class DesktopAppContainer(database: TendrilDatabase) {
     val workbenchCore: WorkbenchCore
     val purgeRegistry = PurgeRegistry(
         database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
-        NoOpEntryScheduleCoordinator,
+        database.propertyDao(), NoOpEntryScheduleCoordinator,
     )
 
     init {

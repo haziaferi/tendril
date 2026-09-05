@@ -51,7 +51,7 @@ class AppContainer(context: Context) {
     val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
     val purgeRegistry = PurgeRegistry(
         database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
-        entryScheduleCoordinator,
+        database.propertyDao(), entryScheduleCoordinator,
     )
     val pagesSyncEngine = PagesSyncEngine(
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),

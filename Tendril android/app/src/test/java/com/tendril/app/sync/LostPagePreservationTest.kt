@@ -36,7 +36,8 @@ class LostPagePreservationTest {
         val ftsDao = FakePageFtsDao(store)
         val purgedDao = FakePurgedRecordDao()
         val registry = PurgeRegistry(
-            purgedDao, pageDao, FakeEntryDao(), FakeHabitDao(), RecordingEntryScheduleCoordinator(),
+            purgedDao, pageDao, FakeEntryDao(), FakeHabitDao(), FakePropertyDao(store),
+            RecordingEntryScheduleCoordinator(),
         )
         val engine = PagesSyncEngine(
             pageDao = pageDao,

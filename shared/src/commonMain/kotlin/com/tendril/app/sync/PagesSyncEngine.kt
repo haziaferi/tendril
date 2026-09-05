@@ -324,15 +324,18 @@ class PagesSyncEngine(
         // Property so Pass 5's row values can resolve even against a database this batch
         // never touched.
         val propertyUidToId = propertyDao.getAll().associate { it.uid to it.id }.toMutableMap()
+        // A peer that has not seen the deletion still carries the column in its schema, and this
+        // pass upserts by uid — so without this the tombstone is undone on the very next merge.
+        val propertyTombstones = purgeRegistry.tombstones(PurgedKind.PROPERTY)
         for (record in records) {
             if (record.uid !in wonUids) continue
             val db = record.database ?: continue
             val pageId = uidToId.getValue(record.uid)
             val pageDatabaseId = pageDatabaseDao.getByPageId(pageId)?.id ?: continue
 
-            val remoteUids = db.properties.map { it.uid }.toSet()
             val existingByUid = propertyDao.getForDatabase(pageDatabaseId).associateBy { it.uid }
             for (p in db.properties) {
+                if (p.uid in propertyTombstones) continue
                 val existing = existingByUid[p.uid]
                 val id = if (existing != null) {
                     propertyDao.update(existing.copy(name = p.name, type = PropertyType.valueOf(p.type), config = p.config, order = p.order))
@@ -342,7 +345,14 @@ class PagesSyncEngine(
                 }
                 propertyUidToId[p.uid] = id
             }
-            existingByUid.values.filter { it.uid !in remoteUids }.forEach { propertyDao.delete(it.id) }
+            // A property absent from this record is NOT deleted. Absence means "hasn't arrived"
+            // -- the rule SnapshotSyncOrchestrator.readAndMerge states for every other record,
+            // and which this pass used to be the single exception to. A device that had not yet
+            // seen a new column re-exported the schema without it, and the column plus every
+            // row's value under it (`property_values` cascades off `properties`) was destroyed
+            // on an ordinary two-device schema race, silently and with no `.tendril-lost` copy.
+            // A real deletion travels as a `PurgedKind.PROPERTY` tombstone instead, the same
+            // signal §5.5.1.1 already uses to tell a deliberate destruction from a slow arrival.
 
             pageDatabaseViewDao.deleteAllForDatabase(pageDatabaseId)
             for (v in db.views) {

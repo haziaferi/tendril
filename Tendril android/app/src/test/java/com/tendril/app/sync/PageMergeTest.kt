@@ -73,7 +73,7 @@ class PageMergeTest {
     private val entryDao = FakeEntryDao()
     private val coordinator = RecordingEntryScheduleCoordinator()
 
-    private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), coordinator)
+    private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
     private val contentRepository = PageContentRepository(blockDao, ftsDao)
 
     private val engine = PagesSyncEngine(
@@ -192,7 +192,7 @@ class PageMergeTest {
         val b = FakePageStore()
         val bPageDao = FakePageDao(b)
         val bPurgedDao = FakePurgedRecordDao()
-        val bRegistry = PurgeRegistry(bPurgedDao, bPageDao, FakeEntryDao(), FakeHabitDao(), RecordingEntryScheduleCoordinator())
+        val bRegistry = PurgeRegistry(bPurgedDao, bPageDao, FakeEntryDao(), FakeHabitDao(), FakePropertyDao(b), RecordingEntryScheduleCoordinator())
         b.seedPage(Page(uid = UID_A, title = "B's newer edit", createdAt = at(3_000L), updatedAt = at(3_000L)))
         bRegistry.adopt(listOf(PurgedRecord(PurgedKind.PAGE, UID_A, at(2_000L))))
         bRegistry.applyToLocalRecords()
@@ -440,7 +440,30 @@ class PageMergeTest {
     }
 
     @Test
-    fun `a property dropped from the remote schema takes its values with it`() = runBlocking {
+    fun `a purged property is deleted, and a peer's schema cannot bring it back`() = runBlocking {
+        val both = listOf(
+            PropertySnapshotRecord(UID_PROP, "Status", "TEXT", order = 0),
+            PropertySnapshotRecord(UID_PROP2, "Notes", "TEXT", order = 1),
+        )
+        engine.mergePages(databaseBatch(1_000L, both))
+
+        // Another device deleted "Notes" for good, and its tombstone arrives.
+        purgeRegistry.adopt(listOf(PurgedRecord(PurgedKind.PROPERTY, UID_PROP2, at(2_000L))))
+        purgeRegistry.applyToLocalRecords()
+
+        assertEquals(listOf("Status"), propertyDao.getAll().map { it.name })
+
+        // That device's peer has not seen the deletion yet and re-exports the old schema. Unlike
+        // a Page, a Property carries no timestamp of its own to supersede a tombstone with, and
+        // it needs none: `Property.uid` is minted fresh, so re-adding a deleted column produces a
+        // *different* property that no tombstone names. A uid that is tombstoned is gone for good.
+        engine.mergePages(listOf(databaseRecord(3_000L, both)))
+
+        assertEquals("a tombstoned column must not be re-inserted", listOf("Status"), propertyDao.getAll().map { it.name })
+    }
+
+    @Test
+    fun `a property missing from a remote schema is kept, not deleted`() = runBlocking {
         val both = listOf(
             PropertySnapshotRecord(UID_PROP, "Status", "TEXT", order = 0),
             PropertySnapshotRecord(UID_PROP2, "Notes", "TEXT", order = 1),
@@ -449,14 +472,13 @@ class PageMergeTest {
         val rowId = pageDao.getByUid(UID_ROW)!!.id
         assertEquals(2, propertyValueDao.getForRow(rowId).size)
 
+        // A device that has not yet seen "Notes" re-exports the schema without it. Absence is
+        // "hasn't arrived", never "was deleted" -- the rule SnapshotSyncOrchestrator.readAndMerge
+        // states for every other record, and which a real deletion signals with a tombstone.
         engine.mergePages(listOf(databaseRecord(2_000L, both.take(1))))
 
-        assertEquals(listOf("Status"), propertyDao.getAll().map { it.name })
-        assertEquals(
-            "the removed column's cells go with it, by the cascade the upsert exists to avoid firing wholesale",
-            listOf("cell for Status"),
-            propertyValueDao.getForRow(rowId).map { it.value },
-        )
+        assertEquals(setOf("Status", "Notes"), propertyDao.getAll().map { it.name }.toSet())
+        assertEquals("the column's cells must survive with it", 2, propertyValueDao.getForRow(rowId).size)
     }
 
     // ------------------------------------------------------------------------- canvas

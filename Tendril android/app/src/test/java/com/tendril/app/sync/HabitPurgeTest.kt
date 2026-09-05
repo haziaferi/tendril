@@ -57,8 +57,11 @@ class HabitPurgeTest {
         val purgedDao = FakePurgedRecordDao()
         val habitDao = FakeHabitDao()
         val entryDao = FakeEntryDao()
-        val pageDao = FakePageDao(FakePageStore())
-        val registry = PurgeRegistry(purgedDao, pageDao, entryDao, habitDao, RecordingEntryScheduleCoordinator())
+        val store = FakePageStore()
+        val pageDao = FakePageDao(store)
+        val registry = PurgeRegistry(
+            purgedDao, pageDao, entryDao, habitDao, FakePropertyDao(store), RecordingEntryScheduleCoordinator(),
+        )
         val orchestrator = SnapshotSyncOrchestrator(
             entryDao = entryDao,
             habitDao = habitDao,

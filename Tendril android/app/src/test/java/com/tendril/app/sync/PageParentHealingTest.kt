@@ -45,7 +45,7 @@ class PageParentHealingTest {
         pageRelationDao = FakePageRelationDao(store),
         purgeRegistry = PurgeRegistry(
             FakePurgedRecordDao(), pageDao, FakeEntryDao(), FakeHabitDao(),
-            RecordingEntryScheduleCoordinator(),
+            FakePropertyDao(store), RecordingEntryScheduleCoordinator(),
         ),
         pageContentRepository = PageContentRepository(blockDao, ftsDao),
     )

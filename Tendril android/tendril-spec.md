@@ -72,6 +72,7 @@ second copy of the reasoning.
 | 2026-09-05 | Audit sections 2, 3 and 4 closed in full, plus §5 items 1, 2 and 4 (PR #3). **Security:** the PBKDF2 salt moved into `sync_meta.json` per folder rather than a compile-time constant, and a folder that declares itself encrypted now refuses plaintext — the two are one fix, since the marker is what distinguishes an injected file from a folder mid-migration (§9.4.2). Checkbox-only mode refuses to activate while App Lock is on and hides the nav bar while bypassing the keyguard, App Lock and a keyguard bypass being in direct contradiction (§3.1.2). A write no longer overwrites an encrypted folder whose key it cannot open — a *mistyped* passphrase derives a perfectly valid key, so the previous `key == null` guard passed it straight through and re-encrypted everything under a key nobody knows. **Sync correctness:** a page whose parent arrived in a later batch was orphaned permanently (Pass 2 resolved parents for winners only); repair now runs for every record, but a non-winner may only *fill* an unresolved position, never overwrite one, or a stale record could move a page. Whole-page LWW is unchanged (§9.4) but the losing record is now written beside the winner as `<uid>.tendril-lost-<updatedAt>.json` instead of being discarded unread. Purge tombstones extended to Habits, which had no "Delete forever" at all. **Features:** one level of block nesting now renders (§3.1.1) and Notion import preserves it (§7 — the flattening was never about the format, the editor filtered children out of its own list); `Habit.duration` wired end to end (§3.3); habit reminders implemented on the notification channel that had been created for them and never posted to (§9.7). **Process:** CI compiles and tests the app rather than only reading it — a compile break had shipped through a green static-only check. 204 unit tests. | §3.1.1, §3.1.2, §3.3, §5.5.1, §5.5.1.1, §7, §9.4, §9.4.2, §9.7 |
 | 2026-09-04 (audit, correction) | Purge tombstones **travel** rather than staying local — a local-only tombstone made "Delete forever" unachievable on more than one device, since the next sync restored everything from whichever device hadn't purged. §9.4's additive-merge rule is narrowed accordingly: absence still never implies deletion, an explicit tombstone does, and record-vs-tombstone resolves by later timestamp so a stale delete cannot destroy a newer edit | §5.5.1.1, §9.4, §9.4.1 |
 | 2026-09-05 (write path) | **An edit to a cell, a block, a tag, a column or a canvas node now reaches the other device.** §9.4's merge decides per page by last-write-wins on `pages.updated_at`, and outside the merge the only writers of that column were `updateTitle`, `softDelete` and `restore` — so every mutation that changes what travels *inside* a page's snapshot left the timestamp alone. The exported `pages/<page_id>.json` carried new content under an unchanged timestamp, was not newer on the peer, lost, and the passes that apply schema, canvas, blocks, tags and cell values were skipped. Not recorded as a conflict either: an *equal* timestamp is the same version by definition, so no `.tendril-lost` copy was written and the edit vanished with nothing anywhere saying it had existed — then vanished on the editing device too, as soon as the peer made any timestamp-moving edit. `PageDao.touch(id, at)` added, and reached through a launcher rather than a second call — `launchAndReindex`/`launchTouching`, `launchAndTouch(pageIdToBump)`, and one `commit` exit in `DatabaseSyncManager` — so the write and the bump are one operation and there is no bump to forget, which is how this arose in the first place. *Which* page is the load-bearing part and is a required parameter, not a default: a cell hangs off its row's page, a property or view off the database's, a binding change off both. Two documented exceptions keep explicit bumps (`setChecked`, narrower lock gate; `addTag`, conditional). LWW itself is unchanged. Excluded on purpose: the lazy `ensureDefaultView` and `PageCanvas` shell writes, which run on open rather than on an edit and would let a device that merely looked at a page outrank one that had edited it. New `WritePathSyncTest` drives the real ViewModels across two stores rather than hand-building snapshot records — the only arrangement in which the defect is visible, and the reason `PageMergeTest` passed throughout. 256 unit tests. | §9.4 |
+| 2026-09-05 (merge losses) | **Three things the merge destroyed as it went past, all of which the write-path fix above turned from latent into routine.** (1) Only *incoming* losers were preserved as `.tendril-lost-`; when an arriving record won, the local copy was overwritten with nothing naming it on either device. The local export is now captured before Pass 1 and compared on content with the timestamp normalised, so a routine catch-up does not litter the folder. (2) `Block.imagePath` is deliberately absent from the snapshot, so rebuilding a winner's blocks wrote null over it and unlinked every picture on the receiving device; held by uid across the delete-and-reinsert instead. (3) A property absent from a winning schema was deleted, taking every row's cell with it by cascade — the single place breaking `SnapshotSyncOrchestrator`'s own "absence never implies deletion" rule, and encoded in a passing test, which is why it survived review. Absence now means "hasn't arrived"; a real deletion travels as a `PurgedKind.PROPERTY` tombstone, which the merge refuses to re-insert and which needs no supersede rule, a re-added column getting a fresh uid. Still open: nothing in the app surfaces a preserved lost version. 261 unit tests. | §5.5.1.1, §9.4 |
 
 ---
 
@@ -1831,6 +1832,45 @@ single-writer Habit-folder case:
   through the real ViewModels, exports, and merges into a second device's store, which is the only
   arrangement in which the defect is visible.
 
+- **Fixed 2026-09-05 (same day, second pass) — what the merge destroys on the way past.** Making
+  the timestamp move above was necessary and is not in question, but it changed how often the
+  merge's destructive half actually runs. Before it, a page whose *content* changed rarely won
+  anything, so the pass that rebuilds a winner's blocks, tags and cell values seldom ran over a
+  page that already existed here. Now every synced edit makes a record win on the peer, and three
+  things that were latent became routine.
+
+  **The local copy is preserved too, not only the arriving one.** `candidateLosers` collected
+  incoming records that lost, and nothing else — so `<uid>.tendril-lost-<updatedAt>.json` was
+  written for the *other* device's version and never for this one's. When an arriving record won,
+  whatever this device held was overwritten and gone, with no file naming it on either side. The
+  local export is now captured before Pass 1 (there is nothing left to capture afterwards) and
+  returned alongside the incoming losers. Compared on content with the timestamp normalised, since
+  the timestamps necessarily differ — that is *why* the remote won — and comparing the records
+  whole would preserve a copy on every routine catch-up where nothing was lost at all.
+
+  **`Block.imagePath` survives the rebuild.** It points into this device's app-private storage and
+  is deliberately excluded from the snapshot, so an arriving record can never carry one; rebuilding
+  from that record wrote null over it and unlinked the picture with the file still on disk. Held by
+  uid across the delete-and-reinsert instead. The remote has nothing to say about where this device
+  keeps its own copy.
+
+  **A property absent from a schema is no longer deleted.** This pass was the single exception to
+  the rule stated one file away in `SnapshotSyncOrchestrator.readAndMerge` — *"absence still never
+  implies deletion… a real hard-delete propagates instead as an explicit tombstone"* — and the
+  exception was encoded in a passing test, which is why it survived review. A device that had not
+  yet seen a new column re-exported the database without it, and the column plus every row's value
+  under it went with it, on an ordinary two-device schema race, silently and with no preserved
+  copy. `PurgedKind.PROPERTY` supplies the signal absence could not: `PurgeRegistry.purgeProperty`
+  records the tombstone and drops the column as one operation, the merge refuses to re-insert a
+  tombstoned uid, and `PageDatabaseViewModel` deletes through the registry rather than the DAO.
+  Unlike the other kinds there is no supersede check, and none is needed: a `Property` carries no
+  timestamp to compare, and `Property.uid` is minted fresh, so re-adding a deleted column produces
+  a *different* property that no tombstone names.
+
+  Not fixed here, and named so it is not mistaken for done: a preserved lost version is still only
+  a file in the folder — nothing in the app tells you one exists. 261 unit tests.
+
+
 ### 9.4.1 Portable export/import (Decided 2026-07-16)
 
 Distinct from §9.4's continuous background sync feed between two of a person's own devices — this is
@@ -2445,6 +2485,24 @@ section):
 - Desktop companion app (§12) — feasibility and platform strategy explored and scored (Kotlin
   Multiplatform + Compose Multiplatform), but not scheduled into §9.9; graduates into its own spec
   file only once it actually enters the build sequence.
+
+- A stable per-install **device id** (**considered and deferred 2026-09-06**). Raised while designing
+  the merge-loss fixes of §9.4: several candidate designs wanted one, and the argument for adding it
+  early is real — a device id is cheap to mint now and expensive to retrofit, since anything that has
+  already written identifiers keyed on its absence has to be re-keyed. It is deferred anyway, on
+  three grounds. **Nothing needs it.** The two designs that did — a conflict-free fractional order
+  key for blocks, and a CRDT actor id — were both examined against this codebase and both declined
+  (see below); with those gone, no code would read it. **It is not the small change it looks like.**
+  There is no shared preferences abstraction: `AppLockPreferences`, `ThemePreferences`,
+  `SyncStatusPreferences` and `SecretStore` all live in the Android module and the desktop has no
+  counterpart, so a per-install value needs a new `expect`/`actual` pair, a new interface with two
+  implementations, or a Room row — and a Room row means a schema bump, which §9.10's destructive
+  policy makes the most expensive kind of change available. **And it is the exact generality this
+  spec refuses elsewhere**: `PurgedKind`'s own note says speculative enum members "are the sort of
+  dead generality this codebase avoids; add HABIT alongside the UI that needs it," and an unused
+  identity facility is that, with a wider blast radius. Recorded rather than built so the reasoning
+  survives: whichever feature first needs a device id should add it, and should expect the retrofit
+  cost this entry declines to pay in advance.
 
 **Decided out of scope** (unlikely to resurface, listed for completeness):
 - A general Notion-style formula language for database properties (§5.4).

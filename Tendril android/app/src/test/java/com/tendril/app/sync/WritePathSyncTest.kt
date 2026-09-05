@@ -110,6 +110,9 @@ class WritePathSyncTest {
         val viewLockState = ViewLockState()
         val checkboxOnlyState = CheckboxOnlyState()
 
+        val purgedDao = FakePurgedRecordDao()
+        val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
+
         val engine = PagesSyncEngine(
             pageDao = pageDao,
             blockDao = blockDao,
@@ -122,7 +125,7 @@ class WritePathSyncTest {
             canvasNodeDao = nodeDao,
             canvasEdgeDao = edgeDao,
             pageRelationDao = relationDao,
-            purgeRegistry = PurgeRegistry(FakePurgedRecordDao(), pageDao, entryDao, FakeHabitDao(), coordinator),
+            purgeRegistry = purgeRegistry,
             pageContentRepository = contentRepository,
         )
 
@@ -133,7 +136,7 @@ class WritePathSyncTest {
 
         fun database(pageId: Long) = PageDatabaseViewModel(
             pageId, pageDao, pageDatabaseDao, propertyDao, propertyValueDao, entryDao, viewDao, blockDao,
-            databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, viewLockState,
+            databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState,
         )
 
         fun canvas(pageId: Long) = CanvasViewModel(pageId, pageDao, canvasDao, nodeDao, edgeDao)
@@ -149,6 +152,10 @@ class WritePathSyncTest {
     /** One sync pass in one direction, exactly as the folder sync runs it: A writes its snapshot
      * out, B reads it in. */
     private suspend fun syncAtoB() {
+        // Tombstones first, then records -- the order SnapshotSyncOrchestrator uses, so a record
+        // and the tombstone that kills it cannot cross in the same pass.
+        b.purgeRegistry.adopt(a.purgedDao.getAll())
+        b.purgeRegistry.applyToLocalRecords()
         b.engine.mergePages(a.engine.exportPages())
     }
 
@@ -268,6 +275,25 @@ class WritePathSyncTest {
         syncAtoB()
 
         assertEquals(listOf(PropertyType.NUMBER), b.propertyDao.getAll().map { it.type })
+    }
+
+    @Test
+    fun `a column deleted on one device is deleted on the other`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        syncAtoB()
+        assertEquals(1, b.propertyDao.getAll().size)
+
+        a.database(seeded.databasePage.id).apply {
+            requestDeleteProperty(seeded.property)
+            confirmDeleteProperty()
+        }
+        syncAtoB()
+
+        assertEquals(
+            "absence no longer deletes, so a real deletion has to travel as its own tombstone",
+            emptyList<String>(),
+            b.propertyDao.getAll().map { it.name },
+        )
     }
 
     // ------------------------------------------------------------------------------ canvas

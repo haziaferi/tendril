@@ -4,6 +4,7 @@ import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.data.purge.PurgedRecordDao
@@ -33,6 +34,7 @@ class PurgeRegistry(
     private val pageDao: PageDao,
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
+    private val propertyDao: PropertyDao,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
 ) {
     /** Records the tombstone *before* dropping the row, so a crash between the two leaves a
@@ -59,6 +61,23 @@ class PurgeRegistry(
         // an Entry's alarms down first: an alarm outliving its row is a wakeup for nothing.
         entryScheduleCoordinator.onHabitRemoved(habitId)
         habitDao.deleteForever(habitId)
+    }
+
+    /**
+     * Deleting a database column. Unlike the three above this is not reached from a Trash — a
+     * property has no Trash — but it needs a tombstone for the same reason: §9.4's merge upserts
+     * every property in a winning schema, so a column deleted here reappears the moment a device
+     * that has not seen the deletion re-exports the database. Absence cannot carry the news;
+     * only a tombstone can.
+     *
+     * `property_values` cascades off `properties`, so the row's cells go with the column — which
+     * is the point, and is why this is a deliberate action with its own confirm dialog (§5.5)
+     * rather than something the merge is allowed to infer.
+     */
+    suspend fun purgeProperty(propertyId: Long, now: Instant = Instant.now()) {
+        val property = propertyDao.getById(propertyId) ?: return
+        purgedRecordDao.insert(PurgedRecord(PurgedKind.PROPERTY, property.uid, now))
+        propertyDao.delete(propertyId)
     }
 
     /** uid → `purgedAt` for one kind, read once per merge pass rather than queried per record. */
@@ -98,6 +117,12 @@ class PurgeRegistry(
                     if (entry.updatedAt.isAfter(tombstone.purgedAt)) supersede(tombstone)
                     else removeEntry(entry)
                 }
+                // No supersede check, unlike the three below: a Property carries no timestamp of
+                // its own to compare against `purgedAt`, and it needs none. `Property.uid` is minted
+                // fresh on creation, so re-adding a deleted column produces a *different* property
+                // that no tombstone names — there is no resurrection here for a supersede rule to
+                // guard against, only a stale peer schema, which this is meant to refuse.
+                PurgedKind.PROPERTY -> propertyDao.getByUid(tombstone.uid)?.let { propertyDao.delete(it.id) }
                 PurgedKind.HABIT -> habitDao.getByUid(tombstone.uid)?.let { habit ->
                     if (habit.updatedAt.isAfter(tombstone.purgedAt)) supersede(tombstone)
                     else {
