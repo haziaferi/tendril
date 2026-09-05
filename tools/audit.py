@@ -104,7 +104,11 @@ DAO_ANN = re.compile(r"^\s*@(?:Query|Insert|Update|Delete|Upsert)\b")
 DAO_FUN = re.compile(r"^\s*(?:suspend\s+)?fun\s+(\w+)")
 KDOC_LINK = re.compile(r"\[([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)*)\]")
 LEAKED_FLOW = re.compile(r"^\s*val\s+\w+\s*:\s*StateFlow<.*>\s*=\s*_\w+\s*$")
-REGEX_IN_BODY = re.compile(r"^\s{8,}[^*/].*\bRegex\(")
+# Indentation stands in for "inside a function body", but a `val` in a nested companion
+# object is indented identically and is allocated once. A per-call allocation is by
+# definition not a declaration, so exclude those outright.
+REGEX_IN_BODY = re.compile(r"^\s{8,}(?!.*\b(?:val|var)\s)[^*/].*\bRegex\(")
+FUN_DECL = re.compile(r"^\s*(?:@\w+\s+)*(?:private |internal |public |protected )?(?:suspend )?fun")
 THROWING = re.compile(r"\b(?:importAdditive|restoreFromBackup|readAndMerge|writeSnapshots)\s*\(|\b\w+\.(?:import|export)\s*\(")
 FRAMEWORK_ANN = ("@Test", "@Before", "@After", "@BeforeClass", "@AfterClass", "@RunWith",
                  "@Composable", "@TypeConverter", "@Dao", "@Database", "@Entity", "@Preview")
@@ -171,7 +175,15 @@ def main() -> int:
                     if not (set(parts) & known) and m.group(1) not in known:
                         rep.add("dangling KDoc link", f"{rel(f)}:{i}  [{m.group(1)}]")
             if not is_test and THROWING.search(line) and not s.startswith(("*", "//", "suspend fun", "fun", "private")):
-                window = "\n".join(lines[max(0, i - 14):i + 4])
+                # Back to the start of the enclosing function rather than a fixed number of
+                # lines: a try that wraps the whole body opens far above its call and its catch
+                # sits below, which a fixed window reported as unguarded.
+                start = 0
+                for j in range(i - 1, max(0, i - 200), -1):
+                    if FUN_DECL.match(lines[j]):
+                        start = j
+                        break
+                window = "\n".join(lines[start:i + 4])
                 if "runCatching" not in window and "try {" not in window and "catch" not in window:
                     rep.add("unguarded throwing I/O call", f"{rel(f)}:{i}  {s[:90]}")
 

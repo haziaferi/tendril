@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -69,8 +68,7 @@ import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
 import com.tendril.app.storage.ThemePreferences
 import com.tendril.app.sync.PortableArchive
-import com.tendril.app.sync.AndroidSafSyncFileStore
-import com.tendril.app.sync.SnapshotSyncOrchestrator
+import com.tendril.app.sync.SyncCoordinator
 import com.tendril.app.ui.theme.TendrilColorTheme
 import com.tendril.app.ui.theme.TendrilMode
 import com.tendril.app.ui.theme.TendrilTypeface
@@ -84,7 +82,7 @@ fun SettingsScreen(
     secretStore: SecretStore,
     appLockPreferences: AppLockPreferences,
     syncStatusPreferences: SyncStatusPreferences,
-    snapshotSyncOrchestrator: SnapshotSyncOrchestrator,
+    syncCoordinator: SyncCoordinator,
     portableArchive: PortableArchive,
     notionImporter: NotionImporter,
     databaseSyncManager: DatabaseSyncManager,
@@ -97,7 +95,7 @@ fun SettingsScreen(
         Column(modifier = Modifier.fillMaxWidth().padding(innerPadding).verticalScroll(rememberScrollState())) {
             AppearanceSection(themePreferences)
             HorizontalDivider()
-            SyncFolderSection(syncFolderManager, syncStatusPreferences, snapshotSyncOrchestrator, secretStore)
+            SyncFolderSection(syncFolderManager, syncStatusPreferences, syncCoordinator)
             HorizontalDivider()
             AtRestEncryptionSection(secretStore)
             HorizontalDivider()
@@ -249,16 +247,16 @@ private fun ThemeSwatchChip(theme: TendrilColorTheme, selected: Boolean, onClick
 private fun SyncFolderSection(
     manager: SyncFolderManager,
     syncStatus: SyncStatusPreferences,
-    orchestrator: SnapshotSyncOrchestrator,
-    secretStore: SecretStore,
+    coordinator: SyncCoordinator,
 ) {
-    val context = LocalContext.current
     val folderUri by manager.folderUri.collectAsState()
     val lastSyncedAt by syncStatus.lastSyncedAt.collectAsState()
-    val passphrase by secretStore.syncPassphrase.collectAsState()
+    // Both from the coordinator rather than local state: the same pass now also runs from the
+    // Activity's lifecycle (§9.4), so this button has to reflect a sync it didn't start, and a
+    // failure that happened while nothing was on screen has to surface somewhere.
+    val syncing by coordinator.running.collectAsState()
+    val syncError by coordinator.lastError.collectAsState()
     val scope = rememberCoroutineScope()
-    var syncing by remember { mutableStateOf(false) }
-    var syncError by remember { mutableStateOf<String?>(null) }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
         onResult = { uri -> manager.onFolderGranted(uri) },
@@ -299,30 +297,11 @@ private fun SyncFolderSection(
                 Text(lastSyncedText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
                     enabled = !syncing,
-                    onClick = {
-                        val uri = folderUri ?: return@Button
-                        syncing = true
-                        scope.launch {
-                            // `syncing` is cleared in a finally: a throw here used to leave the
-                            // button disabled forever *and* take the app down with it. The
-                            // store's writes now surface failures rather than silently doing
-                            // nothing, so this is a path that genuinely reports.
-                            try {
-                                val store = AndroidSafSyncFileStore.create(context, uri)
-                                if (store == null) {
-                                    syncError = "Couldn't open the sync folder — try choosing it again."
-                                } else {
-                                    syncError = null
-                                    orchestrator.syncNow(store, passphrase)
-                                    syncStatus.markSyncedNow()
-                                }
-                            } catch (e: Exception) {
-                                syncError = e.message ?: "Sync failed."
-                            } finally {
-                                syncing = false
-                            }
-                        }
-                    },
+                    // Every guard this used to hold inline — the store failing to open, the
+                    // passphrase-mismatch refusal to write, clearing the in-flight flag in a
+                    // finally — now lives in SyncCoordinator, because the lifecycle triggers
+                    // need exactly the same ones and two copies of that is how they drift.
+                    onClick = { scope.launch { coordinator.sync() } },
                 ) { Text(if (syncing) "Syncing…" else "Sync now") }
             }
             syncError?.let {
@@ -421,8 +400,17 @@ private fun PortableBackupSection(archive: PortableArchive) {
         onResult = { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
             scope.launch {
-                statusMessage = runCatching { archive.export(uri) }
-                    .fold({ "Exported" }, { it.message ?: "Export failed." })
+                statusMessage = runCatching { archive.export(uri) }.fold(
+                    { result ->
+                        if (result.encrypted) {
+                            "Exported — encrypted with your sync passphrase. Anyone opening this " +
+                                "file, including you on another device, will need that passphrase."
+                        } else {
+                            "Exported"
+                        }
+                    },
+                    { it.message ?: "Export failed." },
+                )
             }
         },
     )

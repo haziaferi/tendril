@@ -120,10 +120,11 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
     var syncError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 folderPath?.toString() ?: "No sync folder chosen",
@@ -155,14 +156,23 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                 val path = folderPath ?: return@TextButton
                 syncing = true
                 scope.launch {
-                    // `syncing` is cleared in a finally, and failures are reported rather than
-                    // thrown on. SyncFileStore's contract is explicit that a write which cannot
-                    // complete throws; without this, one unwritable folder disabled the button
-                    // for the rest of the session. Android's own "Sync now" already does this.
+                    // SyncFileStore's contract is that a write which cannot complete throws,
+                    // and callers handle it. Without the finally, one throw left `syncing`
+                    // stuck true and the button disabled for the rest of the session, with
+                    // nothing on screen saying why. Android's caller already did this.
                     try {
+                        val key = passphrase.ifBlank { null }
                         val store = DesktopFileSyncFileStore(path)
-                        orchestrator.syncNow(store, passphrase.ifBlank { null })
-                        syncError = null
+                        val merge = orchestrator.readAndMerge(store, key)
+                        if (merge.passphraseMismatch) {
+                            // Writing here would overwrite the folder's only copy with this
+                            // device's state under the wrong key (§9.4.2).
+                            syncError = "${merge.undecryptableFiles} file(s) couldn't be decrypted — " +
+                                "check the passphrase. Nothing was written."
+                        } else {
+                            orchestrator.writeSnapshots(store, key)
+                            syncError = null
+                        }
                     } catch (e: Exception) {
                         syncError = e.message ?: "Sync failed."
                     } finally {
@@ -171,6 +181,15 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                 }
             },
         ) { Text(if (syncing) "Syncing…" else "Sync now") }
+        }
+        syncError?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
     }
     syncError?.let {
         Text(

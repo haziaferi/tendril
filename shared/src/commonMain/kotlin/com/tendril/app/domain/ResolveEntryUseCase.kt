@@ -9,6 +9,8 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.RecurrenceRule
 import java.time.Instant
 import java.time.LocalDate
+import java.time.Period
+import java.time.ZoneId
 
 /**
  * §5.2 / §9.8 R1 — the one place every surface that can resolve a TASK Entry (Row checkbox,
@@ -33,17 +35,16 @@ class ResolveEntryUseCase(
         val entry = entryDao.getById(entryId) ?: return
         require(entry.kind == EntryKind.TASK) { "Only TASK Entries resolve; EVENT has no done/not-done state (§4)" }
 
-        val occurrenceDate = entry.startDate ?: LocalDate.now()
+        val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
+        val occurrenceDate = entry.startDate ?: today
         completionDao.insert(
             EntryCompletion(entryId = entryId, occurrenceDate = occurrenceDate, resolvedAt = now, status = status)
         )
 
         val recurrence = entry.recurrenceRule
         val updated = if (recurrence is RecurrenceRule.Elastic) {
-            // §6.2 — anchored to the *original fixed schedule*, not to when it was actually
-            // resolved: advance by exactly one period from the occurrence just resolved.
             entry.copy(
-                startDate = occurrenceDate.plus(recurrence.period),
+                startDate = nextOccurrenceAfter(occurrenceDate, recurrence.period, today),
                 status = EntryStatus.PENDING,
                 updatedAt = now,
             )
@@ -52,6 +53,42 @@ class ResolveEntryUseCase(
         }
         entryDao.update(updated)
         entryScheduleCoordinator.onEntryChanged(updated)
+    }
+
+    /**
+     * The next occurrence of a recurring TASK, after [resolved] was just resolved on [today].
+     *
+     * §6.2 fixes the *phase*: occurrences step from the original schedule, never from the
+     * moment of resolution, so handling one late does not drag the whole series later. Adding
+     * a single period is what implements that — but on its own it only lands in the future
+     * when the task was resolved roughly on time. Resolve a P7D task nineteen days late and
+     * `resolved + P7D` is still eleven days in the past, which is not "the next occurrence"
+     * under any reading of §6.1 or §6.2, and it broke three things at once:
+     *
+     *  - the task reappeared overdue immediately, needing one Done tap per missed period to
+     *    clear — while §5.2 keeps exactly one live Entry row per recurring task, so those
+     *    intermediate occurrences have no representation to resolve in the first place;
+     *  - each of those taps wrote an [EntryCompletion] claiming an occurrence was resolved
+     *    that nobody ever did, corrupting the append-only history §4.1 relies on for
+     *    "what actually happened";
+     *  - §9.7 refuses to schedule an alarm whose trigger time is already past, so every one
+     *    of those in-between states was silently unscheduled — a long-neglected recurring
+     *    task stopped notifying entirely.
+     *
+     * So: keep stepping by whole periods (preserving §6.2's phase and, for MONTH intervals,
+     * `Period`'s own calendar-correct end-of-month clamping — which repeated addition and a
+     * single multiplied jump do not agree on) until the date is strictly in the future. The
+     * occurrence just resolved stays logged as resolved; the ones missed in between are
+     * passed over rather than invented.
+     *
+     * A zero or negative period would never terminate, so it advances by nothing at all —
+     * the create/edit paths are what keep such a rule from being stored (§4.1).
+     */
+    private fun nextOccurrenceAfter(resolved: LocalDate, period: Period, today: LocalDate): LocalDate {
+        if (period.isZero || period.isNegative) return resolved
+        var next = resolved.plus(period)
+        while (!next.isAfter(today)) next = next.plus(period)
+        return next
     }
 
     /** The undo counterpart to [resolve] — unchecking a Row's bound Done checkbox (§5.2) or

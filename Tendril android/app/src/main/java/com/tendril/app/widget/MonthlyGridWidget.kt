@@ -31,7 +31,8 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.tendril.app.MainActivity
 import com.tendril.app.TendrilApp
-import com.tendril.app.data.entry.Entry
+import com.tendril.app.domain.recurrence.EntryOccurrence
+import com.tendril.app.domain.recurrence.EntryOccurrences
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle as JavaTextStyle
@@ -57,9 +58,10 @@ class MonthlyGridWidget : GlanceAppWidget() {
         val today = LocalDate.now()
         val gridStart = today.withDayOfMonth(1).let { it.minusDays(((it.dayOfWeek.value - DayOfWeek.MONDAY.value) + 7).toLong() % 7) }
         val gridEnd = gridStart.plusDays(41)
-        val entriesByDay = container.database.entryDao().getInRange(gridStart, gridEnd)
-            .filter { it.startDate != null }
-            .groupBy { it.startDate!! }
+        // See AgendaWidget for why this is getAllDated + expansion rather than getInRange:
+        // a recurring series' stored row sits at its first occurrence, not inside this grid.
+        val entriesByDay = EntryOccurrences
+            .byDay(container.database.entryDao().getAllDated(), gridStart, gridEnd)
 
         provideContent {
             val prefs = currentState<Preferences>()
@@ -75,7 +77,7 @@ class MonthlyGridWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 @Composable
-private fun MonthlyGridContent(theme: WidgetTheme, today: LocalDate, gridStart: LocalDate, entriesByDay: Map<LocalDate, List<Entry>>) {
+private fun MonthlyGridContent(theme: WidgetTheme, today: LocalDate, gridStart: LocalDate, entriesByDay: Map<LocalDate, List<EntryOccurrence>>) {
     val size = LocalSize.current
     val density = densityFor(size.height.value.toInt())
     val monthLabel = today.month.getDisplayName(JavaTextStyle.FULL, Locale.getDefault())
@@ -131,7 +133,7 @@ private fun MonthDayCell(
     date: LocalDate,
     inMonth: Boolean,
     isToday: Boolean,
-    events: List<Entry>,
+    events: List<EntryOccurrence>,
     density: MonthDensity,
     theme: WidgetTheme,
     modifier: GlanceModifier,
@@ -154,7 +156,7 @@ private fun MonthDayCell(
                 )
                 MonthDensity.ONE, MonthDensity.WRAP -> {
                     Text(
-                        text = events.first().title,
+                        text = events.first().entry.title,
                         maxLines = if (density == MonthDensity.WRAP) 2 else 1,
                         style = TextStyle(color = ColorProvider(theme.palette.textDim), fontSize = 8.sp, textAlign = TextAlign.Center),
                     )

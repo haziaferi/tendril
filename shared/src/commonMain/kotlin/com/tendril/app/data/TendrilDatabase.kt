@@ -63,7 +63,17 @@ import kotlinx.coroutines.Dispatchers
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
         PurgedRecord::class,
     ],
-    version = 7, // §5.5.1.1 — purge tombstones now cover Entries too and travel; destructive (§9.10)
+    // Bump this on ANY change to the entity set or to a column — Room hashes the schema
+    // and compares it against the hash stored in `room_master_table` at open time. A hash
+    // that moved while `version` stayed put throws IllegalStateException ("you've changed
+    // schema but forgot to update the version number") *before* migration runs, so
+    // fallbackToDestructiveMigration below never gets the chance to recover: it only
+    // handles version changes.
+    //
+    // v8 is a merge of two independent bumps that each reached a different number from a
+    // shared v5: the Canvas tables took it to 6 on one branch, purge tombstones to 7 on
+    // the other. The combined entity set hashes to neither, so it has to clear both.
+    version = 8, // §3.2/§9.9/§5.5.1.1 — v5 providerEventId; Canvas tables; purge tombstones; destructive pre-v1 (§9.10)
     // No schema-history export while Room migration policy is destructive-only pre-v1
     // (§9.10) — nothing to diff against yet. Revisit alongside the @AutoMigration switch.
     exportSchema = false,

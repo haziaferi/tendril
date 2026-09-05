@@ -363,6 +363,7 @@ class PageDatabaseViewModel(
     /** §3.1.3 — "Save as template," same operation as [PageDetailViewModel.saveAsTemplate]
      * but for a Database: clones its schema (properties), never its rows. */
     fun saveAsTemplate() {
+        if (locked()) return
         val current = page.value ?: return
         viewModelScope.launch { templateManager.saveAsTemplate(current) }
     }

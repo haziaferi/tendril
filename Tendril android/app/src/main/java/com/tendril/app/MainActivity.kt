@@ -51,10 +51,31 @@ class MainActivity : FragmentActivity() {
         isUnlockedForSession.value = !(container.appLockPreferences.enabled.value && container.appLockPreferences.lockOnLaunch.value)
 
         lifecycle.addObserver(object : DefaultLifecycleObserver {
+            /**
+             * §9.4's "checks for these on resume/launch" — the `.sync-conflict-*` sweep, and
+             * the merge that brings in whatever the other device wrote while this one was
+             * away. Until now the only thing that ever ran a sync pass was the Settings
+             * button, so a conflict file sat undetected until someone went looking for it.
+             */
+            override fun onStart(owner: LifecycleOwner) {
+                container.syncCoordinator.syncInBackground()
+            }
+
+            /**
+             * §9.4's `onStop`/backgrounding flush — "the normal 'close the page, go do
+             * something else' moment is never left waiting on a timer."
+             *
+             * Skipped on a configuration change, which also calls `onStop`: a rotation is not
+             * a backgrounding, and syncing on every one would rewrite the whole folder for
+             * nothing. The pass itself runs on the coordinator's own application-scoped,
+             * non-cancellable coroutine, so this Activity going away can't stop a write
+             * part-written (see [com.tendril.app.sync.SyncCoordinator]).
+             */
             override fun onStop(owner: LifecycleOwner) {
                 if (container.appLockPreferences.enabled.value && container.appLockPreferences.lockOnBackground.value) {
                     isUnlockedForSession.value = false
                 }
+                if (!isChangingConfigurations) container.syncCoordinator.syncInBackground()
             }
         })
 

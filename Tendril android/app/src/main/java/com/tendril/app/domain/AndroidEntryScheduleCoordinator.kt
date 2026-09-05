@@ -2,6 +2,7 @@ package com.tendril.app.domain
 
 import com.tendril.app.calendarprovider.CalendarProviderSync
 import com.tendril.app.data.entry.Entry
+import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.notifications.AlarmScheduler
 
 /**
@@ -13,9 +14,16 @@ import com.tendril.app.notifications.AlarmScheduler
 class AndroidEntryScheduleCoordinator(
     private val alarmScheduler: AlarmScheduler,
     private val calendarProviderSync: CalendarProviderSync,
+    private val entryDao: EntryDao,
 ) : EntryScheduleCoordinator {
     override suspend fun onEntryChanged(entry: Entry) {
-        alarmScheduler.rescheduleFor(entry)
+        // A recurring EVENT's alarms anchor to its next occurrence, and an exception row can
+        // skip or move that occurrence (§4.1) — so the scheduler needs them alongside the row.
+        // Fetched here rather than inside AlarmScheduler so the scheduler keeps its single DAO
+        // dependency and stays constructible from a test without a database.
+        val exceptions =
+            if (entry.originalEntryId == null) entryDao.getExceptionsOf(entry.id) else emptyList()
+        alarmScheduler.rescheduleFor(entry, exceptions)
         calendarProviderSync.upsertEntry(entry)
     }
 

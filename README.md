@@ -95,6 +95,17 @@ an API 32 image as well as a current one.
 
 ---
 
+## Continuous integration
+
+`.github/workflows/build.yml` runs the three commands above on every pull request and on every
+push to `main` — `:app:assembleDebug` plus `:app:testDebugUnitTest`, then `shared`'s own `build`,
+then the desktop one. All three run even if an earlier one fails, so a single run reports all
+three results; a failed test run uploads its HTML report as a job artifact.
+
+Note the `gradlew` scripts are committed **executable** (mode `755`). They were `644` until the
+workflow was added, which is invisible on Windows and makes `./gradlew` fail with "Permission
+denied" on any Linux or macOS clone, CI included. If git ever shows a mode change back to `644`,
+restore it with `git update-index --chmod=+x` rather than working around it in the workflow.
 ## Checks
 
 ```bash

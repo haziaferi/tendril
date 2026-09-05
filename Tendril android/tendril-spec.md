@@ -3,14 +3,23 @@
 **Status:** living document, consolidated from design conversation. Sections are marked **Decided**,
 **Open**, or **Deferred** — treat anything not marked Decided as unsettled, even if it reads
 confidently. App name **decided 2026-08-04: Tendril** (previously carried as the "Noema" working
-title throughout this doc and its reference artifacts below — those filenames weren't renamed, since
-they're real files on disk, not just prose).
+title). The 2026-08-04 Revision Log entry claimed the document was "retitled throughout"; it wasn't —
+22 prose references to the old name survived until 2026-09-04, when they were finally replaced. The
+two that remain, here and in that log row, are deliberate: they are *about* the rename. The
+prototype **filenames** below still start `noema-`, because those are real files on disk.
 
-**Reference artifacts** (interactive HTML prototypes, ground truth for pixel-level detail):
-- `noema-nav-prototype.html` — full app shell, 4 navigation explorations, Workbench theming system
-- `noema-widgets-audit.html` — home-screen widget designs, live contrast-audit tool
-- `noema-accent2-fallback-comparison.html` — scratch tool from the widget-color investigation
-  (historical reference only, superseded by the shade/hue system now built into the widgets file)
+**Reference artifacts** (interactive HTML prototypes, ground truth for pixel-level detail). They
+live at the **repository root**, one level up from this file — paths below are relative to it.
+*(**Corrected 2026-09-04:** this list named `noema-nav-prototype.html`, which is on disk under a
+browser-numbered name, and `noema-accent2-fallback-comparison.html`, which is not in the repository
+at all — while asserting the names were left alone because they were "real files on disk." Both
+claims were checked against the tree and corrected.)*
+- `../noema-nav-prototype (4).html` — full app shell, 4 navigation explorations, Workbench theming
+  system. The " (4)" is part of the real filename.
+- `../noema-widgets-audit.html` — home-screen widget designs, live contrast-audit tool
+- ~~`noema-accent2-fallback-comparison.html`~~ — scratch tool from the widget-color investigation,
+  superseded by the shade/hue system built into the widgets file. **Not in the repository**; treat
+  every reference to it as historical.
 
 ---
 
@@ -51,6 +60,11 @@ second copy of the reasoning.
 | 2026-08-30 (following day, pass 4) | Anti-drift-rule entry: Milestone 2 (folder-sync-on-desktop) implemented — full reasoning and detail in `tendril-windows-spec.md` §7, not repeated here per that file's §0. Summary only, since this touches `shared\`: Android's `SnapshotSyncManager`/`SnapshotEncryption` moved into a new `shared/jvmCommon` intermediate source set (a real Gradle finding — `javax.crypto` isn't visible from true KMP `commonMain` even though both targets are JVM-based) behind a new `SyncFileStore` interface, with `AndroidSafSyncFileStore`/`DesktopFileSyncFileStore` platform implementations; `Tendril android`'s two deleted files' logic is now `SnapshotSyncOrchestrator`, called via `AndroidSafSyncFileStore` from `AppContainer.kt`/`SettingsScreen.kt` with no behavior change (`assembleDebug`/`testDebugUnitTest` pass unchanged). | §9.4, §12 |
 | 2026-08-30 (following day, pass 5) | Anti-drift-rule entry: Milestone 3 (Workbench UI port), first slice, implemented — full reasoning and detail in `tendril-windows-spec.md` §8, not repeated here per that file's §0. Summary only, since this touches `shared\`: theming (`ui/theme/`), the nav shell (`ui/nav/WorkbenchScaffold.kt` + new hand-rolled `WorkbenchNavState`, not navigation-compose — still alpha/beta-only for Compose Multiplatform at this project's pin), and the block editor (`PagesScreen`/`PageDetailScreen`/`PageDatabaseScreen` + their ViewModels) moved from `:app` into `shared/src/commonMain/`, now rendering on both Android and desktop from one implementation. New `WorkbenchCore` groups the shared pieces these screens need; `AppContainer.kt` now holds one, `MainActivity.kt` calls a new Android-only `AndroidWorkbenchScaffold` wrapper (holds the `Activity`/`BiometricPrompt` calls the shared file no longer can) instead of the old `WorkbenchScaffold` directly — `assembleDebug`/`testDebugUnitTest` pass unchanged. Calendar/Tasks & Habits/Road Map/Settings/Canvas are not ported this pass (Android-integration-heavy, out of scope) — desktop renders a placeholder for each via `WorkbenchScaffold`'s new slot parameters. | §9.4, §12 |
 | 2026-09-04 | **Corrected:** the 2026-08-30 "No version control" decision is reversed — the project is now under git in a single repository (`haziaferi/tendril`) spanning all three sibling folders. One repo rather than three because both consumers resolve the shared core as `includeBuild("../shared")`, a relative sibling path only a single clone reproduces; a submodule would have to nest `shared\` and break both build files. Revision Log keeps its role for *why*; `git log` covers *what changed when*. Build/setup instructions moved out of this spec into `README.md` at the repository root. | §11 |
+| 2026-09-04 (later same day) | **Consistency audit of the whole app against this document — corrections, not new scope.** Nine spec-internal contradictions fixed: §6.2's anchoring rule and §4.1's "elastic" gloss asserted opposite recurrence semantics (§6.2 wins; §4.1's sentence withdrawn, `RecurrenceRule.Elastic` acknowledged as a kept misnomer, and §4.1's justification for event-driven alarms restated on grounds that actually hold); §5.5.1 still carried "auto-purge"/"recoverable for 30 days" in two bullets the 2026-08-08 no-auto-purge correction never reached; §9.10's Acceptance block was printed at the end of §9.11, so §9.10 had none and §9.11 acceptance-tested a different section (both now have their own); §3.6's "widgets show only summary data, not editable content" was written three weeks before §8.1.1 added a widget that writes; §3.4/§10 said the in-page mind-map "does not exist yet / not started" while a full Canvas page kind ships (three Room tables, a screen, snapshot sync) with no Revision Log entry at all — an anti-drift-rule breach, since it lives in `shared\`; §8.1 said "four density tiers" and named three; §8.3 listed the Monthly grid's weekday letters as accent2 while §8.4's own fix #2 reassigns them to `textDim`; §8.3's "rotation preserves lightness" rule never recorded the two palettes darkened to clear AA; §1 still opened "Noema is a personal productivity Android app" and 22 further prose references to the old name survived a Revision Log entry claiming the doc was "retitled throughout"; the reference-artifact list named one file under the wrong name and one that isn't in the repository. Code fixes in the same pass — Room `version` left at 5 after three Canvas tables were added (identity-hash crash on open, which `fallbackToDestructiveMigration` cannot catch); a recurring task resolved late advanced to a date still in the past; unchecking a task in Tasks/Calendar wrote a second terminal resolution instead of undoing; the boot sweep rescheduled TASKs only, losing every EVENT reminder at reboot; an undecryptable sync folder was overwritten rather than left alone; FTS returned trashed pages and mis-ordered `snippet()`'s arguments; the Habits widget wrote to Room with App Lock on. See §11. | title, §1, §3.4, §3.6, §4.1, §5.5.1, §6.2, §8.1, §8.3, §9.10, §9.11, §10, §11, §12 |
+| 2026-09-04 (later still) | **Recurring EVENT expansion built — new §4.1.1.** Closes the largest gap the consistency audit above found but did not fix: `RecurrenceRule.Fixed` was only ever written *outward*, to `CalendarContract` (§9.11) and Google (§9.5.1), and nothing read it back, so a weekly meeting appeared once in Tendril's own Calendar while recurring properly in the system calendar Tendril publishes to. Multi-day spans (§4.1 round 1) and exception rows (§4.1 round 3, §9.8 R5) were dead for the same reason — declared, synced, never read. New `EntryOccurrences` expander plus a hand-rolled RRULE parser in `shared\`, consumed by Calendar's Day/Week/Month views, the Agenda and Monthly-grid widgets, and `AlarmScheduler` (which anchored to a series' *first* occurrence, so a recurring EVENT reminded once and then never again). Corrects §4.1's "use an existing RFC5545 library such as `lib-recur`": the only producer of a `Fixed` rule is the Google pull, its subset is small and stable, and a bounded grammar under our own control matched this codebase's own calls elsewhere (§7.4). The subset's limits, and the visible divergence an unsupported rule leaves against the system calendar, are stated in §4.1.1 rather than left to be discovered. §9.8 R3 is now satisfied properly rather than vacuously — expansion reads Room, never `CalendarContract.Instances`. | §3.2, §4.1, §4.1.1, §9.7, §9.11 |
+| 2026-09-04 (last of the day) | **Sync actually runs on its own.** Third and last item the consistency audit found and left open. §9.4 specified a conflict sweep "on resume/launch", an `onStop`/backgrounding flush, and a periodic background pass; none existed — the only caller of `readAndMerge`/`writeSnapshots` in the whole app was the Settings button, so a `.sync-conflict-*` file sat undetected and an editing session reached the folder only if the person remembered to tap. New `SyncCoordinator` (`:app`) is the single place a pass runs from, non-reentrant, always read-merge-then-write, on an application-scoped **non-cancellable** coroutine — the Android SAF write is not atomic, so a pass cancelled by the Activity going away can leave the synced folder with no copy of a file at all. Wired to `onStart` and to `onStop` (skipped on a configuration change — a rotation is not a backgrounding); the Settings button now delegates to it rather than holding a second copy of the same guards. **The 2-second per-page debounce is explicitly still open**, with the reason recorded in §9.4 rather than approximated: it is specified per page, `writeSnapshots` has no per-page mode, and putting a whole-database write on a 2-second typing timer would be worse than the per-mutation write that decision already rejected. | §9.4 |
+| 2026-09-04 (later than the last) | **Trashed Habits are recoverable again.** `HabitDao` had `observeTrash`/`restore`/`deleteForever` from the start and no caller for any of them, so trashing a Habit set `deleted_at`, removed it from the habits list, the Merged view and the quick-check widget, and left no way back — a permanent delete wearing a soft delete's field, against §5.5.1's "a deleted standalone Task/Event **or Habit** is recoverable". The Tasks & Habits Trash sheet (`EntryTrashSheet` → `TasksHabitsTrashSheet`) now lists Entries and Habits in one merged newest-first list through a small `TrashItem` sealed type, so the selection set, bulk Restore / Delete forever and counted confirm are written once rather than twice. Selection is keyed by kind+id, since Entry 3 and Habit 3 are different things. §5.5.1's "one list" is still not satisfied — Pages/Rows keep their own sheet — and that is now recorded there as open, together with the related bug it has to be fixed alongside: restoring a database Row doesn't restore its linked Entry. | §5.5.1 |
+| 2026-09-04 (last, really) | **`.tendril` exports are encrypted when the toggle is on.** §9.4.2 says conflict files *and* portable packages carry the same at-rest protection "not a separate case to design" — but `PortableArchive` never referenced `SnapshotEncryption` at all, so Export was the plaintext way around the toggle, for a file meant to leave the device. Now encrypted per zip entry with the same magic/cipher/fresh-IV scheme as the sync folder; `manifest.json` stays readable on purpose (uids, not titles — see §9.4.2 for the trade) and gains an `encrypted` flag, defaulted so older archives still decode. An undecryptable archive is refused *before* Restore's wipe, with a message naming the passphrase rather than blaming the file. The passphrase now reaches `PortableArchive` as a constructor-supplied supplier, because the gap existed precisely as something a call site had to remember and none did. Also recorded: this cuts against §9.4.1's "send a Page to someone else" — an encrypted export needs the whole sync passphrase to open, so the export confirmation now says so. Six round-trip tests. | §9.4.1, §9.4.2 |
 | 2026-09-04 (audit) | Add-dialog time pickers (a Task's time, a Habit's time-of-day) — both dialogs previously hard-passed `null`, so no Habit could reach the Merged tab and no same-day Task ever alarmed. "Delete forever" made to stick: a `(kind, uid, purged_at)` tombstone recorded with the row delete, covering Pages and Entries | §3.3, §5.5.1.1, §9.4 |
 | 2026-09-05 | Audit sections 2, 3 and 4 closed in full, plus §5 items 1, 2 and 4 (PR #3). **Security:** the PBKDF2 salt moved into `sync_meta.json` per folder rather than a compile-time constant, and a folder that declares itself encrypted now refuses plaintext — the two are one fix, since the marker is what distinguishes an injected file from a folder mid-migration (§9.4.2). Checkbox-only mode refuses to activate while App Lock is on and hides the nav bar while bypassing the keyguard, App Lock and a keyguard bypass being in direct contradiction (§3.1.2). A write no longer overwrites an encrypted folder whose key it cannot open — a *mistyped* passphrase derives a perfectly valid key, so the previous `key == null` guard passed it straight through and re-encrypted everything under a key nobody knows. **Sync correctness:** a page whose parent arrived in a later batch was orphaned permanently (Pass 2 resolved parents for winners only); repair now runs for every record, but a non-winner may only *fill* an unresolved position, never overwrite one, or a stale record could move a page. Whole-page LWW is unchanged (§9.4) but the losing record is now written beside the winner as `<uid>.tendril-lost-<updatedAt>.json` instead of being discarded unread. Purge tombstones extended to Habits, which had no "Delete forever" at all. **Features:** one level of block nesting now renders (§3.1.1) and Notion import preserves it (§7 — the flattening was never about the format, the editor filtered children out of its own list); `Habit.duration` wired end to end (§3.3); habit reminders implemented on the notification channel that had been created for them and never posted to (§9.7). **Process:** CI compiles and tests the app rather than only reading it — a compile break had shipped through a green static-only check. 204 unit tests. | §3.1.1, §3.1.2, §3.3, §5.5.1, §5.5.1.1, §7, §9.4, §9.4.2, §9.7 |
 | 2026-09-04 (audit, correction) | Purge tombstones **travel** rather than staying local — a local-only tombstone made "Delete forever" unachievable on more than one device, since the next sync restored everything from whichever device hadn't purged. §9.4's additive-merge rule is narrowed accordingly: absence still never implies deletion, an explicit tombstone does, and record-vs-tombstone resolves by later timestamp so a stale delete cannot destroy a newer edit | §5.5.1.1, §9.4, §9.4.1 |
@@ -59,7 +73,8 @@ second copy of the reasoning.
 
 ## 1. Overview
 
-Noema is a personal productivity Android app combining a Notion-like page/database system, a
+Tendril is a personal productivity app — an Android app plus a Windows desktop companion (§12) over
+a shared Kotlin Multiplatform core — combining a Notion-like page/database system, a
 calendar capable of replacing the phone's default calendar, a combined tasks-and-habits tracker, a
 relationship map between pages, and a themeable settings layer — all built to avoid the two failure
 modes of this category: burying power-user features, and overwhelming casual use. One person should
@@ -75,7 +90,7 @@ spec of each.
 2. Unrooted
 3. Storage Access Framework (SAF) folder access for the sync folder — no Shizuku, no root (Decided
    2026-07-13, supersedes the original Shizuku plan; see §9.3)
-4. An external Syncthing-fork app handles the actual sync; Noema only reads/writes snapshot files
+4. An external Syncthing-fork app handles the actual sync; Tendril only reads/writes snapshot files
    inside a folder that app is already syncing — never the live database itself (see §9.4)
 5. Personal use only — no Google Play distribution
 6. Built on Windows 11, Android Studio, JDK 21
@@ -330,7 +345,7 @@ including Rows and Databases (both are Pages, §5.1).
   adding a step.
 - **No new Android permissions.** `setShowWhenLocked`/`setTurnScreenOn` are plain Activity-level API
   calls, not a runtime-permission-gated capability — §9.7's permission list is unaffected.
-- **Architecture note for Phase 5 (§9.9).** Noema is expected to be single-Activity (standard for a
+- **Architecture note for Phase 5 (§9.9).** Tendril is expected to be single-Activity (standard for a
   Compose app), and these lock-screen flags are window-level, not per-screen — so the app's own
   navigation logic must gate exactly when they're active (checkbox-only is on, and this specific
   page is the one currently showing), clearing them the instant navigation moves away. Worth testing
@@ -449,17 +464,19 @@ composable ("No pages match '…'").
 
 ### 3.2 Calendar
 
-- Day, Week, Month views; **week starts Monday**; defaults to **Day** view on open
+- Day, Week, Month views; **week starts Monday**; defaults to **Day** view on open. All three draw
+  *occurrences*, not stored rows (§4.1.1) — a recurring EVENT appears on every occurrence in view
+  and a multi-day one on every day it covers, each labelled "day N of M"
 - Create and edit events and tasks directly
 - **System Calendar Provider registration** (Decided wording, 2026-07-13 — replaces the earlier
   "default calendar app" phrasing, which isn't a real Android concept: there's no `RoleManager` role
-  for calendar the way there is for browser/SMS/dialer). Noema registers a Calendar Provider
+  for calendar the way there is for browser/SMS/dialer). Tendril registers a Calendar Provider
   account, so its own events become visible/editable to any other calendar-aware app, widget, or
   watch face on the device via `CalendarContract` (native integration required — see §9.11). **Added
   2026-07-14**: Room (with the RRULE-based recurrence expansion from §4.1) is the single source of
-  truth for Noema's own UI at all times; the Provider write is one-directional (Noema → Provider)
-  and never read back for Noema's own display logic. Two independent recurrence expanders both
-  feeding the same screen — Noema's local one and whatever `CalendarContract.Instances` computes —
+  truth for Tendril's own UI at all times; the Provider write is one-directional (Tendril → Provider)
+  and never read back for Tendril's own display logic. Two independent recurrence expanders both
+  feeding the same screen — Tendril's local one and whatever `CalendarContract.Instances` computes —
   would be exactly the kind of duplicated, silently-divergent logic (DST, leap years, BYDAY edge
   cases) worth ruling out now rather than discovering later. **Corrected 2026-08-29**:
   "sync-adapter-backed account" originally implied a real `android.accounts.Account` registered via
@@ -476,7 +493,7 @@ composable ("No pages match '…'").
   both simplicity (no write-through sync code) and risk (no duplicate-event display if the real
   Google Calendar app is also installed), and only gives up system-wide Provider visibility
   specifically for Google-sourced events, which is a minor loss since Provider registration already
-  delivers the actual goal (Noema's own events being visible system-wide) regardless. A
+  delivers the actual goal (Tendril's own events being visible system-wide) regardless. A
   Connect/Disconnect control for this lives in Calendar's own settings (not main Settings) —
   **corrected 2026-08-29**: no client ID field, see §9.5 for why and for the OAuth setup details
   (production vs. testing mode, 7-day token expiry trap), and §9.5.1 for the sync engine's own scope
@@ -527,10 +544,26 @@ two different concerns.
 ### 3.4 Road Map
 
 Originally scoped as "Mind Map" — **renamed to Road Map** specifically to avoid collision with a
-*separate, future* feature: an actual in-page mind-map block type inside Pages (user-drawn or
-Claude-API-generated), which does not exist yet and is intentionally out of scope for the current
-build (§10). Road Map and any future in-page mind-map block must never be conflated in naming or
-code.
+*separate* feature: a user-drawn mind-map surface inside Pages. Road Map and that surface must never
+be conflated in naming or code.
+
+**Corrected 2026-09-04 — that separate feature now exists, and this document said it didn't.** This
+paragraph read "which does not exist yet and is intentionally out of scope for the current build
+(§10)," and §10's Deferred list called it "entirely separate feature, not started." Both were false:
+a **Canvas** feature is fully built and shipping — a third `PageKind.CANVAS` alongside `PAGE` and
+`DATABASE`, three Room tables (`page_canvases`, `canvas_nodes`, `canvas_edges`) registered on the
+database, their DAOs, a `CanvasScreen`/`CanvasViewModel`, snapshot sync through `PagesSyncEngine`,
+and an entry in the "New from template" sheet. It is modelled on Obsidian Canvas: freely-positioned
+text and page-embed cards joined by user-drawn, optionally-labelled, optionally-directional arrows.
+It is its own page kind, not a block type nested in a page body.
+
+The design record never recorded any of it — no Revision Log entry, no entity in §4's data model, no
+mention in §1's "Five pages" — which also breaks §12's anti-drift rule, since the Canvas entities
+live in `shared\` and so owed both spec files a same-day entry. The feature is now acknowledged
+here; the reasoning behind its shape lives in `PageCanvas.kt`'s own doc comment, which is currently
+the only written record of it. **Writing that reasoning up properly is an open item**, not something
+this correction can reconstruct after the fact. The Claude-API-generated variant of the idea is
+still not built and stays deferred (§10).
 
 - Interactive map of relationships **between existing Pages**, redirecting to each on tap
 - Full-screen canvas (§2.2); "All Pages" as a collapsible bottom drawer, not a side panel
@@ -583,9 +616,27 @@ medical-appointment (§5.1) and financial (§5.2.2) data on a personal, unrooted
   background** (re-prompt after any backgrounding, however brief) — the second is stricter and stays
   off by default even when App Lock itself is on, since re-prompting on every app-switch would be
   disruptive for a personal-productivity app used throughout the day.
-- **Widgets are unaffected** — §8's home-screen widgets show only Date/Monthly-grid/Agenda summary
-  data, not editable content, and remain visible regardless of App Lock state, matching how
-  lock-screen widgets behave system-wide.
+- **Widgets stay visible; the one that writes is gated (Corrected 2026-09-04).** As written on
+  2026-08-08 this bullet read "Widgets are unaffected — §8's home-screen widgets show only
+  Date/Monthly-grid/Agenda summary data, **not editable content**, and remain visible regardless of
+  App Lock state." That was true of the three widgets that existed then. §8.1.1 added a fourth three
+  weeks later whose entire purpose is editing data from the home screen with no app launch, and
+  neither section was reconciled — so the two together said App Lock keeps someone holding the
+  unlocked phone out of the app while the Habits widget lets that same person rewrite
+  `streak`/`lastCompletedDate` from the launcher. The premise, not the conclusion, is what was
+  wrong. Resolved by splitting the claim:
+  - **Reading stays unaffected.** All four widgets keep rendering regardless of App Lock state,
+    matching how lock-screen widgets behave system-wide. Accepted and now stated rather than implied:
+    Agenda and Monthly-grid render real Entry *titles*, and Habits real habit titles — not "summary
+    data" in the strict sense. Anyone holding the phone can read them without unlocking. That is the
+    same exposure any calendar widget carries, and the price of the widget being useful at a glance;
+    it is a deliberate limit on what App Lock protects, not an oversight.
+  - **Writing is gated.** With App Lock enabled, tapping a habit in the Habits widget opens the app
+    through the lock gate instead of checking in. `CheckInHabitAction` also refuses to write if it
+    is reached anyway — the same UI-gate-plus-guard defense-in-depth §3.1.2 uses for the View-Only
+    lock, since a Glance `ActionCallback` is dispatched straight into the app process and the
+    Activity's own lock branch cannot see it.
+  - With App Lock off — the default — §8.1.1's one-tap check-in is unchanged.
 - **Interaction with checkbox-only mode (§3.1.2)**: independent, no precedence rule needed — App
   Lock gates entering the app at all; checkbox-only governs one already-open page's behavior over
   the lockscreen. A person can reasonably want the app locked normally but still let one
@@ -610,7 +661,7 @@ starting point for the real schema work, not a byte-for-byte ratified design.
 | **Block** | id, page_id, type, order, parent_block_id (nullable), content, formatting spans, created/updated | One row per content block inside a Page's (or Row's) body (§3.1.1) — paragraph, heading, list item, code, image, toggle, callout, page-mention, etc. Feeds the FTS index (§3.1.1). |
 | **Database** | *(a Page with a schema)* — schema (ordered Property list), `sync_to_tasks` flag, `done_property_id`, `deadline_property_id`, `recurrence_property_id` (nullable) | The Sync-to-Tasks flag and the explicit property bindings are the mechanism from §5.2 — not inferred from schema shape, always deliberate. `recurrence_property_id` added 2026-07-16 — see §5.2 for the binding and §4's Property type note below for the `Interval` type it points at. |
 | **DatabaseView** | id, database_id, name, view_type (`TABLE` \| `BOARD` \| `GALLERY` \| `CALENDAR`), group_by_property_id (nullable, BOARD-only), date_property_id (nullable, CALENDAR-only), visible_property_ids, filter (single condition, nullable), sort_property_id (nullable), sort_direction | Saved views over a Database's rows (§5.6, added 2026-08-08) — display configuration only, never alters stored row/property data. A Database always has at least one Table view (default, matches §5.1's existing behavior). |
-| **Property** | id, database_id, name, type, config | Type list needs to cover at minimum: text, number, checkbox, select, multi-select, date, URL, email, phone — the set Notion CSV export can actually carry (§7). Relation/rollup/formula are explicitly deferred (§7, §10). **Added 2026-07-16**: `Interval` (number + unit ∈ {day, week, month}) — a Noema-native type, not part of the Notion CSV import set, used exclusively as the `recurrence_property_id` binding target (§5.2). Not offered as a general-purpose property type in the "New property" picker outside that binding context, to avoid a second, uglier way to represent a plain number. |
+| **Property** | id, database_id, name, type, config | Type list needs to cover at minimum: text, number, checkbox, select, multi-select, date, URL, email, phone — the set Notion CSV export can actually carry (§7). Relation/rollup/formula are explicitly deferred (§7, §10). **Added 2026-07-16**: `Interval` (number + unit ∈ {day, week, month}) — a Tendril-native type, not part of the Notion CSV import set, used exclusively as the `recurrence_property_id` binding target (§5.2). Not offered as a general-purpose property type in the "New property" picker outside that binding context, to avoid a second, uglier way to represent a plain number. |
 | **Row** | id, database_id, property values | A Row *is* a page (§5.1) — its free-form body beneath the properties is the same Block-based content as any Page (§3.1.1), matching Notion's actual row=page model. Tapping a row opens it. |
 | **Entry** *(renamed from Task, 2026-07-13)* | id, title, kind (`TASK` \| `EVENT`), start_date (nullable), start_time (nullable), end_date (nullable, EVENT-only — see below), end_time (nullable, EVENT-only), recurrence_rule (typed, see below), original_entry_id (nullable, FK to another Entry), original_occurrence_date (nullable), is_exception_skip (nullable), status (`PENDING` \| `DONE` \| `SKIPPED`, TASK-only), source_row_id (nullable, FK to Row — **added 2026-07-16**, see below), deleted_at (nullable, **added 2026-08-08** — Trash, §5.5.1), source | Calendar queries `WHERE start_date IS NOT NULL` regardless of kind. Tasks view queries `WHERE kind = TASK`. Merged view (§3.3) also filters `kind = TASK`. Both queries also filter `WHERE deleted_at IS NULL`. `source_row_id` is the actual foreign key behind the Row↔Entry link §5.2 has described behaviorally since it was designed but never named as a real field — a small, previously-invisible gap surfaced while designing the rebind mechanism (§5.2). Full reasoning for the multi-day, recurrence-split, and exception design below the table (2026-07-14 case-scenario round 2). |
 | **Habit** | id, title, time (nullable), duration (nullable), frequency, streak, previous_streak, previous_completed_date (nullable, **added 2026-08-29** — undo-check-in, §8.1.1), deleted_at (nullable, **added 2026-08-08** — Trash, §5.5.1) | Structurally separate from Task (Decided 2026-07-13, §3.3) — does not follow the to-do database pattern. |
@@ -653,12 +704,17 @@ occurrence it overrides); if `is_exception_skip = true` it's a tombstone (skip t
 else on the row matters); otherwise it's a full override with its own independent
 `start_date`/`start_time`/`end_date`/`end_time`/title. This deliberately mirrors
 `CalendarContract.Events`' own `ORIGINAL_ID`/`ORIGINAL_INSTANCE_TIME` exception-event columns, so
-writing Noema's exceptions into the system Calendar Provider at Phase 3 (§9.9) is close to a direct
+writing Tendril's exceptions into the system Calendar Provider at Phase 3 (§9.9) is close to a direct
 field mapping rather than a translation layer that has to be invented later.
 
 **`recurrence_rule` splits format, not just meaning (Decided 2026-07-14).** EVENT and TASK
 recurrence aren't the same *shape* of data — EVENT needs real calendar expressiveness (every Monday,
-every 2nd Tuesday), TASK needs only an elastic interval anchored to whenever it was last resolved.
+every 2nd Tuesday), TASK needs only a plain repeating interval. *(**Corrected 2026-09-04:** this
+paragraph originally read "an elastic interval anchored to whenever it was last resolved," and the
+`AlarmScheduler` note below elaborated it as "resolve 2 days late, the gap to next time is 7+2 days,
+not a fixed 7." Both are withdrawn — they contradict §6.2's anchoring rule and, through it, §6.1's
+dividing test. Intervals step from the original schedule; see §6.2, which carries the surviving rule
+and explains why the `Elastic` type name is now a misnomer that is kept anyway.)*
 Rather than one loosely-typed string column disambiguated by convention via `kind` (the same
 implicit-coupling shape that caused the original TASK/EVENT bug), `recurrence_rule` should be a
 Kotlin sealed type — `RecurrenceRule.Fixed(rrule: String)` storing a real RFC5545 RRULE string for
@@ -668,6 +724,50 @@ as `lib-recur` rather than hand-rolling a parser), and `RecurrenceRule.Elastic(p
 storing an ISO-8601 duration ("P7D") for TASK, parseable natively via `java.time.Period` with no
 extra dependency. A Room `TypeConverter` handles serialization; the type system, not developer
 memory, then enforces that a TASK row can never carry a `Fixed` rule or vice versa.
+
+#### 4.1.1 Occurrence expansion (Implemented 2026-09-04 — the read side `Fixed` never had)
+
+Everything above is about *storing* a recurrence rule, and until now that is all the app did with
+one. `RecurrenceRule.Fixed` was written outward — into `CalendarContract` (§9.11) and the Google
+Calendar API (§9.5.1) — and never read back, so every Tendril surface rendered one stored row on one
+stored day. Three things followed, all with the same root cause:
+
+- **A recurring EVENT appeared once.** A weekly meeting showed a single entry in Tendril's own
+  Calendar while recurring properly in Google Calendar, in any watch face, and in the system
+  calendar **Tendril itself publishes to** — §9.11 defines that mirror's scope as "whatever
+  Tendril's own Calendar screen already shows," and the screen showed strictly less than the mirror
+  did. §9.8 R3's "Room stays authoritative for Tendril's UI" held only vacuously: Room's
+  un-expanded rows were what the UI showed.
+- **Multi-day spans never rendered.** `end_date`/`end_time` (round 1 above) reached the Provider but
+  no Tendril view consulted them, so a three-day offsite appeared on day one.
+- **Exception rows were dead.** `original_entry_id`/`original_occurrence_date`/`is_exception_skip`
+  (round 3 above, §9.8 R5) were declared, round-tripped through snapshots, and never written, read
+  or honoured by anything.
+
+**Decided/Implemented:** a shared `EntryOccurrences` expander in `shared/`, taking stored rows plus
+a date range and returning one occurrence per covered day. Calendar's Day/Week/Month views, the
+Agenda and Monthly-grid widgets, and `AlarmScheduler` all read through it. Nothing reads
+`CalendarContract.Instances` — that would be the second, silently-divergent expander §9.8 R3 exists
+to rule out; this expands Room's own rows, so R3 is satisfied properly rather than vacuously.
+
+**Corrected: hand-rolled, not `lib-recur`.** The paragraph above says to "use an existing RFC5545
+library such as `lib-recur` rather than hand-rolling a parser." That was written in 2026-07-14, when
+the assumption was that Tendril would author arbitrary RRULEs itself. It doesn't: the *only* thing
+that ever constructs a `Fixed` rule is `GoogleEvent.toEntry` (§9.5.1), so the rules this app has to
+read come from one producer emitting a small, stable subset. Weighed against this codebase's
+consistent call elsewhere — hand-rolled Notion Markdown and CSV parsers (§7.4), a hand-rolled nav
+shell — a bounded grammar under our own control won. Supported: `FREQ` (DAILY/WEEKLY/MONTHLY/
+YEARLY), `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY` (plain and ordinal), `BYMONTHDAY`, `BYMONTH`, `WKST`.
+
+**The accepted limitation, stated rather than discovered later.** A rule using a part outside that
+subset (`BYSETPOS`, `BYWEEKNO`, `BYYEARDAY`) is treated as unexpandable and shows its first
+occurrence only. That is deliberate — the alternative, ignoring the unsupported part, *adds*
+occurrences on days the event doesn't happen, and a phantom calendar entry is worse than a missing
+one because a missing one is visibly missing. It does mean such a series can show fewer occurrences
+in Tendril than in the system calendar Tendril published it to. That divergence is cosmetic, not a
+data-integrity problem — the Provider write is still one-directional and Room is still the single
+source of truth (§9.8 R3) — but it is a real, visible gap, and the honest fix if it ever bites is to
+widen the subset, not to start reading `Instances` back.
 
 **Alarm rescheduling must be event-driven, not schedule-ahead (Decided 2026-07-14).** `AlarmManager`
 cannot know a TASK's next occurrence before it exists — elastic recurrence means the interval itself
@@ -794,7 +894,7 @@ concept at all — confirmed via an open, unresolved community feature request a
 — so third-party layers on top of it (the Tasks and TaskNotes community plugins) are where
 recurrence actually lives, not the platform itself. Notion's own native answer (added ~Nov 2022) is
 a bindable "Recur Interval" number property plus an automation that resets status and recalculates
-the date on completion — structurally the same shape as Noema's own resolve-and-advance mechanism
+the date on completion — structurally the same shape as Tendril's own resolve-and-advance mechanism
 (§4.1), which is reassuring rather than coincidental, since it's the natural shape for this kind of
 elastic recurrence regardless of app.
 
@@ -872,7 +972,7 @@ than assuming it's fine.
   and several conversions are silently lossy (multi-select → text collapses every row's tags into a
   comma-joined string that won't cleanly re-split; date → text loses the date semantics outright).
   That's in direct tension with this app's own "nothing is a one-way, permanent choice" philosophy
-  (§5.3), so Noema does the safer thing: opening "Edit property type" shows a preview of what would
+  (§5.3), so Tendril does the safer thing: opening "Edit property type" shows a preview of what would
   happen to existing values ("12 rows will lose their multi-select tags"), and the change commits
   immediately on confirm — not a bespoke flow, the same confirm-dialog pattern as the rest of this
   section. A bound property (Done/Deadline, §5.2) never enters this flow to begin with — there's no
@@ -905,7 +1005,13 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   data and block content remain fully intact underneath.
 - **Trash**: one list, reachable from the Pages hub's "···" menu, showing everything with a non-null
   `deleted_at`, most-recent-first, noting the deleted item's former location (e.g., "was in:
-  Groceries database") so restoring makes sense out of context. Two actions per item: **Restore**
+  Groceries database") so restoring makes sense out of context. *(**Open as of 2026-09-04 — still
+  two lists, not one.** Pages and Rows are in a sheet off the Pages hub as specified; Entries and
+  Habits are in a second sheet off the Tasks & Habits tab. Merging them is more than a move: a
+  database Row and its linked Entry are trashed together (§5.2), but Page-Trash's Restore clears
+  only the Row's `deleted_at`, so a restored row currently comes back with its Task still in the
+  other Trash. Both are tracked together rather than the split being closed and that bug left
+  behind it.)* Two actions per item: **Restore**
   (clears `deleted_at`, reappears exactly where it was — same `parent_id`/`database_id`, no
   re-creation) and **Delete forever** (the actual permanent removal, with its own confirm dialog,
   same pattern as §5.5's others).
@@ -932,13 +1038,30 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   (confirm-and-commit-immediately), since a property's stored values, once converted or dropped,
   have no natural "undo" shape the way a whole row does.
 - **Entry and Habit** (§4, not Pages) get the same `deleted_at` field directly, with the same
-  Trash/Restore/auto-purge behavior — a deleted standalone Task/Event or Habit is recoverable for 30
-  days exactly like a Page.
+  Trash/Restore behavior — a deleted standalone Task/Event or Habit is recoverable exactly like a
+  Page. *(**Corrected 2026-09-04:** this bullet and the next one still read "auto-purge" and
+  "recoverable for 30 days" — the 2026-08-08 correction three bullets above removed the 30-day purge
+  and never reached them, leaving the section asserting both indefinite retention and a 30-day sweep.
+  Indefinite retention is the decided rule.)*
+  - **Implemented 2026-09-04, second half.** "Recoverable" is a claim about a surface, and for
+    Habits there wasn't one. `HabitDao` had `observeTrash`/`restore`/`deleteForever` from the
+    start and **nothing ever called any of the three** — so trashing a Habit set `deleted_at`,
+    removed it from the habits list, the Merged view (§3.3) and the quick-check widget (§8.1.1),
+    and left no way back at all. It was a permanent delete wearing a soft delete's field. The
+    identical gap for Entries had already been closed; the Tasks & Habits Trash sheet now lists
+    both, with the same selection, bulk Restore / Delete forever and counted confirm this section
+    requires, over one merged newest-first list rather than two stacked ones. Restoring an Entry
+    still routes through `ResolveEntryUseCase` so a TASK comes back with its alarms rearmed
+    (§9.7); a Habit has no alarms, so the DAO call is the whole operation.
 - **Interaction with sync (§9.4)**: `deleted_at` is just another field on an already-synced record —
   no new sync mechanism needed; it travels with the record's normal snapshot write and merges under
-  the existing per-record LWW rule. A device that permanently purges an item after 30 days writes
-  that as a real hard-delete to its own snapshot file on the next sync pass, same as any other
-  mutation.
+  the existing per-record LWW rule. A **Delete forever** — the only way an item leaves Trash — is a
+  real hard-delete written to that device's own snapshot file on the next sync pass, same as any
+  other mutation. *(Known gap, not yet closed: the merge on the receiving side is additive by
+  design and never deletes a local record for being absent from a remote file, so a hard-delete does
+  not currently propagate — the record is re-inserted from the folder's own copy on the next pass,
+  on this device as much as another. Closing it needs a tombstone the merge can act on, which is a
+  format change, not a fix in place.)*
 
 #### 5.5.1.1 "Delete forever" and snapshot sync (Decided 2026-09-04; scope corrected same day)
 
@@ -1057,13 +1180,35 @@ example: making the bed (Habit) vs. paying the water & electricity bill roughly 
 
 ### 6.2 Mechanism
 
-Recurrence belongs to **Task**, using calendar-native recurrence (the same RRULE-style mechanism any
-competent calendar needs regardless) — not a Habit-adjacent concept. Since a dated Task already *is*
-a Calendar entry (§3.2, §4), a repeating Task is just that entry carrying a recurrence rule. One
-mechanism, not two.
+**Correction, stated plainly (2026-09-04) — this section and §4.1 asserted opposite rules for a
+year, and §4.1's own architectural argument rested on the version this section rules out.** As
+originally written (2026-07-13), §6.2 said Task recurrence used "calendar-native recurrence (the
+same RRULE-style mechanism any competent calendar needs)" and that "a repeating Task is just that
+entry carrying a recurrence rule. One mechanism, not two." §4.1's round-3 pass the following day
+replaced exactly that with **two** mechanisms — `RecurrenceRule.Fixed(rrule)` for EVENT and
+`RecurrenceRule.Elastic(period)` for TASK — precisely so a column's meaning would stop depending on
+an adjacent column. §6.2 was never updated to match, so the document carried both claims at once.
+The split in §4.1 is the decided one; the "one mechanism" sentence is withdrawn.
+
+The anchoring rule below is the reverse case: §6.2 is the one that survives, and §4.1's gloss on it
+is what is wrong. §4.1 describes `Elastic` as meaning "the interval itself depends on *when* the
+person resolves the current one (resolve 2 days late, the gap to next time is 7+2 days, not a fixed
+7)". That is resolution-anchored recurrence, and it contradicts §6.1's dividing test in exactly the
+way this section's own bullet spells out. **The anchoring rule below stands; §4.1's sentence is
+withdrawn**, and `RecurrenceRule.Elastic` is therefore a misnomer for what it stores — kept as a
+name only because it is the persisted `"ELASTIC:"` tag in the Room converter and in every snapshot
+file (§9.4), which a rename would break for no behavioural gain. Read it as "an interval rule,"
+never as "elastic about when it is resolved."
+
+One consequence §4.1 loses with that sentence: its stated reason for event-driven alarms —
+"`AlarmManager` cannot know a TASK's next occurrence before it exists" — is not true of the rule
+that was actually built, since the next occurrence is a deterministic function of the current one.
+`AlarmScheduler` (§9.7) is still right, for the reasons that do hold: an edit, a Trash, a restore or
+a rebind can move `start_date` at any time, so alarms must be re-derived from the row on every
+write rather than laid down ahead.
 
 - **Repeats** field on Task: `None / Daily / Weekly / Monthly / Custom` (custom = interval + unit,
-  so "every 2 months" is interval=2, unit=month)
+  so "every 2 months" is interval=2, unit=month), stored as `RecurrenceRule.Elastic(Period)` (§4.1)
 - No page or database required — a standalone recurring Task never has to touch Pages
 - A Task generated from a synced database Row (§5) inherits the same Repeats field
 - **Anchoring**: the next occurrence is generated from the **original fixed schedule**, not from
@@ -1071,6 +1216,20 @@ mechanism, not two.
   instance would silently push the whole schedule out instead of becoming genuinely overdue — which
   would contradict the §6.1 test directly. A late payment shows up overdue exactly as expected; the
   next one still lands on the original schedule rather than drifting.
+- **Anchoring, second clause (added 2026-09-04, closing a real bug the rule above left open):**
+  the next occurrence is the first one on that schedule that **hasn't already gone by**, not
+  literally "the resolved date plus one period." Both readings keep the same phase — every candidate
+  is `original + n×period` — so this doesn't reintroduce drift. What it removes is the degenerate
+  case: resolve a weekly task nineteen days late and `resolved + 7` is still eleven days in the
+  past, so the task reappeared overdue the instant it was ticked off, and clearing it took one Done
+  tap per missed period. That broke three things at once — §5.2 keeps exactly **one** live Entry row
+  per recurring task, so those intermediate occurrences had nothing to resolve in the first place;
+  each tap wrote an `EntryCompletion` (§4.1) claiming an occurrence was resolved that nobody
+  performed, corrupting the one append-only record of what actually happened; and §9.7's "never
+  schedule an alarm for a trigger time already past" meant every in-between state was silently
+  unscheduled, so a long-neglected recurring task stopped notifying entirely. Backlog is still real
+  and still visible — the occurrence in hand stays overdue until it is resolved, per §6.1 — the app
+  just stops manufacturing backlog for occurrences it never tracked.
 
 Habits keep their own separate, simpler streak-based recurrence — not the calendar RRULE mechanism.
 
@@ -1105,7 +1264,7 @@ faithfully), and an assets folder per page for uploaded images/files.
 1. Parse `.md` files preserving heading levels, lists, quotes, code fences, tables, image/file
    references.
 2. **Rewrite internal links.** Exported links point to local relative paths carrying the same
-   32-character hex page ID; the importer must remap these to Noema's own internal page IDs, or
+   32-character hex page ID; the importer must remap these to Tendril's own internal page IDs, or
    every internal link breaks on import — the single most common failure mode across every migration
    guide checked.
 3. Detect embedded raw HTML from callouts and preserve it faithfully (fallback HTML block at
@@ -1121,7 +1280,7 @@ faithfully), and an assets folder per page for uploaded images/files.
    user wants synced to Tasks. Not new surface area — the identical mechanism already built for
    locally-created to-do databases. Notion import always runs through the **additive Import path**
    (§9.4.1), never the replace-everything Restore path — it was never meant to overwrite a person's
-   existing Noema data, only add to it.
+   existing Tendril data, only add to it.
 7. Communicate plainly, not silently, that views/filters/live formulas/comments cannot be recovered
    — this is what the export format itself omits, not something a better importer could fix.
 
@@ -1242,7 +1401,9 @@ once none of the original three touched Habits at all.
 
 - **Date**: resizable from 1×1 up to 2×2+; the day number renders at the **same font size regardless
   of footprint** — a larger widget only adds tap area/breathing room, never distorts the number.
-- **Monthly grid**: four density tiers depending on widget height — `dots` (compact, 4×2, no room
+- **Monthly grid**: three density tiers depending on widget height *(**corrected 2026-09-04**: this
+  read "four" while naming three; the code and `monthly_widget_info.xml`'s own comment both say
+  three)* — `dots` (compact, 4×2, no room
   for real text), `one` (standard, 4×3.5, one truncated title + "+N"), `wrap` (tall, 4×5, one full
   entry title wrapped to two lines + "+N" — chosen deliberately over showing two truncated titles,
   so a user who dedicates that much space can actually read the one entry rather than skim two
@@ -1317,15 +1478,28 @@ detected/declared wallpaper darkness. **Deferred.**
 
 ### 8.3 `accent2` and the Shade/Hue system (Decided, built)
 
-A secondary accent colour, distinct from the app's primary accent, applied to four specific
-elements: the Date widget's number, the Monthly grid's weekday header letters, and the Agenda list's
-day label and time label.
+A secondary accent colour, distinct from the app's primary accent, applied to three specific
+elements: the Date widget's number, and the Agenda list's day label and time label.
+
+*(**Corrected 2026-09-04:** this listed four elements, including "the Monthly grid's weekday header
+letters" — which §8.4's own fix #2, further down this same section, then reassigns to `textDim`
+because those letters are the only label in their row. The two statements are incompatible and the
+build follows §8.4. §8.4 wins: it is the later finding, it is the one backed by a measured contrast
+failure, and the weekday row is now deliberately outside the Shade/Hue controls' reach. The
+prototype's CSS still colours it `--w-accent2`, i.e. the prototype predates fix #2 here.)*
 
 - **Generation**: an Analogous hue rotation (±30°) off each theme's primary accent — chosen over a
   full complementary rotation to stay consistent with the app's restrained, cohesive visual
   identity. Rotation direction (+30° or −30°) is picked per theme for the strongest natural
   contrast, then kept identical between that theme's light and dark mode so the colour's character
-  doesn't flip when switching modes.
+  doesn't flip when switching modes. Ink, Clay and Moss rotate −30°; Mauve rotates +30°.
+  **Two exceptions to "rotation preserves lightness" (recorded 2026-09-04 — real all along, never
+  written down):** Moss-light's base lightness is 0.427 rather than the accent's own 0.490, and
+  Mauve-light's is 0.514 rather than 0.551. Both were darkened because the pure rotation fails AA
+  against a white background — Moss-light would sit at 3.61:1 and Mauve-light at 4.01:1, against a
+  4.5:1 requirement; at the stored values they reach 4.59:1 and 4.62:1. Same "nudged darker, hue
+  preserved" move §8.4's fix #3 records for `textFaint`, and the shipped values are correct; it was
+  only the rule as stated here that claimed a pure rotation with no exception.
 - **Shade slider** (0–100%): interpolates lightness from the original vivid tone toward a
   verified-safe extreme — L=0.12 in light mode, L=0.88 in dark mode — per theme's own exact base
   lightness (not a shared generic value; an early implementation bug used one generic lightness per
@@ -1368,7 +1542,7 @@ checked directly at the code level (`WidgetMonthlyConfigureActivity.kt`) for how
 same background-opacity-vs-text-legibility problem. Finding: **it doesn't.** Background alpha and
 text colour are two entirely independent, manually user-picked values with no coupling, no contrast
 computation, and no warning — confirming that even a mature, published app accepts this as an
-inherent, unmitigated trade-off. Noema's live readout already goes further than the reference by at
+inherent, unmitigated trade-off. Tendril's live readout already goes further than the reference by at
 least surfacing the risk, even before the Shade/Hue system existed.
 
 ### 8.6 What the live readout still does *not* model
@@ -1463,7 +1637,7 @@ but that overstates the problem: `ACTION_OPEN_DOCUMENT_TREE` (Storage Access Fra
 persistable read/write grant to a user-chosen folder — no root, no privileged API, survives reboots
 via `takePersistableUriPermission()`. This is the standard scoped-storage-compliant mechanism for
 exactly this case, and it's what the real Syncthing Android app itself uses for folder access. If
-Noema and the Syncthing-fork app each get their own SAF grant (or plain filesystem access) to the
+Tendril and the Syncthing-fork app each get their own SAF grant (or plain filesystem access) to the
 same physical folder, both can read/write it with no coordination needed.
 
 This removes an entire isolated, high-external-dependency build phase (Shizuku pairing,
@@ -1472,8 +1646,8 @@ one-time system folder picker, foldable into Phase 1 rather than its own late ph
 
 ### 9.4 Syncthing-fork integration & multi-device backup safety (Decided 2026-07-13 — expanded scope)
 
-Confirmed: Noema does **not** embed or manage a Syncthing engine. An external Syncthing-fork app
-already handles sync separately; Noema only needs to read and write files inside the SAF-granted
+Confirmed: Tendril does **not** embed or manage a Syncthing engine. An external Syncthing-fork app
+already handles sync separately; Tendril only needs to read and write files inside the SAF-granted
 folder (§9.3) that app is already syncing.
 
 Scope now explicitly includes **two devices writing to the same synced folder virtually
@@ -1519,7 +1693,7 @@ single-writer Habit-folder case:
   earlier prototype's habit-sync design.
 - **Conflict files are actively handled, not just trusted to LWW.** When Syncthing detects genuinely
   concurrent edits to the same file from two devices, it creates a
-  `<file>.sync-conflict-<date>-<deviceID>.json` sibling rather than silently overwriting. Noema
+  `<file>.sync-conflict-<date>-<deviceID>.json` sibling rather than silently overwriting. Tendril
   checks for these on resume/launch, merges them via the same per-record LWW rule, then deletes the
   conflict file.
 - **Accepted v1 limitation**: for Pages specifically, LWW applies at the whole-page snapshot level —
@@ -1542,6 +1716,48 @@ single-writer Habit-folder case:
   per-mutation write specifically because Pages are the one domain where a single user action
   (typing a sentence) fans out into many rapid mutations, unlike Entry/Habit edits which are already
   one mutation per user action.
+
+- **Implemented 2026-09-04 — the triggers, not the debounce.** Everything above described *when* a
+  sync pass should run, and until now none of it did: the only caller of `readAndMerge`/
+  `writeSnapshots` anywhere in the app was the Settings "Sync now" button. So a `.sync-conflict-*`
+  file sat undetected until someone went looking for it ("Tendril checks for these on
+  resume/launch"), an editing session reached the folder only if the person remembered to tap a
+  button, and the "periodic background sync pass already implied by the 'last synced at' UI" did not
+  exist. Now:
+  - a new `SyncCoordinator` is the one place a pass runs from — the lifecycle triggers and the
+    button both go through it, so they can't overlap and a failure has somewhere to be reported
+    from even when nothing is on screen;
+  - **launch/resume** (`onStart`) runs a pass, which is what performs the conflict sweep;
+  - **`onStop`/backgrounding** runs one too, skipped on a configuration change — a rotation also
+    calls `onStop` and is not a backgrounding;
+  - a pass is always read-merge-**then**-write, never a bare write. That ordering matters:
+    `writeSnapshots` rewrites each domain file wholesale from this device's rows, so writing
+    without merging first would drop records only the other device has. They survive on that
+    device and return on its next pass, but merging first keeps the window as small as this
+    design allows;
+  - the pass runs on an application-scoped, non-cancellable coroutine rather than the Activity's.
+    That is load-bearing rather than tidy: the Android `SyncFileStore` write is **not** atomic
+    (§9.4's "write to a temp file, then rename over the target" is approximated — it renames the
+    existing file aside, moves the temp into place, then deletes the old one), so a write
+    cancelled by the Activity going away can leave the folder with no copy of that file at all,
+    in a folder Syncthing is actively watching.
+
+  **Still not implemented, and deliberately not faked: the 2-second per-page debounce itself.** The
+  flush triggers above are the half that has somewhere to live; the debounce is the half that
+  doesn't yet. It is specified per *page* — "a Page's `pages/<page_id>.json` snapshot" — and
+  `writeSnapshots` has no per-page mode, it rewrites every domain file from scratch. Running that
+  whole-database write on a 2-second timer while someone types would be far worse than the
+  per-mutation write this decision already rejected, for exactly the reason it rejected it. Doing it
+  properly needs a per-page write path in the orchestrator plus a way for the block editor — which
+  lives in `shared/` and knows nothing about SAF or a desktop file store — to reach it. Left open
+  rather than approximated. The practical gap is narrow and self-healing: edits are in Room
+  immediately (§3.1.2), and reach the folder at the next backgrounding.
+
+- **Desktop is still manual (2026-09-04).** `onStart`/`onStop` are Android lifecycle callbacks, and
+  the desktop companion has a more specific reason to stay on its explicit "Sync now" button: its
+  passphrase is session-only and typed into the sync bar, never persisted
+  (`tendril-windows-spec.md` §7), so at launch there is nothing to decrypt an encrypted folder
+  with. An automatic pass there would either do nothing or, without the §9.4.2 guard, do harm.
 
 ### 9.4.1 Portable export/import (Decided 2026-07-16)
 
@@ -1571,7 +1787,7 @@ the other's data).
     separate agendas without one silently overwriting the other. Notion import (§7.3) is just one
     flavor of this same path — it was always additive-only in practice, never a full-app replace, so
     it never had a destructive-replace risk to begin with; only manually-created or
-    manually-exported Noema packages did.
+    manually-exported Tendril packages did.
   - **Restore from backup** — a separate, deliberately harder-to-reach, full wipe-and-replace
     action, worded unambiguously about what it does (e.g. requiring the person to confirm they
     understand current data will be erased, not a soft dialog matching §5.5's lighter pattern).
@@ -1617,6 +1833,34 @@ permission (§3.5) gains an adjacent **optional passphrase** toggle:
 - **Conflict files (§9.4) and portable export/import packages (§9.4.1 above) are encrypted under the
   same scheme when the toggle is on** — a `.tendril` export carries the same at-rest protection as
   continuous sync, not a separate case to design.
+  - **Implemented 2026-09-04 for the export half.** Conflict files were encrypted from the
+    start; `.tendril` packages were not. `PortableArchive` never referenced `SnapshotEncryption`
+    at all, so with the toggle on, **Export was the plaintext way around it** — carrying exactly
+    the medical (§5.1) and financial (§5.2.2) data this section names as its reason for
+    existing, in a file explicitly meant to be moved off the device.
+  - **Per zip entry, not one encrypted blob around the whole archive**, matching what the sync
+    folder already does to the same JSON: same `TDRLENC1` magic, same AES-256-GCM, same
+    fresh-IV-per-write. That also keeps a `.tendril` a real zip rather than an opaque payload.
+  - **`manifest.json` stays plaintext, deliberately.** It carries no content — an app version,
+    a timestamp, full-vs-partial, and a list of `pages/<uid>.json` names, which are uids rather
+    than titles. Leaving it readable costs a page *count* and an export date to anyone holding
+    the file; it buys an importer that can say "this is encrypted, check your passphrase"
+    instead of "this file is unreadable", and keeps §9.4.1's manifest-driven picker possible
+    for someone who has the passphrase but mistyped it. The manifest also now carries an
+    explicit `encrypted` flag, defaulted false so archives written before this still decode.
+  - **An archive that can't be decrypted is refused before anything changes.** This matters most
+    on the Restore path, which wipes before it applies (§9.4.1): the existing readability guard
+    would have caught it, but only as "this file doesn't contain any readable Tendril data" —
+    which reads as *the file is wrong* when the truth is *the passphrase is*, and sends someone
+    hunting for another backup instead of fixing the passphrase they still have.
+  - **Consequence worth stating, because it cuts against §9.4.1.** That section's other use for
+    an export is "a single Page/Database sent to someone else". With the toggle on, such a file
+    is unreadable to the recipient unless they are also given the passphrase — which is the
+    passphrase to the person's *entire* sync folder, not to that one export. This spec has no
+    per-export key and no reason to invent one for a personal build, so the mitigation is
+    disclosure rather than mechanism: the export confirmation now says the file is encrypted
+    and that opening it elsewhere needs that passphrase. Revisit only if sharing single pages
+    with other people becomes a real habit rather than a stated possibility.
 - **Losing the passphrase** makes the synced snapshot folder unreadable on any new device — Room
   (the live local database, always unaffected by this toggle) is unaffected on devices that already
   have it, but re-establishing sync elsewhere requires either recovering the passphrase or wiping
@@ -1719,6 +1963,19 @@ handling:
   actions — separate from the pre-due reminders above, and what actually drives
   sequential-recurrence advancement (§4) when the person isn't in the app to tap it manually.
 
+**Added 2026-09-04 — alarms follow a recurring EVENT, not just its first occurrence.**
+`AlarmScheduler` anchored every alarm to `entry.start_date`. For a recurring EVENT that is the
+series' *first* occurrence, so once it had passed, the never-schedule-in-the-past rule below
+suppressed everything after it and a weekly meeting reminded exactly once, ever. It now anchors to
+the first occurrence whose start is still in the future, resolved through §4.1.1's expander and
+honouring skip/override exception rows. Only that one occurrence is armed at a time: request codes
+are deterministic in `(entry_id, reminder_id)` alone (below), so two occurrences of one series would
+collide on the same `PendingIntent` and the second would silently replace the first. That is the
+same "only the currently-live occurrence's alarms exist" model this section already settled on for
+elastic TASK recurrence, and it leans on the same backstop — the reconciliation sweep below re-arms
+everything on boot and on app open. A series whose next occurrence passes while the app is never
+opened waits for that sweep; bounded and self-healing, against the previous permanent silence.
+
 **Added 2026-07-14 — `AlarmScheduler`, a required architectural component, not just a permission
 list.** Elastic TASK recurrence (§4.1) means `AlarmManager` can never be handed a whole future
 sequence — only the currently-live occurrence's alarms exist at any time, and every write path that
@@ -1785,10 +2042,10 @@ correspondence instead of developer memory.
 *Risk:* minor, well-trodden pattern.
 
 **[R3] One source of truth for recurrence expansion — MEDIUM-HIGH impact.**
-*Problem:* once Calendar Provider registration exists (§3.2), Noema's own local RRULE expansion and
+*Problem:* once Calendar Provider registration exists (§3.2), Tendril's own local RRULE expansion and
 `CalendarContract.Instances`' expansion could silently disagree on edge cases if both ever feed the
-same screen — a missing-anti-corruption-layer risk between Noema's model and the platform's.
-*Change:* Room stays authoritative for Noema's UI always; Provider writes are one-directional (added
+same screen — a missing-anti-corruption-layer risk between Tendril's model and the platform's.
+*Change:* Room stays authoritative for Tendril's UI always; Provider writes are one-directional (added
 to §3.2 above).
 *Migration path:* free now (one sentence); expensive to un-teach later if Phase 3 code starts
 reading `Instances` for convenience.
@@ -1941,6 +2198,18 @@ byte-for-byte Room dump. Gate that path behind the same plain-language confirm d
 uses elsewhere ("this update needs to reset local data; your synced pages, tasks, and habits will be
 restored from your last sync").
 
+**Acceptance** *(restored here 2026-09-04 — this block was printed at the end of §9.11, so §9.10 had
+no acceptance criteria and §9.11's acceptance-tested a different section; §9.11 now has its own)*:
+every schema change from v1 onward ships with either an `@AutoMigration` entry or an explicit
+`Migration`, never a silent `fallbackToDestructiveMigration()` left in place after the first
+release; the snapshot-restore fallback is wired and manually tested at least once (a
+deliberately-broken migration on a test device, confirming the restore path actually recovers a
+populated Room DB) before it's relied on for a real one. **Pre-v1 the version number still has to
+move on every schema change**: Room compares a hash of the schema against the one stored in the
+database and throws before migration runs when the hash moved but `version` didn't, so
+`fallbackToDestructiveMigration` never gets the chance to recover — it only handles version
+*changes*. Adding the Canvas tables (§3.4) without a bump is exactly how that was found.
+
 ### 9.11 System Calendar Provider registration (Decided/Implemented 2026-08-29)
 
 The actual mechanics behind §3.2's Provider registration bullet, corrected and built together once
@@ -1955,7 +2224,11 @@ The actual mechanics behind §3.2's Provider registration bullet, corrected and 
 - **Scope: both TASK and EVENT, whatever Tendril's own Calendar screen already shows** (§4's `WHERE
   start_date IS NOT NULL` rule) — broader than §9.5.1's Google Calendar sync, which is EVENT-only. A
   todo with a date is exactly the kind of thing a widget or watch face should be able to show
-  alongside real events.
+  alongside real events. *(**Note added 2026-09-04:** this sentence was aspirational until §4.1.1.
+  The Provider expands the `RRULE` it is handed, so the mirror showed a recurring EVENT on every
+  occurrence while Tendril's own screen showed it once — the mirror was strictly broader than the
+  scope defining it. With expansion built, the two agree, except for a rule outside §4.1.1's
+  supported subset, where Tendril shows fewer; that residual gap is recorded there.)*
 - **Google-sourced Entries excluded** (`source = GOOGLE_CALENDAR`, §9.5.1) — those already reach the
   system's calendar surfaces through the device's own real Google account sync; mirroring them here
   would just duplicate them.
@@ -1987,11 +2260,11 @@ The actual mechanics behind §3.2's Provider registration bullet, corrected and 
   backfill sweep rides alongside the existing boot-time alarm reconciliation (§9.7, §9.8 R4) for the
   case permission was granted after some Entries already existed.
 
-**Acceptance:** every schema change from v1 onward ships with either an `@AutoMigration` entry or an
-explicit `Migration`, never a silent `fallbackToDestructiveMigration()` left in place after the
-first release; the snapshot-restore fallback is wired and manually tested at least once (a
-deliberately-broken migration on a test device, confirming the restore path actually recovers a
-populated Room DB) before it's relied on for a real one.
+**Acceptance:** every Provider write carries `CALLER_IS_SYNCADAPTER=true` with the fixed local
+account name/type; `Entry.providerEventId` never appears in a snapshot record and is preserved
+locally by every merge path (snapshot, Google pull, and `.tendril` import alike); no Entry with
+`source = GOOGLE_CALENDAR` is mirrored; and a recurring write sends `DURATION`, never `DTEND`
+alongside `RRULE`.
 
 ---
 
@@ -2069,8 +2342,11 @@ section):
 - Secret storage — local-first until toggled, then Keystore-backed (§3.5).
 
 **Deferred (not needed for v1, worth keeping on record):**
-- In-page mind-map block, user-drawn or Claude-API-generated (§3.4) — the reason Road Map was
-  renamed away from "Mind Map" in the first place; entirely separate feature, not started.
+- In-page mind-map block, **Claude-API-generated** (§3.4) — the reason Road Map was renamed away
+  from "Mind Map" in the first place. *(**Corrected 2026-09-04:** this read "user-drawn or
+  Claude-API-generated ... entirely separate feature, not started." The user-drawn half shipped as
+  the Canvas page kind and is no longer deferred — see §3.4. Only the API-generated half remains
+  unbuilt.)*
 - Notion API-based import (using a user's own integration token) as a second, richer import path
   alongside the file-based Markdown/CSV importer (§7.3).
 - Extending the widget live-audit tool to model one specific/sampled wallpaper luminance instead of

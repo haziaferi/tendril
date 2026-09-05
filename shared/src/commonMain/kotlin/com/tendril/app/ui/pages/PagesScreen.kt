@@ -4,6 +4,7 @@ package com.tendril.app.ui.pages
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,13 +63,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.data.page.PageSearchHit
+import com.tendril.app.data.page.SEARCH_HL_CLOSE
+import com.tendril.app.data.page.SEARCH_HL_OPEN
 import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.empty_pages_cta
 import com.tendril.app.generated.resources.empty_pages_message
@@ -77,6 +86,7 @@ import com.tendril.app.generated.resources.nav_pages
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -323,15 +333,37 @@ private fun NewOptionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 private fun SearchOverlay(viewModel: PagesViewModel, onDismiss: () -> Unit, onOpenPage: (Long) -> Unit) {
     var query by remember { mutableStateOf("") }
     val results by viewModel.searchResults.collectAsState()
-    val scope = rememberCoroutineScope()
 
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // §3.1.7's "live at roughly a 300ms debounce". Both this composable and
+    // PagesViewModel.onSearchQueryChange documented a debounce that neither actually
+    // performed — every keystroke ran its own FTS query. Keying the effect on `query` is the
+    // debounce: a new keystroke cancels the pending coroutine before the delay elapses, so
+    // only the last one in a burst reaches the DAO. A blank query still clears immediately,
+    // since onSearchQueryChange short-circuits it.
+    LaunchedEffect(query) {
+        delay(SEARCH_DEBOUNCE_MS)
+        viewModel.onSearchQueryChange(query)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            // The overlay is composed as a sibling *over* the Scaffold, not in place of it, so
+            // the page list and FAB underneath are still composed and still clickable. A
+            // background alone paints over them without consuming anything; an indication-less
+            // clickable swallows the tap, which is what actually blocks the pass-through.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {},
+    ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close search") }
                 OutlinedTextField(
                     value = query,
-                    onValueChange = { query = it; viewModel.onSearchQueryChange(it) },
+                    onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     placeholder = { Text("Search pages…") },
@@ -343,14 +375,59 @@ private fun SearchOverlay(viewModel: PagesViewModel, onDismiss: () -> Unit, onOp
             } else {
                 LazyColumn {
                     items(results, key = { it.pageId }) { hit ->
-                        Column(
-                            modifier = Modifier.fillMaxWidth().clickable { onOpenPage(hit.pageId) }.padding(16.dp),
-                        ) {
-                            Text(hit.snippet, style = MaterialTheme.typography.bodyMedium)
-                        }
+                        SearchResultRow(hit = hit, onClick = { onOpenPage(hit.pageId) })
                     }
                 }
             }
+        }
+    }
+}
+
+private const val SEARCH_DEBOUNCE_MS = 300L
+
+/** §3.1.7 — "results show each matching page's icon, title, and a highlighted snippet".
+ * The row used to render the bare snippet and nothing else, so a hit was an unlabelled
+ * fragment of text with no way to tell which page it came from. */
+@Composable
+private fun SearchResultRow(hit: PageSearchHit, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val hitIcon = hit.icon
+        Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+            if (hitIcon != null) {
+                Text(hitIcon, style = MaterialTheme.typography.titleMedium)
+            } else {
+                Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(hit.title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                highlightMatches(hit.snippet),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Turns the delimiters SQLite's `snippet()` wraps each match in (see [PageFtsDao.search])
+ * into a real bold span, and drops them from the visible text. */
+private fun highlightMatches(snippet: String): AnnotatedString = buildAnnotatedString {
+    var inMatch = false
+    for (char in snippet) {
+        when (char) {
+            SEARCH_HL_OPEN -> inMatch = true
+            SEARCH_HL_CLOSE -> inMatch = false
+            else ->
+                if (inMatch) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(char) }
+                } else {
+                    append(char)
+                }
         }
     }
 }

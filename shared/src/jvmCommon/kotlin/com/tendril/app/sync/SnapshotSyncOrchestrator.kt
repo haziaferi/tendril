@@ -53,6 +53,30 @@ private const val LOST_MARKER = ".tendril-lost-"
  * be supplied on every device sharing the folder, or their snapshots become unreadable to each
  * other (a plain-language warning for that lives in each platform's own UI, not here).
  */
+/**
+ * What [SnapshotSyncOrchestrator.readAndMerge] found in the folder. [undecryptableFiles] counts
+ * snapshot files that carried [SnapshotEncryption]'s magic prefix but would not decrypt with the
+ * passphrase in hand — a wrong passphrase, or none configured against an encrypted folder.
+ */
+data class SnapshotMergeResult(val undecryptableFiles: Int) {
+    /**
+     * True when the folder holds encrypted snapshots this device cannot read. Callers **must
+     * not** follow such a merge with [SnapshotSyncOrchestrator.writeSnapshots]: nothing was
+     * merged in, so the write would replace every readable file with this device's own state,
+     * re-encrypted under the wrong key. §9.4.2 promises that losing the passphrase leaves the
+     * folder "unreadable" and recoverable by recovering the passphrase — overwriting it makes
+     * that false, and it is the *only* copy on a fresh install. The conflict sweep already
+     * refuses to delete a file it couldn't decrypt for the same reason; the primary files just
+     * had no equivalent guard.
+     */
+    val passphraseMismatch: Boolean get() = undecryptableFiles > 0
+}
+
+/** Mutable counter threaded through one [SnapshotSyncOrchestrator.readAndMerge] pass. */
+private class ReadTally {
+    var undecryptable = 0
+}
+
 class SnapshotSyncOrchestrator(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
@@ -178,7 +202,7 @@ class SnapshotSyncOrchestrator(
      * a stale delete can't destroy a newer edit.
      *
      * Runs on [Dispatchers.IO] for the same reasons as [writeSnapshots]. */
-    suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null) =
+    suspend fun readAndMerge(store: SyncFileStore, passphrase: String? = null): SnapshotMergeResult =
         // mint = false: reading must never write to the folder, and a folder with nothing in it
         // has nothing to decrypt anyway.
         mergeWithKey(store, ReadKey(deriveKey(passphrase, resolveSalt(store, mint = false)), isEncryptedFolder(store)))
@@ -188,7 +212,15 @@ class SnapshotSyncOrchestrator(
      * to be encrypted. The second is a property of the *folder*, not of any one file, which is
      * exactly why it is resolved once per pass and carried rather than re-derived per read.
      */
-    private data class ReadKey(val key: SecretKeySpec?, val folderEncrypted: Boolean)
+    private data class ReadKey(
+        val key: SecretKeySpec?,
+        val folderEncrypted: Boolean,
+        /** Counts files this pass could not read, for [SnapshotMergeResult]. Carried here rather
+         * than threaded as a fourth parameter: it travels through exactly the same nine
+         * functions the key does, and two parallel plumbings of the same shape is how one of
+         * them eventually gets forgotten at a call site. */
+        val tally: ReadTally = ReadTally(),
+    )
 
     /** A folder is known to be encrypted if it says so (`sync_meta.json`) or demonstrates it
      * (ciphertext written before that file existed). */
@@ -235,6 +267,8 @@ class SnapshotSyncOrchestrator(
             if (!name.contains(".sync-conflict-")) return@forEach
             if (mergePageContent(readPageText(store, name, read))) store.deletePage(name)
         }
+
+        SnapshotMergeResult(undecryptableFiles = read.tally.undecryptable)
     }
 
     private suspend fun mergePagesDir(store: SyncFileStore, read: ReadKey) {
@@ -472,12 +506,17 @@ class SnapshotSyncOrchestrator(
             // Refused as "couldn't read this" rather than deleted, which is the same treatment
             // an undecryptable file gets, and means the conflict sweep leaves it on disk to be
             // inspected instead of destroying it unread.
-            return if (read.folderEncrypted) "" else bytes.toString(Charsets.UTF_8)
+            if (read.folderEncrypted) {
+                read.tally.undecryptable++
+                return ""
+            }
+            return bytes.toString(Charsets.UTF_8)
         }
         // Encrypted content with no passphrase configured, or the wrong one, decrypts to
         // null — surfaced to the caller as "nothing to merge" rather than a crash; each
         // platform's own UI is where a wrong/missing passphrase gets explained to the person.
         val decrypted = read.key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
+        if (decrypted == null) read.tally.undecryptable++
         return decrypted?.toString(Charsets.UTF_8) ?: ""
     }
 

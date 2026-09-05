@@ -27,6 +27,7 @@ import com.tendril.app.storage.ThemePreferences
 import com.tendril.app.sync.PagesSyncEngine
 import com.tendril.app.sync.PortableArchive
 import com.tendril.app.sync.SnapshotSyncOrchestrator
+import com.tendril.app.sync.SyncCoordinator
 import com.tendril.app.ui.WorkbenchCore
 
 /**
@@ -44,7 +45,8 @@ class AppContainer(context: Context) {
     val alarmScheduler = AlarmScheduler(context, database.reminderDao())
     val calendarProviderPreferences = CalendarProviderPreferences(context)
     val calendarProviderSync = CalendarProviderSync(context, database.entryDao(), calendarProviderPreferences)
-    val entryScheduleCoordinator = AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync)
+    val entryScheduleCoordinator =
+        AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
     val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), entryScheduleCoordinator)
     val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
     val purgeRegistry = PurgeRegistry(
@@ -63,6 +65,14 @@ class AppContainer(context: Context) {
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
         purgeRegistry, pagesSyncEngine,
+        // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
+        // `.tendril` package. "Off" is simply no passphrase set.
+        passphrase = { secretStore.syncPassphrase.value },
+    )
+    /** §9.4's sync triggers — lifecycle and the Settings button both run through this one
+     * place, so they can't overlap and a failure has somewhere to be reported from. */
+    val syncCoordinator = SyncCoordinator(
+        context, syncFolderManager, snapshotSyncOrchestrator, secretStore, syncStatusPreferences,
     )
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
@@ -75,10 +85,19 @@ class AppContainer(context: Context) {
     )
     val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao())
     val googleCalendarPreferences = GoogleCalendarPreferences(context)
-    val googleCalendarAuthManager = GoogleCalendarAuthManager(context, googleCalendarPreferences)
-    val googleCalendarSyncEngine = GoogleCalendarSyncEngine(
-        database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
-    )
+    // `by lazy`, not an eager val: GoogleCalendarAuthManager's constructor calls
+    // Identity.getAuthorizationClient(...), so an eager one built a Play Services
+    // authorization client on every cold start whether or not Google Calendar had ever been
+    // connected. No network call was made by that — but §3.5 states the stronger property
+    // outright ("no client/library is constructed at startup"), and this is what makes it true.
+    val googleCalendarAuthManager by lazy { GoogleCalendarAuthManager(context, googleCalendarPreferences) }
+    // Lazy for the same reason — an eager engine forces the auth manager above, which would
+    // put the Play Services client straight back into the startup path.
+    val googleCalendarSyncEngine by lazy {
+        GoogleCalendarSyncEngine(
+            database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
+        )
+    }
     val viewLockState = ViewLockState()
     // audit 4.3 — checkbox-only mode draws over the keyguard, so it must refuse to turn on at
     // all when App Lock is the thing standing in front of the app.

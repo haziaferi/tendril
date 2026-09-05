@@ -1,0 +1,78 @@
+# Builds all three Gradle projects and runs the JVM unit tests.
+#
+# There is deliberately no root wrapper (README, "Building"): `Tendril android/`, `shared/` and
+# `Tendril windows/` are three separate builds that happen to live in one repository, because both
+# consumers resolve the shared core as `includeBuild("../shared")` — a *relative sibling* path only
+# a single clone reproduces (tendril-spec.md §11). So this workflow runs three wrappers rather than
+# one, mirroring exactly what the README tells a person to run by hand.
+#
+# All three need the Android SDK, including the desktop build: `shared` has an `android` target as
+# well as a `desktop` one, and `Tendril windows` composite-builds it.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes the run still in flight for the same branch, rather than queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Assemble and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 21 — AGP's floor is 17, and gradle-daemon-jvm.properties pins toolchainVersion=21.
+      # Providing it here keeps Gradle from provisioning its own through foojay on every run.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Installs cmdline-tools and accepts the SDK licences. The platform itself (compileSdk 37)
+      # is left to AGP's own auto-download, which only needs those licences accepted — if a future
+      # runner image ever stops allowing that, add `with: packages: 'platforms;android-37'` here.
+      - uses: android-actions/setup-android@v3
+
+      # Caches ~/.gradle across runs and writes a build summary on the job page. Deliberately no
+      # --no-daemon on the wrapper calls below: this action manages the daemon, and killing it
+      # stops the cache being written.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The one that matters most — the APK plus every JVM unit test in the repo. Quoted because
+      # the folder name contains a space.
+      - name: Android — assemble + unit tests
+        working-directory: 'Tendril android'
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest
+
+      # Both of the remaining builds run even when the one above failed, so a single run reports
+      # all three results instead of only the first failure.
+      - name: Shared KMP core — both targets
+        if: ${{ !cancelled() }}
+        working-directory: shared
+        run: ./gradlew build
+
+      - name: Desktop companion
+        if: ${{ !cancelled() }}
+        working-directory: 'Tendril windows'
+        run: ./gradlew build
+
+      # A failed Kotlin test says little in the console log; the HTML report says which assertion.
+      - name: Upload test reports
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+          retention-days: 14

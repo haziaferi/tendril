@@ -390,7 +390,9 @@ class FakePageFtsDao(private val store: FakePageStore) : PageFtsDao {
     override suspend fun deleteForPage(pageId: Long) { store.fts.remove(pageId) }
     override suspend fun search(query: String): List<PageSearchHit> =
         store.fts.filter { it.value.contains(query.removeSuffix("*"), ignoreCase = true) }
-            .map { PageSearchHit(it.key, it.value) }
+            // The real query joins `pages` for title and icon (§3.1.5's search overlay shows
+            // both); this store holds only indexed text, so the page's own row supplies them.
+            .map { PageSearchHit(it.key, store.pages[it.key]?.title.orEmpty(), store.pages[it.key]?.icon, it.value) }
 }
 
 /**

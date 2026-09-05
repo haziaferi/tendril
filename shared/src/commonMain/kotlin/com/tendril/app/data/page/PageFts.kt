@@ -27,16 +27,45 @@ interface PageFtsDao {
     @Query("DELETE FROM page_fts WHERE pageId = :pageId")
     suspend fun deleteForPage(pageId: Long)
 
-    /** §3.1.7 — the search overlay's query, live at ~300ms debounce. Returns pageId plus a
-     * snippet of the matching text for the results list. */
+    /**
+     * §3.1.7 — the search overlay's query. Returns everything a result row shows: "each
+     * matching page's icon, title, and a highlighted snippet from the first matching block".
+     *
+     * The join is what keeps a trashed page out of the results. `page_fts` is a standalone
+     * `@Fts4` table (no `contentEntity`), so it carries no `deletedAt` of its own and nothing
+     * prunes it on delete — §5.5.1 requires a deleted Page to be "invisible everywhere except
+     * Trash", FTS named explicitly. Filtering here covers both halves at once: a soft-deleted
+     * page stops matching, and a **Delete forever**'d one can no longer return a `pageId` that
+     * resolves to nothing.
+     *
+     * `snippet()`'s FTS4 signature is
+     * `snippet(table, startMatch, endMatch, ellipses, columnNumber, tokens)`. The arguments
+     * used to be `(-1, '', '', '…', 12)` — one position short, so `-1` landed in `startMatch`,
+     * the match delimiters were empty strings, and `'…'` was read as the *column number*,
+     * coercing to 0, which is `pageId` rather than `plainText`. Snippets were drawn from the
+     * wrong column and nothing was ever highlighted. [SEARCH_HL_OPEN]/[SEARCH_HL_CLOSE] are
+     * control characters so they cannot collide with a person's own note text; the overlay
+     * splits on them to build the highlight.
+     */
     @Query(
-        "SELECT pageId, snippet(page_fts, -1, '', '', '…', 12) AS snippet " +
-            "FROM page_fts WHERE page_fts MATCH :query LIMIT 50"
+        "SELECT page_fts.pageId AS pageId, pages.title AS title, pages.icon AS icon, " +
+            "snippet(page_fts, '\u0002', '\u0003', '…', 1, 12) AS snippet " +
+            "FROM page_fts JOIN pages ON pages.id = page_fts.pageId " +
+            "WHERE page_fts MATCH :query AND pages.deletedAt IS NULL LIMIT 50"
     )
     suspend fun search(query: String): List<PageSearchHit>
 }
 
-data class PageSearchHit(val pageId: Long, val snippet: String)
+/** Delimiters SQLite wraps each match in — see [PageFtsDao.search]. */
+const val SEARCH_HL_OPEN = '\u0002'
+const val SEARCH_HL_CLOSE = '\u0003'
+
+data class PageSearchHit(
+    val pageId: Long,
+    val title: String,
+    val icon: String?,
+    val snippet: String,
+)
 
 /** Matches a run of letters or digits — everything else is punctuation as far as search is
  * concerned. */

@@ -109,4 +109,19 @@ data class TendrilManifest(
      * selective export yet). */
     val kind: String,
     val includedFiles: List<String>,
+    /**
+     * §9.4.2 — whether every payload entry beside this manifest is AES-256-GCM ciphertext
+     * under the sync passphrase. Defaulted false so archives written before this existed still
+     * decode; a reader can also tell from [SnapshotEncryption]'s magic prefix on any payload,
+     * but having it stated up front is what lets an importer say "this is encrypted" instead of
+     * "this is unreadable" before it has touched anything.
+     *
+     * The manifest itself is deliberately **not** encrypted. It carries no page content — an
+     * app version, a timestamp, full-vs-partial, and a list of `pages/<uid>.json` names, which
+     * are uids rather than titles. Leaving it readable costs a page *count* and an export date
+     * to anyone holding the file, and buys a legible failure and a working §9.4.1 file picker
+     * for someone who has the passphrase but mistyped it. Stated here rather than left to be
+     * inferred from the code.
+     */
+    val encrypted: Boolean = false,
 )

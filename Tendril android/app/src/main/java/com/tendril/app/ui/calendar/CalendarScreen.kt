@@ -66,6 +66,8 @@ import com.tendril.app.AppContainer
 import com.tendril.app.R
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryStatus
+import com.tendril.app.domain.recurrence.EntryOccurrence
+import com.tendril.app.domain.recurrence.EntryOccurrences
 import com.tendril.app.googlecalendar.GoogleCalendarAuthManager
 import com.tendril.app.googlecalendar.GoogleCalendarSyncEngine
 import com.tendril.app.googlecalendar.SyncOutcome
@@ -78,6 +80,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private enum class CalendarView { DAY, WEEK, MONTH }
@@ -146,10 +149,27 @@ fun CalendarScreen(container: AppContainer, modifier: Modifier = Modifier) {
                 }
             }
 
+            // §4.1 — the stored rows are expanded into occurrences before anything is drawn:
+            // a recurring EVENT contributes one per occurrence in the window, and a multi-day
+            // one contributes a row on every day it covers. Filtering `it.startDate == day`
+            // straight off the rows, as this used to, showed a weekly series exactly once and
+            // a three-day event on day one only. `remember`ed per range so panning a month
+            // doesn't re-expand on every recomposition.
+            val weekStart = selectedDate.minusDays((selectedDate.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong())
+            val gridMonth = YearMonth.from(selectedDate)
+            val occurrences = remember(entries, view, selectedDate) {
+                when (view) {
+                    CalendarView.DAY -> EntryOccurrences.onDay(entries, selectedDate)
+                    CalendarView.WEEK -> EntryOccurrences.expand(entries, weekStart, weekStart.plusDays(6))
+                    CalendarView.MONTH ->
+                        EntryOccurrences.expand(entries, gridMonth.atDay(1), gridMonth.atEndOfMonth())
+                }
+            }
+
             when (view) {
                 CalendarView.DAY -> DayView(
                     date = selectedDate,
-                    entries = entries.filter { it.startDate == selectedDate },
+                    occurrences = occurrences,
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
@@ -158,12 +178,12 @@ fun CalendarScreen(container: AppContainer, modifier: Modifier = Modifier) {
                 )
                 CalendarView.WEEK -> WeekStripView(
                     selectedDate = selectedDate,
-                    entries = entries,
+                    occurrences = occurrences,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
                 )
                 CalendarView.MONTH -> MonthGridView(
-                    month = YearMonth.from(selectedDate),
-                    entries = entries,
+                    month = gridMonth,
+                    occurrences = occurrences,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
                     onMonthShift = { selectedDate = selectedDate.plusMonths(it.toLong()) },
                 )
@@ -175,7 +195,7 @@ fun CalendarScreen(container: AppContainer, modifier: Modifier = Modifier) {
 @Composable
 private fun DayView(
     date: LocalDate,
-    entries: List<Entry>,
+    occurrences: List<EntryOccurrence>,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (String) -> Unit,
@@ -208,11 +228,16 @@ private fun DayView(
         )
         HorizontalDivider()
 
-        if (entries.isEmpty()) {
+        if (occurrences.isEmpty()) {
             EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing scheduled", modifier = Modifier.fillMaxSize())
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-                items(entries.sortedWith(compareBy({ it.startTime == null }, { it.startTime })), key = { it.id }) { entry ->
+                // Already ordered by EntryOccurrences.expand (by time, untimed last, then
+                // title) — the order this list was sorting into by hand. The key carries the
+                // occurrence's start date as well as the row id: one series contributes many
+                // occurrences, all sharing the base row's id.
+                items(occurrences, key = { "${it.entry.id}:${it.startDate}" }) { occurrence ->
+                    val entry = occurrence.entry
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -226,7 +251,7 @@ private fun DayView(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(entry.title, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                entry.startTime?.toString() ?: "All day",
+                                occurrenceSubtitle(occurrence, date),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -241,15 +266,28 @@ private fun DayView(
     }
 }
 
+/**
+ * The line under an occurrence's title. A multi-day span (§4.1) says which day of it this is,
+ * since otherwise the same title appears on three consecutive days with nothing to tell them
+ * apart, and the middle and last days of a span have no start time of their own to show.
+ */
+private fun occurrenceSubtitle(occurrence: EntryOccurrence, day: LocalDate): String {
+    val base = (if (occurrence.isFirstDay) occurrence.startTime?.toString() else null) ?: "All day"
+    if (!occurrence.isMultiDay) return base
+    val total = ChronoUnit.DAYS.between(occurrence.startDate, occurrence.endDate) + 1
+    val index = ChronoUnit.DAYS.between(occurrence.startDate, day) + 1
+    return "$base · day $index of $total"
+}
+
 /** Cards layout (§2.2) — the Grid/hour-grid alternative is a later refinement. */
 @Composable
-private fun WeekStripView(selectedDate: LocalDate, entries: List<Entry>, onSelectDate: (LocalDate) -> Unit) {
+private fun WeekStripView(selectedDate: LocalDate, occurrences: List<EntryOccurrence>, onSelectDate: (LocalDate) -> Unit) {
     val monday = selectedDate.minusDays((selectedDate.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong())
     val days = (0..6).map { monday.plusDays(it.toLong()) }
 
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
         items(days) { day ->
-            val dayEntries = entries.filter { it.startDate == day }
+            val dayEntries = occurrences.filter { it.date == day }
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 tonalElevation = 1.dp,
@@ -265,7 +303,7 @@ private fun WeekStripView(selectedDate: LocalDate, entries: List<Entry>, onSelec
                     if (dayEntries.isEmpty()) {
                         Text("—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        dayEntries.take(3).forEach { Text("• ${it.title}", style = MaterialTheme.typography.bodySmall) }
+                        dayEntries.take(3).forEach { Text("• ${it.entry.title}", style = MaterialTheme.typography.bodySmall) }
                         if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -275,7 +313,7 @@ private fun WeekStripView(selectedDate: LocalDate, entries: List<Entry>, onSelec
 }
 
 @Composable
-private fun MonthGridView(month: YearMonth, entries: List<Entry>, onSelectDate: (LocalDate) -> Unit, onMonthShift: (Int) -> Unit) {
+private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, onSelectDate: (LocalDate) -> Unit, onMonthShift: (Int) -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -297,7 +335,7 @@ private fun MonthGridView(month: YearMonth, entries: List<Entry>, onSelectDate: 
                 if (day == null) {
                     Box(modifier = Modifier.size(40.dp))
                 } else {
-                    val count = entries.count { it.startDate == day }
+                    val count = occurrences.count { it.date == day }
                     Column(
                         modifier = Modifier
                             .size(40.dp)

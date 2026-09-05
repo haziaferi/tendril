@@ -110,6 +110,8 @@ class NotionImporter(
 
         val now = Instant.now()
         val warnings = mutableListOf<String>()
+        // Notion ids of pages carrying at least one link this export can't resolve (§7.3.2).
+        val unresolvedLinkPages = mutableSetOf<String>()
         var assetsImported = 0
         var rowsImported = 0
 
@@ -180,7 +182,16 @@ class NotionImporter(
                         is ParsedSpanKind.Strikethrough -> SpanStyle.Strikethrough
                         is ParsedSpanKind.InlineCode -> SpanStyle.InlineCode
                         is ParsedSpanKind.ExternalLink -> SpanStyle.Link(kind.url)
-                        is ParsedSpanKind.PageRef -> idToRoomId[kind.notionId]?.let(SpanStyle::PageMention)
+                        // A ref whose target isn't in the map points outside this export —
+                        // linked from a page the person didn't tick "include subpages" for.
+                        // Two-pass linking (§7.4) removes every *resolvable* dangling link;
+                        // it cannot conjure a page the zip never contained. Counted rather
+                        // than dropped in silence: §7.3.2 calls broken internal links the
+                        // single most common failure mode across every migration guide
+                        // checked, and §7.3.7 requires saying so plainly.
+                        is ParsedSpanKind.PageRef ->
+                            idToRoomId[kind.notionId]?.let(SpanStyle::PageMention)
+                                ?: run { unresolvedLinkPages += meta.notionId; null }
                     }
                     style?.let { FormattingSpan(span.start, span.end, it) }
                 }
@@ -259,6 +270,15 @@ class NotionImporter(
             }
 
             importedDatabases += ImportedDatabase(dbPageId, databaseId, dbTitle)
+        }
+
+        if (unresolvedLinkPages.isNotEmpty()) {
+            val titles = unresolvedLinkPages.mapNotNull { idToTitle[it] }.sorted()
+            val named = titles.take(3).joinToString(", ") { "\"$it\"" }
+            val rest = titles.size - 3
+            warnings += "${unresolvedLinkPages.size} page(s) link to pages that weren't in this " +
+                "export — those links were imported as plain text" +
+                if (named.isEmpty()) "." else ": $named${if (rest > 0) " and $rest more" else ""}."
         }
 
         // Named rather than merely counted, up to a point: "3 files were skipped" invites the

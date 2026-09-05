@@ -9,11 +9,14 @@ import androidx.core.content.getSystemService
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.EntryStatus
+import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
 import com.tendril.app.data.reminder.toDuration
 import com.tendril.app.domain.nextHabitReminderAt
+import com.tendril.app.domain.recurrence.EntryOccurrences
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -37,15 +40,21 @@ class AlarmScheduler(
 ) {
     private val alarmManager: AlarmManager? = context.getSystemService()
 
-    suspend fun rescheduleFor(entry: Entry) {
+    /**
+     * @param exceptions [entry]'s single-occurrence exception rows (§4.1), so a skipped or
+     * moved occurrence isn't the one alarms get anchored to. Defaults to none — correct for
+     * every Entry that isn't a recurring EVENT, which is all of them until a series is pulled
+     * from Google Calendar (§9.5.1).
+     */
+    suspend fun rescheduleFor(entry: Entry, exceptions: List<Entry> = emptyList()) {
         cancelAllFor(entry.id)
         if (entry.deletedAt != null) return
         // A resolved TASK stops reminding. An EVENT has no status to resolve (§4), so this
         // gate is deliberately TASK-only rather than folded into one `kind != TASK` bail —
         // pre-due reminders below apply to either kind.
         if (entry.kind == EntryKind.TASK && entry.status != EntryStatus.PENDING) return
-        val startDate = entry.startDate ?: return
         val zone = ZoneId.systemDefault()
+        val startDate = nextOccurrenceDate(entry, exceptions, zone) ?: return
 
         // Overdue trigger: start_date+start_time, or midnight if no time (§4.1 round 1).
         // TASK-only (§9.7) — an EVENT has no done/not-done state for it to drive.
@@ -79,6 +88,44 @@ class AlarmScheduler(
                 reminderId = reminder.id,
             )
         }
+    }
+
+    /**
+     * Which occurrence this Entry's alarms should be anchored to.
+     *
+     * For everything except a recurring EVENT this is just `entry.startDate`, unchanged. For a
+     * recurring EVENT it is the first occurrence whose start instant is still in the future
+     * (§4.1). Anchoring to `startDate` meant that once a series' *first* occurrence had passed,
+     * [scheduleIfFuture]'s never-in-the-past guard suppressed every alarm after it — so a
+     * weekly meeting reminded exactly once, ever, while the same series went on recurring in
+     * Tendril's Calendar and in the system calendar it publishes to (§9.11).
+     *
+     * Only the next occurrence is armed, never a run of them: request codes are derived from
+     * `(entryId, reminderId)` alone (§9.7/§9.8 R4), so two occurrences of one series would
+     * collide on the same `PendingIntent` and the second would silently replace the first.
+     * That is the same "only the currently-live occurrence's alarms exist" model §4.1 already
+     * settled on for elastic TASK recurrence, and it leans on the same backstop: §9.7's
+     * reconciliation sweep, which re-arms everything on boot and on app open. A series whose
+     * next occurrence passes while the app is never opened waits for that sweep — bounded and
+     * self-healing, rather than the previous permanent silence.
+     */
+    private fun nextOccurrenceDate(entry: Entry, exceptions: List<Entry>, zone: ZoneId): LocalDate? {
+        val anchor = entry.startDate ?: return null
+        if (entry.kind != EntryKind.EVENT || entry.recurrenceRule !is RecurrenceRule.Fixed) return anchor
+
+        val now = Instant.now()
+        val today = LocalDate.now(zone)
+        val candidates = EntryOccurrences
+            .expand(listOf(entry) + exceptions, today, today.plusDays(EntryOccurrences.DEFAULT_ALARM_HORIZON_DAYS))
+            .filter { it.isFirstDay && (it.entry.id == entry.id || it.entry.originalEntryId == entry.id) }
+
+        // "On or after today" isn't enough on its own: today's occurrence may already have
+        // started, in which case its alarms are all in the past and the series' *next* one is
+        // what should be armed.
+        return candidates.firstOrNull { occurrence ->
+            LocalDateTime.of(occurrence.startDate, occurrence.startTime ?: LocalTime.MIDNIGHT)
+                .atZone(zone).toInstant().isAfter(now)
+        }?.startDate ?: candidates.firstOrNull()?.startDate
     }
 
     /**
