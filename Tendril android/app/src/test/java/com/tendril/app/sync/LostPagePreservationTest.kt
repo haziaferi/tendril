@@ -104,6 +104,21 @@ class LostPagePreservationTest {
     }
 
     @Test
+    fun `a local page overwritten by a newer remote is kept beside the winner`() = runBlocking {
+        val d = Device()
+        // Local holds an older, different version...
+        d.engine.mergePages(listOf(pageRecord(UID, "Mine, older", 5_000)))
+        // ...and a newer copy arrives from the folder, which legitimately wins.
+        val store = folderWith(UID, "Theirs, newer", 9_000)
+
+        d.orchestrator.readAndMerge(store)
+
+        assertEquals("the newer remote title must win", "Theirs, newer", d.pageDao.getByUid(UID)!!.title)
+        assertEquals("the overwritten local version should have been kept", 1, store.lostFiles().size)
+        assertTrue(store.lostFiles().single().startsWith("$UID$LOST"))
+    }
+
+    @Test
     fun `preserving the same losing version twice does not accumulate copies`() = runBlocking {
         val d = Device()
         d.engine.mergePages(listOf(pageRecord(UID, "Mine, newer", 9_000)))
@@ -134,7 +149,7 @@ class LostPagePreservationTest {
     }
 
     @Test
-    fun `a winning record is not preserved`() = runBlocking {
+    fun `the winner is not preserved, only the copy it replaced`() = runBlocking {
         val d = Device()
         d.engine.mergePages(listOf(pageRecord(UID, "Mine, older", 1_000)))
         val store = folderWith(UID, "Theirs, newer", 9_000)
@@ -142,7 +157,23 @@ class LostPagePreservationTest {
         d.orchestrator.readAndMerge(store)
 
         assertEquals("the newer remote should have won", "Theirs, newer", d.pageDao.getByUid(UID)!!.title)
-        assertTrue("a winner is not a loss", store.lostFiles().isEmpty())
+        // A loss file is named for the losing version's own timestamp, so this asserts *which*
+        // side was kept: 1_000, the local copy that was overwritten -- never 9_000, which is
+        // the live version and would be a copy of the winner.
+        assertEquals(listOf("$UID${LOST}1000.json"), store.lostFiles())
+    }
+
+    @Test
+    fun `a local page replaced by an identical newer remote is not preserved`() = runBlocking {
+        val d = Device()
+        d.engine.mergePages(listOf(pageRecord(UID, "Same", 1_000)))
+        // Newer, so it wins -- but it carries exactly the content already held, which is the
+        // ordinary case of a peer's routine re-export catching up. Nothing was lost.
+        val store = folderWith(UID, "Same", 9_000)
+
+        d.orchestrator.readAndMerge(store)
+
+        assertTrue("only the timestamp moved, so nothing was lost", store.lostFiles().isEmpty())
     }
 
     @Test

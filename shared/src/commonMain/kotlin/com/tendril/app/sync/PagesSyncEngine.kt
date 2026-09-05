@@ -233,8 +233,23 @@ class PagesSyncEngine(
             isSafeUid(it.uid) && !purgeRegistry.isPurged(PurgedKind.PAGE, it.uid, Instant.ofEpochMilli(it.updatedAt), tombstones)
         }
         if (records.isEmpty()) return emptyList()
-        val uidToId = pageDao.getAll().associate { it.uid to it.id }.toMutableMap()
+        val localPages = pageDao.getAll()
+        val uidToId = localPages.associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
+        // The local copies about to be replaced. A winning record overwrites the page row and
+        // Pass 5 clears and rebuilds its blocks, tags and cell values, so whatever this device
+        // held is gone by the time the passes finish -- and unlike a losing *remote* record it
+        // is not sitting in a file anywhere. Captured here, before Pass 1, because afterwards
+        // there is nothing left to capture. Same deferral as `candidateLosers` below: the
+        // export is only paid for when a record actually stands to overwrite something.
+        val localUpdatedAt = localPages.associate { it.uid to it.updatedAt }
+        val overwritten: Map<String, PageSnapshotRecord> =
+            if (records.any { r -> localUpdatedAt[r.uid]?.let { Instant.ofEpochMilli(r.updatedAt).isAfter(it) } == true }) {
+                exportPages().associateBy { it.uid }
+            } else {
+                emptyMap()
+            }
+        val overwrittenUids = mutableSetOf<String>()
         // Records that lost on timestamp. Whether each is a real loss depends on its content
         // differing, but that comparison needs exportPages(), which walks every page on the
         // device -- so it is deferred until something is actually a candidate, and skipped
@@ -256,6 +271,7 @@ class PagesSyncEngine(
                 id = local.id
                 pageDao.update(record.toBareEntity().copy(id = id, parentId = local.parentId, databaseId = local.databaseId))
                 wonUids += record.uid
+                overwrittenUids += record.uid
             } else {
                 id = local.id
                 // Strictly older: an equal timestamp is the same version, not a race.
@@ -431,9 +447,18 @@ class PagesSyncEngine(
 
         // Compared against the page as it stands once the pass is done, which is exactly what
         // replaced the loser. An identical body has nothing in it to preserve.
-        if (candidateLosers.isEmpty()) return emptyList()
+        if (candidateLosers.isEmpty() && overwrittenUids.isEmpty()) return emptyList()
         val localByUid = exportPages().associateBy { it.uid }
-        return candidateLosers.filter { localByUid[it.uid] != it }
+        return candidateLosers.filter { localByUid[it.uid] != it } +
+            overwrittenUids.mapNotNull { uid ->
+                val before = overwritten[uid] ?: return@mapNotNull null
+                val after = localByUid[uid] ?: return@mapNotNull null
+                // Content only. The timestamps necessarily differ -- that is why the remote won --
+                // so comparing the records whole would preserve a copy on every routine catch-up,
+                // where a peer re-exported the same content under a newer stamp and nothing was
+                // lost at all.
+                if (before.copy(updatedAt = after.updatedAt) == after) null else before
+            }
     }
 
     suspend fun mergeRelations(records: List<PageRelationSnapshotRecord>) {
