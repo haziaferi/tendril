@@ -42,6 +42,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -97,7 +98,7 @@ fun SettingsScreen(
             HorizontalDivider()
             SyncFolderSection(syncFolderManager, syncStatusPreferences, syncCoordinator)
             HorizontalDivider()
-            AtRestEncryptionSection(secretStore)
+            AtRestEncryptionSection(secretStore, syncCoordinator)
             HorizontalDivider()
             PortableBackupSection(portableArchive)
             HorizontalDivider()
@@ -317,11 +318,14 @@ private fun SyncFolderSection(
  * simply "no passphrase set"; there's no separate toggle to fall out of sync with that.
  */
 @Composable
-private fun AtRestEncryptionSection(secretStore: SecretStore) {
+private fun AtRestEncryptionSection(secretStore: SecretStore, coordinator: SyncCoordinator) {
     val stored by secretStore.syncPassphrase.collectAsState()
     var draft by remember(stored) { mutableStateOf(stored ?: "") }
     var revealed by remember { mutableStateOf(false) }
     var showConfirm by remember { mutableStateOf(false) }
+    var showRekeyConfirm by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val rekeying by coordinator.running.collectAsState()
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -357,6 +361,16 @@ private fun AtRestEncryptionSection(secretStore: SecretStore) {
             Spacer(Modifier.width(12.dp))
             Button(onClick = { showConfirm = true }, enabled = draft != (stored ?: "")) { Text("Save") }
         }
+
+        // Offered only where it means something: the folder already has a passphrase, and the
+        // box holds a different, non-empty one. Re-keying *to* no encryption is a different
+        // operation with a different hazard (§9.4.2's cleartext downgrade) and is not offered.
+        if (stored != null && draft.isNotEmpty() && draft != stored) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = { showRekeyConfirm = true }, enabled = !rekeying) {
+                Text(if (rekeying) "Re-keying…" else "Re-key folder to this passphrase")
+            }
+        }
     }
 
     if (showConfirm) {
@@ -365,7 +379,11 @@ private fun AtRestEncryptionSection(secretStore: SecretStore) {
             title = { Text("Change sync encryption") },
             text = {
                 Text(
-                    "The same passphrase must be entered on every device sharing this sync " +
+                    "This changes the passphrase this device uses to read the folder — it does " +
+                        "not change the folder. If the folder was written with a different one, " +
+                        "sync pauses until the two match; use \"Re-key folder\" below to change the " +
+                        "folder itself.\n\n" +
+                        "The same passphrase must be entered on every device sharing this sync " +
                         "folder, or their snapshots become unreadable to each other. Losing " +
                         "this passphrase makes the synced folder unreadable on any new device."
                 )
@@ -377,6 +395,33 @@ private fun AtRestEncryptionSection(secretStore: SecretStore) {
                 })
             },
             dismissButton = { DialogTextButton(onClick = { showConfirm = false }, label = "Cancel") },
+        )
+    }
+
+    if (showRekeyConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showRekeyConfirm = false },
+            title = { Text("Re-key this sync folder?") },
+            text = {
+                Text(
+                    "Every snapshot in the folder will be re-encrypted under the new passphrase. " +
+                        "This device syncs once under the current passphrase first, and refuses to " +
+                        "re-key if anything in the folder can't be read — re-keying rewrites the whole " +
+                        "folder, so it can only keep what this device can actually read.\n\n" +
+                        "Your other devices will stop syncing until you give them the new passphrase. " +
+                        "Their own data isn't lost: once they have it they'll merge and republish."
+                )
+            },
+            confirmButton = {
+                DialogTextButton(onClick = {
+                    val target = draft
+                    showRekeyConfirm = false
+                    // The coordinator stores the new passphrase only after the folder carries
+                    // it, so a failure here leaves this device on the one that still works.
+                    scope.launch { coordinator.rekey(target) }
+                })
+            },
+            dismissButton = { DialogTextButton(onClick = { showRekeyConfirm = false }, label = "Cancel") },
         )
     }
 }
