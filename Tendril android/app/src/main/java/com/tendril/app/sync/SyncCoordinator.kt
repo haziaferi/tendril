@@ -106,6 +106,49 @@ class SyncCoordinator(
         }
     }
 
+    /**
+     * §9.4.2 — re-encrypt the folder under [newPassphrase] and adopt it on this device.
+     *
+     * Takes the same gate as [sync] because it is the same kind of pass over the same folder;
+     * two of them overlapping would be two full rewrites racing each other.
+     *
+     * The stored passphrase changes *after* the folder does, never before. Storing it first
+     * and failing the write would leave this device holding a passphrase the folder does not
+     * use — which is precisely the state this whole feature exists to get people out of.
+     */
+    suspend fun rekey(newPassphrase: String): SnapshotSyncOutcome {
+        val uri = folderManager.folderUri.value ?: return SnapshotSyncOutcome.NoFolder
+        if (!gate.tryLock()) return SnapshotSyncOutcome.AlreadyRunning
+        _running.value = true
+        return try {
+            withContext(Dispatchers.IO + NonCancellable) {
+                val store = AndroidSafSyncFileStore.create(context, uri)
+                    ?: return@withContext fail("Couldn't open the sync folder — try choosing it again.")
+                when (val outcome = orchestrator.rekey(store, secretStore.syncPassphrase.value, newPassphrase)) {
+                    is RekeyOutcome.RefusedUnreadable -> {
+                        _lastError.value =
+                            "Can't re-key: ${outcome.undecryptableFiles} file(s) in the folder couldn't be " +
+                                "read with the passphrase this device holds. Re-keying rewrites every " +
+                                "snapshot, so it would replace those with this device's copy. Enter the " +
+                                "folder's current passphrase and sync once first."
+                        SnapshotSyncOutcome.PassphraseMismatch(outcome.undecryptableFiles)
+                    }
+                    RekeyOutcome.Completed -> {
+                        secretStore.setSyncPassphrase(newPassphrase)
+                        statusPreferences.markSyncedNow()
+                        _lastError.value = null
+                        SnapshotSyncOutcome.Completed
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            fail(e.message ?: "Re-key failed.")
+        } finally {
+            _running.value = false
+            gate.unlock()
+        }
+    }
+
     private suspend fun runPass(uri: Uri): SnapshotSyncOutcome = try {
         val store = AndroidSafSyncFileStore.create(context, uri)
         if (store == null) {
@@ -116,9 +159,15 @@ class SyncCoordinator(
             if (merge.passphraseMismatch) {
                 // Never write over a folder we couldn't read: nothing merged in, so the write
                 // would replace its only copy with this device's state under the wrong key.
+                // Two very different situations reach this line and the message has to serve
+                // both: a mistyped passphrase, and a passphrase the person changed on purpose.
+                // "Check the passphrase" is right for the first and tells the second they made
+                // a mistake they did not make, so it names both remedies instead.
                 _lastError.value =
-                    "${merge.undecryptableFiles} file(s) in the sync folder couldn't be decrypted — " +
-                        "check the passphrase. Nothing was written, so the folder is untouched."
+                    "The sync folder is encrypted under a different passphrase — " +
+                        "${merge.undecryptableFiles} file(s) couldn't be read. Sync is paused and the " +
+                        "folder is untouched. Enter the passphrase it was written with, or re-key the " +
+                        "folder to this one in Settings."
                 SnapshotSyncOutcome.PassphraseMismatch(merge.undecryptableFiles)
             } else {
                 orchestrator.writeSnapshots(store, passphrase)

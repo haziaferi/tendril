@@ -72,6 +72,28 @@ data class SnapshotMergeResult(val undecryptableFiles: Int) {
     val passphraseMismatch: Boolean get() = undecryptableFiles > 0
 }
 
+/**
+ * The result of [SnapshotSyncOrchestrator.rekey].
+ *
+ * Re-keying is the one operation that deliberately overwrites a folder under a different key, so
+ * it is the one that most needs to be able to say "no".
+ */
+sealed interface RekeyOutcome {
+    /** The folder is now encrypted under the new passphrase. */
+    data object Completed : RekeyOutcome
+
+    /**
+     * Refused: this device could not read [undecryptableFiles] of the folder's snapshots under
+     * the passphrase it currently holds, so nothing was written.
+     *
+     * A re-key is decrypt-then-encrypt, which means it can only preserve what the re-keying
+     * device can actually read — anything it could not decrypt would be replaced by whatever
+     * this device happens to hold. That is why a clean read is the precondition rather than a
+     * warning: a device that cannot read the folder has no business rewriting it.
+     */
+    data class RefusedUnreadable(val undecryptableFiles: Int) : RekeyOutcome
+}
+
 /** Mutable counter threaded through one [SnapshotSyncOrchestrator.readAndMerge] pass. */
 private class ReadTally {
     var undecryptable = 0
@@ -101,6 +123,41 @@ class SnapshotSyncOrchestrator(
         val key = deriveKey(passphrase, salt)
         mergeWithKey(store, ReadKey(key, isEncryptedFolder(store)))
         writeWithKey(store, key, allowRekey, salt)
+    }
+
+    /**
+     * §9.4.2 — re-encrypt the whole folder under [newPassphrase].
+     *
+     * The precondition is the whole design: this merges under [currentPassphrase] first and
+     * refuses if anything failed to decrypt. A re-key is decrypt-then-encrypt, so it can only
+     * preserve what this device can read; without the read, "re-key" is indistinguishable from
+     * "replace the folder with my copy and lock everyone else out of the rest".
+     *
+     * Other devices are not harmed by a successful re-key. They will find the folder unreadable
+     * and refuse to write to it — the same guard, from the other side — and once told the new
+     * passphrase they merge and republish their own rows from their local database. The case
+     * that is *not* recoverable is a device that no longer exists, whose rows lived only in the
+     * folder; those are what the precondition protects.
+     *
+     * Deliberately takes a non-null [newPassphrase]: turning encryption *off* over an encrypted
+     * folder is a different operation with a different hazard (the silent cleartext downgrade
+     * [writeWithKey] exists to refuse), and is not offered here.
+     */
+    suspend fun rekey(
+        store: SyncFileStore,
+        currentPassphrase: String?,
+        newPassphrase: String,
+    ): RekeyOutcome {
+        // Straight to the internals rather than readAndMerge + writeSnapshots, for the reason
+        // [syncNow] gives: each public entry point resolves the folder's salt for itself, and
+        // both halves here want the same one. Two passphrases still mean two PBKDF2 derivations,
+        // which is unavoidable — it is the salt lookup that would have been done twice.
+        val salt = resolveSalt(store, mint = true)
+        val merge = mergeWithKey(store, ReadKey(deriveKey(currentPassphrase, salt), isEncryptedFolder(store)))
+        if (merge.passphraseMismatch) return RekeyOutcome.RefusedUnreadable(merge.undecryptableFiles)
+        // allowRekey is reachable only from here, and only past that check.
+        writeWithKey(store, deriveKey(newPassphrase, salt), allowRekey = true, salt = salt)
+        return RekeyOutcome.Completed
     }
 
     /** The write half on its own, for a caller that only needs to publish. [syncNow] is what a
