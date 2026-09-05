@@ -139,15 +139,10 @@ fun EntryTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        targets.forEach { entry ->
-                            // Tear the schedule down before the row goes. Trashing normally
-                            // does this already, but an Entry can also reach Trash from
-                            // GoogleCalendarSyncEngine's pull, which soft-deletes without
-                            // going through the coordinator — so its alarms may still be
-                            // live, and an alarm outliving its row is a wakeup for nothing.
-                            container.entryScheduleCoordinator.onEntryRemoved(entry)
-                            container.database.entryDao().deleteForever(entry.id)
-                        }
+                        // §5.5.1.1 — the registry records the tombstone that makes this purge
+                        // stick on the other devices too, and tears the schedule down on the way
+                        // (which this call site used to have to remember to do itself).
+                        targets.forEach { container.purgeRegistry.purgeEntry(it.id) }
                     }
                     selectedIds = selectedIds - targets.map { it.id }.toSet()
                     pendingDeleteForever = null

@@ -46,7 +46,7 @@ class OverdueAlarmReceiver : BroadcastReceiver() {
                     .addAction(0, context.getString(R.string.action_skip), EntryActionReceiver.pendingIntent(context, entryId, EntryActionReceiver.ACTION_SKIP))
                     .build()
 
-                NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_BASE + entryId.toInt(), notification)
+                NotificationManagerCompat.from(context).notify(notificationId(entryId), notification)
             } finally {
                 pendingResult.finish()
             }
@@ -55,5 +55,11 @@ class OverdueAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         private const val NOTIFICATION_ID_BASE = 10_000
+
+        /** The one place this id is derived. [EntryActionReceiver] has to cancel the very
+         * notification whose action was tapped, and used to re-spell `10_000 + entryId` by
+         * hand — so changing the base here would have silently stopped Done/Skip from
+         * dismissing anything. */
+        fun notificationId(entryId: Long): Int = NOTIFICATION_ID_BASE + entryId.toInt()
     }
 }

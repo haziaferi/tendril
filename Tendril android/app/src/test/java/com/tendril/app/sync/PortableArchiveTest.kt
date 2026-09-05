@@ -37,6 +37,7 @@ class PortableArchiveTest {
             entryDao = entryDao,
             habitDao = habitDao,
             pageDao = mockk<PageDao>(relaxed = true),
+            purgeRegistry = mockk(relaxed = true),
             pagesSyncEngine = mockk(relaxed = true),
         )
 

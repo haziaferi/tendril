@@ -13,6 +13,7 @@ import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.pagedatabase.PropertyType
+import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
@@ -126,6 +127,9 @@ class Converters {
 
     @TypeConverter fun sortDirectionToString(value: SortDirection?): String? = value?.name
     @TypeConverter fun stringToSortDirection(value: String?): SortDirection? = value?.let(SortDirection::valueOf)
+
+    @TypeConverter fun purgedKindToString(value: PurgedKind): String = value.name
+    @TypeConverter fun stringToPurgedKind(value: String): PurgedKind = PurgedKind.valueOf(value)
 
     // --- Canvas enums ---
     @TypeConverter fun canvasNodeTypeToString(value: CanvasNodeType): String = value.name

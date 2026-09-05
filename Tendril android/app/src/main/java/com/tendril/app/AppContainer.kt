@@ -9,6 +9,7 @@ import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -46,14 +47,23 @@ class AppContainer(context: Context) {
     val entryScheduleCoordinator = AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync)
     val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), entryScheduleCoordinator)
     val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
+    val purgeRegistry = PurgeRegistry(
+        database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
+        entryScheduleCoordinator,
+    )
     val pagesSyncEngine = PagesSyncEngine(
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), pageContentRepository,
+        database.pageRelationDao(), purgeRegistry, pageContentRepository,
     )
-    val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
-    val portableArchive = PortableArchive(context, database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
+        database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, purgeRegistry,
+    )
+    val portableArchive = PortableArchive(
+        context, database.entryDao(), database.habitDao(), database.pageDao(),
+        purgeRegistry, pagesSyncEngine,
+    )
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
         database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,
@@ -70,13 +80,15 @@ class AppContainer(context: Context) {
         database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
     )
     val viewLockState = ViewLockState()
-    val checkboxOnlyState = CheckboxOnlyState()
+    // audit 4.3 — checkbox-only mode draws over the keyguard, so it must refuse to turn on at
+    // all when App Lock is the thing standing in front of the app.
+    val checkboxOnlyState = CheckboxOnlyState { appLockPreferences.enabled.value }
 
     // Milestone 3 (tendril-windows-spec.md §6 step 3) — the slice of this container the ported
     // Workbench UI (nav shell, Pages, PageDetail, PageDatabase — now in `shared`) depends on.
     val workbenchCore = WorkbenchCore(
         database, databaseSyncManager, templateManager, viewLockState, checkboxOnlyState,
-        resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository,
+        resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository, purgeRegistry,
     )
 
     companion object {

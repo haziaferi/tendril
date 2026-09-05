@@ -52,9 +52,11 @@ import com.tendril.app.R
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.formatHabitDuration
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.reminders.ReminderSheet
 import com.tendril.app.ui.trash.EntryTrashSheet
+import com.tendril.app.ui.trash.HabitTrashSheet
 import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
@@ -73,6 +75,7 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
                     container.resolveEntryUseCase,
                     container.entryScheduleCoordinator,
                     container.checkInHabitUseCase,
+                    container.alarmScheduler,
                 )
             }
         }
@@ -176,7 +179,13 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
     }
 
     if (showTrash) {
-        EntryTrashSheet(container = container, onDismiss = { showTrash = false })
+        // Which Trash the button opens follows the tab, exactly as the add button's label does
+        // above: on Habits it has to be the Habit sheet, or trashed Habits stay unreachable.
+        if (tab == TabSelection.HABITS) {
+            HabitTrashSheet(container = container, onDismiss = { showTrash = false })
+        } else {
+            EntryTrashSheet(container = container, onDismiss = { showTrash = false })
+        }
     }
 }
 
@@ -243,7 +252,7 @@ private fun TaskRow(entry: Entry, viewModel: TasksHabitsViewModel, onOpenReminde
     ) {
         Checkbox(
             checked = entry.status == EntryStatus.DONE,
-            onCheckedChange = { checked -> viewModel.resolve(entry.id, if (checked) EntryStatus.DONE else EntryStatus.SKIPPED) },
+            onCheckedChange = { checked -> viewModel.setDone(entry.id, checked) },
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.title, style = MaterialTheme.typography.bodyLarge)
@@ -287,7 +296,15 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(habit.title, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s) · streak ${habit.streak}",
+                        // §3.3 — time and duration are what distinguish a habit that sits at an
+                        // hour from one that just needs doing sometime today, so both show when
+                        // set and neither takes room when not.
+                        listOfNotNull(
+                            "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
+                            habit.time?.toString(),
+                            habit.duration?.let(::formatHabitDuration),
+                            "streak ${habit.streak}",
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

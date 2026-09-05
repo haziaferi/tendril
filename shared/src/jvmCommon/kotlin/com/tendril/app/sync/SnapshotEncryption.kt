@@ -15,12 +15,13 @@ import javax.crypto.spec.SecretKeySpec
  * dependency, and this isn't a high-value password-cracking target — a personal sync
  * folder, not a server-side credential store).
  *
- * The salt is a fixed, app-specific constant rather than a random per-install value: every
- * device sharing the sync folder must derive the *same* key from the *same* passphrase with
- * no channel to exchange a random salt over (the whole point is Tendril has no account/
- * identity system, §9.4.2). A fixed salt is weaker against a precomputed rainbow-table
- * attack in the abstract, but combined with a real passphrase and a high iteration count
- * it's an acceptable trade for this threat model — documented here rather than left implicit.
+ * The salt used to be a fixed, app-specific constant, on the reasoning that every device
+ * sharing the folder must derive the *same* key from the *same* passphrase with no channel to
+ * exchange a random salt over (Tendril has no account or identity system, §9.4.2). The premise
+ * was wrong: there *is* a channel, and it is the sync folder itself. A random salt now travels
+ * in `sync_meta.json` beside the snapshots, so one precomputed table no longer works against
+ * every Tendril install and two people who choose the same passphrase no longer get the same
+ * key. [LEGACY_SALT] stays for folders written before that, which must keep opening.
  *
  * §12.5/Milestone 2 — moved into `shared/jvmCommon` (Android and desktop both being JVM
  * targets) so it's written once, not duplicated per platform.
@@ -30,10 +31,18 @@ object SnapshotEncryption {
     private const val KEY_LENGTH_BITS = 256
     private const val GCM_TAG_LENGTH_BITS = 128
     private const val GCM_IV_LENGTH_BYTES = 12
-    private val FIXED_SALT = "tendril-snapshot-encryption-v1".toByteArray(Charsets.UTF_8)
+    const val SALT_LENGTH_BYTES = 16
 
-    fun deriveKey(passphrase: String): SecretKeySpec {
-        val spec: KeySpec = PBEKeySpec(passphrase.toCharArray(), FIXED_SALT, ITERATIONS, KEY_LENGTH_BITS)
+    /** The compile-time salt every folder used before `sync_meta.json` existed. A folder with
+     * encrypted snapshots and no meta file was written under this one, and re-deriving its key
+     * under a random salt would make it unreadable — so this is a compatibility constant, not a
+     * default for anything new. */
+    val LEGACY_SALT: ByteArray = "tendril-snapshot-encryption-v1".toByteArray(Charsets.UTF_8)
+
+    fun randomSalt(): ByteArray = ByteArray(SALT_LENGTH_BYTES).also { SecureRandom().nextBytes(it) }
+
+    fun deriveKey(passphrase: String, salt: ByteArray = LEGACY_SALT): SecretKeySpec {
+        val spec: KeySpec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH_BITS)
         val raw = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
         return SecretKeySpec(raw, "AES")
     }

@@ -201,11 +201,19 @@ class GoogleCalendarSyncEngine(
         json.decodeFromString(request("POST", EVENTS_BASE_URL, accessToken, body))
 
     private suspend fun updateEvent(accessToken: String, eventId: String, body: String): GoogleEvent =
-        json.decodeFromString(request("PUT", "$EVENTS_BASE_URL/$eventId", accessToken, body))
+        json.decodeFromString(request("PUT", eventUrl(eventId), accessToken, body))
 
     private suspend fun deleteEvent(accessToken: String, eventId: String) {
-        request("DELETE", "$EVENTS_BASE_URL/$eventId", accessToken)
+        request("DELETE", eventUrl(eventId), accessToken)
     }
+
+    /** Encoded for the same reason `updatedMin`/`pageToken` are on the list call above:
+     * `Entry.googleEventId` isn't necessarily an id this device minted. It travels in the
+     * §9.4 snapshot record, so it arrives from a synced folder or an imported archive, and
+     * unencoded `../` segments in it would re-target the request at another Calendar
+     * resource under the user's own OAuth token. */
+    private fun eventUrl(eventId: String): String =
+        "$EVENTS_BASE_URL/${URLEncoder.encode(eventId, "UTF-8")}"
 
     private suspend fun request(method: String, url: String, accessToken: String, body: String? = null): String =
         withContext(Dispatchers.IO) {

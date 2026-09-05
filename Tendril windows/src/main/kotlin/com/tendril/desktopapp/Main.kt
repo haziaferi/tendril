@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -65,9 +66,11 @@ fun main() {
         database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), core.pageContentRepository,
+        database.pageRelationDao(), container.purgeRegistry, core.pageContentRepository,
     )
-    val orchestrator = SnapshotSyncOrchestrator(database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine)
+    val orchestrator = SnapshotSyncOrchestrator(
+        database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, container.purgeRegistry,
+    )
     val folderManager = DesktopSyncFolderManager()
 
     application {
@@ -106,11 +109,15 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     }
 }
 
+/** Allocated once rather than per recomposition of the passphrase field it decorates. */
+private val PASSPHRASE_MASK = PasswordVisualTransformation()
+
 @Composable
 private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
     val folderPath by folderManager.folderPath.collectAsState()
     var passphrase by remember { mutableStateOf("") } // session-only, never persisted (§12.5/Milestone 2)
     var syncing by remember { mutableStateOf(false) }
+    var syncError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Row(
@@ -135,6 +142,10 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
             onValueChange = { passphrase = it },
             label = { Text("Passphrase (optional)") },
             singleLine = true,
+            // This is the key to every snapshot in the folder, typed in whatever room the
+            // desktop happens to be in. Android's two passphrase fields also offer a reveal
+            // toggle; this one doesn't yet.
+            visualTransformation = PASSPHRASE_MASK,
             modifier = Modifier.width(220.dp).padding(horizontal = 8.dp),
         )
 
@@ -144,13 +155,30 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                 val path = folderPath ?: return@TextButton
                 syncing = true
                 scope.launch {
-                    val store = DesktopFileSyncFileStore(path)
-                    orchestrator.readAndMerge(store, passphrase.ifBlank { null })
-                    orchestrator.writeSnapshots(store, passphrase.ifBlank { null })
-                    syncing = false
+                    // `syncing` is cleared in a finally, and failures are reported rather than
+                    // thrown on. SyncFileStore's contract is explicit that a write which cannot
+                    // complete throws; without this, one unwritable folder disabled the button
+                    // for the rest of the session. Android's own "Sync now" already does this.
+                    try {
+                        val store = DesktopFileSyncFileStore(path)
+                        orchestrator.syncNow(store, passphrase.ifBlank { null })
+                        syncError = null
+                    } catch (e: Exception) {
+                        syncError = e.message ?: "Sync failed."
+                    } finally {
+                        syncing = false
+                    }
                 }
             },
         ) { Text(if (syncing) "Syncing…" else "Sync now") }
+    }
+    syncError?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        )
     }
 }
 

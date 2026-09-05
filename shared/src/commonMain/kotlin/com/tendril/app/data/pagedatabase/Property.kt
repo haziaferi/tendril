@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 import com.tendril.app.data.entry.IntervalUnit
 import java.util.UUID
 
-/** §4/§7 — the set a Notion CSV export can actually carry, plus the Noema-native `Interval`
+/** §4/§7 — the set a Notion CSV export can actually carry, plus the Tendril-native `Interval`
  * type (§5.2.2), which is never offered in the general "New property" picker outside the
  * recurrence-binding context — enforced by the UI, not the schema. */
 enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL }
@@ -50,6 +50,22 @@ data class PropertyValue(
 /** `PropertyValue.value` encoding for an `INTERVAL`-type property — "<count>:<unit>", the
  * same `"n:UNIT"` shape [Converters] already uses for `HabitFrequency`/`ReminderOffset`. */
 fun formatIntervalValue(count: Int, unit: IntervalUnit): String = "$count:${unit.name}"
+
+/**
+ * A [java.time.Period] as the same `"n:UNIT"` string [formatIntervalValue] produces.
+ *
+ * Period does not carry back which single IntervalUnit it was entered as, so this re-derives the
+ * closest whole-unit pair the way it must have been entered — Elastic recurrence only ever comes
+ * from one. It lives here, next to the format it produces, because it existed twice before and
+ * the two copies had drifted: `DatabaseSyncManager.crystallize` wrote this form while
+ * `PageDatabaseViewModel.valueForCell` returned `Period.toString()`'s "P7D", so a filter on a
+ * bound Recurrence column matched the frozen value or the live proxy but never both.
+ */
+fun formatPeriodAsInterval(period: java.time.Period): String = when {
+    period.months != 0 -> formatIntervalValue(period.months, IntervalUnit.MONTH)
+    period.days % 7 == 0 && period.days != 0 -> formatIntervalValue(period.days / 7, IntervalUnit.WEEK)
+    else -> formatIntervalValue(period.days, IntervalUnit.DAY)
+}
 
 fun parseIntervalValue(value: String): Pair<Int, IntervalUnit>? =
     runCatching {

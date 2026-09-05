@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.entry.EntryKind
-import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.ResolveEntryUseCase
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,7 +44,9 @@ class CalendarViewModel(
         }
     }
 
-    fun resolve(entryId: Long, status: EntryStatus) {
-        viewModelScope.launch { resolveEntryUseCase.resolve(entryId, status) }
+    /** §9.8 R1 — the checked/unchecked decision lives in [ResolveEntryUseCase.setDone], not in
+     * each surface's own ViewModel. */
+    fun setDone(entryId: Long, done: Boolean) {
+        viewModelScope.launch { resolveEntryUseCase.setDone(entryId, done) }
     }
 }

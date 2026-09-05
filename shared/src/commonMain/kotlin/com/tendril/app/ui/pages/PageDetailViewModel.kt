@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
-import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.entry.intervalToPeriod
@@ -30,10 +29,12 @@ import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.domain.indentTargetFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -95,9 +96,9 @@ class PageDetailViewModel(
     /** No unlock needed to turn on — §3.1.2: "toggling checkbox-only on plus confirming is
      * judged sufficient friction on its own." View-Only still wins if somehow both are toggled
      * at once, since a locked page has nothing to newly protect by going into checkbox-only. */
-    fun activateCheckboxOnly() {
-        if (viewOnlyLocked()) return
-        checkboxOnlyState.activate(pageId)
+    fun activateCheckboxOnly(): Boolean {
+        if (viewOnlyLocked()) return false
+        return checkboxOnlyState.activate(pageId)
     }
 
     /** §3.1.2 — "turning it back off requires a full device unlock." The unlock prompt itself
@@ -113,10 +114,10 @@ class PageDetailViewModel(
         tagDao.observeForPage(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _tagCandidates = MutableStateFlow<List<Tag>>(emptyList())
-    val tagCandidates: StateFlow<List<Tag>> = _tagCandidates
+    val tagCandidates: StateFlow<List<Tag>> = _tagCandidates.asStateFlow()
 
     private val _mentionCandidates = MutableStateFlow<List<Page>>(emptyList())
-    val mentionCandidates: StateFlow<List<Page>> = _mentionCandidates
+    val mentionCandidates: StateFlow<List<Page>> = _mentionCandidates.asStateFlow()
 
     /** §5.1 Row-as-page — populated only when this Page is a Database row (`databaseId` set);
      * empty/null for an ordinary Page. */
@@ -141,7 +142,7 @@ class PageDetailViewModel(
      * collapsed by default, and a backlink only changes when some *other* page's content is
      * edited, which this screen has no reason to be watching for. */
     private val _backlinks = MutableStateFlow<List<Backlink>>(emptyList())
-    val backlinks: StateFlow<List<Backlink>> = _backlinks
+    val backlinks: StateFlow<List<Backlink>> = _backlinks.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -245,6 +246,27 @@ class PageDetailViewModel(
         reordered.forEachIndexed { i, b -> if (b.order != i) blockDao.update(b.copy(order = i)) }
     }
 
+    /**
+     * §3.1.1 — tuck [block] under the nearest preceding top-level sibling. A no-op when there
+     * is none (nothing to tuck under) or when it is already indented, since one level is the
+     * whole of the nesting this spec has.
+     *
+     * `order` is left alone: [outlineOf] draws a child immediately after its parent whatever
+     * its own order says, so re-numbering here would be churn with nothing depending on it.
+     */
+    fun indentBlock(block: Block) = launchAndReindex {
+        val blocks = blockDao.getForPage(pageId)
+        val target = indentTargetFor(block, blocks) ?: return@launchAndReindex
+        blockDao.update(block.copy(parentBlockId = target.id, updatedAt = Instant.now()))
+    }
+
+    /** The inverse, and the escape hatch for a child whose parent went away on another device:
+     * anything indented can always be flattened again. */
+    fun outdentBlock(block: Block) = launchAndReindex {
+        if (block.parentBlockId == null) return@launchAndReindex
+        blockDao.update(block.copy(parentBlockId = null, updatedAt = Instant.now()))
+    }
+
     fun searchTagCandidates(query: String) {
         viewModelScope.launch {
             val existingIds = tags.value.map { it.id }.toSet()
@@ -260,9 +282,11 @@ class PageDetailViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            val tag = tagDao.findByName(trimmed) ?: trimmed.let {
-                val id = tagDao.insert(Tag(name = it))
-                tagDao.findByName(it)!!
+            val tag = tagDao.findByName(trimmed) ?: run {
+                tagDao.insert(Tag(name = trimmed))
+                // Re-read rather than building a Tag from the returned id: `color` is derived
+                // from the name at construction, so the stored row is the authoritative one.
+                tagDao.findByName(trimmed)!!
             }
             if (tags.value.none { it.id == tag.id }) {
                 tagDao.addToPage(PageTag(pageId = pageId, tagId = tag.id))
@@ -285,9 +309,7 @@ class PageDetailViewModel(
     fun toggleRowDone(checked: Boolean) {
         if (contentLocked()) return
         val entry = rowLinkedEntry.value ?: return
-        viewModelScope.launch {
-            if (checked) resolveEntryUseCase.resolve(entry.id, EntryStatus.DONE) else resolveEntryUseCase.unresolve(entry.id)
-        }
+        viewModelScope.launch { resolveEntryUseCase.setDone(entry.id, checked) }
     }
 
     fun setRowDeadline(date: java.time.LocalDate?) {

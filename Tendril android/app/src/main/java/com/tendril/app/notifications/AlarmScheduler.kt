@@ -12,10 +12,12 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
 import com.tendril.app.data.reminder.toDuration
+import com.tendril.app.domain.nextHabitReminderAt
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
  * §4.1 (round 2) / §9.7 / §9.8 R4 — elastic TASK recurrence means only the currently-live
@@ -86,6 +88,31 @@ class AlarmScheduler(
      * caller must still call this *before* deleting: [rescheduleFor] cancels by reading the
      * reminder rows back out of the DAO, so a deleted row's alarm is invisible to it.
      */
+    /**
+     * §9.7 / §3 — schedules (or clears) this habit's next reminder.
+     *
+     * Idempotent for the same reason [rescheduleFor] is: the request code comes from the habit
+     * id, so calling it twice replaces one alarm rather than creating two. Every path that can
+     * change when a habit is next due — creating it, checking it in, undoing that, trashing it —
+     * calls this, and [nextHabitReminderAt] decides whether there is anything to schedule.
+     */
+    fun rescheduleHabit(habit: com.tendril.app.data.habit.Habit) {
+        val requestCode = habitRequestCode(habit.id)
+        cancelHabit(habit.id)
+        val triggerAt = nextHabitReminderAt(habit, ZonedDateTime.now()) ?: return
+        scheduleIfFuture(
+            requestCode = requestCode,
+            triggerAt = triggerAt,
+            receiver = HabitReminderAlarmReceiver::class.java,
+            entryId = habit.id,
+            idKey = EXTRA_HABIT_ID,
+        )
+    }
+
+    fun cancelHabit(habitId: Long) {
+        cancel(habitRequestCode(habitId), HabitReminderAlarmReceiver::class.java, habitId, idKey = EXTRA_HABIT_ID)
+    }
+
     fun cancelReminder(entryId: Long, reminderId: Long) {
         cancel(reminderRequestCode(entryId, reminderId), ReminderAlarmReceiver::class.java, entryId, reminderId)
     }
@@ -103,13 +130,16 @@ class AlarmScheduler(
         receiver: Class<*>,
         entryId: Long,
         reminderId: Long? = null,
+        // Habits ride the same two helpers but are not Entries; the key travels with the caller
+        // rather than being hardcoded, so a habit alarm never arrives labelled as an entry.
+        idKey: String = EXTRA_ENTRY_ID,
     ) {
         // Never schedule a trigger at/before now — AlarmManager fires a past-due alarm
         // almost immediately, which would flood notifications on bulk/retroactive writes.
         if (!triggerAt.isAfter(Instant.now())) return
         val manager = alarmManager ?: return
         val intent = Intent(context, receiver).apply {
-            putExtra(EXTRA_ENTRY_ID, entryId)
+            putExtra(idKey, entryId)
             reminderId?.let { putExtra(EXTRA_REMINDER_ID, it) }
         }
         val pendingIntent = PendingIntent.getBroadcast(
@@ -136,10 +166,16 @@ class AlarmScheduler(
     private fun canScheduleExact(manager: AlarmManager): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
 
-    private fun cancel(requestCode: Int, receiver: Class<*>, entryId: Long, reminderId: Long? = null) {
+    private fun cancel(
+        requestCode: Int,
+        receiver: Class<*>,
+        entryId: Long,
+        reminderId: Long? = null,
+        idKey: String = EXTRA_ENTRY_ID,
+    ) {
         val manager = alarmManager ?: return
         val intent = Intent(context, receiver).apply {
-            putExtra(EXTRA_ENTRY_ID, entryId)
+            putExtra(idKey, entryId)
             reminderId?.let { putExtra(EXTRA_REMINDER_ID, it) }
         }
         val pendingIntent = PendingIntent.getBroadcast(
@@ -151,6 +187,7 @@ class AlarmScheduler(
 
     companion object {
         const val EXTRA_ENTRY_ID = "entry_id"
+        const val EXTRA_HABIT_ID = "habit_id"
         const val EXTRA_REMINDER_ID = "reminder_id"
 
         // Deterministic request codes derived from entry_id/reminder_id (§9.7/§9.8 R4) —
@@ -177,5 +214,20 @@ class AlarmScheduler(
         fun reminderRequestCode(entryId: Long, reminderId: Long): Int =
             (((entryId and ID_MASK.toLong()) shl 16) or
                 ((reminderId and ID_MASK.toLong()) shl 1) or 1L).toInt()
+
+        /**
+         * Habits get a region of their own, well clear of both Entry schemes (§9.7).
+         *
+         * Those two partition the low space between them by bit 0 — overdue clear, reminder set —
+         * so a habit cannot simply pick a spelling and hope. Bit 0 stays clear to stay out of the
+         * reminder range, and the base puts every habit code above the largest overdue code
+         * (`0xFFFF shl 1`, so bits 1-16) by a wide margin. A habit id and an entry id are
+         * independent Room sequences and will collide constantly; the ranges are what keeps one
+         * from cancelling the other's alarm.
+         */
+        private const val HABIT_REQUEST_BASE = 0x2000_0000
+
+        fun habitRequestCode(habitId: Long): Int =
+            HABIT_REQUEST_BASE + (((habitId and ID_MASK.toLong()) shl 1).toInt())
     }
 }

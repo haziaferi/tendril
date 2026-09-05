@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageFtsDao
+import com.tendril.app.data.page.searchPrefix
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageSearchHit
 import com.tendril.app.data.page.Tag
@@ -17,6 +18,7 @@ import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.domain.DatabaseSyncManager
+import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +38,7 @@ class PagesViewModel(
     private val propertyDao: PropertyDao,
     private val pageFtsDao: PageFtsDao,
     private val tagDao: TagDao,
+    private val purgeRegistry: PurgeRegistry,
     private val databaseSyncManager: DatabaseSyncManager,
     private val templateManager: TemplateManager,
     private val viewLockState: ViewLockState,
@@ -84,8 +87,15 @@ class PagesViewModel(
     val searchResults: StateFlow<List<PageSearchHit>> = _searchResults.asStateFlow()
 
     fun onSearchQueryChange(query: String) {
+        viewModelScope.launch { _searchResults.value = pageFtsDao.searchPrefix(query) }
+    }
+
+    /** §5.5.1.1 "Delete forever", from the Trash — through [PurgeRegistry], which records the
+     * tombstone and drops the row as one operation so a purge both sticks here and propagates. */
+    fun deleteForever(pageIds: List<Long>) {
         viewModelScope.launch {
-            _searchResults.value = if (query.isBlank()) emptyList() else pageFtsDao.search("$query*")
+            val now = Instant.now()
+            pageIds.forEach { purgeRegistry.purgePage(it, now) }
         }
     }
 

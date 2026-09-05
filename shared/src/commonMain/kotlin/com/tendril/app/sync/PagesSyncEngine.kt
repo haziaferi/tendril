@@ -33,25 +33,32 @@ import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
+import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.PurgeRegistry
 import java.time.Instant
+
+private val UUID_PATTERN = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 /**
  * §9.4 — completes the Page/Row/Database/Canvas half of snapshot sync (Entry/Habit's half
- * already lived in [SnapshotMappers]/[SnapshotSyncManager]/[PortableArchive]). Shared by both
- * the continuous folder sync and the one-off portable export/import, matching those callers'
- * own "one schema, reused everywhere" rule — the merge algorithm here is intricate enough
- * (five ordered passes, several cross-page FK resolutions) that duplicating it per caller the
- * way the simpler Entry/Habit merges are today would be a real maintenance risk, not just
- * more typing.
+ * already lived in `SnapshotMappers.kt`, `SnapshotSyncOrchestrator` and `PortableArchive`).
+ * Shared by both the continuous folder sync and the one-off portable export/import, matching
+ * those callers' own "one schema, reused everywhere" rule — the merge
+ * algorithm here is intricate enough (five ordered passes, several cross-page FK resolutions)
+ * that duplicating it per caller the way the simpler Entry/Habit merges are today would be a
+ * real maintenance risk, not just more typing.
  *
  * Every FK in [PageSnapshotRecord] and friends travels as a `uid`; resolving it back to a
  * local Room id follows the same "drop the link if the target hasn't merged in yet, self-heal
- * on a later sync pass" rule [SnapshotMappers.toEntity] already established for
+ * on a later sync pass" rule `SnapshotMappers.kt`'s `toEntity` already established for
  * `originalEntryUid` — except for a Page's own tree position (`parentUid`/`databaseUid`),
  * which gets a real two-pass fixup instead of drop-and-heal: unlike a rare recurring-exception
  * backlink, losing a page's parent on every first sync would misplace most of a person's
- * Pages hub, not just one edge case.
+ * Pages hub, not just one edge case. That fixup used to hold only *within* one batch — a parent
+ * arriving in a later one never healed the child, because by then the child was no longer a
+ * winner and Pass 2 skipped it. It now repairs unresolved positions on every pass, for winners
+ * and non-winners alike; see Pass 2 for why the non-winner case fills nulls only.
  *
  * Merge is whole-record LWW: a winning [PageSnapshotRecord] fully replaces its local
  * blocks/tags/property values/database schema/canvas content rather than diffing them in —
@@ -74,6 +81,7 @@ class PagesSyncEngine(
     private val canvasNodeDao: CanvasNodeDao,
     private val canvasEdgeDao: CanvasEdgeDao,
     private val pageRelationDao: PageRelationDao,
+    private val purgeRegistry: PurgeRegistry,
     private val pageContentRepository: PageContentRepository,
 ) {
     // ---------------------------------------------------------------- export
@@ -192,11 +200,47 @@ class PagesSyncEngine(
     // ----------------------------------------------------------------- merge
 
     /** Full folder-wide (or archive-wide) merge in five ordered passes — see the class doc for
-     * why this can't be a simple per-record loop the way Entry/Habit's merge is. */
-    suspend fun mergePages(records: List<PageSnapshotRecord>) {
-        if (records.isEmpty()) return
+     * why this can't be a simple per-record loop the way Entry/Habit's merge is.
+     *
+     * Records whose `uid` isn't a plain UUID are dropped before anything else looks at them.
+     * A page's uid is reflected back out as a *filename* on the next write pass
+     * (`pages/<uid>.json`, see the snapshot orchestrator), and these records arrive from a
+     * file someone was handed — an archive, or whatever a sync peer put in the folder. A uid
+     * of `../../…` therefore escaped the sync folder entirely on the desktop store, whose
+     * `Path.resolve` honours `..`. Every uid this app generates is
+     * `UUID.randomUUID().toString()`, so nothing legitimate is turned away. */
+    /**
+     * §5.2 / §9.4 — merges [allRecords], and **returns the records that lost and would otherwise
+     * have been discarded silently**.
+     *
+     * Whole-page LWW is a deliberate v1 decision and this does not change it: the winner still
+     * wins outright. What changes is that the loser stops vanishing. The caller writes each
+     * returned record beside the winner, the way Syncthing itself keeps the copy that lost a
+     * race, so a concurrent edit made on another device is recoverable by hand instead of gone.
+     *
+     * A record is returned only when its content actually *differs* from what this device holds.
+     * Without vector clocks there is no way to tell a genuine concurrent edit from a merely
+     * stale copy of a version we already have — but an identical copy has nothing in it to
+     * preserve, and that check alone is what keeps the folder from filling with duplicates of
+     * itself on every sync. An equal `updatedAt` is the same version and never counts as a loss.
+     */
+    suspend fun mergePages(allRecords: List<PageSnapshotRecord>): List<PageSnapshotRecord> {
+        // A purged page stays purged: its own snapshot file is still sitting in the folder, and
+        // without this the very next merge inserts it straight back (§5.5.1.1). A record edited
+        // after the purge is the one exception, and `isPurged` handles it by superseding.
+        val tombstones = purgeRegistry.tombstones(PurgedKind.PAGE)
+        val records = allRecords.filter {
+            isSafeUid(it.uid) && !purgeRegistry.isPurged(PurgedKind.PAGE, it.uid, Instant.ofEpochMilli(it.updatedAt), tombstones)
+        }
+        if (records.isEmpty()) return emptyList()
         val uidToId = pageDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
+        // Records that lost on timestamp. Whether each is a real loss depends on its content
+        // differing, but that comparison needs exportPages(), which walks every page on the
+        // device -- so it is deferred until something is actually a candidate, and skipped
+        // entirely when nothing is. mergePages runs once per conflict file as well as once per
+        // pass, and paying for a full export each time would make the merge O(files x pages).
+        val candidateLosers = mutableListOf<PageSnapshotRecord>()
 
         // Pass 1 — upsert bare Page rows (tree position deferred to Pass 2); ensure every
         // DATABASE-kind page in the batch has a PageDatabase shell row to hang properties off.
@@ -214,6 +258,8 @@ class PagesSyncEngine(
                 wonUids += record.uid
             } else {
                 id = local.id
+                // Strictly older: an equal timestamp is the same version, not a race.
+                if (remoteUpdatedAt.isBefore(local.updatedAt)) candidateLosers += record
             }
             if (record.kind == PageKind.DATABASE.name && pageDatabaseDao.getByPageId(id) == null) {
                 val now = Instant.ofEpochMilli(record.updatedAt)
@@ -222,13 +268,39 @@ class PagesSyncEngine(
         }
 
         // Pass 2 — every page (and every DATABASE page's PageDatabase shell) in the batch now
-        // has a stable id, so a winner's parent/database FK can resolve for real.
+        // has a stable id, so a parent/database FK can resolve for real.
+        //
+        // This used to run for winners only, and that made a lost parent permanent. A child
+        // arriving before its parent finds `uidToId[parentUid]` empty and drops to root; on the
+        // next pass the parent is finally present, but the child's `updatedAt` is no longer newer
+        // than the local row it just wrote, so it is not a winner, so it is skipped — and nothing
+        // ever revisits it. The class doc's "a real two-pass fixup instead of drop-and-heal" was
+        // true only within a single batch.
+        //
+        // So the loop now visits every record, and does one of two different things:
+        //
+        //  - a winner has its tree position written outright, as before;
+        //  - a non-winner is only *repaired* — a null parent or database that can now resolve is
+        //    filled in, and an already-resolved one is left exactly as it is.
+        //
+        // The asymmetry is the point. Letting a non-winner overwrite a resolved position would
+        // hand a stale record the power to move a page, which is precisely what losing on
+        // `updatedAt` is supposed to deny it. Filling a null takes nothing away from anyone: the
+        // position was unknown, and now it is known.
         for (record in records) {
-            if (record.uid !in wonUids) continue
-            val id = uidToId.getValue(record.uid)
+            val id = uidToId[record.uid] ?: continue
             val parentId = record.parentUid?.let { uidToId[it] }
             val databaseId = record.databaseUid?.let { dbPageUid -> uidToId[dbPageUid]?.let { pageDatabaseDao.getByPageId(it)?.id } }
-            pageDao.updateParentAndDatabase(id, parentId, databaseId)
+            if (record.uid in wonUids) {
+                pageDao.updateParentAndDatabase(id, parentId, databaseId)
+                continue
+            }
+            val local = pageDao.getById(id) ?: continue
+            val healedParent = local.parentId ?: parentId
+            val healedDatabase = local.databaseId ?: databaseId
+            if (healedParent != local.parentId || healedDatabase != local.databaseId) {
+                pageDao.updateParentAndDatabase(id, healedParent, healedDatabase)
+            }
         }
 
         // Pass 3 — Properties/Views for winning DATABASE records. Properties are upserted by
@@ -356,6 +428,12 @@ class PagesSyncEngine(
                 }
             }
         }
+
+        // Compared against the page as it stands once the pass is done, which is exactly what
+        // replaced the loser. An identical body has nothing in it to preserve.
+        if (candidateLosers.isEmpty()) return emptyList()
+        val localByUid = exportPages().associateBy { it.uid }
+        return candidateLosers.filter { localByUid[it.uid] != it }
     }
 
     suspend fun mergeRelations(records: List<PageRelationSnapshotRecord>) {
@@ -367,6 +445,13 @@ class PagesSyncEngine(
             pageRelationDao.addRelation(fromId, toId, Instant.ofEpochMilli(r.createdAt))
         }
     }
+
+    private fun isSafeUid(uid: String): Boolean = UUID_PATTERN.matches(uid)
+
+    /** The per-page snapshot files the write pass should drop — every page known to be purged,
+     * whose file nothing else in the folder will ever clear. */
+    suspend fun purgedPageFileNames(): Set<String> =
+        purgeRegistry.tombstones(PurgedKind.PAGE).keys.mapTo(mutableSetOf()) { "$it.json" }
 
     private fun PageSnapshotRecord.toBareEntity(): Page = Page(
         uid = uid, title = title, icon = icon, kind = PageKind.valueOf(kind),

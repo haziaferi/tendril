@@ -61,10 +61,11 @@ object NotionPropertyTypeInference {
         if (ISO_DATE_REGEX.containsMatchIn(text)) {
             return runCatching { LocalDate.parse(text.take(10)) }.getOrNull()
         }
-        for (formatter in LONG_DATE_FORMATS) {
-            val datePart = text.substringBefore(" at ").trim()
-            runCatching { return LocalDate.parse(datePart, formatter) }
+        // Notion's long form carries a time as "March 3, 2026 at 9:00 AM"; only the date half
+        // is kept.
+        val datePart = text.substringBefore(" at ").trim()
+        return LONG_DATE_FORMATS.firstNotNullOfOrNull {
+            runCatching { LocalDate.parse(datePart, it) }.getOrNull()
         }
-        return null
     }
 }
