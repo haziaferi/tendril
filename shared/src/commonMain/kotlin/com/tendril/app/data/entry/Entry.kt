@@ -68,8 +68,9 @@ data class Entry(
      * rows from the system Calendar Provider mirror (§9.11), on the reasoning that they already
      * reach the OS through the device's own Google account. Anything that sets this value on a
      * locally-created Entry therefore removes it from every system calendar surface.
-     * [EntrySource.NOTION_IMPORT] is genuinely unused — the importer creates Pages and Rows, and
-     * any Entry comes later from Sync-to-Tasks, which marks it `DATABASE_SYNC`.
+     *
+     * There is deliberately no member for the Notion importer; [EntrySource]'s own KDoc records
+     * why, and why the one that existed was removed rather than wired up.
      */
     val source: EntrySource = EntrySource.MANUAL,
 
@@ -92,4 +93,27 @@ data class Entry(
     val updatedAt: Instant,
 )
 
-enum class EntrySource { MANUAL, DATABASE_SYNC, GOOGLE_CALENDAR, NOTION_IMPORT }
+/**
+ * Where an Entry came from. Provenance, and in one case behaviour: [GOOGLE_CALENDAR] is what
+ * `CalendarProviderSync` tests against to keep a row out of the system Calendar Provider mirror
+ * (§9.11), so this is not a decorative label.
+ *
+ * **`NOTION_IMPORT` removed 2026-09-07.** It was declared "reserved for integrations not yet
+ * built" in the initial commit and was never once constructed in the 49 commits since —
+ * `git log -S NOTION_IMPORT --all -- '*.kt'` names only that commit, i.e. the declaration
+ * itself. Nor was there anywhere to construct it: `NotionImporter` creates Pages, Blocks and
+ * Database Rows and no Entry at all, and an imported database becomes an Entry only later,
+ * through `DatabaseSyncManager`'s Sync-to-Tasks, which marks it [DATABASE_SYNC]. Setting it
+ * would have meant inventing Entry creation in the importer, not labelling something that
+ * already happens.
+ *
+ * Deleting an enum member is normally the risky half of that choice, because a value an older
+ * peer still holds arrives in the next snapshot. Not here, on two counts. Nothing has ever
+ * written it, so no peer holds it. And if some build outside this repository's history somehow
+ * had, both read paths already fold an unrecognised source to [MANUAL] instead of throwing —
+ * `SnapshotMappers.toEntity` and `Converters.stringToEntrySource`, both pinned by
+ * `UnknownEnumQuarantineTest` — and [MANUAL] is the *behaviourally identical* reading, since
+ * [GOOGLE_CALENDAR] is the only member any call site branches on. The entire worst case is one
+ * row's provenance label reading MANUAL.
+ */
+enum class EntrySource { MANUAL, DATABASE_SYNC, GOOGLE_CALENDAR }

@@ -24,6 +24,24 @@ import java.time.ZoneId
  * property (§5.2.1) never needs a separate write-back step here — once bound it's a live
  * proxy computed from this Entry at display time (see [com.tendril.app.domain.DatabaseSyncManager]),
  * not a second stored value that could drift out of lockstep.
+ *
+ * ## View-Only does not reach here, by decision (§3.1.2)
+ * This class must never learn about [ViewLockState], and no call site of it should be gated —
+ * which is worth stating plainly, because a resolution *is* a write that syncs, so the omission
+ * otherwise reads as the one the lock sweep missed. §3.1.2 scopes View-Only to "every page under
+ * Pages", and every surface that resolves through here except one lives outside that hub:
+ * `EntryActionReceiver`'s notification inline action, the Habits widget, `CalendarScreen` and
+ * `TasksHabitsScreen` are quick-capture surfaces where the eye toggle is not on screen and often
+ * not even in the app. Gating them would swallow a tap the person had no way to know was locked,
+ * silently, at the moment they were trying to record that something really happened — and an
+ * unlogged completion is itself lost data, which is the thing the lock exists to prevent.
+ *
+ * The one deliberate exception is `PageDatabaseViewModel.toggleDone`: a Row's bound Done checkbox
+ * is inside Pages, on a page whose lock the person can see and toggle in the same breath, so that
+ * call site keeps its `locked()` gate. The split is intentional and lives at the call site rather
+ * than here, because "am I inside the locked surface?" is a question only the caller can answer.
+ * The ungated half is pinned by `ViewOnlySurfacesGuardTest`, so a later sweep that gates every
+ * write it can find breaks a test rather than a person's quick capture.
  */
 class ResolveEntryUseCase(
     private val entryDao: EntryDao,

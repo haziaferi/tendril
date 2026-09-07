@@ -78,6 +78,7 @@ import com.tendril.app.R
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.components.EmptyState
+import com.tendril.app.ui.pages.LocalViewOnly
 import kotlinx.coroutines.isActive
 import kotlin.math.cos
 import kotlin.math.min
@@ -107,10 +108,19 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
     val viewModel: RoadMapViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                RoadMapViewModel(container.database.pageDao(), container.database.pageRelationDao(), container.pageContentRepository)
+                RoadMapViewModel(
+                    container.database.pageDao(),
+                    container.database.pageRelationDao(),
+                    container.pageContentRepository,
+                    container.workbenchCore.viewLockState,
+                )
             }
         }
     )
+    // §3.1.2 — the same global toggle [RoadMapViewModel.locked] refuses on, read here so the
+    // screen stops offering the one write it has. Provided by
+    // [com.tendril.app.ui.nav.WorkbenchScaffold], which hosts this tab.
+    val viewOnly = LocalViewOnly.current
     val graph by viewModel.displayedGraph.collectAsState()
     val allPages by viewModel.allPages.collectAsState()
     val focusedPageId by viewModel.focusedPageId.collectAsState()
@@ -126,8 +136,14 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
                 TopAppBar(
                     title = { Text(stringResource(R.string.nav_road_map)) },
                     actions = {
-                        IconButton(onClick = { showRelateFlow = true }) {
-                            Icon(Icons.Filled.Link, contentDescription = "Relate two pages")
+                        // The only control on this screen that writes anything. Hidden rather
+                        // than disabled while View-Only is on, matching the Pages hub's own
+                        // create FAB — refresh, focus and "All Pages" stay, so the app bar does
+                        // not go empty and the map is still fully explorable.
+                        if (!viewOnly) {
+                            IconButton(onClick = { showRelateFlow = true }) {
+                                Icon(Icons.Filled.Link, contentDescription = "Relate two pages")
+                            }
                         }
                         IconButton(onClick = { viewModel.refresh() }) {
                             Icon(Icons.Filled.Refresh, contentDescription = "Refresh Road Map")
@@ -174,7 +190,9 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
         )
     }
 
-    if (showRelateFlow) {
+    // `&& !viewOnly` for the same reason the Canvas guards its own open sheets: the toggle lives
+    // on another screen and can be turned on mid-flow, and this flow's second pick is the write.
+    if (showRelateFlow && !viewOnly) {
         RelateToFlow(
             viewModel = viewModel,
             onDismiss = { showRelateFlow = false },

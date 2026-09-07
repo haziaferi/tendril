@@ -16,12 +16,19 @@ const val MAX_BLOCK_DEPTH = 1
  *
  * `Block.parentBlockId` has existed (indexed, even) since the schema was written, and
  * `PageDetailScreen` has always rendered an indent for it — but the list filtered to
- * `parentBlockId == null`, so a child was simply never drawn. That is why the Notion importer
- * assigns top-level parents only: spec line 46 records it deciding to flatten imported nesting
- * "rather than risking silently-invisible content".
+ * `parentBlockId == null`, so a child was simply never drawn. That is why the Notion import
+ * path used to collapse imported nesting into a top-level sequence, "rather than risking
+ * silently-invisible content" (spec Revision Log, 2026-08-30).
  *
- * That constraint is the one this function is built around. **Every block comes out**, whatever
- * shape the data is in:
+ * **This function is what ended that**, and the KDoc here described the old world for a while
+ * after it stopped being true. `PageDetailScreen` builds its list from `outlineOf` now, so a
+ * child *is* drawn; with the risk gone, the 2026-09-05 revision reversed the import decision,
+ * and `NotionImporter` hangs an indented source block off the last top-level block it emitted —
+ * the same rule as [indentTargetFor], which is what the in-app Indent action uses. Nothing
+ * upstream normalises the shape before it reaches here any more, so the invariant below is
+ * load-bearing rather than defensive.
+ *
+ * **Every block comes out**, whatever shape the data is in:
  *
  *  - a child whose parent is not on this page is drawn at the top level, not dropped;
  *  - a grandchild is re-attached to its top-level ancestor rather than hidden or drawn at an

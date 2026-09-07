@@ -172,7 +172,13 @@ class SyncCoordinator(
             } else {
                 orchestrator.writeSnapshots(store, passphrase)
                 statusPreferences.markSyncedNow()
-                _lastError.value = null
+                // A quarantined record is a successful pass, not a failed one — the merge did
+                // everything it safely could — but it must not be silent. A device that quietly
+                // drops a peer's page on every pass looks exactly like a device in sync, and the
+                // person finds out on the day they go looking for the page. So it rides the same
+                // channel `passphraseMismatch` uses, and resolves to null (clearing the banner)
+                // on the ordinary pass where nothing was quarantined.
+                _lastError.value = merge.quarantineMessage()
                 SnapshotSyncOutcome.Completed
             }
         }

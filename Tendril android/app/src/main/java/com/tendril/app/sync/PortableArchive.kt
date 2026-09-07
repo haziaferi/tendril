@@ -8,6 +8,7 @@ import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.domain.PurgeRegistry
+import com.tendril.app.domain.ViewLockState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -29,6 +30,21 @@ private const val PAGES_DIR_PREFIX = "pages/"
 
 /** Ceiling on total inflated bytes from an imported archive — see [PortableArchive.readZipEntries]. */
 private const val MAX_ARCHIVE_BYTES = 128L * 1024 * 1024
+
+/**
+ * §3.1.2 — the refusal text for a write blocked by View-Only. Names the toggle *and* where it
+ * lives, because Settings is the one place the eye in the Pages toolbar isn't on screen: someone
+ * who forgot it was on would otherwise read "nothing happened" as "the file is broken" and go
+ * hunting for a second backup. Both messages end the same way as this class's other refusals so
+ * the reassurance is identical wherever it comes from.
+ */
+private const val VIEW_ONLY_IMPORT_REFUSAL =
+    "View-Only is on, so nothing can be imported into this device. Turn it off with the eye in " +
+        "the Pages toolbar, then import again — nothing has been changed."
+private const val VIEW_ONLY_RESTORE_REFUSAL =
+    "View-Only is on, so this backup can't be restored — restoring erases and replaces everything " +
+        "on this device. Turn off View-Only with the eye in the Pages toolbar to restore — nothing " +
+        "has been changed."
 
 /**
  * §9.4.1 — a one-off, user-initiated, shareable `.tendril` package. Distinct from
@@ -56,7 +72,31 @@ class PortableArchive(
      * doesn't reach for Android Keystore, which a JVM test has no access to.
      */
     private val passphrase: () -> String?,
+    /**
+     * §3.1.2's View-Only toggle, as the user decided it: the lock is absolute and it covers
+     * Settings. [importAdditive] and [restoreFromBackup] are the largest create and destroy
+     * operations in the app, so the refusal lives down here beside the work rather than only on
+     * the two buttons — any future caller inherits it. [export] is deliberately *not* gated: it
+     * reads and writes nothing local, and a lock that stopped someone taking a backup would be
+     * the toggle working against the data it exists to protect.
+     *
+     * Nullable for the test harness only. `PortableArchiveTest` and `UnknownEnumQuarantineTest`
+     * construct this class to exercise decode and merge behaviour that has nothing to do with
+     * View-Only, and a lock they would never toggle is noise in those fixtures. The running app
+     * always supplies the real one: `AppContainer` declares the shared [ViewLockState] just above
+     * `portableArchive` and passes it in, so both layers are live — the affordance guard in
+     * `SettingsScreen`'s `PortableBackupSection` and its Notion sibling (both reading that same
+     * single global flag through `LocalViewOnly`), and this one behind them. Read the default as
+     * "a fixture didn't need a lock", never as "production is unprotected".
+     */
+    private val viewLockState: ViewLockState? = null,
 ) {
+    /**
+     * The established one-gate-per-write-surface idiom (see `PageDetailViewModel.viewOnlyLocked`
+     * and `PageDatabaseViewModel.locked`), called at the top of every mutating entry point here.
+     */
+    private fun locked(): Boolean = viewLockState?.viewOnly?.value == true
+
     /** Null when §9.4.2's toggle is off — "off" is simply "no passphrase set". */
     private fun keyOrNull(): SecretKeySpec? = passphrase()?.let(SnapshotEncryption::deriveKey)
 
@@ -117,11 +157,21 @@ class PortableArchive(
 
     /** Always additive — reuses the exact per-record last-write-wins merge rule §9.4
      * already defines, never a wholesale replace (§9.4.1's fix for the "one import
-     * silently overwrites the other person's data" risk). */
+     * silently overwrites the other person's data" risk).
+     *
+     * A record this build can't decode is quarantined rather than fatal (see [applyEntries]):
+     * import writes nothing over the local copy of anything, so one unreadable record has no
+     * reason to cost the person the rest of the file. The count comes back in [ImportResult] —
+     * quarantine is reported, never silent, and that includes the pages [PagesSyncEngine.mergePages]
+     * quarantined on its own account. Dropping its outcome on the floor was the same silence in a
+     * different place: the import reported "everything landed" while a page from a newer build had
+     * not. */
     suspend fun importAdditive(source: Uri): ImportResult = withContext(Dispatchers.IO) {
+        check(!locked()) { VIEW_ONLY_IMPORT_REFUSAL }
         val contents = readZipEntries(source).readable()
         var entriesFound = 0
         var habitsFound = 0
+        var quarantined = 0
         val pageRecords = decodePages(contents)
         // Tombstones first and applied before any record, exactly as the folder sync does: an
         // archive is just another source of the same two facts, and the later of "edited at" and
@@ -130,12 +180,17 @@ class PortableArchive(
         // untimestamped, with no principled way to compare them against a record. Now there is.
         purgeRegistry.adopt(decodePurged(contents))
         purgeRegistry.applyToLocalRecords()
-        pagesSyncEngine.mergePages(pageRecords)
+        quarantined += pagesSyncEngine.mergePages(pageRecords).quarantined.size
         decodeRelations(contents).takeIf { it.isNotEmpty() }?.let { pagesSyncEngine.mergeRelations(it) }
-        contents[FILE_ENTRIES_ACTIVE]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
-        contents[FILE_ENTRIES_ARCHIVED]?.let { applyEntries(decodeEntries(it)); entriesFound++ }
-        contents[FILE_HABITS]?.let { applyHabits(decodeHabits(it)); habitsFound++ }
-        ImportResult(hadManifest = contents.containsKey(MANIFEST_NAME), entryFilesFound = entriesFound, habitFilesFound = habitsFound)
+        contents[FILE_ENTRIES_ACTIVE]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
+        contents[FILE_ENTRIES_ARCHIVED]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
+        contents[FILE_HABITS]?.let { quarantined += applyHabits(decodeHabits(it)); habitsFound++ }
+        ImportResult(
+            hadManifest = contents.containsKey(MANIFEST_NAME),
+            entryFilesFound = entriesFound,
+            habitFilesFound = habitsFound,
+            quarantinedRecords = quarantined,
+        )
     }
 
     /**
@@ -148,8 +203,22 @@ class PortableArchive(
      * a future schema this build can't read — used to leave an empty database and no way
      * back, because every decode below is best-effort and simply yields nothing on failure.
      * An archive carrying no readable records now throws and changes nothing.
+     *
+     * "Decoded" means all the way to entities, not merely to JSON. Every enum in these shapes
+     * travels as a plain String (that is what makes adding an enum member a zero-schema-change
+     * edit, and what lets a newer build write values this one has never heard of), so an archive
+     * from a newer build parses perfectly, passes the readability check below, and only throws
+     * later inside `toEntity` — by which point `entryDao.deleteAll()`, `habitDao.deleteAll()` and
+     * `purgeRegistry.clearAll()` have all already run, with no transaction to roll them back. The
+     * device would be left empty *and* unrestored, which is the exact outcome the decode-first
+     * ordering exists to prevent. [requireEveryRecordDecodes] closes that by mapping every record
+     * to its entity while the local data is still there to lose.
      */
-    suspend fun restoreFromBackup(source: Uri) = withContext(Dispatchers.IO) {
+    // `: Unit` spelled out because the apply* helpers now return a quarantine count that only
+    // [importAdditive] has any use for; without it this function's inferred type would follow
+    // whatever the last one happens to return.
+    suspend fun restoreFromBackup(source: Uri): Unit = withContext(Dispatchers.IO) {
+        check(!locked()) { VIEW_ONLY_RESTORE_REFUSAL }
         // Before the decode-then-wipe sequence below, and so before anything is deleted.
         val contents = readZipEntries(source).readable()
 
@@ -164,6 +233,16 @@ class PortableArchive(
             pageRecords.isNotEmpty() || relations.isNotEmpty() || activeEntries.isNotEmpty() ||
                 archivedEntries.isNotEmpty() || habits.isNotEmpty()
         ) { "This file doesn't contain any readable Tendril data — nothing was changed." }
+
+        // The last thing that happens before the first delete: prove every record maps to an
+        // entity, not just to JSON. Pages are asked the same question here rather than left to
+        // mergePages' own quarantine — see the note in [requireEveryRecordDecodes] for why
+        // quarantine is the wrong answer on this one path.
+        requireEveryRecordDecodes(
+            activeEntries + archivedEntries,
+            habits,
+            pagesSyncEngine.undecodablePages(pageRecords),
+        )
 
         entryDao.deleteAll()
         habitDao.deleteAll()
@@ -221,22 +300,99 @@ class PortableArchive(
         return runCatching { json.decodeFromString<List<HabitSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
     }
 
-    /** Deliberately the same rules as `SnapshotSyncOrchestrator`'s entry merge, because an
+    /**
+     * Restore's pre-delete proof, and the reason the mapped entities here are thrown away: what is
+     * kept is not the objects but the *fact* that every one of them can be built. [applyEntries]
+     * re-maps against the uid→id maps as they stand after the wipe (a restored Entry's
+     * `originalEntryUid`/`sourceRowUid` resolve against rows that only exist once this pass has
+     * inserted them), so reusing entities mapped against the pre-wipe maps would silently rewire
+     * those two links. Mapping twice costs one pass over records that are about to be inserted
+     * anyway; getting the links wrong costs data.
+     *
+     * Refuse rather than quarantine, unlike [importAdditive]: restore's contract is "become
+     * exactly what this archive says", so partially becoming it — some records applied, others
+     * skipped, and the local copy of all of them already deleted — is worse than not starting.
+     * Import can quarantine precisely because it deletes nothing.
+     *
+     * Pages are covered too, via [PagesSyncEngine.undecodablePages] — the check [PagesSyncEngine]
+     * offers precisely for a caller that must decide before it destroys anything. Leaving them to
+     * `mergePages`' own quarantine looked safe because restore bulk-deletes no pages, but the
+     * arithmetic is different once the entries and habits either side of them *have* been wiped:
+     * the archive is applied, the person is told it succeeded, and the pages this build couldn't
+     * read are simply absent. Restore is the one operation that can empty the app, so it refuses
+     * whole or does nothing — a half-restore reported as a success is the worst outcome available.
+     *
+     * That page check is very slightly wider than `mergePages`' own: it reads every record handed
+     * to it, where `mergePages` first drops uids that aren't UUIDs and pages the tombstones already
+     * cover. Nothing this app writes lands in that gap — a purged page is gone from the database
+     * before an export can name it, and every uid generated here is a UUID — so in practice the
+     * only file it turns away is one no version of Tendril produced, which is a file to refuse.
+     */
+    private fun requireEveryRecordDecodes(
+        entries: List<EntrySnapshotRecord>,
+        habits: List<HabitSnapshotRecord>,
+        undecodablePages: List<QuarantinedRecord>,
+    ) {
+        // The mapper's own exception message names the offending field and value ("entry kind
+        // \"MILESTONE\""), which is worth repeating verbatim: "some records can't be read" sends
+        // someone looking for a corrupt file, "entry kind MILESTONE" tells them which build wrote
+        // it. The empty FK maps are deliberate — an unresolved `originalEntryUid`/`sourceRowUid`
+        // maps to null by design rather than throwing, so it cannot turn a readable record
+        // unreadable here and then readable again in `applyEntries`.
+        val failures = entries.mapNotNull { runCatching { it.toEntity(emptyMap(), emptyMap()) }.exceptionOrNull() } +
+            habits.mapNotNull { runCatching { it.toEntity() }.exceptionOrNull() }
+        // Page reasons join the same list because they read the same way — the engine's `detail`
+        // is already the quoted `label "VALUE"` shape the entity mappers' messages use, so the
+        // person sees one sentence naming the offending values whichever half they came from.
+        val reasons = (
+            failures.mapNotNull { it.message?.takeIf(String::isNotBlank) } + undecodablePages.map { it.detail }
+            ).distinct().take(3)
+        val unreadable = failures.size + undecodablePages.size
+        val detail = if (reasons.isEmpty()) "" else " (${reasons.joinToString("; ")})"
+        require(unreadable == 0) {
+            "$unreadable record(s) in this backup can't be read by this version of Tendril$detail. " +
+                "It was most likely written by a newer one. Nothing has been changed — update Tendril " +
+                "and restore again, or use Import, which adds every record it can read and leaves the " +
+                "rest alone."
+        }
+    }
+
+    /**
+     * Deliberately the same rules as `SnapshotSyncOrchestrator`'s entry merge, because an
      * archive is just another source of the same records — an Entry purged on this device must
      * not come back through Import when it cannot come back through the folder, and
      * `providerEventId` is per-device (§3.2) so it is kept from the local row rather than
-     * adopted from an archive some other device wrote. */
-    private suspend fun applyEntries(records: List<EntrySnapshotRecord>) {
-        if (records.isEmpty()) return
+     * adopted from an archive some other device wrote.
+     *
+     * Returns how many records were quarantined — decoded as JSON but not as an entity, the
+     * newer-build case [requireEveryRecordDecodes] describes. Skipping one leaves this device's
+     * copy of that record exactly as it was, which is the whole point: a value this build doesn't
+     * recognise is a reason to leave a record alone, never a reason to overwrite or drop it. The
+     * count is returned rather than logged so the caller can say so out loud (§9.4's rule that a
+     * sync problem is surfaced, not swallowed).
+     */
+    private suspend fun applyEntries(records: List<EntrySnapshotRecord>): Int {
+        if (records.isEmpty()) return 0
         val uidToId = entryDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val rowUidToId = pageDao.getAll().associate { it.uid to it.id }
         val tombstones = purgeRegistry.tombstones(PurgedKind.ENTRY)
+        var quarantined = 0
         for (record in records) {
             val remoteUpdatedAt = Instant.ofEpochMilli(record.updatedAt)
             if (purgeRegistry.isPurged(PurgedKind.ENTRY, record.uid, remoteUpdatedAt, tombstones)) continue
+            // Decoded before anything is written, never after — the ordering that made Restore
+            // dangerous is the same ordering that would make one bad record here overwrite a good
+            // local row with half of itself. `toEntityOrNull` is the mapper's own quarantining
+            // form, shared with the folder-sync merge so both boundaries skip on exactly the
+            // same rule.
+            val decoded = record.toEntityOrNull(uidToId, rowUidToId)
+            if (decoded == null) {
+                quarantined++
+                continue
+            }
             val local = entryDao.getByUid(record.uid)
             if (local == null) {
-                uidToId[record.uid] = entryDao.insert(record.toEntity(uidToId, rowUidToId))
+                uidToId[record.uid] = entryDao.insert(decoded)
             } else if (remoteUpdatedAt.isAfter(local.updatedAt)) {
                 // providerEventId is per-device only (§9.11) and isn't in the snapshot record,
                 // so `toEntity` defaults it to null — a whole-row update then wrote that null
@@ -244,21 +400,31 @@ class PortableArchive(
                 // leaving the backfill sweep to insert a duplicate. The two sibling merge
                 // paths (SnapshotSyncOrchestrator, GoogleCalendarSyncEngine) already preserve
                 // it; this one was the outlier.
-                entryDao.update(record.toEntity(uidToId, rowUidToId).copy(id = local.id, providerEventId = local.providerEventId))
+                entryDao.update(decoded.copy(id = local.id, providerEventId = local.providerEventId))
             }
         }
+        return quarantined
     }
 
-    private suspend fun applyHabits(records: List<HabitSnapshotRecord>) {
-        if (records.isEmpty()) return
+    /** Quarantines an undecodable habit for the same reason [applyEntries] does — one record from
+     * a newer build costs that record and nothing else. */
+    private suspend fun applyHabits(records: List<HabitSnapshotRecord>): Int {
+        if (records.isEmpty()) return 0
+        var quarantined = 0
         for (record in records) {
+            val decoded = record.toEntityOrNull()
+            if (decoded == null) {
+                quarantined++
+                continue
+            }
             val local = habitDao.getByUid(record.uid)
             if (local == null) {
-                habitDao.insert(record.toEntity())
+                habitDao.insert(decoded)
             } else if (Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) {
-                habitDao.update(record.toEntity().copy(id = local.id))
+                habitDao.update(decoded.copy(id = local.id))
             }
         }
+        return quarantined
     }
 
     /**
@@ -341,7 +507,21 @@ class PortableArchive(
  * "state the concrete consequence in plain words" rule exists to prevent. */
 data class ExportResult(val encrypted: Boolean)
 
-data class ImportResult(val hadManifest: Boolean, val entryFilesFound: Int, val habitFilesFound: Int)
+data class ImportResult(
+    val hadManifest: Boolean,
+    val entryFilesFound: Int,
+    val habitFilesFound: Int,
+    /**
+     * Entries, habits and pages that parsed as JSON but that this build couldn't turn into rows —
+     * almost always a value written by a newer version (see [PortableArchive.applyEntries], and
+     * [PagesSyncEngine.mergePages] for the page half, whose count is folded in here rather than
+     * kept in its own field: the person is being told how much of the file did not come across,
+     * and that number is not per-table). Reported for the same reason a decryption failure is: an
+     * import that quietly landed nine records out of ten looks identical to one that landed all
+     * ten, and the person finds out on the day they go looking for the tenth.
+     */
+    val quarantinedRecords: Int = 0,
+)
 
 /** Decoded archive text plus how many entries were encrypted and unreadable — see
  * [PortableArchive.readable], which is what turns a non-zero count into a refusal. */

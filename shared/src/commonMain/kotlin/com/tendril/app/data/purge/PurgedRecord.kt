@@ -7,9 +7,15 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import java.time.Instant
 
-/** What a tombstone is *for*. Only the kinds that actually offer "Delete forever" in the
- * Trash today — a Habit has no such action yet, and speculative enum members are the sort of
- * dead generality this codebase avoids; add HABIT alongside the UI that needs it. */
+/** What a tombstone is *for*. Every member is reached from a real, deliberate delete that
+ * exists today, and only those: PAGE, ENTRY and HABIT from "Delete forever" in their Trash
+ * sheets — HABIT is no longer speculative, `HabitTrashSheet` grew that action on 2026-09-05 and
+ * calls [com.tendril.app.domain.PurgeRegistry.purgeHabit] from its confirm dialog — and
+ * PROPERTY from §5.5's delete-column dialog, which is not a Trash at all (a property has no
+ * Trash) but needs a tombstone for exactly the same reason §9.4's merge would otherwise
+ * re-upsert the column from a peer that has not seen the deletion. Speculative members are the
+ * sort of dead generality this codebase avoids: add one alongside the delete path that needs
+ * it, never ahead of it. */
 enum class PurgedKind { PAGE, ENTRY, HABIT, PROPERTY }
 
 /**

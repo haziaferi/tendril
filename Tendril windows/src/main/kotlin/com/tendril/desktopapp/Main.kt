@@ -31,6 +31,7 @@ import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
 import com.tendril.app.sync.PagesSyncEngine
 import com.tendril.app.sync.SnapshotSyncOrchestrator
+import com.tendril.app.sync.quarantineMessage
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.nav.WorkbenchScaffold
 import com.tendril.app.ui.theme.TendrilColorTheme
@@ -171,7 +172,10 @@ private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Deskt
                                 "check the passphrase. Nothing was written."
                         } else {
                             orchestrator.writeSnapshots(store, key)
-                            syncError = null
+                            // Quarantine is a survivable pass, but never a silent one — same
+                            // reasoning and same channel as Android's SyncCoordinator. Null on a
+                            // clean pass, so the notice clears itself.
+                            syncError = merge.quarantineMessage()
                         }
                     } catch (e: Exception) {
                         syncError = e.message ?: "Sync failed."

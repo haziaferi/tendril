@@ -7,6 +7,7 @@ import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.addRelation
 import com.tendril.app.data.page.PageRelationDao
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.ViewLockState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -51,7 +52,16 @@ class RoadMapViewModel(
     private val pageDao: PageDao,
     private val relationDao: PageRelationDao,
     private val contentRepository: PageContentRepository,
+    private val viewLockState: ViewLockState,
 ) : ViewModel() {
+    /** §3.1.2 — the same single enforcement point as every other editing ViewModel (see
+     * [com.tendril.app.ui.pages.PageDetailViewModel.viewOnlyLocked]). The Road Map is mostly a
+     * *reader* — the graph scan, the focus filter and the page search all stay available, since
+     * View-Only locks editing, not looking — so this gates exactly the one mutation the screen
+     * has, [relate]. Read at call time rather than captured, so the eye toggle takes effect on a
+     * map that is already open. */
+    private fun locked() = viewLockState.viewOnly.value
+
     private val _graph = MutableStateFlow(RoadMapGraph(emptyList(), emptyList()))
     val graph: StateFlow<RoadMapGraph> = _graph.asStateFlow()
 
@@ -138,9 +148,18 @@ class RoadMapViewModel(
 
     fun clearPageSearch() { _pageSearchResults.value = emptyList() }
 
-    /** §3.4 — the manual "Relate to…" action, for pages conceptually connected but that
-     * "don't reference each other in text." */
+    /**
+     * §3.4 — the manual "Relate to…" action, for pages conceptually connected but that
+     * "don't reference each other in text."
+     *
+     * The only write this ViewModel makes, and so the only thing §3.1.2's lock has to stop here.
+     * It is not a page edit that rides inside some page's snapshot: a `page_relations` row is its
+     * own synced record, merged by `PagesSyncEngine.mergeRelations` off no page's timestamp at
+     * all, so one made while the person believed the app was read-only reaches every other device
+     * on the next pass with nothing left to mark it unintended (§9.4).
+     */
     fun relate(fromPageId: Long, toPageId: Long) {
+        if (locked()) return
         viewModelScope.launch {
             relationDao.addRelation(fromPageId, toPageId)
             refresh()

@@ -23,6 +23,8 @@ import com.tendril.app.domain.ViewLockState
 import com.tendril.app.ui.canvas.CanvasViewModel
 import com.tendril.app.ui.pages.PageDatabaseViewModel
 import com.tendril.app.ui.pages.PageDetailViewModel
+import com.tendril.app.ui.pages.PagesViewModel
+import com.tendril.app.ui.roadmap.RoadMapViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -139,7 +141,35 @@ class WritePathSyncTest {
             databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState,
         )
 
-        fun canvas(pageId: Long) = CanvasViewModel(pageId, pageDao, canvasDao, nodeDao, edgeDao)
+        fun canvas(pageId: Long) = CanvasViewModel(pageId, pageDao, canvasDao, nodeDao, edgeDao, viewLockState)
+
+        /**
+         * The Pages list itself (§3.1) — the only surface that *creates* pages, canvases and
+         * whole databases, and the only one that empties the Trash via [PurgeRegistry].
+         *
+         * Takes no `pageId`, unlike the three factories above: it is scoped to the tree, not to
+         * a page. That is also why it matters for §3.1.2's View-Only lock — a create is a write
+         * even though there is no page open to gate it against, and a "Delete forever" is the
+         * one write in the app that leaves a tombstone rather than a record.
+         */
+        fun pages() = PagesViewModel(
+            pageDao, pageDatabaseDao, propertyDao, ftsDao, tagDao, purgeRegistry, databaseSyncManager,
+            templateManager, viewLockState,
+        )
+
+        /**
+         * §3.4's Road Map. Also unscoped — the map is over every page, and [RoadMapViewModel]'s
+         * own `setFocus` narrows it *after* construction rather than through the constructor,
+         * so this factory deliberately takes no page id (see `RoadMapViewModel.kt:50-54`).
+         *
+         * Its one mutation, `relate`, writes a [com.tendril.app.data.page.PageRelation] through
+         * the same [relationDao] the sync engine's relation pass reads, so a relation made here
+         * is a relation the export carries.
+         *
+         * Note it constructs eagerly: `init { refresh() }` launches on `viewModelScope`, which
+         * is why every caller must already be inside `runTest(mainDispatcher)`.
+         */
+        fun roadmap() = RoadMapViewModel(pageDao, relationDao, contentRepository, viewLockState)
 
         /** Local ids are each device's own; a page is the same page across devices only by `uid`. */
         suspend fun pageIdOf(uid: String): Long =
