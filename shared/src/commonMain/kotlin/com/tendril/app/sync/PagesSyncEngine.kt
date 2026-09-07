@@ -233,8 +233,23 @@ class PagesSyncEngine(
             isSafeUid(it.uid) && !purgeRegistry.isPurged(PurgedKind.PAGE, it.uid, Instant.ofEpochMilli(it.updatedAt), tombstones)
         }
         if (records.isEmpty()) return emptyList()
-        val uidToId = pageDao.getAll().associate { it.uid to it.id }.toMutableMap()
+        val localPages = pageDao.getAll()
+        val uidToId = localPages.associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
+        // The local copies about to be replaced. A winning record overwrites the page row and
+        // Pass 5 clears and rebuilds its blocks, tags and cell values, so whatever this device
+        // held is gone by the time the passes finish -- and unlike a losing *remote* record it
+        // is not sitting in a file anywhere. Captured here, before Pass 1, because afterwards
+        // there is nothing left to capture. Same deferral as `candidateLosers` below: the
+        // export is only paid for when a record actually stands to overwrite something.
+        val localUpdatedAt = localPages.associate { it.uid to it.updatedAt }
+        val overwritten: Map<String, PageSnapshotRecord> =
+            if (records.any { r -> localUpdatedAt[r.uid]?.let { Instant.ofEpochMilli(r.updatedAt).isAfter(it) } == true }) {
+                exportPages().associateBy { it.uid }
+            } else {
+                emptyMap()
+            }
+        val overwrittenUids = mutableSetOf<String>()
         // Records that lost on timestamp. Whether each is a real loss depends on its content
         // differing, but that comparison needs exportPages(), which walks every page on the
         // device -- so it is deferred until something is actually a candidate, and skipped
@@ -256,6 +271,7 @@ class PagesSyncEngine(
                 id = local.id
                 pageDao.update(record.toBareEntity().copy(id = id, parentId = local.parentId, databaseId = local.databaseId))
                 wonUids += record.uid
+                overwrittenUids += record.uid
             } else {
                 id = local.id
                 // Strictly older: an equal timestamp is the same version, not a race.
@@ -308,15 +324,18 @@ class PagesSyncEngine(
         // Property so Pass 5's row values can resolve even against a database this batch
         // never touched.
         val propertyUidToId = propertyDao.getAll().associate { it.uid to it.id }.toMutableMap()
+        // A peer that has not seen the deletion still carries the column in its schema, and this
+        // pass upserts by uid — so without this the tombstone is undone on the very next merge.
+        val propertyTombstones = purgeRegistry.tombstones(PurgedKind.PROPERTY)
         for (record in records) {
             if (record.uid !in wonUids) continue
             val db = record.database ?: continue
             val pageId = uidToId.getValue(record.uid)
             val pageDatabaseId = pageDatabaseDao.getByPageId(pageId)?.id ?: continue
 
-            val remoteUids = db.properties.map { it.uid }.toSet()
             val existingByUid = propertyDao.getForDatabase(pageDatabaseId).associateBy { it.uid }
             for (p in db.properties) {
+                if (p.uid in propertyTombstones) continue
                 val existing = existingByUid[p.uid]
                 val id = if (existing != null) {
                     propertyDao.update(existing.copy(name = p.name, type = PropertyType.valueOf(p.type), config = p.config, order = p.order))
@@ -326,7 +345,14 @@ class PagesSyncEngine(
                 }
                 propertyUidToId[p.uid] = id
             }
-            existingByUid.values.filter { it.uid !in remoteUids }.forEach { propertyDao.delete(it.id) }
+            // A property absent from this record is NOT deleted. Absence means "hasn't arrived"
+            // -- the rule SnapshotSyncOrchestrator.readAndMerge states for every other record,
+            // and which this pass used to be the single exception to. A device that had not yet
+            // seen a new column re-exported the schema without it, and the column plus every
+            // row's value under it (`property_values` cascades off `properties`) was destroyed
+            // on an ordinary two-device schema race, silently and with no `.tendril-lost` copy.
+            // A real deletion travels as a `PurgedKind.PROPERTY` tombstone instead, the same
+            // signal §5.5.1.1 already uses to tell a deliberate destruction from a slow arrival.
 
             pageDatabaseViewDao.deleteAllForDatabase(pageDatabaseId)
             for (v in db.views) {
@@ -390,6 +416,13 @@ class PagesSyncEngine(
             if (record.uid !in wonUids) continue
             val pageId = uidToId.getValue(record.uid)
 
+            // `Block.imagePath` points into this device's app-private storage and is deliberately
+            // excluded from the snapshot (see its own doc comment), so an incoming record can
+            // never carry one. Rebuilding from that record therefore writes null over whatever
+            // was here, and the picture is unlinked with the file still on disk. Held by uid
+            // across the delete-and-reinsert instead -- the block is the same block, and the
+            // remote simply has nothing to say about where this device keeps its copy.
+            val imagePathByUid = blockDao.getForPage(pageId).mapNotNull { b -> b.imagePath?.let { b.uid to it } }.toMap()
             blockDao.deleteForPage(pageId)
             val blockUidToId = mutableMapOf<String, Long>()
             for (b in record.blocks) {
@@ -397,6 +430,7 @@ class PagesSyncEngine(
                     Block(
                         uid = b.uid, pageId = pageId, type = BlockType.valueOf(b.type), order = b.order,
                         parentBlockId = null,
+                        imagePath = imagePathByUid[b.uid],
                         content = b.content,
                         formattingSpans = b.formattingSpans.mapNotNull { it.toEntity(uidToId) },
                         checked = b.checked, codeLanguage = b.codeLanguage, calloutIcon = b.calloutIcon, calloutColor = b.calloutColor,
@@ -431,9 +465,18 @@ class PagesSyncEngine(
 
         // Compared against the page as it stands once the pass is done, which is exactly what
         // replaced the loser. An identical body has nothing in it to preserve.
-        if (candidateLosers.isEmpty()) return emptyList()
+        if (candidateLosers.isEmpty() && overwrittenUids.isEmpty()) return emptyList()
         val localByUid = exportPages().associateBy { it.uid }
-        return candidateLosers.filter { localByUid[it.uid] != it }
+        return candidateLosers.filter { localByUid[it.uid] != it } +
+            overwrittenUids.mapNotNull { uid ->
+                val before = overwritten[uid] ?: return@mapNotNull null
+                val after = localByUid[uid] ?: return@mapNotNull null
+                // Content only. The timestamps necessarily differ -- that is why the remote won --
+                // so comparing the records whole would preserve a copy on every routine catch-up,
+                // where a peer re-exported the same content under a newer stamp and nothing was
+                // lost at all.
+                if (before.copy(updatedAt = after.updatedAt) == after) null else before
+            }
     }
 
     suspend fun mergeRelations(records: List<PageRelationSnapshotRecord>) {

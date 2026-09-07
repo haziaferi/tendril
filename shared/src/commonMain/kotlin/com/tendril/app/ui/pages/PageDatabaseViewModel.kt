@@ -30,6 +30,7 @@ import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryScheduleCoordinator
+import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -65,6 +66,7 @@ class PageDatabaseViewModel(
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val templateManager: TemplateManager,
+    private val purgeRegistry: PurgeRegistry,
     private val viewLockState: ViewLockState,
 ) : ViewModel() {
     /** §3.1.2 — see [PageDetailViewModel.viewOnlyLocked]'s note; the same single enforcement point,
@@ -322,7 +324,11 @@ class PageDatabaseViewModel(
                     db.recurrencePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.RECURRENCE)
                 }
             }
-            propertyDao.delete(property.id)
+            // Through the registry, not `propertyDao.delete`: §9.4's merge upserts every
+            // property in a winning schema, so without a tombstone this column is reinstated by
+            // the first peer that has not seen the deletion — and its cells with it, since the
+            // schema record carries the column but no device's row values.
+            purgeRegistry.purgeProperty(property.id)
         }
     }
 

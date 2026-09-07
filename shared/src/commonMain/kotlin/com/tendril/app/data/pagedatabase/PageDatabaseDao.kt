@@ -50,6 +50,11 @@ interface PropertyDao {
     @Query("SELECT * FROM properties WHERE id = :id")
     suspend fun getById(id: Long): Property?
 
+    /** §5.5.1.1 — a `PurgedKind.PROPERTY` tombstone names a uid, since that is the only
+     * identity that means the same thing on both devices. */
+    @Query("SELECT * FROM properties WHERE uid = :uid")
+    suspend fun getByUid(uid: String): Property?
+
     /** §9.4 snapshot merge — a Row's [PropertyValue.propertyId] can reference a Property
      * defined by a *different* page's (the owning Database's) snapshot file, so resolving it
      * needs every device-wide uid→id mapping at once rather than one query per value. */

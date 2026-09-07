@@ -245,6 +245,8 @@ class FakePageDatabaseDao(private val store: FakePageStore) : PageDatabaseDao {
 }
 
 class FakePropertyDao(private val store: FakePageStore) : PropertyDao {
+    override suspend fun getByUid(uid: String): Property? = store.properties.values.find { it.uid == uid }
+
     override suspend fun insert(property: Property): Long {
         val id = store.nextId()
         store.properties[id] = property.copy(id = id)

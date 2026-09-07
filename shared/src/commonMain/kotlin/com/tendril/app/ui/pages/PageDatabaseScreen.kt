@@ -96,6 +96,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                     core.resolveEntryUseCase,
                     core.entryScheduleCoordinator,
                     core.templateManager,
+                    core.purgeRegistry,
                     core.viewLockState,
                 )
             }
