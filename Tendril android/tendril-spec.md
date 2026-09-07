@@ -73,6 +73,11 @@ second copy of the reasoning.
 | 2026-09-04 (audit, correction) | Purge tombstones **travel** rather than staying local — a local-only tombstone made "Delete forever" unachievable on more than one device, since the next sync restored everything from whichever device hadn't purged. §9.4's additive-merge rule is narrowed accordingly: absence still never implies deletion, an explicit tombstone does, and record-vs-tombstone resolves by later timestamp so a stale delete cannot destroy a newer edit | §5.5.1.1, §9.4, §9.4.1 |
 | 2026-09-05 (write path) | **An edit to a cell, a block, a tag, a column or a canvas node now reaches the other device.** §9.4's merge decides per page by last-write-wins on `pages.updated_at`, and outside the merge the only writers of that column were `updateTitle`, `softDelete` and `restore` — so every mutation that changes what travels *inside* a page's snapshot left the timestamp alone. The exported `pages/<page_id>.json` carried new content under an unchanged timestamp, was not newer on the peer, lost, and the passes that apply schema, canvas, blocks, tags and cell values were skipped. Not recorded as a conflict either: an *equal* timestamp is the same version by definition, so no `.tendril-lost` copy was written and the edit vanished with nothing anywhere saying it had existed — then vanished on the editing device too, as soon as the peer made any timestamp-moving edit. `PageDao.touch(id, at)` added, and reached through a launcher rather than a second call — `launchAndReindex`/`launchTouching`, `launchAndTouch(pageIdToBump)`, and one `commit` exit in `DatabaseSyncManager` — so the write and the bump are one operation and there is no bump to forget, which is how this arose in the first place. *Which* page is the load-bearing part and is a required parameter, not a default: a cell hangs off its row's page, a property or view off the database's, a binding change off both. Two documented exceptions keep explicit bumps (`setChecked`, narrower lock gate; `addTag`, conditional). LWW itself is unchanged. Excluded on purpose: the lazy `ensureDefaultView` and `PageCanvas` shell writes, which run on open rather than on an edit and would let a device that merely looked at a page outrank one that had edited it. New `WritePathSyncTest` drives the real ViewModels across two stores rather than hand-building snapshot records — the only arrangement in which the defect is visible, and the reason `PageMergeTest` passed throughout. 256 unit tests. | §9.4 |
 | 2026-09-05 (merge losses) | **Three things the merge destroyed as it went past, all of which the write-path fix above turned from latent into routine.** (1) Only *incoming* losers were preserved as `.tendril-lost-`; when an arriving record won, the local copy was overwritten with nothing naming it on either device. The local export is now captured before Pass 1 and compared on content with the timestamp normalised, so a routine catch-up does not litter the folder. (2) `Block.imagePath` is deliberately absent from the snapshot, so rebuilding a winner's blocks wrote null over it and unlinked every picture on the receiving device; held by uid across the delete-and-reinsert instead. (3) A property absent from a winning schema was deleted, taking every row's cell with it by cascade — the single place breaking `SnapshotSyncOrchestrator`'s own "absence never implies deletion" rule, and encoded in a passing test, which is why it survived review. Absence now means "hasn't arrived"; a real deletion travels as a `PurgedKind.PROPERTY` tombstone, which the merge refuses to re-insert and which needs no supersede rule, a re-added column getting a fresh uid. Still open: nothing in the app surfaces a preserved lost version. 261 unit tests. | §5.5.1.1, §9.4 |
+| 2026-09-06 (scope reopened) | **Every "kept out of v1" decision in this document was reopened at once, by instruction.** The immediate consequence recorded here is §5.4's: the Notion-style formula language is reversed, and relation, rollup and formula land **together** as one feature — rollup aggregates across a relation and cannot exist without one, and a formula that cannot traverse a relation is a calculator over one row. The shape is a single `COMPUTED` type with two authoring paths onto one evaluator: the rollup pickers *write an expression*, and a `ƒ` reveals it, so choosing the easy path teaches the language rather than capping the person who chose it. Three properties justify building rather than copying — authoring-time type errors instead of Notion 2.0's silently empty cell, a real dependency graph with cycle rejection naming the path instead of an opaque 15-layer budget, and a computed cell that can explain its own derivation, which spreadsheets have had for thirty years and no database app in this category ships. §5.6's grouping exclusion falls out for free (grouping by a computed value is the same code path as grouping by a Select once the evaluator exists); §4, §5.6 and §10's bullets are struck in place rather than deleted, per §5.6's own 2026-08-08 precedent. *(**The strikes were not actually applied until 2026-09-07.** This row asserted a convention the edit had not carried out — no `~~` existed on any of the three — and it was caught by an audit checking this document against itself, not by a reader. A convention claimed but not applied is worse than one never claimed, because the next editor copies the claim.)* **A precondition outranks the feature**: `PagesSyncEngine`'s bare `PropertyType.valueOf` throws out of `mergePages` and aborts the *entire* sync pass — pages, entries, habits, purges — so an un-upgraded device receiving a new property type stops syncing altogether rather than degrading one column. The tolerant decode must reach every device first. **Recorded late, and that cost something**: an automated classifier reading §10 on 2026-09-06 found the formula language still filed under "Decided out of scope (unlikely to resurface)" and correctly recommended dropping it. In a document that is the source of truth, an unrecorded decision is not neutral — downstream readers actively decide against it. | §4, §5.4, §5.6, §10 |
+| 2026-09-06 (spec audit, **partial**) | **Both specs were checked claim by claim against the code, and this row is written mid-pass because stopping without one is the failure the pass exists to fix.** Method, recorded because the result depends on it: 399 checkable claims were read against the working tree, 107 were reported wrong, and every one was then handed to an adversarial reviewer whose default was to *refute* it — **34 were thrown out**, one region producing 24 findings of which only 7 survived. That rate is the point. An unrefuted audit applied to this document would have written 34 fresh errors into the thing every later reader and every later automated agent treats as true, which is strictly worse than the staleness it set out to remove. **Status: complete — all 68 android corrections applied, and the windows spec with them.** The pass ran out of budget partway and this row was written mid-flight saying 31 remained; they were finished afterwards, and the row is corrected rather than rewritten because a status line that only ever shows the happy ending is not a status line. **The most important finding is a live defect, not a documentation error, and no code changed in this pass**: §3.1.2 promises Pages are read-only "as a group… no per-page exception" and claims defense-in-depth through a guard on every mutating ViewModel function. `PageDetailViewModel` has 13 such guards and `PageDatabaseViewModel` 19; **`PagesViewModel` has none**, and `PagesScreen`'s Trash sheet reaches `PageDao.restore`/`deleteForever` straight from the composable, past every ViewModel, behind a Trash button that is ungated while the FAB three lines below it is correctly gated. So Trash → **Delete forever** permanently destroys pages while the app reports itself read-only. The sentence that should have caught it is the one this document already contains: it was true when written and nothing re-checked it. Also corrected in this pass: the §10 note added hours earlier today pointed this document at a location outside version control, which a reader of the repository cannot follow. | §3.1.2, §10, and the sections named per correction |
+| 2026-09-07 (Milestone 0 — written up after the fact) | **The largest change in the working tree had no row at all, in either spec; this is it.** Milestone 0 is hardening, not a feature, in two halves. **(1) §3.1.2's View-Only lock adopted on the surfaces that never had it** — the Pages hub (`PagesViewModel`: create, Restore, Delete forever), Canvas §3.7 (`CanvasViewModel`, gated in the `launchAndTouch` funnel every node and edge mutation already goes through, plus `updateTitle`, which sits outside that funnel and writes `pages` directly), the Road Map (`RoadMapViewModel.relate`, the screen's only write), and Settings' two portable-archive operations, Import and Restore backup — refused by `PortableArchive` itself as well as by disabled buttons, so the guard does not depend on the composable being the only way in, with the Notion import section swapped for a stand-in that says *why* rather than showing a dead button. Export is deliberately left ungated: it reads and changes nothing, and a lock that stopped someone taking a backup would work against the data it exists to protect. Each gate is a `locked()` read at call time rather than a captured value, so the eye toggle takes effect on a screen already open. The reason these four needed gating at all is that none of their writes is a local mistake: a create is exported to every peer on the next pass, Restore rewrites `pages.updatedAt` and so wins the next last-write-wins merge everywhere, a `page_relations` row is its own synced record merged off no page's timestamp, and Delete forever records a `PurgedKind.PAGE` tombstone that deletes the row on every device that adopts it (§5.5.1.1) — the one write in Tendril no `.tendril-lost-` copy can undo. **Two exemptions, deliberate and stated at their own call sites**, both pinned by `ViewOnlySurfacesGuardTest` so a later sweep that gates everything it can find breaks a test rather than a person's app: *idempotent repair-on-open* (`PageDatabaseViewModel.ensureDefaultView` and `CanvasViewModel`'s lazy `PageCanvas` shell) — gating those would leave a viewless database or a boardless canvas unopenable for exactly as long as View-Only stayed on, a lock hiding data instead of protecting it, and both sit outside `launchAndTouch` so they claim no authorship and move no `pages.updatedAt`; and *entry resolution* through `ResolveEntryUseCase` from the notification inline action (`EntryActionReceiver`), the Habits widget, `CalendarScreen` and `TasksHabitsScreen` — quick-capture surfaces outside the Pages hub where the eye toggle is not on screen and often the app is not even open, so a gate would swallow the tap silently at the moment someone was recording that something really happened, and an unlogged completion is itself lost data. Its one gated caller is `PageDatabaseViewModel.toggleDone`, which is inside Pages on a page whose lock the person can see. **(2) A quarantine policy for records this build cannot read, at every sync boundary.** Every enum persists as its `.name` String, so a newer build routinely writes values an older one must read; those values used to be parsed *in the middle of* a merge pass — `blockDao.deleteForPage(pageId)` and only then `BlockType.valueOf` — which destroyed this device's own blocks and *then* threw, aborting the pass for every other page in the batch. Now the whole record decodes before anything local is touched, an unreadable one is skipped entire with the local copy untouched, it is reported to the person through the channel sync problems already travel on (`SnapshotMergeResult` → `SyncCoordinator` → Settings' `lastError`), and — the clause that makes it quarantine rather than a plain skip — **it is suppressed from that same pass's export**, since the write half republishes every local record unconditionally and a mere skip would put this device's stale copy over the peer's newer file with no `.tendril-lost-` copy kept, manufacturing the exact loss the work exists to prevent. Restore-from-backup takes the opposite policy on purpose (§9.4.1): it clears the database first, so there is no local copy to fall back on and it refuses the whole archive up front via `undecodablePages` instead. **The suppression is now structural rather than remembered:** a private `FolderArrayFile` enum names the five folder-wide array files (`entries_active.json`, `entries_archived.json`, `habits.json`, `page_relations.json`, `purged_records.json`), `publishArrayFile` takes that enum rather than a filename and consults the held set itself so publishing without answering the suppression question is not something a caller can express, and two exhaustive `when`s with no `else` — one for where a file's local records come from, one for where its held records come from — make a sixth file a compile error in exactly two places rather than a silent omission. Held records travel as raw `JsonElement`s, not as decoded records, so republication is byte-faithful. **It took four rounds, and the shape of the sequence is the useful part.** Rounds 1–3 each turned up one more folder-wide file that had been forgotten: pages first, then the `entries_active`/`entries_archived`/`habits`/`purged_records` group, then `page_relations.json`. Round 4 named what made that third one hard to see and found it was general: **quarantine has to propagate along references between records.** No value in `page_relations.json` is unreadable at all — the file decodes perfectly, and the loss is second-order: an edge points at a page that was quarantined, so that page never lands locally, so `mergeRelations` drops the edge as having a missing endpoint, so it never appears in `exportRelations()`, and publishing that local view deletes the peer's link from the folder for everyone. The same shape, found the same round: a purge tombstone that this build reads perfectly well, naming a page file it cannot parse, deleted that file on the strength of half a comparison — `PurgeRegistry`'s supersede check lives inside `mergePages`, which a file that never decodes never reaches. Both are now held rather than dropped, and the tombstone still travels so a device that *can* read the page settles it properly. Counted rather than copied, at the time this row was written: 321 `@Test` methods across 29 classes under `Tendril android\app\src\test`, none carrying `@Ignore`. **What Milestone 0 did *not* close is recorded as an Open item in §9.4** — see the 2026-09-07 (deferred issue put on the record) row below. Note against convention: this row carries its own reasoning because Milestone 0 has no home-section write-up; §3.1.2 and §9.4 are still owed the prose, and that debt is the likeliest reason the change reached this log later than the code did. | §3.1.2, §3.7, §5.5.1.1, §9.4, §9.4.1 |
+| 2026-09-07 (Canvas written up; three stale statements retired) | **Canvas finally has a design record.** New **§3.7**, written from the tree rather than from memory: the page-kind-not-a-block-type decision and both arguments for it, the single-`graphicsLayer` transform that keeps cards and arrows aligned at any zoom, the node and edge model, the View-Only enforcement that landed the same day plus the one exemption it keeps (the lazy `PageCanvas` shell, ungated *and* unbumped — repair-on-open must not claim authorship), what travels in the snapshot and what deliberately does not, the desktop asymmetry (the surface is Android-only while the entities, DAOs and merge pass are in `shared\`, so desktop is a full participant in canvas sync while rendering a placeholder), and the two `docs/audit-2026-09-04.md` §1 defects that make arrows unreachable and are confirmed still open. This closes what §3.4's 2026-09-04 correction acknowledged and then explicitly declined to reconstruct in passing. **§4** gains the three Canvas entity rows, and its "seven entities have no row here" note is marked partly closed at four rather than edited down, since the size of the original omission is why the paragraph exists. **§1's "Five pages" is deliberately *not* changed to six** — it counts nav destinations (`WorkbenchDestination` has five) and Canvas is a page kind rendered inside the Pages destination; the fix is a note saying exactly that, because the ambiguity between "uncounted sixth tab" and "page kind that was never counted" is what let the absence go unnoticed. **§10**'s desktop-companion deferral struck: its own graduation condition was met by Milestone 1 on 2026-08-30 and three milestones have shipped since, leaving a superseded deferral in the one list a reader consults for what is not built. **§11**'s next-step bullet named a reopened backlog but not its first item — Milestone 0 has landed (View-Only gates on the four surfaces that had never adopted them, plus enum quarantine at every sync boundary) and the next step is §9.10's Room destructive-migration switch, first on a dependency argument: nearly every reopened item adds to the schema, so each one built before the switch is another migration to hand-write afterwards. Its test count is **recounted, not copied** — 321 `@Test` across 29 classes, static, none ignored — with the disagreement against the 313 handed over explained rather than smoothed over. Separately, `docs/audit-2026-09-04.md` row 5.1 (nested blocks — that audit's own top-ranked gap, still listed as open) is marked closed against `988f8c7` and `4e63f08`. | §1, §3.7, §4, §10, §11; `docs/audit-2026-09-04.md` |
+| 2026-09-07 (deferred issue put on the record) | **New Open item in §9.4: a record this build reads *well enough* is republished with the fields it did not understand stripped out.** Verified against the tree rather than assumed: `SnapshotSyncOrchestrator`'s `Json` is configured `ignoreUnknownKeys = true`, and all 24 `@Serializable` declarations in `SnapshotRecords.kt` and `PageSnapshotRecords.kt` are plain data classes with no catch-all — no `JsonObject`, no leftover-property map, in either file. A record from a newer build carrying one additional field therefore decodes with it silently discarded, is adopted into Room, and is re-encoded on the next write pass **from Room rows** (`exportPages()`, and the `SnapshotMappers` path off `entryDao.getAll()`) rather than from the bytes that arrived — so it goes back to the folder without the field, and every other device adopts that. The asymmetry is why it earns a written record: a record this build *cannot* read is now the safe case, because quarantine holds it as a raw `JsonElement` and republishes it byte-faithfully, so it is precisely the records understood *well enough to adopt* that lose data — the failure gets quieter as two builds grow closer, and no unreadable value exists anywhere for a guard to trip on. **Deferred, not fixed**: the fix is a format change (every record carrying its raw `JsonObject` alongside its typed fields, merged on re-encode), not a guard, and it rewrites `SnapshotRecords.kt` and `SnapshotMappers.kt` end to end — the same two files the backlog's SYNC lane (S2/S3/S4) already rewrites and marks strictly serial for that reason, so doing it separately would rewrite both twice. Stated in the section as plainly as it is here: it is not fixed today, and it bites the first time two builds of different versions share a folder. | §9.4 |
 
 ---
 
@@ -87,7 +92,14 @@ be able to use it to track groceries and a company roadmap without the app feeli
 different products.
 
 **Five pages:** Pages, Calendar, Tasks & Habits, Road Map, Settings — see §3 for the full functional
-spec of each.
+spec of each. *(**Clarified 2026-09-07 — the count is five and stays five.** It counts the
+Workbench's nav destinations (§2.1), of which `WorkbenchDestination` has exactly these five.
+**Canvas** is not a sixth: it is a third page *kind* — `PageKind.CANVAS`, alongside `PAGE` and
+`DATABASE` — created from the Pages hub's New sheet and rendered full-screen inside the Pages
+destination, the same way a Database page is. It is named here because §3.4 recorded its absence
+from this line as one of the gaps in its own record, and because a reader who met `PageKind.CANVAS`
+in the code and this sentence in the spec had no way to tell an uncounted sixth tab from a page kind
+that was never meant to be counted. Its functional record is §3.7; its entities are in §4.)*
 
 **Target device / build environment** (Decided):
 1. minSdk 30 (Android 11+), targetSdk 36+ (Android 16+) — see §9.2.1 for behavior changes this
@@ -122,9 +134,14 @@ navigation-paradigm question later.
   icon) rather than the original stacked/vertical card — roughly half the height of the first
   version, so more pages/databases are visible without scrolling, while keeping icon and font size
   unchanged.
-- **Page-level settings icon**: always the horizontal three-dot (⋯) icon on Calendar and Tasks &
-  Habits' own settings entry points — never the gear icon, which is reserved exclusively for the
-  main Settings tab, so the two are never visually confused.
+- **Page-level settings icon**: always the horizontal three-dot (⋯) icon on ~~Calendar and Tasks &
+  Habits' own settings entry points~~ Calendar's own settings entry point — never the gear icon,
+  which is reserved exclusively for the main Settings tab, so the two are never visually confused.
+  *(**Corrected 2026-09-06:** Calendar honours the rule and cites this bullet by number in its own
+  code. Tasks & Habits has no per-page settings entry point at all — its single top-bar action is a
+  Delete glyph opening the Entry/Habit Trash. The rule stays the rule for whenever one is added;
+  stating it as current fact sends a reader looking for a control that is not there. §3.3's
+  sync-folder-picker bullet, corrected the same day, is the other half of the same missing screen.)*
 - **Road Map** (renamed from "Mind Map" — see §3.4 for why): occupies the full screen as an
   interactive canvas; "All Pages" is a collapsible bottom sheet/drawer over the canvas, not a fixed
   side panel.
@@ -167,6 +184,21 @@ theming system).
 
 `surface` is white (light) / the theme's near-black-tinted dark tone (dark) in every case — see
 prototype source for the exact `surface`/`surface-3` steps not tabulated above.
+
+**Two colours in the app sit outside this table entirely (recorded 2026-09-06).** Inline links and
+`@` page mentions in the block editor both render one hardcoded blue that is not a palette token and
+appears in none of the eight rows above. It is identical in Ink and in Mauve, in light mode and in
+dark, and its contrast against `bg` was never part of the AA verification this section claims for
+"every text/background pairing" — so that claim is true of every pairing the palette defines, and
+silently not true of the two most-tapped pieces of text inside a page. Either they become tokens, or
+the verification sentence has to say what it excludes.
+
+**And the mode setting has three states, not two (recorded 2026-09-06).** Before the picker is ever
+touched the app follows the system, which is a third state that neither "4 colour themes × 2 modes =
+8 palettes" nor the flat picker describes. Choosing a mode sets an explicit flag that nothing ever
+clears, so "follow the system" becomes unreachable the moment any mode is chosen — a one-way door in
+a document whose running rule is that nothing is a one-way, permanent choice (§5.3). The widgets
+re-implement the same tri-state separately, which is a second place for it to drift.
 
 ### 2.4 Accessibility scope (Decided 2026-08-26)
 
@@ -217,8 +249,14 @@ with Workbench's existing card-forward aesthetic (§2.2) (weights 0.30/0.30/0.25
 **Decided:** one reusable `EmptyState(icon, message, ctaLabel, onCta)` composable, used wherever a
 list-shaped screen in §3 can be empty — Pages ("No pages yet — New page"), Tasks ("Nothing due — Add
 a task"), Habits ("No habits yet — Add a habit"), Road Map ("Nothing to map yet — mention another
-page to get started"), Trash ("Trash is empty"). Calendar needs no bespoke empty state, since Day
-view always renders a date grid regardless of content. No onboarding wizard and no seeded sample
+page to get started"), Trash ("Trash is empty"). ~~Calendar needs no bespoke empty state, since Day
+view always renders a date grid regardless of content.~~ *(**Corrected 2026-09-06:** the premise was
+wrong and the conclusion followed it out. Day view is a header, a quick-add field and a list of
+occurrences — there is no grid in it at all; the only grid on that screen is Month's. So an empty day
+is genuinely blank, and Day view does render an empty state, with copy this section never fixed
+("Nothing scheduled") on a chevron icon borrowed from the next-day button. Calendar belongs in the
+list above, and its copy and icon should be settled here like every other tab's — which is exactly
+what this section's own Acceptance clause requires.)* No onboarding wizard and no seeded sample
 content: this is a single-developer, single-user build — a walkthrough only its own author would
 ever see is pure sunk cost, and seed content is one more thing to delete rather than a genuine aid.
 
@@ -238,7 +276,8 @@ visually noisy.
 
 - Import from Notion (Markdown & CSV export format — see §7 for the full fidelity spec)
 - Full import/export of pages and projects
-- Page cards show icon (page vs. database), title, and metadata; horizontal layout per §2.2
+- Page cards show icon (page vs. database vs. Canvas — *three kinds since Canvas shipped (§3.4);
+  recorded here 2026-09-06*), title, and metadata; horizontal layout per §2.2
 
 **Databases and to-do behaviour** — see §5 for the full design (row-as-page, Sync-to-Tasks
 mechanism, property bindings).
@@ -265,9 +304,26 @@ canvases), which would be a multi-month subsystem on its own and isn't needed fo
 - Divider
 - Image (local file, copied into app-private storage on insert — kept out of the SAF-synced snapshot
   folder, §9.4, to keep the sync payload small; worth confirming this split is acceptable)
+  *(**Status corrected 2026-09-06 — only half of this exists.** `Block.imagePath` has exactly one
+  writer, the Notion importer, which does copy into app-private storage as specified, and the
+  snapshot exclusion is real and covered by a test. The editor can neither insert nor draw one: the
+  slash menu offers "Image", and the block that results renders as an empty editable text line,
+  because no composable anywhere reads `imagePath`. So an imported picture is invisible in the app
+  that stores it, and §5.6's Gallery cover — which picks exactly the right block — has nothing to
+  paint. The open question above stays open, and is **not** answered by the merge work of 2026-09-05:
+  holding `imagePath` by uid across a rebuild protects *this* device's path precisely because the
+  snapshot never carries one, so a picture still does not reach a second device at all.)*
 - Toggle (actually collapses, unlike §7.2's degraded-on-import case, which is permanently open)
 - Callout (icon + colored background — natively rendered; an *imported* callout starts as a raw-HTML
-  fallback block, per §7.2, until manually converted)
+  fallback block, per §7.2, until manually converted) *(**Two corrections, both 2026-09-06.** The
+  icon renders; the coloured background does not. `Block.calloutColor` exists in the schema and
+  travels in the snapshot, but nothing writes it and no composable reads it, so a callout is visually
+  a paragraph with an emoji in front of it — a rendering gap, not a data-model decision to reopen,
+  which is why the intended design is left standing here rather than struck. And an imported callout
+  no longer starts as raw HTML: the parser matches Notion's `<aside>` export structurally and emits a
+  native callout with its leading emoji lifted into `calloutIcon`, which is §7.3.3's "nice to have"
+  having actually been built — see §7.4's correction of the same date. The raw-HTML fallback still
+  exists and still catches every *other* embedded HTML line.)*
 - Page mention (`@Page Title`) — inline reference to another Page; the primary source of Road Map's
   edges (§3.4)
 
@@ -277,14 +333,33 @@ list/toggle nesting), content (typed per block type), created/updated`. Inline f
 over a block's plain-text content rather than embedded markup — keeps FTS indexing (below) simple,
 since the indexed text is just the plain content with spans stripped.
 
-**Interaction model:** a slash-command menu (`/`) to insert any block type at the cursor; a drag
-handle on hover/long-press to reorder; a floating selection toolbar for inline formatting on text
-selection.
+**Interaction model:** a slash-command menu (`/`) to insert any block type at the cursor; ~~a drag
+handle on hover/long-press to reorder~~; a ~~floating~~ selection toolbar for inline formatting on
+text selection. *(**Corrected 2026-09-06 — two divergences in one sentence.** Reordering shipped as a
+long-press action sheet with explicit **Move up** / **Move down**, not a drag handle. That is
+defensible on a phone, where a drag handle inside a scrolling column of editable text fields fights
+the text-selection gesture for the same long-press, and it is the same call the Board view made for
+the same reason (§5.6) — but it is a different interaction from the one specified here, and this
+section should say which one a reader will actually find. The formatting toolbar is not floating
+either: it renders inline, beneath the block being edited and inside that block's own column, rather
+than as a popup over the page.)*
 
 **Full-text search (confirmed necessary):** a Room FTS4/5 virtual table indexing each page's
 concatenated block plain-text, rebuilt on block write. Page-level granularity for v1, not per-block
-— a search hit opens the page and scrolls/highlights the first match; per-block result granularity
-is a reasonable later refinement (§10) if page-level feels too coarse.
+— a search hit opens the page ~~and scrolls/highlights the first match~~; per-block result
+granularity is a reasonable later refinement (§10) if page-level feels too coarse. *(**Corrected
+2026-09-06:** it opens the page at the top. The highlight half of that promise went somewhere real —
+the search overlay highlights the match inside its own result snippet — but nothing scrolls, and
+nothing can yet: opening a page carries a page id and has no slot for a block id to scroll to.
+§3.1.7 restates the same sentence and is corrected with it.)*
+
+*(**Also recorded 2026-09-06, because a reader would predict the opposite.** "Each page's
+concatenated block plain-text" is literally all that is indexed — **the title is not a searchable
+column.** A page called "Mortgage" whose body never says the word cannot be found by typing it, and a
+page with no blocks at all has no index row and cannot be found by any query; the title is joined
+back in only to draw the result row. Results are also capped at fifty. None of that was decided by
+anyone — it is simply what indexing block text alone produces — and it is the first thing to look at
+if search ever feels broken.)*
 
 **Decided (2026-07-13, via Pareto trade-off analysis)** — three objectives that genuinely don't
 collapse into one score: build effort (lower better), feature completeness for daily personal use
@@ -369,9 +444,37 @@ a plain `ViewLockState` held on `AppContainer` (session-scoped, matching the ori
 persisting" call) rather than duplicating it per-ViewModel, threaded through the UI via a
 `LocalViewOnly` CompositionLocal provided once in `WorkbenchScaffold` rather than as an explicit
 parameter on every one of the dozens of leaf composables that needed to react to it. Enforcement is
-defense-in-depth: every mutating ViewModel function also early-returns through the same flag (a
+defense-in-depth: ~~every mutating ViewModel function also early-returns through the same flag (a
 `locked()`/`contentLocked()` guard), not just the UI disabling the affordance, so a missed UI gate
-can't silently let an edit through. Checkbox-only mode is built the same way — a second
+can't silently let an edit through.~~
+
+*(**Corrected 2026-09-06 — this is true of two ViewModels out of three, and the third is the one that
+deletes. View-Only does not actually prevent editing.** `PageDetailViewModel` and
+`PageDatabaseViewModel` carry the guard at eleven and eighteen call sites respectively *(**both
+figures corrected 2026-09-07** — the originals counted each `private fun` definition as though it
+were a call, and "throughout" was wrong besides: `PageDatabaseViewModel.ensureDefaultView` carries
+no gate. That one is deliberate — it is idempotent repair-on-open — but a deliberate exemption is
+not "throughout," and this sentence is what an implementer copies to learn the pattern)*.
+`PagesViewModel` carries none at all — not on `deleteForever`, not on `createBlankPage`,
+`createCanvas`, `createDatabase`, `createFromTemplate` or `openJournal` — and takes `ViewLockState`
+only in order to publish the toggle. The UI gate is missed in the same place: the Pages hub's `···`
+button, which opens Trash, and its Journal button both sit outside the `if (!viewOnly)` that
+correctly hides the FAB beside them. Inside the Trash sheet, **Restore** writes straight to `PageDao`
+from the composable, bypassing every ViewModel, and **Delete forever** goes through the unguarded
+`PagesViewModel.deleteForever`. Said plainly, because that is what this document is for: with
+View-Only on, a person can open Trash and permanently destroy pages, and can still create today's
+journal page. The app says it is read-only and it is not.*
+
+*This bullet is struck rather than narrowed to whatever happens to be true, because it is the rule
+that should have caught this. "Read-only **as a group**, no per-page exception" (above) is only safe
+to state if a missed UI gate cannot let an edit through, and the whole point of writing the
+defense-in-depth rule down was that the UI gates would eventually be missed — they were, on the
+button next to the one that was gated correctly. **Known open defect; nothing was fixed in this
+pass** and no code changed on 2026-09-06. The fix is the one this bullet already describes: the same
+guard on `PagesViewModel`'s mutating functions, and the Trash sheet reaching the DAO through a
+ViewModel like everything else.)*
+
+Checkbox-only mode is built the same way — a second
 `CheckboxOnlyState` (one active page at a time, since the window flags it drives are window-level)
 combined with `LocalViewOnly` into a `LocalContentLocked` CompositionLocal that every control except
 a to-do block's own checkbox respects. `WorkbenchScaffold` owns the "architecture note" concern
@@ -384,11 +487,25 @@ mechanism) rather than a second bespoke prompt.
 ### 3.1.3 Page templates (Decided 2026-08-08)
 
 Any Page or Database can be saved as a template from its "···" menu — "Save as template." A template
-captures the page's block structure (for a Notion-like page) or its schema plus default property
-values (for a Database), not a specific content instance. Creating a new page offers "New from
-template" alongside a blank page, listing the person's own saved templates plus a small built-in set
-(blank page, blank database, to-do database — folding §5.3's existing shortcut in as the first
-built-in template rather than a separate mechanism). Templates live as ordinary Pages internally,
+captures the page's block structure (for a Notion-like page) or its schema ~~plus default property
+values~~ (for a Database), not a specific content instance. *(**Corrected 2026-09-06:** "default
+property values" names a feature this data model does not have. A `Property` carries a name, a type,
+a config and an order and no default; a value exists only as a `PropertyValue` bound to one specific
+row, and `TemplateManager` clones properties and deliberately never clones row data — which is the
+right behaviour for "structure, not instance", and is what its own doc comment says while
+conspicuously dropping this phrase. The phrase was aspirational and reads as a promise; a
+per-property default would be a new column and a new decision, not something a template does.)*
+Creating a new page offers "New from template" alongside four fixed starting points — blank page,
+blank database, to-do database, and Canvas (§3.4's page kind, added long after this section) — and
+then lists the person's own saved templates. *(**Corrected 2026-09-06:** this read "a small built-in
+set (blank page, blank database, to-do database — ~~folding §5.3's existing shortcut in as the first
+built-in template rather than a separate mechanism~~)". It was not folded in. "To-do database" still
+runs `createDatabase(asToDoDatabase = true)`, which wires the Done property and the §5.2 binding
+directly and never touches `TemplateManager`, whose own doc comment says as much. That is arguably
+the better arrangement — a to-do database needs a *binding*, which is a relationship over live rows
+and precisely what a template deliberately does not carry — so the mechanism is kept and the claim
+corrected, not the other way round. Canvas as a fourth starting point was never recorded here at
+all.)* Templates live as ordinary Pages internally,
 flagged `is_template = true`, excluded from Road Map's edges (§3.4) and from the Pages hub's default
 list — surfaced only via "New from template" — so they don't clutter the page tree.
 
@@ -412,7 +529,10 @@ page; there's no "missed" state to track, deliberately unlike Habits' streak mod
 
 ### 3.1.5 Backlinks panel (Decided 2026-08-08)
 
-A collapsed-by-default "Linked mentions" section at the bottom of every page, listing every other
+A collapsed-by-default "Linked mentions" section at the bottom of every page *that has any*
+*(**clarified 2026-09-06:** the panel renders nothing at all when there are no backlinks, rather than
+an empty collapsed header — a deliberate call and the right one, but "every page" is how this reads
+and is not what ships)*, listing every other
 Page whose body contains an `@Page Title` mention of this one (§3.1.1) — the same edge data Road Map
 (§3.4) already computes, consumed here as a second, lighter-weight view rather than a second query
 or a new data source. Each entry shows the linking page's title and the block containing the
@@ -471,8 +591,22 @@ composable ("No pages match '…'").
 
 - Day, Week, Month views; **week starts Monday**; defaults to **Day** view on open. All three draw
   *occurrences*, not stored rows (§4.1.1) — a recurring EVENT appears on every occurrence in view
-  and a multi-day one on every day it covers, each labelled "day N of M"
-- Create and edit events and tasks directly
+  and a multi-day one on every day it covers. The "day N of M" label is the **Day view's alone**
+  *(corrected 2026-09-06)*: Week lists bare titles and Month draws a presence dot, so neither has
+  anywhere to put it. That is the right trade at those densities, but it means the disambiguation
+  §4.1 asked for — three consecutive identical titles with nothing to tell them apart — is delivered
+  in one view out of three.
+- ~~Create and edit events and tasks directly~~ — **corrected 2026-09-06: create events, through
+  Quick Add, and nothing else.** Neither half held on this screen. Quick Add is Calendar's only write
+  path and it hard-codes `kind = EVENT` with a title and a date, so a Task cannot be created here at
+  all — that is Tasks & Habits' own add dialog (§3.3). And nothing on this screen edits: a Day row
+  offers a Done checkbox and a reminders bell and no tap target on the row itself, while Week and
+  Month rows only navigate. The only surfaces in the app that edit a stored Entry are §5.2's bound
+  Database cells, where a row's deadline and its recurrence can be changed from the database table or
+  from the row's own page; a title, a time or a span has no edit path anywhere. §4.1's "every write
+  path that can move an Entry's `start_date` (create, **manual edit**, or the resolve-and-advance
+  step)" is therefore satisfied by those cells rather than aspirational — the gap is that Calendar,
+  the screen a person would actually look on, is not one of them.
 - **System Calendar Provider registration** (Decided wording, 2026-07-13 — replaces the earlier
   "default calendar app" phrasing, which isn't a real Android concept: there's no `RoleManager` role
   for calendar the way there is for browser/SMS/dialer). Tendril registers a Calendar Provider
@@ -504,12 +638,22 @@ composable ("No pages match '…'").
   (production vs. testing mode, 7-day token expiry trap), and §9.5.1 for the sync engine's own scope
   (EVENT-only, `primary` calendar, incremental via `updatedMin`)
 - **Quick Add**: fast, minimal single-line capture. Deliberately does **not** include the Reminders
-  list (see §5.4) — that lives in the fuller edit sheet, keeping Quick Add fast
-- **Show Habits** button: small toggle surfacing habit entries (with time+duration) inline in the
-  calendar view
+  list (see §5.4) — that lives behind its own bell icon on a row, keeping Quick Add fast
+  *(**corrected 2026-09-06**: "the fuller edit sheet" named a surface that was never built — see the
+  Reminders bullet below)*
+- **Show Habits** button — **not built (recorded 2026-09-06)**. Still the intended design: a small
+  toggle surfacing habit entries (with time+duration) inline in the calendar view. `CalendarViewModel`
+  does not take a `HabitDao` at all, so habit rows never reach this screen — a genuinely unbuilt item
+  rather than a rendering detail. Habits with a time are visible today only in Tasks & Habits' Merged
+  view (§3.3), which is the same idea on the other page; whichever of the two is built second should
+  share one composable rather than growing a second habit-row renderer.
 - **Reminders** (Decided, §5.4): repeatable list per event/task, presets (1h / 2h / 4h / 8h / 1 day
-  / 2 days / 1 week) or custom (number + unit), no cap on how many stack, lives in the full edit
-  sheet only
+  / 2 days / 1 week) or custom (number + unit), no cap on how many stack, ~~lives in the full edit
+  sheet only~~ *(**corrected 2026-09-06:** reached from a bell icon on each row of Calendar's Day view
+  and of the Tasks list, opening a sheet of its own. The "full edit sheet" it was supposed to live in
+  was never built at all, so the constraint this clause was really expressing — **not** in Quick Add,
+  which stays single-line — is the part that holds, and is what it should have said. Week and Month
+  rows carry no bell; they navigate to Day. The same phrase is corrected in §5.4 the same day.)*
 - Recurrence (Decided, §6.2): `None / Daily / Weekly / Monthly / Custom (interval + unit)`, anchored
   to the **original fixed schedule** — a missed occurrence does not shift subsequent ones
 
@@ -528,8 +672,16 @@ two different concerns.
 
 **Habits** (adjacent but distinct — daily/periodic personal practices, not work):
 - Optional time + duration (not required)
-- Habit sync folder picker lives in **Tasks & Habits' own settings** (not main Settings) — written
-  to via an SAF folder grant, read by the external Syncthing-fork app (§9.3, §9.4)
+- ~~Habit sync folder picker lives in **Tasks & Habits' own settings** (not main Settings)~~ — written
+  to via an SAF folder grant, read by the external Syncthing-fork app (§9.3, §9.4). *(**Corrected
+  2026-09-06:** the premise this rested on — habits sync through a folder of their own, so the picker
+  belongs on the habits page — stopped being true when §9.4 put entries, habits and pages into one
+  snapshot folder together. There is exactly one SAF folder grant, it lives in main Settings (§3.5),
+  and it is the sync folder for everything; Tasks & Habits has no settings surface of any kind.
+  Recorded rather than quietly deleted, because §3.5's "page-specific settings live on the page" rule
+  cites this bullet as one of its two precedents and only Calendar's Google connect control actually
+  is one — and because §2.2's icon rule, corrected the same day, presupposes the same missing
+  screen.)*
 - Streak-based; missing an instance does **not** create backlog (§6.1 — this is the defining test
   that separates a Habit from a recurring Task)
 - **Decided (2026-07-13)**: Habits stay a simple, structurally separate top-level entity — not the
@@ -542,9 +694,19 @@ two different concerns.
 
 **Merged**:
 - A calendar-style view holding both Tasks and Habits together
-- Habits with time + duration get a **delicate highlight** to distinguish them from Tasks in the
-  same view
-- Undated tasks collapse into the same top toggle pattern as the Tasks view
+- Habits **with a time** get a **delicate highlight** to distinguish them from Tasks in the
+  same view; a habit with no time does not appear in Merged at all. *(**Corrected 2026-09-06:** "time
+  + duration" reads as a joint condition and is not one — duration is optional (above), and gating on
+  it would drop most habits, so the code gates on the time alone and has said so in its own comment
+  for some time. The highlighted row shows a title and a time; duration is shown on the Habits tab
+  and not here, which is a gap rather than a decision, since duration is exactly what tells a
+  five-minute habit from an hour-long one in a day-shaped list.)*
+- Undated tasks — **not carried into Merged at all (recorded 2026-09-06)**. This read "collapse into
+  the same top toggle pattern as the Tasks view"; the Merged list filters to dated rows only and has
+  no toggle and no parameter for one, so an undated task is invisible here rather than one tap away.
+  Worth fixing rather than re-specifying: the toggle is the pattern §2.2 settled on precisely so that
+  an undated item is never silently dropped, and Merged is the view most likely to be read as
+  "everything today".
 
 ### 3.4 Road Map
 
@@ -570,7 +732,14 @@ the only written record of it. **Writing that reasoning up properly is an open i
 this correction can reconstruct after the fact. The Claude-API-generated variant of the idea is
 still not built and stays deferred (§10).
 
-- Interactive map of relationships **between existing Pages**, redirecting to each on tap
+- Interactive map of relationships **between existing Pages**; a first tap selects a node and
+  highlights its neighbourhood, dimming everything else, and a second tap on the already-selected
+  node opens that page. *(**Corrected 2026-09-06:** written as "redirecting to each on tap", which is
+  what the design record has said since 2026-07-13 and is not what shipped. Two-stage is the better
+  behaviour on a dense force-directed graph — a single-tap-to-navigate map cannot be explored without
+  leaving it — and it is worth recording as a decision rather than leaving as a discrepancy, because
+  the phrase "redirecting to each on tap" is reused two bullets below as the argument against
+  inferred, similarity-scored edges.)*
 - Full-screen canvas (§2.2); "All Pages" as a collapsible bottom drawer, not a side panel
 - **Decided (2026-07-13)**: edges are explicit, never inferred from content similarity (a fuzzy,
   scored-match feature that doesn't match "redirecting to each on tap"). Two sources feed the same
@@ -595,8 +764,15 @@ still not built and stays deferred (§10).
   2026-08-29**: Google Calendar sync (§3.2) doesn't actually need this treatment — see §9.5, it
   never persists a refresh token or any other secret; the only local state is a plain, non-secret
   "connected" flag.
-- **Sync folder permission** (SAF) — grants the folder used for Habit sync and full export/import
-  (§9.3, §9.4); replaces the earlier Shizuku-toggle plan
+- **Sync folder permission** (SAF) — grants the one folder the continuous snapshot sync reads and
+  writes: entries, habits *and* pages (§9.3, §9.4); replaces the earlier Shizuku-toggle plan.
+  *(**Corrected 2026-09-06:** this read "the folder used for Habit sync and full export/import",
+  which was the shape of the design before §9.4 put every record type in one folder, and it also
+  collapsed two deliberately separate mechanisms. Export, Import and Restore do **not** use this
+  grant — each opens its own document through the file picker, because a `.tendril` package is a
+  one-off file that should be placeable anywhere (§9.4.1), while the sync folder is a standing grant
+  to a directory Syncthing replicates. The shipped Settings screen already draws the same
+  distinction in its own subtitle.)*
 - **Full data import/export** across every page (all pages/projects/databases, tasks, habits,
   events) — **Restore from backup** (full replace) and full-app **Export**/**Import** (additive)
   live here as distinct actions; see §9.4.1 for the format and the merge-vs-replace design
@@ -642,11 +818,163 @@ medical-appointment (§5.1) and financial (§5.2.2) data on a personal, unrooted
     lock, since a Glance `ActionCallback` is dispatched straight into the app process and the
     Activity's own lock branch cannot see it.
   - With App Lock off — the default — §8.1.1's one-tap check-in is unchanged.
-- **Interaction with checkbox-only mode (§3.1.2)**: independent, no precedence rule needed — App
-  Lock gates entering the app at all; checkbox-only governs one already-open page's behavior over
-  the lockscreen. A person can reasonably want the app locked normally but still let one
-  already-open checklist page survive the lockscreen, since the two gate different moments (before
-  vs. after entry).
+  - **The overdue notification's own actions are not gated (recorded 2026-09-06 — the same hole, one
+    surface over).** The Done/Skip actions on §9.7's overdue notification resolve the Entry through
+    `ResolveEntryUseCase` with no App Lock check anywhere in the notification code. One tap from the
+    keyguard logs a completion, advances a recurring TASK's `start_date`, re-arms its alarms and
+    rewrites the Calendar Provider mirror — exactly the class of write the bullet above exists to
+    stop, reached by a route the bullet above never considered. The Habits widget was reconciled with
+    App Lock on 2026-09-04 and its code comment states the reasoning; the notification path was
+    never reconciled with anything.
+- **Interaction with checkbox-only mode (§3.1.2): App Lock wins (corrected 2026-09-06).**
+  ~~Independent, no precedence rule needed — App Lock gates entering the app at all; checkbox-only
+  governs one already-open page's behavior over the lockscreen. A person can reasonably want the app
+  locked normally but still let one already-open checklist page survive the lockscreen, since the two
+  gate different moments (before vs. after entry).~~ Withdrawn, and kept struck because the
+  "different moments" reasoning is the only record of why this was thought to need no rule. What it
+  misses is that checkbox-only mode does not merely *survive* the lockscreen — it draws the app over
+  the keyguard with `setShowWhenLocked`/`setTurnScreenOn`, which is precisely the authentication step
+  App Lock exists to impose. Honouring both is impossible in either enabling order, and honouring
+  checkbox-only silently defeats App Lock. So checkbox-only refuses to activate while App Lock is on,
+  and the caller explains the refusal. That was decided and built on 2026-09-05 and recorded in
+  §3.1.2 and in the Revision Log; this section endorsed the one arrangement the code refuses for a
+  further day, because nobody came back to it.
+- **Interaction with the View-Only lock (§3.1.2)**: no rule needed, and stated here 2026-09-06 only
+  because the other two pairs are. View-Only is a read-only rule *inside* an already-unlocked app —
+  imperfectly enforced, see §3.1.2's correction of the same date — and asks nothing of the keyguard,
+  so it neither overrides App Lock nor is overridden by it. All three pairs among the three locks are
+  now written down, which they were not before: one was ruled, one was denied and wrong, and this one
+  was simply absent.
+
+### 3.7 Canvas (built long before this record — **written up 2026-09-07**)
+
+**This section exists because the feature did not have one.** §3.4's 2026-09-04 correction found a
+fully shipped Canvas — a page kind, three Room tables, a screen and ViewModel, snapshot sync, an
+entry in the New sheet — with no Revision Log row, no §4 entity, and no mention in §1. It
+acknowledged the feature and then said, correctly, that reconstructing the reasoning was not
+something a correction could do in passing. This is that write-up. It describes what is in the tree
+on 2026-09-07 and says so where the tree and the intent differ; where the reasoning survives only in
+`PageCanvas.kt`'s and `CanvasViewModel.kt`'s doc comments, it is repeated here rather than pointed
+at, because a doc comment is deleted by the refactor that invalidates it and this file is not.
+
+**Numbered §3.7 and not §3.1.8, and §1 still says five pages.** Canvas is not a sixth nav
+destination, so it does not belong in §1's count; but it is also not a Pages sub-feature in the way
+§3.1.1–§3.1.7 are, because it replaces the block editor rather than adding to it — a Canvas page
+never renders a `Block`. §3.6 (App Lock) is the precedent for a §3.x that is not a nav tab. The
+other candidate placement was a top-level section of its own, on the §5 Database precedent — the
+other page kind that is "a Page plus a companion table" — and that was declined only because §5 is
+that size for the to-do sync mechanism hanging off it, which Canvas has no equivalent of.
+
+**What it is.** A freeform board, modelled on Obsidian Canvas: text cards and page-embed cards at
+arbitrary positions, joined by user-drawn arrows that are optionally labelled and optionally
+directional. It is the surface §3.4 renamed *away* from — Road Map is the generated graph of
+relationships between existing pages, Canvas is the one you draw yourself — and the two must stay
+distinct in naming and in code for that reason.
+
+**Decided: a page kind, not a block type.** `PageKind.CANVAS` sits beside `PAGE` and `DATABASE`, and
+a canvas is never nested inside another page's body. Two arguments, one external and one internal.
+Obsidian's own model is a file, never embedded content in a note. And this app already had the shape:
+a Database is a Page with a 1:1 companion row plus child rows (§5.1), so Canvas reuses a structure
+the merge, the router and the Pages list already understood — `WorkbenchScaffold` branches on
+`page.kind` alone to choose the screen, and Canvas cost that branch one line. The alternative — a
+canvas block inside a page — would have put a pannable, zoomable, gesture-hungry surface inside a
+vertically scrolling block list, which is a gesture conflict with no good resolution, and would have
+made §3.1.1's "nestable one level" question apply to a two-dimensional thing.
+
+**Reaching one.** Pages → New → "Canvas" (§3.1.3's creation sheet, which Canvas joined as a fourth
+starting point). A canvas page shows in the Pages list under its own icon and the label "Canvas" —
+the third of §3.1's three page-card kinds. Opening it routes on `kind` to `CanvasScreen`.
+
+**The board.** Node positions and sizes are stored in content-space float units; `scale` and `pan`
+transform that space onto the screen, applied once via a single `graphicsLayer` on one content layer
+so cards and arrows cannot drift out of alignment at any zoom — the failure mode of transforming
+each separately. Zoom is clamped 0.3×–2.5×; a new card is dropped by inverting the screen→content
+transform, so it lands where the view is currently looking rather than at a fixed origin that the
+person may have panned far away from. Pinch/pan is one gesture detector on the outer box; card
+drags, the link drag, and the arrow hit-test are separate detectors on the layers beneath it.
+
+**Nodes.** `TEXT` cards hold plain text with no formatting model of their own — deliberately, on
+§3.1.1's own "obvious 80% subset" reasoning: a card is a sticky note, not a second block editor
+nested inside the first. `PAGE_EMBED` cards show a target page's title and icon, and tapping one
+opens that page. Tapping a text card opens an editor sheet instead, because a card renders at most a
+few lines on the board.
+
+**Edges.** Drag from a card onto another to connect them; a drag that ends on no card creates
+nothing, and a self-connection is refused where the edge is made rather than by the drag. Direction
+cycles `ONE_WAY → TWO_WAY → NONE`, `NONE` drawing a plain line for the case where two cards are
+related without the relationship having a direction. Labels are optional and blank is stored as
+null, so an emptied label is absent rather than an empty string the merge would have to treat as
+content.
+
+**View-Only (§3.1.2) — shipped 2026-09-07, and the reason it needed shipping.** Canvas had neither
+half of the lock: no gate in the ViewModel and no mention of `viewOnly` in the screen, so the board
+both offered edits and performed them while the person had been told the app was read-only. That is
+a §9.4 problem and not only a broken promise, because every canvas write travels — a node rides
+inside its page's snapshot and lands on every other device, where nothing distinguishes a write
+nobody chose from one they did. What shipped:
+- One gate, in `launchAndTouch`. Every node and edge mutation already funnelled through that helper
+  (see the sync note below), so the gate is a property of *making a canvas write* rather than a line
+  each future mutation has to remember to add.
+- `updateTitle` carries its own gate, because it is the one mutation outside the funnel: it writes
+  the `pages` row directly, and a guard placed only in the funnel would have left the rename — and
+  the `updatedAt` bump it carries — completely ungated.
+- Refusing before the write also refuses the bump. A bump under the lock would be a claim of
+  authorship for an edit nobody made, which is enough on its own to outrank a real edit waiting on
+  another device (§9.4).
+- In the UI: the add FAB is hidden rather than disabled (matching the Pages hub — nothing else is on
+  that control, so a greyed-out one would only advertise a refusal), the empty state drops the half
+  of its message that invites a tap on a control that is gone, and the delete-card dialog re-checks
+  the flag rather than trusting the hidden badge that opened it, since the toggle can be flipped
+  from the Pages topbar while the dialog is already open.
+- Both editor sheets stay *openable* and become readers. The board draws only a few lines of a card
+  and never draws an arrow's label at all, so refusing to open them would hide content rather than
+  protect it; what they lose is every control that writes.
+
+**One decided exemption: the lazy `PageCanvas` shell.** Opening a canvas page with no companion row
+creates one, ungated and untouched — the same exemption as a database's default view, for the same
+two reasons. It is idempotent repair-on-open rather than an edit, and gating it would leave such a
+page permanently unopenable-as-a-canvas for as long as View-Only is on; and it claims no authorship,
+staying outside the bump so that merely *looking* at a board can never outrank a real edit made
+elsewhere and not yet synced. Every device performs the same repair for itself.
+
+**Sync (§9.4).** A canvas travels inside its own page's snapshot record, never as its own file, and
+is exported only for `kind == CANVAS` pages. Three consequences worth stating, because each one is a
+decision:
+- **In the snapshot, nodes carry their `uid` and edges do not** — both tables have one in Room, but
+  an edge's is never written out. An edge is referenced from nowhere else, so its identity only has
+  to be stable *within* one canvas record, and the pair of node uids it connects already is that
+  identity. The cost is that a re-merged edge is a new row locally; nothing reads an edge id, so
+  nothing notices.
+- **A page-embed target travels as the target's `uid`**, not a local row id, and resolves against
+  the incoming batch on arrival. A target that has not arrived yet resolves to null: the card
+  survives as an empty embed rather than the record failing.
+- **A winning record replaces the whole node and edge set.** Blind delete-and-reinsert is safe here
+  in a way it explicitly is not for Properties (§9.4), because nothing outside this subsystem
+  references a node id — no cell, no tombstone, no other table. The delete runs only after every
+  node type and arrow direction in the record has decoded, which is the ordering Milestone 0's
+  quarantine policy generalised: a decode that fails after the delete has destroyed the local copy
+  of the thing it was replacing.
+- Because the merge gates all of this on `pages.updated_at`, every canvas mutation goes through
+  `launchAndTouch`, which writes and bumps as one operation. A canvas edit that forgets the bump
+  looks completely saved on the device that made it and simply never arrives on the other one —
+  this is the §9.4 write-path defect, seen from the Canvas end.
+
+**Not available on desktop.** `Tendril windows` renders `NotAvailableOnDesktop("Canvas")` for the
+canvas slot; the screen and ViewModel live in `Tendril android`, not in `shared\`, unlike the block
+editor Milestone 3 moved. The asymmetry to be aware of is that the *data* is shared even though the
+surface is not: the entities, the DAOs and the merge pass are all in `shared/commonMain`, so a
+desktop sync reads, merges and re-exports canvas nodes and edges it has no way to draw. That is the
+correct behaviour — a client must not drop what it cannot render — but it means the desktop is a
+full participant in canvas sync while showing a placeholder.
+
+**Known open defects, recorded here rather than only in `docs/audit-2026-09-04.md`** (§1.1 and §1.2
+there; both re-read against the tree on 2026-09-07 and both still present): the arrow hit-test is
+implemented inside a drag detector, whose callback only fires after touch slop, so a *tap* on an
+arrow never reaches it — arrows cannot be selected, relabelled or deleted from the board at all,
+which also makes the View-Only note above ("tapping an arrow to read its label stays live")
+describe an affordance that does not currently work. And the arrow editor operates on the captured
+snapshot of the edge it was opened with, so direction never cycles past one step and the displayed
+direction goes stale. Neither is a data-loss bug; both make a shipped feature partly unreachable.
 
 ---
 
@@ -656,21 +984,38 @@ medical-appointment (§5.1) and financial (§5.2.2) data on a personal, unrooted
 eligibility questions that were open when this section was first drafted are now resolved. Still a
 starting point for the real schema work, not a byte-for-byte ratified design.
 
+**This table is partial, and now says so (recorded 2026-09-06).** Seven entities registered on the
+database have no row here at all — `PageCanvas`/`CanvasNode`/`CanvasEdge` (§3.4, which already notes
+its own absence), `PageRelation`, `PurgedRecord` (§5.5.1.1), `PropertyValue`, and the FTS entry
+(§3.1.1) — and until this pass no row named `uid`, the cross-device identity every merge in §9.4
+turns on. *(**Partly closed 2026-09-07:** the three Canvas entities now have rows below, alongside
+the functional record at §3.7 they were missing. **Four remain unwritten** — `PageRelation`,
+`PurgedRecord`, `PropertyValue` and the FTS entry — and the sentence above is kept whole rather than
+edited down to four, because the size of the original omission is the reason this paragraph exists.)* That matters more than tidiness because of where this section is pointed at from:
+`tendril-windows-spec.md` sends a desktop reader here first for what a `shared\` type or table
+actually means, and §12 lists the Room schema among the things that stay in this file. A register
+that omits a third of the schema without saying so sends that reader away with a wrong model. The
+missing rows are not written in this pass — filling them in is real work rather than a correction —
+but the omission is on the record instead of being inferred.
+
 **Core entities:**
 
 | Entity | Key fields | Notes |
 |---|---|---|
-| **Page** | id, title, icon/kind, parent_id, deleted_at (nullable, added 2026-08-08 — Trash, §5.5.1), created/updated | `kind` distinguishes a plain page from a database. `parent_id` builds the page tree (also what Notion import needs to reconstruct, §7). Body content is a structured `Block` list (§3.1.1), not a blob field. **`category` removed 2026-08-08** — carried from an early draft with no behavior ever specified behind it; replaced by the `Tag`/`PageTag` entities below (§3.1.6). |
+| **Page** | id, uid, title, icon, kind, parent_id, database_id (nullable), is_template, deleted_at (nullable, added 2026-08-08 — Trash, §5.5.1), created/updated | `kind` distinguishes a plain page from a database. `parent_id` builds the page tree (also what Notion import needs to reconstruct, §7). Body content is a structured `Block` list (§3.1.1), not a blob field. **`category` removed 2026-08-08** — carried from an early draft with no behavior ever specified behind it; replaced by the `Tag`/`PageTag` entities below (§3.1.6). **Corrected 2026-09-06:** `kind` is three-valued — `PAGE` \| `DATABASE` \| `CANVAS` — the third having arrived with the Canvas feature §3.4 records, while this cell still described the two-valued version; and three key fields were missing from it. `uid` is the cross-device identity every merge in §9.4 is keyed on. `database_id` is listed here rather than only under **Row** because a row *is* a page (§5.1): the link physically lives on this table, and reading it as a Row-table column is exactly the mistake §5.1's row=page model exists to prevent. `is_template` (§3.1.3) is what keeps saved templates out of the Pages list and out of Road Map's edge set. |
 | **Tag** | id, name, color | Global, freeform, reusable across all Pages (§3.1.6, added 2026-08-08) — resolves the removed `category` field. Flat, no nesting. |
 | **PageTag** | page_id, tag_id | Many-to-many join table between Page and Tag (§3.1.6, added 2026-08-08). |
 | **Block** | id, page_id, type, order, parent_block_id (nullable), content, formatting spans, created/updated | One row per content block inside a Page's (or Row's) body (§3.1.1) — paragraph, heading, list item, code, image, toggle, callout, page-mention, etc. Feeds the FTS index (§3.1.1). |
+| **PageCanvas** *(added to this table 2026-09-07 — the entity has existed since the Canvas feature shipped, §3.7)* | id, uid, page_id (unique, FK → Page, cascade delete), created/updated | The 1:1 companion row that makes a `kind = CANVAS` Page a board — structurally the same move as **Database** below, which is why Canvas cost the router one branch. Created **lazily on first open**, not at page creation, and that write is deliberately exempt from both the View-Only gate and the `updated_at` bump (§3.7): it is repair-on-open, not an edit, and bumping it would let merely opening a board outrank a real edit made on another device (§9.4). Carries no content of its own; the board is its child rows. |
+| **CanvasNode** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), type (`TEXT` \| `PAGE_EMBED`), x, y, width, height, text (nullable — TEXT only), embedded_page_id (nullable, FK → Page, cascade — PAGE_EMBED only), created/updated | One card on the board. Position and size are content-space floats, not pixels — the screen transform is applied once at render (§3.7), so the same board is the same board at any zoom or on any screen size. `text` is plain, with no `Block` model of its own: a card is a sticky note, not a second page editor (§3.1.1's "obvious 80% subset" reasoning). `embedded_page_id` cascades from Page, so deleting the embedded page removes the card — the one place a canvas is changed by an action taken outside it. In the snapshot the target travels as the page's `uid` and resolves on arrival; unresolvable means an empty card, never a rejected record. |
+| **CanvasEdge** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), from_node_id, to_node_id (both FK → CanvasNode, cascade), direction (`NONE` \| `ONE_WAY` \| `TWO_WAY`), label (nullable) | One arrow. The `uid` exists in Room but is **not written to the snapshot** — an edge is referenced from nowhere else, so its identity only needs to be stable within one canvas record, and the node-uid pair it connects supplies that (§3.7). `direction = NONE` draws a plain line, for two cards that are related without the relation having a direction. A blank label is stored as null rather than `""`, so an emptied label is absence rather than content the merge has to carry. Both endpoint cascades are what makes deleting a card delete its arrows, with no application-level cleanup. |
 | **Database** | *(a Page with a schema)* — schema (ordered Property list), `sync_to_tasks` flag, `done_property_id`, `deadline_property_id`, `recurrence_property_id` (nullable) | The Sync-to-Tasks flag and the explicit property bindings are the mechanism from §5.2 — not inferred from schema shape, always deliberate. `recurrence_property_id` added 2026-07-16 — see §5.2 for the binding and §4's Property type note below for the `Interval` type it points at. |
 | **DatabaseView** | id, database_id, name, view_type (`TABLE` \| `BOARD` \| `GALLERY` \| `CALENDAR`), group_by_property_id (nullable, BOARD-only), date_property_id (nullable, CALENDAR-only), visible_property_ids, filter (single condition, nullable), sort_property_id (nullable), sort_direction | Saved views over a Database's rows (§5.6, added 2026-08-08) — display configuration only, never alters stored row/property data. A Database always has at least one Table view (default, matches §5.1's existing behavior). |
-| **Property** | id, database_id, name, type, config | Type list needs to cover at minimum: text, number, checkbox, select, multi-select, date, URL, email, phone — the set Notion CSV export can actually carry (§7). Relation/rollup/formula are explicitly deferred (§7, §10). **Added 2026-07-16**: `Interval` (number + unit ∈ {day, week, month}) — a Tendril-native type, not part of the Notion CSV import set, used exclusively as the `recurrence_property_id` binding target (§5.2). Not offered as a general-purpose property type in the "New property" picker outside that binding context, to avoid a second, uglier way to represent a plain number. |
+| **Property** | id, database_id, name, type, config | Type list needs to cover at minimum: text, number, checkbox, select, multi-select, date, URL, email, phone — the set Notion CSV export can actually carry (§7). ~~Relation/rollup/formula were explicitly deferred (§7, §10)~~ — **reopened 2026-09-06, see §5.4**; they now land together as a single `COMPUTED` type plus a stored `RELATION` type. **Added 2026-07-16**: `Interval` (number + unit ∈ {day, week, month}) — a Tendril-native type, not part of the Notion CSV import set, used exclusively as the `recurrence_property_id` binding target (§5.2). Not offered as a general-purpose property type in the "New property" picker outside that binding context, to avoid a second, uglier way to represent a plain number. |
 | **Row** | id, database_id, property values | A Row *is* a page (§5.1) — its free-form body beneath the properties is the same Block-based content as any Page (§3.1.1), matching Notion's actual row=page model. Tapping a row opens it. |
 | **Entry** *(renamed from Task, 2026-07-13)* | id, title, kind (`TASK` \| `EVENT`), start_date (nullable), start_time (nullable), end_date (nullable, EVENT-only — see below), end_time (nullable, EVENT-only), recurrence_rule (typed, see below), original_entry_id (nullable, FK to another Entry), original_occurrence_date (nullable), is_exception_skip (nullable), status (`PENDING` \| `DONE` \| `SKIPPED`, TASK-only), source_row_id (nullable, FK to Row — **added 2026-07-16**, see below), deleted_at (nullable, **added 2026-08-08** — Trash, §5.5.1), source | Calendar queries `WHERE start_date IS NOT NULL` regardless of kind. Tasks view queries `WHERE kind = TASK`. Merged view (§3.3) also filters `kind = TASK`. Both queries also filter `WHERE deleted_at IS NULL`. `source_row_id` is the actual foreign key behind the Row↔Entry link §5.2 has described behaviorally since it was designed but never named as a real field — a small, previously-invisible gap surfaced while designing the rebind mechanism (§5.2). Full reasoning for the multi-day, recurrence-split, and exception design below the table (2026-07-14 case-scenario round 2). |
-| **Habit** | id, title, time (nullable), duration (nullable), frequency, streak, previous_streak, previous_completed_date (nullable, **added 2026-08-29** — undo-check-in, §8.1.1), deleted_at (nullable, **added 2026-08-08** — Trash, §5.5.1) | Structurally separate from Task (Decided 2026-07-13, §3.3) — does not follow the to-do database pattern. |
-| **Reminder** | id, owning Entry id, offset-or-preset, anchor_time (nullable) | Presets: 1h / 2h / 4h / 8h / 1 day / 2 days / 1 week; or custom (number + unit). No cap on count. Applies to either kind — a birthday reminder is just as valid as a deadline reminder. **Decided 2026-07-14**: when the day a reminder anchors to has no `start_time`/`end_time` (an all-day Event, or one of the all-day middle days of a multi-day span), the reminder needs a concrete time-of-day to actually fire at — prompted via presets (8:00 AM / 10:00 AM / 12:00 PM / 4:00 PM / custom), defaulting to midnight if none is chosen. Stored in `anchor_time`, unused when the Entry already has a real time on the relevant day. Separately, `kind = TASK` Entries also get an automatic **overdue notification** at `start_date`+`start_time` (or midnight if `start_time` is null) with inline Done/Skip actions — distinct from these pre-due reminders, and the trigger for the Skip-only-once-overdue rule above; folded into §9.7. |
+| **Habit** | id, uid, title, time (nullable), duration (nullable), frequency, streak, **last_completed_date** (nullable — *listed here 2026-09-06; the field itself has always existed*), previous_streak, previous_completed_date (nullable, **added 2026-08-29** — undo-check-in, §8.1.1), deleted_at (nullable, **added 2026-08-08** — Trash, §5.5.1), created/updated | Structurally separate from Task (Decided 2026-07-13, §3.3) — does not follow the to-do database pattern. `last_completed_date` is the date the current streak run last extended: it is what "already checked in today" is computed from, and what a missed period resets against without ever surfacing backlog (§6.1). Leaving it out was not harmless — `previous_completed_date` sat here as the undo counterpart of a field this table never named, and §3.6 had to refer to it by its code name in order to describe what the Habits widget writes. |
+| **Reminder** | id, owning Entry id, offset-or-preset, anchor_time (nullable) | Presets: 1h / 2h / 4h / 8h / 1 day / 2 days / 1 week; or custom (number + unit). No cap on count. Applies to either kind — a birthday reminder is just as valid as a deadline reminder. **Decided 2026-07-14**: when the day a reminder anchors to has no `start_time`/`end_time` (an all-day Event, or one of the all-day middle days of a multi-day span), the reminder needs a concrete time-of-day to actually fire at — prompted via presets (8:00 AM / 10:00 AM / 12:00 PM / 4:00 PM / custom), defaulting to midnight if none is chosen. Stored in `anchor_time`, unused when the Entry already has a real time on the relevant day. Separately, `kind = TASK` Entries also get an automatic **overdue notification** at `start_date`+`start_time` (or midnight if `start_time` is null) with inline Done/Skip actions — distinct from these pre-due reminders, and the trigger for the Skip-only-once-overdue rule above; folded into §9.7. **Device-local, and not synced (recorded 2026-09-06).** A Reminder appears in no snapshot record and in no `.tendril` package — the Entry snapshot has no reminders field and there is no `reminders.json` anywhere — so a reminder set on the phone does not exist on the desktop and never has. The loss is active rather than passive: `Reminder` cascades on `Entry`, and Restore-from-backup deletes every Entry before merging, so restoring a backup silently destroys every reminder on the device and restores none of them. §9.4.1's "one schema, reused everywhere" reads as though this table travelled with the rest of the model; it does not. Either it joins the snapshot format, or that omission belongs in §9.4's list of what travels as a decision rather than as an accident. |
 | **EntryCompletion** *(new, 2026-07-14 — resolves round 1's open history question)* | id, entry_id, occurrence_date, resolved_at, status (`DONE` \| `SKIPPED`) | Append-only log, written by the same centralized resolution step that advances a recurring Entry (below) — every TASK resolution gets logged uniformly, recurring or not, so a future "history" screen has one consistent source rather than recurring Tasks silently having no record (per round 1's finding) while one-off Tasks do. |
 
 **Decided (2026-07-13), corrected (2026-07-14):** Task and Event are the *same underlying table* —
@@ -745,9 +1090,17 @@ stored day. Three things followed, all with the same root cause:
   un-expanded rows were what the UI showed.
 - **Multi-day spans never rendered.** `end_date`/`end_time` (round 1 above) reached the Provider but
   no Tendril view consulted them, so a three-day offsite appeared on day one.
-- **Exception rows were dead.** `original_entry_id`/`original_occurrence_date`/`is_exception_skip`
-  (round 3 above, §9.8 R5) were declared, round-tripped through snapshots, and never written, read
-  or honoured by anything.
+- **Exception rows were dead**, and two thirds of that is now fixed. `original_entry_id`/
+  `original_occurrence_date`/`is_exception_skip` (round 3 above, §9.8 R5) were declared,
+  round-tripped through snapshots, and never written, read or honoured by anything. *(**Added
+  2026-09-06 — an omission, not a correction: the sentence above is true of what was found.** The
+  expander below did fix the reading half, and properly — a skip tombstone removes an occurrence, an
+  override replaces one, and an override whose base has vanished is still drawn rather than lost.
+  **Nothing writes one.** No surface in the app creates a skip or a per-occurrence override, so
+  §4.1's "single-occurrence editing/deleting for recurring Events is in scope (Decided 2026-07-14)"
+  is a decision with no implementation behind it, and an exception row can currently only reach this
+  device from another device's snapshot. Said plainly here so that the next reader does not infer
+  from this section's "Implemented" heading that the round-3 design shipped whole.)*
 
 **Decided/Implemented:** a shared `EntryOccurrences` expander in `shared/`, taking stored rows plus
 a date range and returning one occurrence per covered day. Calendar's Day/Week/Month views, the
@@ -774,10 +1127,23 @@ data-integrity problem — the Provider write is still one-directional and Room 
 source of truth (§9.8 R3) — but it is a real, visible gap, and the honest fix if it ever bites is to
 widen the subset, not to start reading `Instances` back.
 
-**Alarm rescheduling must be event-driven, not schedule-ahead (Decided 2026-07-14).** `AlarmManager`
-cannot know a TASK's next occurrence before it exists — elastic recurrence means the interval itself
-depends on *when* the person resolves the current one (resolve 2 days late, the gap to next time is
-7+2 days, not a fixed 7). This means only the currently-live occurrence's alarms should ever be
+**Alarm rescheduling must be event-driven, not schedule-ahead (Decided 2026-07-14; premise struck
+2026-09-06).** ~~`AlarmManager` cannot know a TASK's next occurrence before it exists — elastic
+recurrence means the interval itself depends on *when* the person resolves the current one (resolve 2
+days late, the gap to next time is 7+2 days, not a fixed 7).~~
+
+*This is the exact wording the 2026-09-04 correction in §4.1 above says it withdrew, and it
+went on standing here verbatim underneath that correction — a withdrawn premise still circulating
+under a **Decided** heading, which is worse than never having withdrawn it, because a reader who
+lands on this paragraph alone has no way to know. Struck in place on 2026-09-06 rather than deleted,
+since the pair of them is the record of how a correction can announce itself in one paragraph and
+never reach the sentence it names. §9.7 carried a third copy, struck the same day.*
+
+*The conclusion survives on a premise that does hold. A recurring TASK keeps exactly one live row,
+and resolving it **moves** that row's `start_date` forward — in whole periods stepped from the
+original schedule, never from the moment of resolution (§6.2). So there is no future occurrence for
+`AlarmManager` to be handed, and the row it can be pointed at changes every time the task is
+resolved, edited, trashed, restored or rebound.* This means only the currently-live occurrence's alarms should ever be
 scheduled for a TASK; every write path that can move an Entry's `start_date` (create, manual edit,
 or the resolve-and-advance step) must cancel that Entry's existing alarms and schedule fresh ones
 against the new date, as one atomic step. MedTimer's own recent changelog confirms this is a real,
@@ -904,7 +1270,16 @@ the date on completion — structurally the same shape as Tendril's own resolve-
 elastic recurrence regardless of app.
 
 **Decided**: a third optional binding, `recurrence_property_id`, pointing at a property of the new
-`Interval` type (§4 — a number plus a unit, day/week/month). Binding it wires that property's value
+`Interval` type (§4 — a number plus a unit, day/week/month). *(**Built but unreachable, recorded
+2026-09-06.** Every piece of the mechanism exists — the type, its `"n:UNIT"` encoding, the conversion
+into a real calendar `Period`, the Enable-sync picker and the rebind picker — except a way to make an
+`Interval` property in the first place. §4 excludes it from the general "New property" picker
+deliberately, to avoid a second and uglier way to represent a plain number, on the understanding that
+one is created *inside the recurrence-binding flow*; that flow only ever selects among properties
+that already exist, and the creation step §4 assumes was never built. So the Recurrence picker is
+always empty and this binding cannot be established from any surface, on either platform. The
+decision below is untouched — only its reachability is at issue — and the fix is either a "create
+one" step in the binding flow, or offering the type in that one context.)* Binding it wires that property's value
 into the linked Entry's `RecurrenceRule.Elastic(period)` (§4.1), the exact same elastic mechanism
 standalone recurring Tasks already use — database-driven Entries are always `kind = TASK`, never
 `EVENT`, so `Fixed` (RRULE) recurrence is never relevant here. **Deliberately simpler than
@@ -933,19 +1308,68 @@ created via the "New → To-do database" shortcut — this was actually already 
 above ("nothing is a one-way, permanent choice"); the Open flag is removed as redundant rather than
 as a new decision.
 
-### 5.4 Reminders (not a computed property)
+### 5.4 Reminders (not a computed property) — and, since 2026-09-06, computed properties themselves
 
 An earlier idea — a computed "remind me N days before a date" *property* on a database row — was
 explicitly dropped. The actual need (assessing timing across visible dates, e.g. when to schedule a
 blood test before a follow-up appointment) is already satisfied by the visible-properties table view
 (§5.1); no computed field was needed for that. Reminders themselves are a Calendar/Task feature, not
 a database one (§3.2): a repeatable list per event/task, presets (1h/2h/4h/8h/1 day/2 days/1 week)
-or custom (number+unit), living in the full edit sheet (not Quick Add), no cap on how many stack per
-item.
+or custom (number+unit), ~~living in the full edit sheet~~ reached from a bell icon on the row itself
+(not Quick Add — *corrected 2026-09-06; no full edit sheet was ever built, see §3.2*), no cap on how
+many stack per item.
 
-A general Notion-style formula language (arbitrary expressions referencing other properties) was
+~~A general Notion-style formula language (arbitrary expressions referencing other properties) was
 also explicitly scoped **out** — real feature, real complexity (closer to a small interpreter than a
-database property), not planned for an early build.
+database property), not planned for an early build.~~
+
+**Reopened and reversed 2026-09-06**, on the same practice as §5.6's reversal of the table-only
+database: the exclusion is struck rather than deleted, because the reasoning above is the only
+record of what the cost was judged to be. What changed is not the estimate — a formula language
+*is* a small interpreter — but the decision to pay it. Computed properties land as **relation,
+rollup and formula together**, since rollup aggregates across a relation and cannot exist without
+one, and a formula that cannot traverse a relation is a calculator over a single row.
+
+The shape, and the reason it is one feature rather than three: a single `COMPUTED` property type
+with **two authoring paths onto one evaluator**. A rollup is built from pickers — relation, target
+property, aggregation, optional condition — and those pickers *write an expression*; a small `ƒ`
+under the result reveals what they wrote, editable in place. Choosing the easy path therefore
+teaches the language instead of capping the person who chose it. The alternative, two disconnected
+subsystems, is Notion's own arrangement and the source of its sharpest limitation; Baserow shipped
+the language first and added rollup fields afterwards purely for approachability, while Teable,
+having no language, now carries four separate field types because in that model every new
+requirement becomes another type.
+
+Three properties are load-bearing and are the reason this is worth building rather than copying.
+**Errors are caught when the formula is written, not when a cell renders** — Notion 2.0 permits
+saving a broken formula and renders it as an empty cell, invisible to anyone not inside the editor.
+**Composition is a real dependency graph with cycle rejection that names the path**, not an opaque
+depth budget; Notion caps at 15 reference layers, and in the 7-layer era exceeding it produced
+silently wrong values. And **a computed cell can explain itself** — tapping one shows the expression
+with every reference resolved to this row's values, and for an aggregate the contributing rows and
+their individual values. Spreadsheets have had trace-precedents for thirty years and no database app
+in this category ships it; in a single-user local app it costs almost nothing.
+
+Determinism is a contract, not an aspiration: the evaluator lives in `shared/commonMain`, reads no
+default time zone and no locale-dependent collation, and a discrepancy between Android and desktop
+is indistinguishable from a sync bug and will be reported as one. Computed **definitions** sync as
+part of a database's schema; computed **values** never enter a snapshot file — they are derived
+state, cached locally so they can still be sorted, grouped and filtered on, and rebuildable from
+scratch.
+
+**Non-negotiable precondition, recorded here because it is a sync-wide hazard rather than a feature
+detail**: `PagesSyncEngine` decodes a property's type with a bare `PropertyType.valueOf`, which
+throws on any name it does not know. That exception leaves `mergePages`, leaves `mergePagesDir`, and
+aborts the entire sync pass *(**precision fix 2026-09-06:** this listed "pages, entries, habits and
+purge tombstones alike". Inbound tombstones are the one thing already applied by the time the throw
+happens, since they merge before any record file is read — but the throw is caught above and the
+write pass never runs at all, so this device also publishes nothing, its own tombstones included. The
+conclusion is unchanged; the four-item enumeration is dropped rather than qualified, because a
+qualification here reads as an escape hatch and there is none)*. So a device on an
+older build that receives a `COMPUTED` property does not degrade to an unreadable column; it stops
+syncing anything at all. The tolerant decode (`runCatching { … }.getOrNull()`, the shape
+`PurgedRecordSnapshot.toEntity` already uses two files away) must reach **every** device before any
+new property type ships.
 
 ---
 
@@ -982,17 +1406,30 @@ than assuming it's fine.
   immediately on confirm — not a bespoke flow, the same confirm-dialog pattern as the rest of this
   section. A bound property (Done/Deadline, §5.2) never enters this flow to begin with — there's no
   real schema-editable field there to convert.
-- **Property deletion** requires an explicit confirm dialog. If the property is `done_property_id`-
-  or `deadline_property_id`-bound, deleting it is just one more trigger into the same
+- **Property deletion** requires an explicit confirm dialog. If the property is
+  `done_property_id`-bound, deleting it is just one more trigger into the same
   Sync-to-Tasks-disable flow below — not a separate bespoke behavior — with the dialog stating
   plainly that confirming disables sync, and that re-adding a same-named property later begins a new
   sync relationship rather than resuming the old one (the property's stored values are genuinely
   gone, even though the sync *relationship* re-establishing might feel like resuming from the
-  person's side).
+  person's side). *(**Corrected 2026-09-06:** this read "`done_property_id`- or
+  `deadline_property_id`-bound", and a Deadline-bound property does **not** take that path — nor
+  should it. §5.2.1 gave the optional roles a non-destructive `unbindProperty`, so deleting a
+  Deadline- or Recurrence-bound column crystallizes it and clears the role while sync keeps running;
+  only Done is mandatory whenever sync is on, so only Done's deletion can end it. The routing is
+  right and the **dialog copy is the defect** — it computes "bound" across all three roles and then
+  warns, for all three, that deleting turns sync off and moves the linked Tasks to Trash. Deleting a
+  Deadline column today promises a teardown that does not happen.)*
 - **Row deletion and Sync-to-Tasks toggle-off** both require an explicit confirm dialog, stated in
   plain language: toggling sync off deletes the database's linked recurring Entries (a deliberate
   bulk-cleanup mechanism, not just a safety gate — it means the person never has to manually delete
-  a database's worth of future Entries by hand when the whole thing is no longer needed). Turning
+  a database's worth of future Entries by hand when the whole thing is no longer needed).
+  *(**Corrected 2026-09-06 — every linked Entry, not only the recurring ones.** Disabling sync walks
+  every row of the database and trashes that row's Entry with no test on its recurrence rule at all;
+  and a database with no Recurrence binding has no recurring Entries in the first place, so on most
+  databases the qualifier describes an empty set while the action clears the lot. The shipped confirm
+  dialog repeats the same wrong qualifier. Appended rather than edited into the sentence above,
+  because §5.5.1's own correction below turns on that sentence still saying "deletes".)* Turning
   Sync-to-Tasks back on later (§5.3) prompts the person to pick which existing rows should generate
   Entries retroactively, with an "All" shortcut.
 
@@ -1010,9 +1447,12 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   data and block content remain fully intact underneath.
 - **Trash**: one list, reachable from the Pages hub's "···" menu, showing everything with a non-null
   `deleted_at`, most-recent-first, noting the deleted item's former location (e.g., "was in:
-  Groceries database") so restoring makes sense out of context. *(**Open as of 2026-09-04 — still
-  two lists, not one.** Pages and Rows are in a sheet off the Pages hub as specified; Entries and
-  Habits are in a second sheet off the Tasks & Habits tab. Merging them is more than a move: a
+  Groceries database") so restoring makes sense out of context. *(**Open as of 2026-09-04, and wider
+  since — three lists, not one** (recounted 2026-09-06). Pages and Rows are in a sheet off the Pages
+  hub as specified; Entries and Habits are in two further sheets off the Tasks & Habits tab, chosen
+  by whichever tab happens to be showing — so a trashed Habit is reachable from the Habits tab only.
+  They were briefly one sheet, merged 2026-09-04 and lost again in the 2026-09-05 integration for
+  purging without recording a tombstone. Merging them is more than a move: a
   database Row and its linked Entry are trashed together (§5.2), but Page-Trash's Restore clears
   only the Row's `deleted_at`, so a restored row currently comes back with its Task still in the
   other Trash. Both are tracked together rather than the split being closed and that bug left
@@ -1036,9 +1476,12 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   files the way Page/Row are.
 - **What this changes from §5.5's existing items above**: Row deletion (third bullet above) now goes
   to Trash like everything else — restorable, not permanent. Sync-to-Tasks toggle-off's bulk
-  deletion of linked recurring Entries (also the third bullet above) is unchanged in trigger and
-  confirm-copy, but the Entries it removes now land in Trash too, restorable via the same mechanism,
-  rather than being gone outright. Property type conversion and property deletion (first two bullets
+  deletion of linked Entries (also the third bullet above) is unchanged in **trigger** ~~and
+  confirm-copy~~, but the Entries it removes now land in Trash too, restorable via the same mechanism,
+  rather than being gone outright. *(**Corrected 2026-09-06:** the confirm copy did change, and could
+  not have stayed — a dialog still saying "deleted" would be describing the behaviour this section
+  replaced. It now says the linked Tasks move to Trash, restorable from there, not deleted outright.
+  Only the trigger is untouched.)* Property type conversion and property deletion (first two bullets
   above) are **unaffected** — those aren't row-level deletions and stay exactly as specced
   (confirm-and-commit-immediately), since a property's stored values, once converted or dropped,
   have no natural "undo" shape the way a whole row does.
@@ -1053,11 +1496,31 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
     start and **nothing ever called any of the three** — so trashing a Habit set `deleted_at`,
     removed it from the habits list, the Merged view (§3.3) and the quick-check widget (§8.1.1),
     and left no way back at all. It was a permanent delete wearing a soft delete's field. The
-    identical gap for Entries had already been closed; the Tasks & Habits Trash sheet now lists
+    identical gap for Entries had already been closed; ~~the Tasks & Habits Trash sheet now lists
     both, with the same selection, bulk Restore / Delete forever and counted confirm this section
-    requires, over one merged newest-first list rather than two stacked ones. Restoring an Entry
+    requires, over one merged newest-first list rather than two stacked ones.~~ *(**Corrected
+    2026-09-06 — the merged list did not survive the 2026-09-05 integration**, and this document's
+    own Revision Log for that day records it as one of three deliberate losses, for a reason that
+    still stands: the combined sheet purged without recording a tombstone, so keeping it would have
+    stopped "Delete forever" propagating. What ships is two sheets, one over Entries and one over
+    Habits, each carrying the selection, bulk actions and counted confirm this section requires, and
+    chosen by whichever tab is showing — which means a trashed Habit is reachable from the Habits tab
+    only, never from Tasks or Merged. The single list stays the goal; it now has to be rebuilt on top
+    of the purge registry rather than beside it.)* Restoring an Entry
     still routes through `ResolveEntryUseCase` so a TASK comes back with its alarms rearmed
-    (§9.7); a Habit has no alarms, so the DAO call is the whole operation.
+    (§9.7); ~~a Habit has no alarms, so the DAO call is the whole operation.~~ *(**Corrected
+    2026-09-06 — a Habit does have an alarm, and this sentence is why its restore forgets it.**
+    Written 2026-09-04, one day before habit reminders were built. A Habit with a time-of-day now has
+    a scheduled reminder of its own; trashing it is what cancels that reminder, and
+    `EntryScheduleCoordinator` gained an `onHabitRemoved` for exactly the reason its own comment
+    gives — an alarm that outlives its row is a wakeup for nothing. Restore still calls the Habit DAO
+    alone, so a restored Habit comes back unscheduled and stays that way until some unrelated write
+    happens to re-arm it; the boot and app-open sweep re-arms Entries only (§9.7). This is the same
+    defect for Habits that routing Entry restore through `ResolveEntryUseCase` was added to prevent
+    for Tasks, and restore has to re-arm by the same rule. Recorded rather than quietly fixed because
+    the reasoning that made it invisible was written here first and then copied verbatim into the
+    Habit Trash sheet's own doc comment, where it will re-justify the bug to the next reader unless
+    both are corrected together.)*
 - **Interaction with sync (§9.4)**: `deleted_at` is just another field on an already-synced record —
   no new sync mechanism needed; it travels with the record's normal snapshot write and merges under
   the existing per-record LWW rule. A **Delete forever** — the only way an item leaves Trash — is a
@@ -1068,7 +1531,10 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   on this device as much as another. Closing it needs a tombstone the merge can act on, which is a
   format change, not a fix in place.~~ **Closed 2026-09-04/05, and the format change is exactly what
   it took** — see §5.5.1.1. A `(kind, uid, purged_at)` tombstone travels in `purged_records.json`,
-  covering Pages, Entries and Habits. §9.4's additive rule is narrowed rather than abandoned: absence
+  covering Pages, Entries, Habits **and database Properties** — the fourth added 2026-09-05, when a
+  property absent from a winning schema stopped meaning "deleted" and had to travel as a tombstone
+  like everything else; *listed here 2026-09-06, having been left out of this enumeration when it
+  shipped*. §9.4's additive rule is narrowed rather than abandoned: absence
   still never implies deletion, an explicit tombstone does, and a tombstone is compared against the
   record's own `updated_at` so a stale delete cannot destroy a newer edit. The tombstone is recorded
   *before* the row is dropped, so a crash between the two leaves a tombstone with no row — harmless
@@ -1084,9 +1550,15 @@ there. Pruning the file afterwards cannot fix either — the merge runs first an
 restored the row. A purge has to be *recorded*, not inferred from absence.
 
 *Decision:* `PurgeRegistry` records a `PurgedRecord` tombstone — `(kind, uid, purged_at)`, keyed
-by kind because Page and Entry uids come from separate spaces — in the same operation that drops
+by kind because each record type's uids come from a separate space — in the same operation that drops
 the row, never as two things a call site must remember to do in order. The merge declines a
-tombstoned uid; the write pass drops that uid's page file.
+tombstoned uid; the write pass drops that uid's page file. *(**Corrected 2026-09-06:** this read
+"because Page and Entry uids come from separate spaces", which was true of the two kinds that existed
+on 2026-09-04. There are four — `PAGE`, `ENTRY`, `HABIT` and `PROPERTY` — Habits added later the same
+day and Properties on 2026-09-05. Three separate Revision Log rows name this section among the ones
+they touched and none of them amended it, which is how a two-kind description survived over a
+four-member enum. `PurgedRecord`'s own doc comment is stale in the same direction, still saying a
+Habit has no such action yet, directly above an enum that lists one.)*
 
 **Purges propagate (corrected).** The first cut kept tombstones local, on the grounds that §9.4
 calls its merge additive and non-destructive. That was the wrong reading: the rule exists so that
@@ -1102,6 +1574,14 @@ already applies everywhere else. A purge therefore removes the record on every d
 some device edited it *after* the purge, never having seen it, in which case that edit resurrects
 it and the tombstone is dropped as superseded. The alternative, letting a stale delete always win,
 silently destroys work someone was still doing.
+
+**One kind is a veto, and deliberately so (added 2026-09-06).** `PROPERTY` has no supersede check and
+cannot be given one: a `Property` carries no timestamp to compare against `purged_at`, and a re-added
+column is minted with a fresh uid that no tombstone names. A property tombstone therefore refuses its
+uid permanently. That is exactly right for the race it exists to stop — a device that had not yet seen
+a new column re-exporting the database without it, taking the column and every row's value under it —
+and it is worth stating, because it is the one exception to the rule immediately above and a reader
+who applied that rule to all four kinds would look for a supersede path that does not exist.
 
 *Ordering matters:* the tombstone file merges, and is applied to local rows, **before** any record
 file is read. Otherwise a record and the tombstone that kills it cross within one pass and the
@@ -1133,28 +1613,46 @@ reasonable simplification. Reopened and reversed.
 **Scope (Notion-lite equivalent, matching §3.1.1's own scoping precedent):**
 - **Table** (existing, §5.1) — unchanged, remains the default view for any new database.
 - **Board**: groups rows into columns by one Select-type property's options (e.g., a Kanban of a
-  project database grouped by a "Status" Select property); drag-and-drop between columns writes the
-  property value, same as editing it from the table. A database with no Select-type property yet
-  shows a prompt to pick one or create it — no silent fallback.
-- **Gallery**: a card grid, one card per row, showing a designated cover (the first Image block in
-  the row's body, §3.1.1, or a blank placeholder) plus a small set of properties chosen per-view —
-  matches Notion's/AppFlowy's own gallery pattern closely enough that a Notion import (§7) can carry
-  a source gallery view forward directly.
+  project database grouped by a "Status" Select property); ~~drag-and-drop between columns~~ a
+  "Move…" menu on the card writes the property value, same as editing it from the table. A database
+  with no Select-type property yet shows a prompt to pick one or create it — no silent fallback.
+  *(**Corrected 2026-09-06 — a card moves by a tap-to-reassign menu, not a drag.** Same end
+  capability, any card to any column, and the same single cell write. It is the same call already
+  made for block reordering (§3.1.1's Move up / Move down over a drag handle) and made for the same
+  reason: gesture-tracking on a 240dp card inside a horizontally-scrolling row is the risk, and the
+  menu costs the board nothing it actually needs.)*
+- **Gallery**: a card grid, one card per row, with a slot for a designated cover (the first Image
+  block in the row's body, §3.1.1, or a blank placeholder) plus a small set of properties chosen
+  per-view — matches Notion's/AppFlowy's own gallery pattern closely enough that a Notion import (§7)
+  can carry a source gallery view forward directly. *(**Two corrections, 2026-09-06.** The cover is
+  chosen and then thrown away: the ViewModel picks exactly the block this bullet specifies, and the
+  card paints nothing for it, because no surface in the app renders an Image block at all — §3.1.1's
+  own gap, surfacing here first. What was built is worse than the empty case it exists to improve: a
+  row *without* a cover at least says "No image", while a row *with* one renders a blank box. The
+  cost is charged to image rendering, not to this view. Second, the properties are **not yet
+  per-view** — the card shows the database's first three, full stop, and the stored
+  `visible_property_ids` is read by nothing. Recorded rather than quietly dropped, because the field
+  exists and the choice is a small edit on top of it rather than a redesign.)*
 - **Calendar**: rows plotted by any one Date-type property in the database, chosen per-view —
   deliberately more general than Sync-to-Tasks' binding (§5.2), which only ever plots the bound
   deadline property on the app's own Calendar page. This view is local to the database (e.g., see
   every row of a Trips database by "Departure date" without that property ever being bound to Tasks
   at all).
 
-**Still explicitly out of scope, unchanged from §10's original reasoning**: Timeline/Gantt view and
+**Was still explicitly out of scope, unchanged from §10's original reasoning** — *reopened 2026-09-06, see §5.4 and §10; the paragraph is struck rather than deleted because it is the record of what the cost was judged to be*: ~~Timeline/Gantt view and
 formula/rollup-driven grouping — both are real added complexity (date-range bar rendering with
 drag-resize; an interpreter for computed grouping keys) that didn't come up anywhere else in this
 spec as an actual need, unlike Board/Gallery/Calendar which map directly onto cases already
-described (§5.1's medical-appointments and Recipes examples, §5.4's blood-test timing example).
+described (§5.1's medical-appointments and Recipes examples, §5.4's blood-test timing example).~~
 
 **Mechanism**: a database can have multiple saved views (matching Notion's own view-tab pattern),
 each storing `view_type`, the grouping/date property it depends on, and its own visible-properties
-selection (§4's new `DatabaseView` entity) — independent of the underlying schema, so switching or
+selection (§4's new `DatabaseView` entity) *(**corrected 2026-09-06 — the third of those is stored,
+synced, and read by nothing.** `view_type`, the grouping property and the date property are all
+honoured; the per-view column chooser is designed and persisted and has no UI in either renderer,
+since the Table draws every property and the Gallery the first three and neither consults the view.
+Left in the schema deliberately: the storage and the sync mapping are the parts that would be
+expensive to add later, and this is the record that the display half is still owed.)* — independent of the underlying schema, so switching or
 adding a view never changes stored data, only how it's displayed. Filters and sorts are
 **per-view**, not global to the database: a single-condition filter model (one property, one
 comparison, one value — e.g., "Status is not Done"), no AND/OR-group logic for v1, matching the
@@ -1188,6 +1686,19 @@ This is sharper than "how often it repeats" — a Habit could in principle be we
 could in principle be daily; what makes them different is what happens when one is missed. Reference
 example: making the bed (Habit) vs. paying the water & electricity bill roughly every two months
 (recurring Task).
+
+**The arithmetic behind that test, written down 2026-09-06 — it had only ever existed in the code.**
+This section states the dividing rule and stops there, and §8.1.1 refers to "a weekly+ habit's grace
+period" as though it had been defined somewhere. It had not been. Four constants are the whole habit
+product. A period is `n` days for a DAY frequency, `n × 7` for WEEK and **`n × 30` for MONTH** — a
+month is thirty days here, which the code concedes in its own comment, and which drifts against a
+real calendar by up to three days a month. A streak **continues** while the gap since the last
+check-in is at most `period + 1` days — a one-day grace period — and otherwise **resets to 1, not
+0**, because the check-in just made is itself day one. A habit that has never been checked in is due
+immediately. And if a habit's time-of-day has already passed today, its reminder moves a **whole
+period** forward rather than to tomorrow (§9.7). None of the four is wrong, but all four are product
+decisions a reader of this section would otherwise have to guess at, and the thirty-day month is the
+one most likely to be judged differently once somebody notices it.
 
 ### 6.2 Mechanism
 
@@ -1241,6 +1752,18 @@ write rather than laid down ahead.
   unscheduled, so a long-neglected recurring task stopped notifying entirely. Backlog is still real
   and still visible — the occurrence in hand stays overdue until it is resolved, per §6.1 — the app
   just stops manufacturing backlog for occurrences it never tracked.
+- **Anchoring, third clause (added 2026-09-06 — the one case the rule above does not cover):** the
+  "original schedule" the phase is read off is the row's `start_date`. A recurring TASK with no date
+  has none, and the resolve step falls back to the day of resolution — resolution-anchored
+  recurrence, the exact thing this section rules out, arrived at through the absence of a date rather
+  than through anybody's decision. Two routes produce that row. The standalone Add-Task dialog is the
+  primary one and is a plain state-retention bug: the Repeats chips are nested under Has-date for
+  *display* only, so picking "Weekly" and then switching Has-date back off still inserts the
+  recurrence alongside a null date. §5.2's binding step is the second and is structural: Deadline and
+  Recurrence are independently optional there, so a database bound for recurrence without a deadline
+  yields the same row by design. The dialog should retain nothing it has hidden, and the binding step
+  should either require a deadline alongside a recurrence or this section should state the fallback
+  as accepted behaviour. It is currently neither.
 
 Habits keep their own separate, simpler streak-based recurrence — not the calendar RRULE mechanism.
 
@@ -1339,8 +1862,13 @@ initial candidates.
   AST library, no intermediate representation. It reads Notion's export line-by-line and emits
   `Block`/`BlockType`/`FormattingSpan` rows directly, the same way `PageContentRepository` and the
   in-app block editor already model content, so there's no separate schema to keep in sync. Embedded
-  HTML callouts (§7.2) are detected structurally (a line beginning `<`) and preserved as a raw HTML
-  fallback per §7.3.3, not silently dropped.
+  HTML callouts (§7.2) are ~~detected structurally (a line beginning `<`) and preserved as a raw HTML
+  fallback per §7.3.3, not silently dropped.~~ *(**Superseded 2026-09-06 — the nice-to-have was
+  built.** Notion's callout export turns out to be completely regular (`<aside>`, emoji, body,
+  `</aside>`), regular enough that reconstructing it structurally cost less than the fallback's own
+  hedging: the parser matches `<aside>` specifically, lifts the leading emoji into `calloutIcon`,
+  parses the body's inline spans, and emits a native `BlockType.CALLOUT`. The raw-HTML fallback
+  survives for every other tag, which is what it was really for.)*
 - **CSV → rows**: a small hand-rolled RFC4180-compliant parser (quoted fields, embedded commas,
   embedded newlines, doubled-quote escaping) — the grammar is compact enough that a dependency for
   it isn't worth this app's zero-non-AndroidX-dependency posture (`AppContainer`'s own stated
@@ -1355,17 +1883,31 @@ initial candidates.
   reasoning §9.8 R1 and §9.11 already established, applied here to reject a design that would have
   spread the same state-handling problem across three unrelated features.
 - **Property-type inference is hybrid, not silent or always-ask**: a small heuristic battery samples
-  each CSV column's values (boolean-like, ISO date, numeric) to pre-select a guessed type, then
+  each CSV column's values (boolean-like, ISO date, numeric) to pre-select a guessed type, ~~then
   reuses the *exact* property-binding confirmation step already built for §5.2/§5.2.1 — not new
-  surface area, per §7.3.6 — letting the person confirm or override before anything commits. Rejected
+  surface area, per §7.3.6 — letting the person confirm or override before anything commits.~~
+  *(**Corrected 2026-09-06: as built, inference commits.** `NotionImporter` writes every `Property`
+  with its guessed type and every `PropertyValue` during the import itself, before any UI appears; the
+  step that runs afterwards is `EnableSyncSheet`, which binds Done/Deadline/Recurrence among columns
+  **as already typed** and offers no way to retype one. Two different confirmations were conflated
+  here — §7.3.6's *binding* confirmation, which genuinely is reused, and a *type* confirmation, which
+  was never built. A wrong guess is still recoverable through §5.5's type-conversion dialog, so §7's
+  opening bar of not silently breaking content is met — but by the recoverability, not by the flow.
+  Either build the type-confirm pass this bullet describes, or restate the decision honestly as "infer
+  silently, recoverable via §5.5". What must not stand is the document claiming a pass that does not
+  exist.)* Rejected
   fully silent inference: a wrong guess on an ambiguous column (e.g., a Select property whose values
   happen to look numeric) would silently mis-type data, which is exactly the "must not silently
   break content" failure §7 opens by ruling out.
 
 **Implementation note (2026-08-30):** built as `com.tendril.app.notionimport` (`NotionMarkdownParser`,
 `NotionCsvParser`, `NotionPropertyTypeInference`, `NotionImporter`) plus a Settings section reusing
-`EnableSyncSheet` (§5.2's existing binding UI, changed from `private` to `internal` for cross-package
-reuse rather than duplicated). Two gaps found only while implementing, not anticipated by §7.1-§7.3:
+`EnableSyncSheet` (§5.2's existing binding UI, made ~~`internal`~~ **public** for cross-module
+reuse rather than duplicated) *(**corrected 2026-09-06:** `internal` was accurate while both lived in
+the app module; Milestone 3's move of the shared UI into `shared/` put a Gradle module boundary
+between the sheet and its second caller, and `internal` does not cross one. The reasoning is unchanged
+— one binding sheet, not two — only the modifier that expresses it)*. Two gaps found only while
+implementing, not anticipated by §7.1-§7.3:
 
 - **No native Table block exists.** The Block model (§3.1.1) has no `BlockType` for a Markdown pipe
   table. Resolved the same way Callouts already degrade (§7.2): a table imports as a Code block
@@ -1511,13 +2053,19 @@ prototype's CSS still colours it `--w-accent2`, i.e. the prototype predates fix 
   4.5:1 requirement; at the stored values they reach 4.59:1 and 4.62:1. Same "nudged darker, hue
   preserved" move §8.4's fix #3 records for `textFaint`, and the shipped values are correct; it was
   only the rule as stated here that claimed a pure rotation with no exception.
-- **Shade slider** (0–100%): interpolates lightness from the original vivid tone toward a
+- **Shade** (0–100%): interpolates lightness from the original vivid tone toward a
   verified-safe extreme — L=0.12 in light mode, L=0.88 in dark mode — per theme's own exact base
   lightness (not a shared generic value; an early implementation bug used one generic lightness per
   mode instead of each theme's real value, caught and fixed before shipping).
-- **Hue slider** (±90°): rotates around the theme's own accent2 base hue. Confirmed to cost almost
+- **Hue** (±90°): rotates around the theme's own accent2 base hue. Confirmed to cost almost
   nothing in contrast once Shade is high — exactly the "hue is free" finding from §8.2, now
   user-controllable rather than fixed.
+- *(**Corrected 2026-09-06: neither is a ~~slider~~.** Both ranges shipped exactly as decided, but the
+  control did not. Two flat gradient bars side by side read as near-identical rows, so Shade and Hue
+  were folded into a single radial picker — radius is Shade, angle is Hue, −90° left, 0° up, +90°
+  right — and one drag sets both. The colour model above is untouched; only the affordance changed.
+  Worth correcting rather than leaving, because a section that names the control twice is the one a
+  reader checks their build against.)*
 - **Default state** (shade=0, hue=0) exactly reproduces the original fixed accent2 hex values —
   verified byte-for-byte across all 8 palettes before shipping, so nothing changes for anyone who
   doesn't touch the new sliders.
@@ -1580,8 +2128,13 @@ global choice" pattern (§2.3), fit with the Fossify Calendar precedent already 
 | **Hybrid: opacity/Shade/Hue per-instance, theme/mode global (chosen)** | 0.95 | 0.90 | 0.60 | 0.75 | 0.75 | **0.8175** |
 
 **Decided:** `AppWidgetConfigureActivity` asks only for the wallpaper-dependent controls — opacity,
-Shade, Hue (§8.2, §8.3) — per placed widget instance, defaulting to whatever the currently-selected
-in-app theme's values are at placement time. Theme (Ink/Clay/Moss/Mauve) and mode (Light/Dark) are
+Shade, Hue (§8.2, §8.3) — per placed widget instance, defaulting to shade=0 / hue=0, which by
+construction *is* the current theme's own unmodified accent2 (§8.3's byte-for-byte default state),
+and to a fixed 88% opacity. *(**Corrected 2026-09-06:** this read ~~"defaulting to whatever the
+currently-selected in-app theme's values are at placement time"~~, which suggests all three defaults
+are sampled from the live theme. Shade and Hue effectively are, because zero *means* the theme's own
+value. Opacity is not and cannot be — no in-app surface carries an opacity, so there is nothing to
+sample, and the 88% is a constant chosen for the widget alone.)* Theme (Ink/Clay/Moss/Mauve) and mode (Light/Dark) are
 **not** offered in the widget config screen at all — they inherit live from Settings → Appearance
 (§2.3), the same way every other themed surface in the app does, so a Settings theme change updates
 every placed widget's base colors automatically rather than leaving old widgets stranded on a stale
@@ -1669,10 +2222,17 @@ single-writer Habit-folder case:
   its own local source of truth; syncing raw `.db`/`.db-wal`/`.db-shm` files is a real corruption
   risk and contradicts local-first.
 - **Snapshots are split by domain** (`entries_active.json`, `entries_archived.json`, `habits.json`,
-  `pages/<page_id>.json`, …) rather than one giant file, so an edit to one Page doesn't create sync
-  tension with an unrelated Habit edit — a generalization of the single-file `anchor_snapshot.json`
+  `pages/<uid>.json`, …) rather than one giant file, so an edit to one Page doesn't create sync
+  tension with an unrelated Habit edit *(**corrected 2026-09-06:** this section wrote
+  `pages/<page_id>.json` throughout, and the distinction is load-bearing rather than cosmetic —
+  `Page.id` is a local Room row id that names a different page on every device, which is exactly the
+  failure the `uid` column exists to prevent. The merge additionally refuses any record whose uid is
+  not a UUID, so a hand-named file dropped into the folder is ignored rather than imported. Corrected
+  here, at §9.4's debounce paragraph and at §9.4.1's file list; the Revision Log's own entries keep
+  their original wording, being dated records of what was written at the time)* — a generalization of
+  the single-file `anchor_snapshot.json`
   pattern an earlier, scrapped prototype used for habit-only sync. **Clarified 2026-07-16**: since a
-  Row *is* a Page (§5.1), each Row gets its own `pages/<row_id>.json` file too, same as any other
+  Row *is* a Page (§5.1), each Row gets its own `pages/<uid>.json` file too, same as any other
   Page — the page tree (including a Database's rows) is reconstructed from `parent_id` on read,
   mirroring exactly how Notion's own export structures a page's children (§7.1), rather than nesting
   Row data inside its parent Database's file.
@@ -1687,12 +2247,27 @@ single-writer Habit-folder case:
     `deleted_at IS NULL` — the small, frequently-edited set Tasks/Calendar/Merged (§3.3) actually
     query against day to day.
   - **Archived** = everything else: `DONE`/`SKIPPED` one-offs, and anything with `deleted_at` set
-    (Trash, §5.5.1) — written once on the transition into that state, then read rarely (history,
-    search, Trash) and essentially never rewritten again.
-  - **Transition**: resolving an Entry or trashing/restoring one (§5.5.1) moves its record between
-    the two files as one added step inside those same operations — not a new mechanism.
-  - This directly neutralizes the growth-safety risk of Trash having no auto-purge (§5.5.1, previous
-    correction): an unbounded, never-emptied Trash inflates only `entries_archived.json`, which sits
+    (Trash, §5.5.1) — ~~written once on the transition into that state, then read rarely (history,
+    search, Trash) and essentially never rewritten again.~~
+  - **Transition**: ~~resolving an Entry or trashing/restoring one (§5.5.1) moves its record between
+    the two files as one added step inside those same operations — not a new mechanism.~~
+  - *(**Both corrected 2026-09-06, and the second is better than what was specified.** The
+    Active/Archived split is real and the file boundary is exactly where this section puts it, but the
+    write pattern it was scored on is not what was built: `writeSnapshots` rewrites **both** files
+    wholesale from `entryDao.getAll()` on every pass, so `entries_archived.json` is re-serialised on
+    every launch and every backgrounding rather than once on transition. And no "move between files"
+    step was ever added to resolve/trash/restore — because none is needed. File membership is not
+    stored anywhere; it is recomputed from `Entry.isActive()` each time a pass writes, so the two
+    files are consistent with Room by construction. That is the stronger design: there is no
+    per-operation step anyone can forget, which is precisely the failure the 2026-09-05 `PageDao.touch`
+    entry is about. It is simply not the design this bullet describes, and it is why the next bullet's
+    write-amplification claim does not hold.)*
+  - ~~This directly neutralizes the growth-safety risk of Trash having no auto-purge (§5.5.1, previous
+    correction)~~ *(**corrected 2026-09-06 — it does not.** There is one write path and both files are
+    on it, so a growing Trash inflates every pass's write. What the split does neutralise is the
+    **read** side: Tasks, Calendar and the Merged view query Room, never these files. The 0.87-vs-0.72
+    score stands on query-ease and growth-safety; its write-amplification component does not.)*: an
+    unbounded, never-emptied Trash inflates only `entries_archived.json`, which sits
     outside the hot write path, rather than inflating the file every active-task edit has to
     rewrite.
   - **`habits.json` stays a single shared file, unaffected.** Habit rows are one-per-definition
@@ -1706,13 +2281,18 @@ single-writer Habit-folder case:
   concurrent edits to the same file from two devices, it creates a
   `<file>.sync-conflict-<date>-<deviceID>.json` sibling rather than silently overwriting. Tendril
   checks for these on resume/launch, merges them via the same per-record LWW rule, then deletes the
-  conflict file.
+  conflict file — *(**refined 2026-09-06:** only once its content has actually merged. The deletion is
+  conditional, deliberately: an undecryptable file and an empty one are indistinguishable at the merge
+  layer, since `decryptText` returns "" for both, so deleting on a failed merge was silent data loss.
+  A conflict file whose passphrase this device does not hold, or one truncated mid-sync, is left on
+  disk for the next pass or for a person to inspect. The same reasoning is why a `.tendril-lost-` copy
+  is never swept: it is evidence, not an input.)*
 - **Accepted v1 limitation**: for Pages specifically, LWW applies at the whole-page snapshot level —
   concurrent edits to the *same page* on two devices before either syncs means one edit is lost.
   Acceptable for a personal, limit-case scenario; flagged explicitly rather than left implicit.
 - **UI**: a "last synced at ·" indicator plus a manual "Sync now" action.
 - **Decided (2026-08-04, resolves the 2026-07-15 reopening — Page-snapshot write timing):**
-  debounce, not per-mutation. A Page's `pages/<page_id>.json` snapshot is written 2 seconds after
+  debounce, not per-mutation. A Page's `pages/<uid>.json` snapshot is written 2 seconds after
   the last block/property mutation to that page, reset on every further edit — not on every
   keystroke, which would make Pages' snapshot-write volume wildly out of proportion to Entry/Habit
   data for no real benefit (nobody is reading the synced file mid-typing). Two flush triggers bypass
@@ -1751,11 +2331,23 @@ single-writer Habit-folder case:
     (§9.4's "write to a temp file, then rename over the target" is approximated — it renames the
     existing file aside, moves the temp into place, then deletes the old one), so a write
     cancelled by the Activity going away can leave the folder with no copy of that file at all,
+    *(**corrected 2026-09-06:** this describes the store as it was before the write-then-swap
+    reordering. `AndroidSafSyncFileStore.writeAtomic` now writes a temp file, moves the existing file
+    aside to `<name>.bak`, renames the temp into place, and restores the backup if that rename is
+    refused — so the worst case leaves the previous snapshot recoverable under `.bak`, never nothing
+    at all, which is what `SyncFileStore`'s own contract promises. `writeAtomic` is not a suspending
+    function either, so cancellation cannot interrupt it partway)*,
     in a folder Syncthing is actively watching.
 
   **Still not implemented, and deliberately not faked: the 2-second per-page debounce itself.** The
-  flush triggers above are the half that has somewhere to live; the debounce is the half that
-  doesn't yet. It is specified per *page* — "a Page's `pages/<page_id>.json` snapshot" — and
+  flush triggers above are ~~the half that has somewhere to live~~ *(**corrected 2026-09-06:** one of
+  the two is. `onStop`/backgrounding was wired; **navigating away from a page was not**, and cannot be
+  with what exists — the block editor lives in `shared/` and holds no reference to `SyncCoordinator`,
+  which is `:app`-only, so the same missing per-page write path that blocks the debounce blocks this
+  trigger too. The practical gap is therefore wider than the paragraph below states: an edit made and
+  navigated away from reaches the folder at the next backgrounding or launch, and not at all if the
+  process is killed first)*; the debounce is the half that
+  doesn't yet. It is specified per *page* — "a Page's `pages/<uid>.json` snapshot" — and
   `writeSnapshots` has no per-page mode, it rewrites every domain file from scratch. Running that
   whole-database write on a 2-second timer while someone types would be far worse than the
   per-mutation write this decision already rejected, for exactly the reason it rejected it. Doing it
@@ -1870,6 +2462,67 @@ single-writer Habit-folder case:
   Not fixed here, and named so it is not mistaken for done: a preserved lost version is still only
   a file in the folder — nothing in the app tells you one exists. 261 unit tests.
 
+- **Open (recorded 2026-09-07 — stated, not fixed): a record this build reads *well enough* is
+  republished with the fields it did not understand stripped out.** Milestone 0's quarantine policy
+  (Revision Log, 2026-09-07) closed the case where an arriving record cannot be read at all. It
+  left the opposite case untouched, and the asymmetry between the two is the whole reason this
+  needs writing down rather than living in a commit message.
+
+  `SnapshotSyncOrchestrator` configures its `Json` with `ignoreUnknownKeys = true`, and all 24
+  `@Serializable` declarations across `SnapshotRecords.kt` and `PageSnapshotRecords.kt` are plain
+  data classes with no catch-all — no `JsonObject` field, no leftover-property map, in either file.
+  So a record written by a newer build that carries one *additional* field, and is in every other
+  respect perfectly readable here, decodes with that field silently discarded. The merge then
+  adopts the decoded object into Room; and the next write pass re-encodes that record **from Room
+  rows** — `pagesSyncEngine.exportPages()`, and `entryDao.getAll()`/`habitDao` through
+  `SnapshotMappers`, never from the bytes that arrived — so the copy that goes back into the folder
+  no longer contains the field. Every other device, including the newer one that wrote it, then
+  adopts *that*. The field is not merely stale on one device: it is destroyed folder-wide, on the
+  ordinary sync pass that runs on every launch and every backgrounding (§9.4's `onStart`/`onStop`
+  triggers).
+
+  **The asymmetry, which is what makes it subtle.** A record this build *cannot* read is now the
+  safe one. `mergePages` quarantines it; `HeldRecords` holds it as a raw `JsonElement` rather than
+  as the typed record it used to hold, precisely so that nothing round-trips through a data class;
+  and `publishArrayFile` appends it back byte-faithfully (pinned by `UnknownEnumQuarantineTest`'s
+  *"a quarantined record is republished with the fields this build has no class for intact"*). It is
+  exactly the records this build understands *well enough to adopt* that lose data — the failure
+  gets quieter as the two builds grow closer, which is the reverse of the intuition, and there is no
+  unreadable value anywhere in the file for a guard to trip on. Nothing reports it either, and no
+  `.tendril-lost-` copy is kept: unlike a lost merge race, the field is gone before any comparison
+  is made, so nothing on this device ever knew it had existed.
+
+  **A second, smaller accepted loss on the same theme (recorded 2026-09-07).** `PurgedKind` is read
+  by a Room converter that cannot return null, so an unrecognised tombstone kind falls back to
+  `PROPERTY` — chosen because it is the narrowest of the four and, every uid being a random UUID,
+  cannot realistically match a local column. At HEAD this line was a bare `valueOf`, and because
+  `PurgeRegistry` loads every tombstone at the top of every merge pass, one unrecognised kind
+  aborted **every** sync this device would ever run, against every peer. That was loud and destroyed
+  nothing; the fallback is survivable and destroys a little. The mislabelled row re-exports to every
+  peer as `PROPERTY`, so a PAGE or ENTRY delete instruction from a newer build stops propagating and
+  the record it named can resurrect on a peer that had not yet applied it. The trade is still the
+  right one, and the reach is narrow — verified, not assumed: the snapshot path can never insert an
+  unknown kind into Room, so the only route is running a newer build here and then downgrading. It
+  is recorded because an unrecorded cost is one a later reader assumes was never paid. The proper
+  fix is the same as above — keep the unreadable kind string rather than folding it to a member —
+  and it needs a schema change on `purged_records`, so it lands with §9.10's migration work.
+
+  **Why it is deferred rather than fixed here.** No guard placed at a sync boundary can close it:
+  by the time any boundary sees the record, the field is already gone, discarded by the decoder
+  before the merge ever ran. It is a **format change** — every record carrying the raw
+  `JsonObject` it arrived as alongside its typed fields, and merging the two on re-encode so
+  unknown members survive the round trip. That rewrites `SnapshotRecords.kt` and
+  `SnapshotMappers.kt` end to end — which is exactly what the backlog's SYNC lane
+  (`.claude\workflows\complete-tendril.PLAN.md`, items S2/S3/S4) already does for Reminder and
+  EntryCompletion sync, the restore fallback and images, and which that plan marks strictly serial
+  with each other *because they are the same two files*. Doing this one separately means rewriting
+  both files twice. So it belongs with S2–S4 and is sequenced there, not skipped.
+
+  Said plainly, because a deferral that reads like a fix is worse than no record: **this is not
+  fixed today.** It bites the first time two builds of different versions share a folder — which
+  needs nobody to choose it, since the pass runs itself on every launch and every backgrounding, so
+  whichever build happens to be installed reads and rewrites the folder unasked.
+
 
 ### 9.4.1 Portable export/import (Decided 2026-07-16)
 
@@ -1882,32 +2535,70 @@ busy-parent-style cases (two people's separate agendas, one import away from sil
 the other's data).
 
 - **One schema, reused everywhere.** The exact per-domain JSON shapes §9.4 already defines —
-  `entries_active.json`, `entries_archived.json`, `habits.json`, one `pages/<page_id>.json` per Page
+  `entries_active.json`, `entries_archived.json`, `habits.json`, one `pages/<uid>.json` per Page
   or Row — are the only serialization format; a portable export doesn't invent a second one, it just
-  packages the same files differently.
+  packages the same files differently. *(**Corrected 2026-09-06:** that list has been closed-ended
+  since 2026-07-16 and the format has grown twice since. It is now `entries_active.json`,
+  `entries_archived.json`, `habits.json`, `page_relations.json` (§3.4's relation edges),
+  `purged_records.json` (§5.5.1.1's tombstones), and one `pages/<uid>.json` per Page or Row. One file
+  is deliberately **not** portable: `sync_meta.json`, which carries a folder's salt and its
+  "this folder is encrypted" marker — properties of one sync folder, meaningless inside a package
+  meant to leave it. That asymmetry is exactly why a `.tendril` and a sync folder do not in fact
+  encrypt identically; see §9.4.2's correction of the same date.)*
 - **Packaging**: a zip, given a dedicated extension so it behaves as one shareable file rather than
   a loose folder (the same trick `.docx`/`.epub` use) — **`.tendril`**, decided 2026-08-04 alongside
   the app name itself. Contains a `manifest.json` (app version, export timestamp, `full` or
   `partial`, and the exact list of domain/page files included) plus whichever domain files the
   export actually contains.
 - **Two distinct actions, not one "Import" with hidden behavior:**
-  - **Import** — always additive, never replaces. Reuses §9.4's existing per-record last-write-wins
-    merge rule (no new merge logic invented) and, for a Page, the same accepted whole-page-snapshot
-    LWW limitation already in place for cross-device sync. Before merging, the manifest drives a
+  - **Import** — ~~always additive, never replaces~~ **additive for *records*, and destructive for
+    anything the package's tombstones name (corrected 2026-09-06)**. When this was decided on
+    2026-07-16 absence never implied deletion and nothing in a package could remove data. §5.5.1.1's
+    travelling tombstones changed that, §9.4's merge rule was narrowed to match, and this bullet was
+    not: `purged_records.json` is adopted and applied *before* any record merges, so importing a
+    package hard-deletes local Pages, Entries, Habits and Properties whose uids it declares purged —
+    superseded only where the local record's `updatedAt` is strictly newer, and for a Property not
+    superseded at all, since a Property carries no timestamp of its own. That is the right behaviour,
+    because a "Delete forever" an import quietly undoes is not one; it is simply not what "never
+    replaces" says, and the picker below is where a person should be able to decline it. Otherwise
+    unchanged: it reuses §9.4's existing per-record last-write-wins merge rule (no new merge logic
+    invented) and, for a Page, the same accepted whole-page-snapshot LWW limitation already in place
+    for cross-device sync. Before merging, the manifest drives a
     picker showing exactly what's in the package, letting the person choose what to actually bring
     in rather than all-or-nothing — this is the direct fix for two people wanting to combine
-    separate agendas without one silently overwriting the other. Notion import (§7.3) is just one
+    separate agendas without one silently overwriting the other. *(**Not built, recorded 2026-09-06.**
+    The manifest is written with everything such a picker would need — `includedFiles`, `kind`, the
+    export timestamp — and nothing reads it; Import merges the whole package. So the specific risk
+    this bullet exists to fix is unmitigated, and is sharper now than when it was written, because an
+    imported package also carries tombstones that delete. Until the screen exists, Import is
+    all-or-nothing and should be described that way. Blocked on nothing but the screen: the data it
+    would list is already in the manifest.)* Notion import (§7.3) is just one
     flavor of this same path — it was always additive-only in practice, never a full-app replace, so
     it never had a destructive-replace risk to begin with; only manually-created or
     manually-exported Tendril packages did.
-  - **Restore from backup** — a separate, deliberately harder-to-reach, full wipe-and-replace
-    action, worded unambiguously about what it does (e.g. requiring the person to confirm they
-    understand current data will be erased, not a soft dialog matching §5.5's lighter pattern).
-    Natural fit for a fresh/empty install or genuine disaster recovery; not reachable via the
-    everyday Import path.
+  - **Restore from backup** — a separate, deliberately harder-to-reach action, worded unambiguously
+    about what it does (e.g. requiring the person to confirm they understand current data will be
+    erased, not a soft dialog matching §5.5's lighter pattern). Natural fit for a fresh/empty install
+    or genuine disaster recovery; not reachable via the everyday Import path. *(**Corrected
+    2026-09-06:** ~~full wipe-and-replace~~ describes the intent and the fresh-install case, not the
+    code. It wipes Entries and Habits, but **merges** Pages: blocks, tags, canvas nodes and cell
+    values are not bulk-deleted, they go through the same whole-page LWW merge Import uses, which
+    behaves as a replace only when there is nothing local to lose. Restore onto a *populated* device
+    therefore leaves any local page the archive does not carry, and lets a newer local page beat the
+    archive's copy — which is not what "erased" implies, and the confirm dialog already states the
+    narrower truth. Either this section matches the dialog or the wipe is extended to pages and the
+    dialog reworded; recorded rather than silently fixed because §9.10 leans on this path as its
+    last-resort migration recovery, and which of the two is true decides whether that reading
+    holds.)*
 - **Selective export** lives on each Page's and each Database's own "···" menu — exporting that
   item, with a prompt (mirroring Notion's own "include subpages" option, §7.1) for whether to bring
-  sub-pages along. A full-app export stays in Settings (§3.5) alongside the SAF sync-folder
+  sub-pages along. *(**Not built, recorded 2026-09-06.** Unimplemented at both ends: there is no "···"
+  entry on a Page or a Database, and `PortableArchive.export` has no partial mode — it always writes
+  `kind = "full"` and always packages every page. The manifest's `full`-versus-`partial` field and the
+  per-page snapshot files it would select from both already exist, so what is missing is the selection
+  UI and a filter on `exportPages()`, not the format. Worth stating plainly because §9.4.2's "send a
+  single Page to someone else" consequence is written as though this shipped: today the only thing
+  anyone can send is the whole database.)* A full-app export stays in Settings (§3.5) alongside the SAF sync-folder
   permission.
 
 ### 9.4.2 At-rest snapshot encryption (Decided 2026-08-08 — optional, off by default)
@@ -1916,7 +2607,12 @@ Syncthing (or its fork) encrypts data in transit between devices, but the snapsh
 sit as plaintext on-disk, on every device, for as long as they exist inside the SAF-granted folder —
 a real exposure on a lost/stolen phone or a compromised sync-fork install, for data that includes
 medical appointments (§5.1) and financial recurring bills (§5.2.2). Settings → Sync folder
-permission (§3.5) gains an adjacent **optional passphrase** toggle:
+permission (§3.5) gains an adjacent **optional passphrase field**; encryption is on exactly when a
+passphrase is stored. *(**Corrected 2026-09-06:** no ~~toggle~~ was built, on purpose — a switch and a
+passphrase are two pieces of state that can disagree, and "toggle on, no passphrase" has no meaning.
+Read "when the toggle is on", used throughout this section, as "when a passphrase is set". The
+plain-language warning this section asks for lives on the Save confirm dialog instead, and does name
+the consequence: losing this passphrase makes the synced folder unreadable on any new device.)*
 
 - **Off by default** — matches the app's consistent "opt-in, nothing surprising by default" pattern
   (Anthropic key, Google OAuth, App Lock §3.6).
@@ -1924,10 +2620,29 @@ permission (§3.5) gains an adjacent **optional passphrase** toggle:
   using a passphrase-derived key (Argon2id or PBKDF2 into AES-256-GCM — the exact choice left to
   implementation, not a spec-level decision). The same passphrase must be entered on every device
   sharing the sync folder, since Tendril has no account/identity system to distribute keys through.
-  The passphrase itself is never written to disk or synced; only Keystore-backed
-  `EncryptedSharedPreferences` (§3.5's existing mechanism) holds it locally per device, re-entered
-  once per install.
+  The passphrase itself is never written to disk or synced; only a Keystore-backed `SecretStore` — an
+  `AndroidKeyStore` AES/GCM key wrapping the value inside ordinary `SharedPreferences` — holds it
+  locally per device, re-entered once per install. *(**Corrected 2026-09-06:** this said
+  ~~`EncryptedSharedPreferences`~~, which the app deliberately does not use: Jetpack Security
+  deprecated it in 1.1.0 in favour of direct platform Keystore use, which is what was built, and which
+  §9.5.1 already cites as this codebase's standing preference for platform APIs over an added
+  abstraction. The security property the bullet depends on is unchanged and worth restating plainly:
+  the wrapping key is hardware-bound to **this** device, so the stored passphrase cannot be carried to
+  another one even by copying the app's data directory.)*
 - **The PBKDF2 salt lives in the folder, not in the binary** (`sync_meta.json`, added 2026-09-05).
+  *(**Corrected 2026-09-06 — the folder salt does not reach exports.** Everything in this bullet holds
+  for the sync folder. It does not hold for `.tendril` packages, which the "same scheme" bullet below
+  brings under the same promise: `PortableArchive.keyOrNull()` calls `deriveKey` with one argument and
+  so takes `SnapshotEncryption.LEGACY_SALT`, the compile-time constant this bullet exists to retire.
+  Both weaknesses named below therefore survive in the file **most** likely to leave the device — one
+  precomputed table works against every Tendril export in existence, and two people choosing the same
+  passphrase produce byte-identical keys. It is at least self-consistent, since import derives the same
+  way and round-trips work, and it is not careless: an archive cannot carry a folder's salt without
+  carrying the folder's identity, and `sync_meta.json` is deliberately not packaged. The fix is the
+  same reasoning one level down — a per-archive random salt in the plaintext `manifest.json`, beside
+  the `encrypted` flag, because a salt is not a secret and the manifest is the channel. Until then,
+  "the same at-rest protection as continuous sync" overstates it, and the salt is the one thing the
+  two do not share.)*
   The original reasoning above — that a random salt needs a channel to distribute it and Tendril
   has none — was wrong in one respect: the sync folder *is* the channel, the same one the
   snapshots travel through. A compile-time salt meant one precomputed table worked against every
@@ -1936,7 +2651,11 @@ permission (§3.5) gains an adjacent **optional passphrase** toggle:
   the salt in order to derive it; a salt is not a secret, it defeats precomputation in the open),
   and a folder written before it keeps its original salt so it stays readable. Two devices that
   enable encryption before either has synced both mint one — earliest `createdAt` wins, ties
-  broken on the salt bytes, so every device converges without negotiating.
+  broken on the salt's Base64 text, so every device converges without negotiating. *(**Corrected
+  2026-09-06:** the comparison runs over the encoded string as it appears in `sync_meta.json`, not the
+  decoded ~~bytes~~. The convergence property claimed here is unaffected — the ordering is total and
+  identical on every device either way — but the two orderings are not the same ordering, and a
+  reimplementation that sorted decoded bytes could pick the other salt and lock itself out.)*
 - **A folder that says it is encrypted does not accept plaintext** (added 2026-09-05). Until the
   meta file existed there was no way to tell an injected plaintext file from a folder that had not
   been encrypted yet, so any non-encrypted file was trusted — which made AES-GCM's authentication
@@ -2126,11 +2845,17 @@ to-do rows (§7.3), would fire one overdue notification per row, all within the 
 scheduling — this applies uniformly wherever alarms get (re)scheduled, including the reconciliation
 sweep above, so it's a property of the component, not something each caller has to remember. The
 Entry itself is unaffected and still shows up correctly as overdue in Tasks/Calendar; only the
-immediate-fire notification is suppressed. **Batched summary notification, added 2026-07-16**: after
-a bulk operation creates one or more already-overdue Entries in one pass (retroactive sync-on,
-Notion import), a single summary notification fires instead of silence — "12 tasks were imported
-already overdue" — the same pattern as a routine "downloads finished" notification elsewhere on the
-OS, not a per-item alert.
+immediate-fire notification is suppressed. **Batched summary notification, added 2026-07-16 — *specified,
+never built* (corrected 2026-09-06)**: after a bulk operation creates one or more already-overdue
+Entries in one pass (retroactive sync-on, Notion import), a single summary notification fires
+instead of silence — "12 tasks were imported already overdue" — the same pattern as a routine
+"downloads finished" notification elsewhere on the OS, not a per-item alert. The reasoning is kept
+because it still holds: the never-schedule-in-the-past guard turns a flood into silence, and silence
+about twelve imported overdue tasks is its own failure. But only the guard shipped.
+`AlarmScheduler`'s own doc comment deferred the summary on the grounds that "nothing in Phase 3
+creates Entries in bulk yet" — and then Notion import (§7) and retroactive Sync-to-Tasks (§5.2.1)
+both shipped without revisiting it, `DatabaseSyncManager.enableSync` still inserting one Entry per
+row with nothing counting them. Open work, not behaviour to debug.
 
 ### 9.8 Architecture review (2026-07-14 — Review Mode, deep-review strategy)
 
@@ -2143,8 +2868,13 @@ over-auditing costs only some reading time.
 **Structural analysis.** `Entry`'s high fan-in (Calendar, Tasks, Merged, widget Agenda, Reminder,
 `EntryCompletion`, the to-do-database bridge, the Provider writer, and snapshot export all touch it)
 is expected for a central domain table and not itself a problem. What *is* a real risk: the
-five-step resolution sequence (log completion → advance-or-finalize → reset the bound Row property →
-reschedule alarms) is exactly the shape of logic that quietly drifts if five different UI surfaces
+~~five-step~~ resolution sequence (log completion → advance-or-finalize → reschedule alarms and the
+Calendar Provider mirror) *(**corrected 2026-09-06:** this said "five-step" while listing four, and one
+of the four — "reset the bound Row property" — was never built, deliberately: a bound Row's Done
+property is a live proxy computed from the Entry at display time, not a second stored value, so there
+is nothing to write back and nothing to drift. The step that did arrive later is the Provider mirror,
+folded in behind `EntryScheduleCoordinator` rather than added as a fifth thing to remember)* is exactly
+the shape of logic that quietly drifts if several UI surfaces
 each reimplement it — the same category of bug as the birthday case and the stale-alarm case already
 caught, just not yet manifested. That's an **anemic domain model** risk (business logic scattered
 across the UI layer instead of owned by one domain operation) if left unaddressed.
@@ -2317,9 +3047,16 @@ overwhelmingly common case this schema actually produces — every change logged
 has been additive (a new nullable column, a new join table, a new entity), never a rename or a drop,
 so `@AutoMigration` covers most future changes with no hand-written SQL. For the rare structural
 change `@AutoMigration` can't express, fall back to a hand-written `Migration`; for the rarer case
-even that can't cover, reuse the existing Restore-from-backup path (§9.4.1) — wipe Room, then replay
-the most recent `.tendril`/snapshot-folder export, which is schema-independent JSON rather than a
-byte-for-byte Room dump. Gate that path behind the same plain-language confirm dialog §5.5 already
+even that can't cover, reuse the existing Restore-from-backup path (§9.4.1) — ~~wipe Room, then replay
+the most recent `.tendril`/snapshot-folder export~~, which is schema-independent JSON rather than a
+byte-for-byte Room dump. *(**Corrected 2026-09-06:** two assumptions here are not true of the code
+this points at. Restore does not wipe Room — it clears Entries and Habits and **merges** everything
+page-shaped — and "snapshot-folder export" names a recovery path that does not exist, the folder being
+read additively only, with no wipe-and-replay against it. For the post-v1 migration case this is
+mostly harmless, because a destructive migration has already emptied Room by the time Restore runs,
+which is the fresh-install case Restore was written for. It matters for the acceptance criterion
+below, which asks for this path to be exercised once against a deliberately broken migration: that
+test must run on a populated device, or it proves the easy case only.)* Gate that path behind the same plain-language confirm dialog §5.5 already
 uses elsewhere ("this update needs to reset local data; your synced pages, tasks, and habits will be
 restored from your last sync").
 
@@ -2400,8 +3137,15 @@ lives as a **Decided** note in its home section rather than here. Both items tha
 rounds are now resolved (see below) — nothing is currently blocking Phase 1 of the build sequence
 (§9.9).
 
-**Still open, not blocking Phase 1 (§9.9):** none. The five items below were the last consolidated
-open items and are now resolved — see §9.9's decision-gate annotations for exactly when each was
+**Still open, not blocking Phase 1 (§9.9):** *this line read "none" until 2026-09-06, when every
+deferral in this document was reopened at once (see the Revision Log). It is no longer none, and this
+section is no longer where they are tracked. A register of that size maintained inline goes stale
+faster than it can be read — which is precisely what happened to the sentence this note replaces —
+so §10 keeps its purpose of recording what was DECIDED and why, and stops pretending to be a
+worklist. Where the worklist itself lives is deliberately not named here: any answer would be either
+a path outside version control, which a reader of this repository cannot follow, or a second copy of
+the same list, which is the duplication §9.8 R1 exists to refuse.*
+The five items below were the last consolidated open items and are now resolved — see §9.9's decision-gate annotations for exactly when each was
 scheduled relative to the build sequence.
 
 **Resolved 2026-08-26** (kept here as a changelog trail; full reasoning lives in the linked
@@ -2482,9 +3226,20 @@ section):
 - Block-level (vs. page-level) full-text search granularity (§3.1.1) — reasonable later refinement
   if page-level feels too coarse.
 - Syntax highlighting in code blocks (§3.1.1) — nice-to-have, not required for v1.
-- Desktop companion app (§12) — feasibility and platform strategy explored and scored (Kotlin
+- ~~Desktop companion app (§12) — feasibility and platform strategy explored and scored (Kotlin
   Multiplatform + Compose Multiplatform), but not scheduled into §9.9; graduates into its own spec
-  file only once it actually enters the build sequence.
+  file only once it actually enters the build sequence.~~ **Superseded 2026-08-30 by Milestone 1**
+  — shared KMP core plus a minimal desktop viewer (`tendril-windows-spec.md` §5) — which met this
+  bullet's own graduation condition on its own terms: running code, not further scoring. Milestones
+  2 (folder-sync-on-desktop, that file's §7) and 3 (Workbench UI port, its §8) landed the same day,
+  so the companion has been three milestones past this deferral while the deferral sat in the one
+  list a reader consults to learn what is *not* built — the same failure mode §10's own "Still open"
+  note describes, reached from the opposite direction. Struck rather than deleted because the
+  condition it sets is the reason `tendril-windows-spec.md` exists as a separate file at all (that
+  file's §4 scored the split against exactly this trigger). What is still deferred is not the
+  companion but the four tabs it stubs out — Calendar, Tasks & Habits, Road Map, Settings, plus the
+  Canvas page kind (§3.7) — which render `NotAvailableOnDesktop` by design, per that file's §8
+  scope boundary.
 
 - A stable per-install **device id** (**considered and deferred 2026-09-06**). Raised while designing
   the merge-loss fixes of §9.4: several candidate designs wanted one, and the argument for adding it
@@ -2505,13 +3260,16 @@ section):
   cost this entry declines to pay in advance.
 
 **Decided out of scope** (unlikely to resurface, listed for completeness):
-- A general Notion-style formula language for database properties (§5.4).
+- ~~A general Notion-style formula language for database properties (§5.4)~~ — **reopened 2026-09-06**; relation, rollup and formula are now in scope as one feature, and are no longer out of scope. See §5.4.
 - Full Notion-parity block editor (embeds, inline databases, nested-page canvases) — Notion-lite
   scope chosen instead (§3.1.1).
-- Timeline/Gantt database view and formula/rollup-driven view grouping (§5.6) — real added
-  complexity with no case elsewhere in this spec that needs them, unlike Board/Gallery/Calendar,
+- ~~Timeline/Gantt database view and formula/rollup-driven view grouping (§5.6) — real added
+  complexity with no case elsewhere in this spec that needs them~~, unlike Board/Gallery/Calendar,
   which are now in scope (§5.6, reopened 2026-08-08 — see the Resolved list above; database views
-  generally are **not** out of scope anymore).
+  generally are **not** out of scope anymore). **Both halves reopened 2026-09-06**: grouping by a
+  computed value stops being a separate problem once §5.4's evaluator exists — it is the same code
+  path as grouping by a Select — and Timeline/Gantt is reopened on its own merits rather than
+  because anything changed about its cost.
 
 ---
 
@@ -2521,12 +3279,48 @@ This spec was consolidated from a single extended design conversation covering n
 design, the widget system, and the Pages/Tasks/Habits data model, then updated 2026-07-13 following
 a pre-build gap-analysis pass (SAF vs. Shizuku, notification/FTS/secret-storage/backup-safety gaps,
 the Pages block editor scope, and resolution of most §10 open questions). It is not a substitute for
-the three HTML prototype files listed at the top — those remain the pixel-accurate reference for
+the ~~three~~ **two** HTML prototype files listed at the top *(**corrected 2026-09-06:** a count left
+over from before the 2026-09-04 reference-artifact pass established that
+`noema-accent2-fallback-comparison.html` was never in the repository; two exist, the third is
+historical)* — those remain the pixel-accurate reference for
 anything visual; this document is the reference for *decisions, reasoning, and what's still open*.
 
 **Suggested next steps:**
-- All consolidated open items are resolved as of 2026-08-26 (§10) — nothing currently blocks
-  starting Phase 1 of the build sequence (§9.9).
+- ~~All consolidated open items are resolved as of 2026-08-26 (§10) — nothing currently blocks
+  starting Phase 1 of the build sequence (§9.9).~~ **Both halves are out of date (corrected
+  2026-09-06):** the build sequence is finished rather than waiting to start — every §9.9 phase is
+  implemented and ~~261 unit tests~~ a unit-test suite runs against it *(**recount 2026-09-07** — the
+  figure is in the bullet below rather than restated here, because a count carried inside a sentence
+  about something else is exactly how the stale ones got in)* — and §10 is no longer empty, because
+  the 2026-09-06 instruction reopened every deferral in this document at once. The live next step is
+  that reopened backlog, ordered by dependency; it is not Phase 1.
+- **The next step as of 2026-09-07: the staged backlog build, beginning with §9.10's Room
+  destructive-migration switch.** What landed immediately before it was **Milestone 0**, which is
+  hardening rather than a feature: a `locked()` write gate on the surfaces that had never adopted
+  §3.1.2's View-Only lock — the Pages hub, Canvas (§3.7), Road Map, and Settings' import/restore
+  paths, where the lock had been absent at *both* layers, so the screens neither refused a write nor
+  hid the control that made one — plus a quarantine policy for unrecognised enum values at every
+  sync boundary, so a record written by a newer build is set aside intact instead of being decoded
+  halfway and then thrown, which used to take the local copy of whatever it was rebuilding with it.
+  The migration switch leads the backlog on a dependency argument, not a size one: §9.10's
+  acceptance criterion forbids leaving `fallbackToDestructiveMigration()` in place past the first
+  release, and nearly every reopened item adds to the schema (§5.4's `RELATION`/`COMPUTED` property
+  types, §5.6's Timeline view) — so each one built before the switch is one more migration to
+  hand-write afterwards, against a schema that moved in the meantime.
+- **The suite, counted rather than remembered (2026-09-07): 321 `@Test` methods across 29 unit-test
+  classes** under `Tendril android\app\src\test`, none carrying `@Ignore` or `@Disabled`. That is a
+  green-run tally, not merely a static count: the JUnit XML under `app/build/test-results` records
+  321 tests, 0 failures, 0 errors and 0 skipped across all 29 classes. It supersedes the "313
+  passing" figure recorded earlier the same day, which was correct until the last round of
+  quarantine tests landed. *(**Corrected 2026-09-07, twice over.** This bullet first claimed a
+  "static count, not a green-run tally" — true when written and false seventy-three seconds later,
+  once the suite ran — and then attributed the 321-313 gap to a named file from memory rather than
+  from anything in the repository. A paragraph whose entire subject is not copying counts forward
+  got its own count wrong in two separate ways. Both are left on the record rather than quietly
+  replaced, because that is precisely the failure it was written to warn about.)* Stated this way because counts are what this
+  document keeps getting wrong by copying them forward instead of recounting — §11's own "three
+  prototypes" (two exist) and §8.1's "four density tiers" (three are named) were both that. Recount
+  before reusing this number; do not carry it into a sentence about something else.
 - If this spec is handed to a fresh conversation or another engineer, it's worth testing it cold:
   paste it in and ask what's unclear or assumed.
 - Continue updating this file directly as further decisions get made, rather than letting new
@@ -2552,7 +3346,8 @@ both `Tendril android\` and `Tendril windows\` resolve the shared core as `inclu
 a *relative sibling* path. Only a single repository reproduces that arrangement from one clone. A
 submodule cannot — a submodule must live inside its superproject, which would nest `shared\` under a
 consumer and break both build files. Keeping the three together also keeps cross-cutting changes
-atomic: 33 of 52 Android source files import `shared` packages, so a change routinely spans a DAO
+atomic: about two thirds of the Android app's source files import `shared` packages — 35 of the 55
+under `app/src/main` at the time of writing — so a change routinely spans a DAO
 query and its Android caller, or a use case and its test.
 
 What this does *not* change: the Revision Log stays the index of decisions and reasoning, because a
@@ -2566,8 +3361,12 @@ root. Setup steps are not decisions, and this document is a decisions record.
 `...\Builds\Tendril\`, not one single project root:
 - `Tendril android\` — this file, and the existing Android app (`app\`, single-module Gradle
   project). Builds the APK.
-- `shared\` — a Kotlin Multiplatform module (Room 2.8.4 data/domain/sync-merge layer, `android` +
-  `desktop` targets), consumed by both other folders via Gradle composite builds
+- `shared\` — a Kotlin Multiplatform module (`android` + `desktop` targets) holding the Room 2.8.4
+  data/domain/sync-merge layer **and, since Milestone 3, the Workbench UI both clients render from**:
+  theming, the five-tab nav shell, and the Pages/PageDetail/PageDatabase block editor with their
+  ViewModels, on Compose Multiplatform *(**added 2026-09-06**, worth stating here rather than only in
+  the windows spec because it widens what §12's anti-drift rule covers — a Compose change to the block
+  editor is now a change to both apps)*. Consumed by both other folders via Gradle composite builds
   (`includeBuild("../shared")`). See §12.
 - `Tendril windows\` — the desktop companion (Compose Multiplatform, JVM). Builds the Windows EXE.
   Has its own spec file, `tendril-windows-spec.md`, living in this folder — see §12.
