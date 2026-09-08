@@ -11,6 +11,7 @@ import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
@@ -127,6 +128,9 @@ class FakePageDao(private val store: FakePageStore) : PageDao {
 
     override suspend fun getRowsOf(databaseId: Long): List<Page> =
         store.pages.values.filter { it.databaseId == databaseId && it.deletedAt == null }
+
+    override suspend fun getByKind(kind: PageKind): List<Page> =
+        store.pages.values.filter { it.kind == kind && it.deletedAt == null }.sortedBy { it.title }
 
     override suspend fun updateParentAndDatabase(id: Long, parentId: Long?, databaseId: Long?) {
         store.pages[id]?.let { store.pages[id] = it.copy(parentId = parentId, databaseId = databaseId) }

@@ -12,6 +12,8 @@ import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
+import com.tendril.app.data.pagedatabase.parseRelationConfig
+import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
@@ -323,6 +325,140 @@ class WritePathSyncTest {
             "absence no longer deletes, so a real deletion has to travel as its own tombstone",
             emptyList<String>(),
             b.propertyDao.getAll().map { it.name },
+        )
+    }
+
+    // -------------------------------------------------------------------- relation property (DB1)
+
+    /** Two empty databases on A, "Tasks" and "Projects" — the tasks page (with its database id
+     * already resolved) and the projects database's own id, which is all [addRelationProperty]
+     * needs as a target. */
+    private suspend fun seedTwoDatabasesOnA(): Pair<Page, Long> {
+        val tasksPage = seedPageOnA("Tasks", PageKind.DATABASE)
+        val tasksDbId = a.pageDatabaseDao.insert(PageDatabase(pageId = tasksPage.id, createdAt = t0, updatedAt = t0))
+        val projectsPage = seedPageOnA("Projects", PageKind.DATABASE)
+        val projectsDbId = a.pageDatabaseDao.insert(PageDatabase(pageId = projectsPage.id, createdAt = t0, updatedAt = t0))
+        return a.pageDao.getById(tasksPage.id)!!.copy(databaseId = tasksDbId) to projectsDbId
+    }
+
+    /** §5.4/DB1 — "plus auto-creation of the reverse property so the link is genuinely
+     * two-way." Both properties exist the moment the forward one is created, paired by uid
+     * rather than only by database, so two relation properties between the same pair of
+     * databases would never be confused with each other. */
+    @Test
+    fun `creating a relation property also creates its reverse in the target database`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single()
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single()
+
+        assertEquals("Project", forward.name)
+        assertEquals(PropertyType.RELATION, forward.type)
+        assertEquals(PropertyType.RELATION, reverse.type)
+        assertEquals(
+            "the reverse is named after the source database, a starting value the person can rename",
+            "Tasks",
+            reverse.name,
+        )
+        assertEquals(
+            "the reverse property's config points back at the forward one by its own uid, not just at the database",
+            forward.uid,
+            parseRelationConfig(reverse.config)?.reversePropertyUid,
+        )
+        assertEquals(
+            "and the forward property's config points at the reverse one, symmetrically",
+            reverse.uid,
+            parseRelationConfig(forward.config)?.reversePropertyUid,
+        )
+    }
+
+    /** Relating never one-way, even before anything syncs: the whole point of pairing the
+     * properties at creation is that editing either row's cell updates the other row's cell on
+     * the *same device*, in the same write. */
+    @Test
+    fun `relating two rows writes the reverse cell locally, before any sync`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val taskRow = a.pageDao.getById(a.store.seedPage(Page(title = "Ship it", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single()
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single()
+
+        a.database(tasksPage.id).setRelationValue(forward, taskRow, setOf(projectRow.uid))
+
+        assertEquals(
+            "this row's own cell holds the related row's uid",
+            setOf(projectRow.uid),
+            parseRelationValue(a.propertyValueDao.getForPropertyAndRow(forward.id, taskRow.id)?.value),
+        )
+        assertEquals(
+            "and the OTHER row's reverse cell was written in the same call, not left for a sync pass to fill in",
+            setOf(taskRow.uid),
+            parseRelationValue(a.propertyValueDao.getForPropertyAndRow(reverse.id, projectRow.id)?.value),
+        )
+    }
+
+    /** Removing a related row from one side removes the edge from both, the same as adding —
+     * the diff in [PageDatabaseViewModel.setRelationValue] has to reach the removed set too, not
+     * only the added one. */
+    @Test
+    fun `un-relating a row clears the reverse cell locally too`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val taskRow = a.pageDao.getById(a.store.seedPage(Page(title = "Ship it", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single()
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single()
+        a.database(tasksPage.id).setRelationValue(forward, taskRow, setOf(projectRow.uid))
+
+        a.database(tasksPage.id).setRelationValue(forward, taskRow, emptySet())
+
+        assertEquals(emptySet<String>(), parseRelationValue(a.propertyValueDao.getForPropertyAndRow(forward.id, taskRow.id)?.value))
+        assertEquals(
+            "the reverse cell has to lose the edge too, or the two rows disagree about being related",
+            emptySet<String>(),
+            parseRelationValue(a.propertyValueDao.getForPropertyAndRow(reverse.id, projectRow.id)?.value),
+        )
+    }
+
+    /** The acceptance test named for DB1 in the build plan, verbatim: "Relate row X to row Y; Y
+     * shows X in its reverse property; both sync." Both databases, both rows and the paired
+     * properties are created on A and synced to B *before* the relation is made, so this proves
+     * the relation edit itself travels — not merely that two databases created together do. */
+    @Test
+    fun `a relation made on one device is visible from both sides on the other`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val taskRow = a.pageDao.getById(a.store.seedPage(Page(title = "Ship it", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single()
+        syncAtoB()
+
+        a.database(tasksPage.id).setRelationValue(forward, taskRow, setOf(projectRow.uid))
+        syncAtoB()
+
+        val bTaskRowId = b.pageIdOf(taskRow.uid)
+        val bProjectRowId = b.pageIdOf(projectRow.uid)
+        val bForward = b.propertyDao.getAll().single { it.name == "Project" }
+        val bReverse = b.propertyDao.getAll().single { it.name == "Tasks" }
+
+        assertEquals(
+            "X's own side: the task row relates to the project row",
+            setOf(projectRow.uid),
+            parseRelationValue(b.propertyValueDao.getForPropertyAndRow(bForward.id, bTaskRowId)?.value),
+        )
+        assertEquals(
+            "Y shows X in its reverse property, per the acceptance test's own wording",
+            setOf(taskRow.uid),
+            parseRelationValue(b.propertyValueDao.getForPropertyAndRow(bReverse.id, bProjectRowId)?.value),
         )
     }
 
