@@ -20,6 +20,9 @@ the one place a reader consults to learn what is not built — declined to say w
 - X6 (harden `tools/audit.py`) is scheduled **last**, in Stage 9. That is the wrong place.
   It is the detector for the entire class of drift this plan exists to clean up, its
   finding was confirmed by measurement on 2026-09-08, and it is sized S.
+  **Half done 2026-09-08, in PR #11**: the two checks that were failing on correct code are
+  fixed. The additive half — a field-with-no-non-mapper-reader check, which is what would
+  actually catch the four dead fields listed in `scope-decisions.md` — is still open.
 
 ---
 

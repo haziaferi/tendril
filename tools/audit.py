@@ -86,13 +86,45 @@ def strip_literals(src: str) -> str:
 CODEY = re.compile(
     r"^\s*//\s*(?:"
     r"(?:private |internal |public |override |suspend )*(?:val|var|fun|class|object|interface)\s+\w+\s*[:(=]"
-    r"|import\s+[\w.]+"
+    r"|import\s+\w+(?:\.[\w*]+)+"
     r"|(?:if|for|while|when)\s*\("
     r"|return\s+\w+"
     r"|\w+(?:\.\w+)*\([^)]*\)\s*[;{]?\s*$"
     r"|\w+(?:\.\w+)*\s*=\s*\w+.*[;)]\s*$"
     r")"
 )
+ENUM_HEAD = re.compile(r"\benum\s+class\s+\w+[^{]*\{")
+
+
+def enum_members(src: str) -> set[str]:
+    """Constant names from every `enum class` body.
+
+    The line-anchored pattern in main() only sees a member alone on its own line ending
+    in `,` or `(`. A one-line body — `enum class EntrySource { MANUAL, DATABASE_SYNC }` —
+    puts every member mid-line, and the last has no trailing comma, so none was ever
+    collected and every KDoc link naming an enum constant read as dangling.
+    """
+    out: set[str] = set()
+    for m in ENUM_HEAD.finditer(src):
+        i, depth = m.end(), 1
+        while i < len(src) and depth:
+            depth += (src[i] == "{") - (src[i] == "}")
+            i += 1
+        body = src[m.end(): i - 1].split(";", 1)[0]   # constants precede any member fun
+        body = re.sub(r"//[^\n]*", " ", body)
+        part, nest = [], 0
+        for ch in body + ",":
+            nest += (ch in "([") - (ch in ")]")
+            if ch == "," and nest == 0:
+                n = re.match(r"\s*(?:@\w+\s+)*([A-Za-z_]\w*)", "".join(part))
+                if n:
+                    out.add(n.group(1))
+                part = []
+            else:
+                part.append(ch)
+    return out
+
+
 MARKER = re.compile(r"^\s*(?://|/?\*+)\s.*\b(FIXME|HACK|XXX|WIP)\b|^\s*(?://|/?\*+)\s*TODO[: ]")
 # Top-level only: column 0, optionally with modifiers. Extension receivers included.
 TOP_DECL = re.compile(
@@ -152,6 +184,7 @@ def main() -> int:
     imported |= set(re.findall(r"^import\s+([\w.]+)", all_code, re.M))
     declared = set(re.findall(r"\b(?:fun|class|object|interface|val|var)\s+(?:<[^>]+>\s+)?(?:[\w.]+\.)?(\w+)", all_code))
     declared |= set(re.findall(r"^\s*(\w+)\s*[,(]\s*$", all_code, re.M))          # enum members
+    declared |= enum_members(all_code)                                             # one-line enum bodies
     declared |= set(re.findall(r"^\s*(?:val|var)?\s*(\w+)\s*:", all_code, re.M))  # params/properties
     declared |= set(re.findall(r"[(,]\s*(?:val\s+|var\s+|vararg\s+)?(\w+)\s*:", all_code))  # inline params
     known = imported | declared | {"Dispatchers", "Boolean", "Int", "Long", "String"}
