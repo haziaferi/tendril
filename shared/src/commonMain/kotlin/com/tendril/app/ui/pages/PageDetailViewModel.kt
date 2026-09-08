@@ -240,6 +240,17 @@ class PageDetailViewModel(
         blockDao.update(block.copy(type = newType, updatedAt = Instant.now()))
     }
 
+    /** CODE only (P1). `null` means "plain text" — the same value the Notion importer
+     * stores for a fence with no language tag (`NotionMarkdownParser`'s `.ifBlank { null }`). */
+    fun setCodeLanguage(block: Block, language: String?) = launchAndReindex {
+        blockDao.update(block.copy(codeLanguage = language, updatedAt = Instant.now()))
+    }
+
+    /** CALLOUT only (P3). */
+    fun setCalloutColor(block: Block, color: String) = launchAndReindex {
+        blockDao.update(block.copy(calloutColor = color, updatedAt = Instant.now()))
+    }
+
     fun deleteBlock(block: Block) = launchAndReindex {
         blockDao.delete(block.id)
     }

@@ -261,6 +261,34 @@ class WritePathSyncTest {
         assertEquals(listOf(true), b.blockDao.getForPage(b.pageIdOf(page.uid)).map { it.checked })
     }
 
+    /** P1 — the code block language picker in `BlockActionSheet`, wired up now that B3 no longer
+     * blocks Stage 5. `setCodeLanguage` is a plain `launchAndReindex` mutation, so this is really
+     * exercising the same write path as `changeType`/`setToggleExpanded` above, not new plumbing. */
+    @Test
+    fun `a code block's language picked on one device reaches the other`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Snippets")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.CODE, order = 0, content = "print(1)", createdAt = t0, updatedAt = t0))
+        syncAtoB()
+
+        a.detail(page.id).setCodeLanguage(a.blockDao.getForPage(page.id).single(), "python")
+        syncAtoB()
+
+        assertEquals(listOf("python"), b.blockDao.getForPage(b.pageIdOf(page.uid)).map { it.codeLanguage })
+    }
+
+    /** P3 — the callout color swatch, same shape as the language picker above. */
+    @Test
+    fun `a callout's color picked on one device reaches the other`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Reminders")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.CALLOUT, order = 0, content = "don't forget", createdAt = t0, updatedAt = t0))
+        syncAtoB()
+
+        a.detail(page.id).setCalloutColor(a.blockDao.getForPage(page.id).single(), "#BFDBFE")
+        syncAtoB()
+
+        assertEquals(listOf("#BFDBFE"), b.blockDao.getForPage(b.pageIdOf(page.uid)).map { it.calloutColor })
+    }
+
     /** Tags are not blocks and travel in their own field of the snapshot, but they are gated by
      * the same one timestamp as everything else hanging off the page. */
     @Test
