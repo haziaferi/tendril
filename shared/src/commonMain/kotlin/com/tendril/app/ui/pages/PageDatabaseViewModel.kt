@@ -145,7 +145,18 @@ class PageDatabaseViewModel(
      * only view got deleted) still always has one — §5.6: "a Database always has at least
      * one Table view." Checks ground truth via a one-shot query, not `views.value` — that
      * StateFlow's initial value is `emptyList()` until Room's own Flow has emitted once, so
-     * checking it on first composition would race and insert a duplicate. */
+     * checking it on first composition would race and insert a duplicate.
+     *
+     * §3.1.2 — the one write on this ViewModel deliberately *outside* [locked], and the omission
+     * is the point rather than an oversight: this is idempotent repair-on-open, not an edit, so
+     * gating it would leave a viewless database unopenable-as-a-database for exactly as long as
+     * View-Only stayed on — a lock that hides data instead of protecting it. It is also outside
+     * [launchAndTouch] on purpose, so it claims no authorship, moves no `pages.updatedAt`, and can
+     * never outrank a real schema edit made on another device (§9.4) — every device simply
+     * performs the same repair for itself. Same exemption, same two reasons, as
+     * `CanvasViewModel`'s `init` block (its lazy `PageCanvas` shell), whose own note points back
+     * here. Pinned by `ViewOnlySurfacesGuardTest`, so a later sweep that gates everything it can
+     * find breaks a test rather than the app. */
     fun ensureDefaultView() {
         val db = database.value ?: return
         viewModelScope.launch {

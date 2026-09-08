@@ -62,12 +62,17 @@ class AppContainer(context: Context) {
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, purgeRegistry,
     )
+    /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
+     * takes it: the lock is absolute and it covers Settings, so import and restore refuse at
+     * the class rather than only at the two Settings buttons. */
+    val viewLockState = ViewLockState()
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
         // `.tendril` package. "Off" is simply no passphrase set.
         passphrase = { secretStore.syncPassphrase.value },
+        viewLockState = viewLockState,
     )
     /** §9.4's sync triggers — lifecycle and the Settings button both run through this one
      * place, so they can't overlap and a failure has somewhere to be reported from. */
@@ -98,7 +103,6 @@ class AppContainer(context: Context) {
             database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
         )
     }
-    val viewLockState = ViewLockState()
     // audit 4.3 — checkbox-only mode draws over the keyguard, so it must refuse to turn on at
     // all when App Lock is the thing standing in front of the app.
     val checkboxOnlyState = CheckboxOnlyState { appLockPreferences.enabled.value }

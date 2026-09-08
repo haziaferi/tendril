@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -70,6 +71,7 @@ import com.tendril.app.storage.SyncStatusPreferences
 import com.tendril.app.storage.ThemePreferences
 import com.tendril.app.sync.PortableArchive
 import com.tendril.app.sync.SyncCoordinator
+import com.tendril.app.ui.pages.LocalViewOnly
 import com.tendril.app.ui.theme.TendrilColorTheme
 import com.tendril.app.ui.theme.TendrilMode
 import com.tendril.app.ui.theme.TendrilTypeface
@@ -89,6 +91,13 @@ fun SettingsScreen(
     databaseSyncManager: DatabaseSyncManager,
     modifier: Modifier = Modifier,
 ) {
+    // §3.1.2 as the user decided it: "View-Only is absolute, and it covers Settings." Read from
+    // the same CompositionLocal every Pages screen reads (provided once in `WorkbenchScaffold`,
+    // which composes this screen inside it) rather than taken as a parameter — the flag is global
+    // and read-only below the root, and a new parameter here would have to be threaded through
+    // `AndroidWorkbenchScaffold` for a value that is already in scope.
+    val viewOnly = LocalViewOnly.current
+
     Scaffold(
         modifier = modifier,
         topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_settings)) }) },
@@ -100,9 +109,13 @@ fun SettingsScreen(
             HorizontalDivider()
             AtRestEncryptionSection(secretStore, syncCoordinator)
             HorizontalDivider()
-            PortableBackupSection(portableArchive)
+            PortableBackupSection(portableArchive, viewOnly)
             HorizontalDivider()
-            NotionImportSection(notionImporter, databaseSyncManager)
+            // The whole section is swapped out rather than merely disabled: its file picker is
+            // launched from inside it, and the honest thing to show someone is why the button
+            // they came here for isn't there. (Standing in for it here, rather than editing
+            // `NotionImportSection` itself, also keeps that file's signature alone.)
+            if (viewOnly) NotionImportLockedSection() else NotionImportSection(notionImporter, databaseSyncManager)
             HorizontalDivider()
             AnthropicKeySection(secretStore)
             HorizontalDivider()
@@ -431,10 +444,19 @@ private fun DialogTextButton(onClick: () -> Unit, label: String = "Confirm") {
     androidx.compose.material3.TextButton(onClick = onClick) { Text(label) }
 }
 
-/** Settings → full data import/export (§3.5, §9.4.1) — a portable `.tendril` package,
- * distinct from the continuous background sync feed above. */
+/**
+ * Settings → full data import/export (§3.5, §9.4.1) — a portable `.tendril` package,
+ * distinct from the continuous background sync feed above.
+ *
+ * [viewOnly] (§3.1.2) takes Import and Restore away, and deliberately leaves Export alone:
+ * exporting reads and changes nothing, and a lock that stopped someone taking a backup would be
+ * working against the data it exists to protect. The refusal is stated rather than implied —
+ * a disabled button with no reason beside it, on the screen where the eye toggle isn't visible,
+ * is indistinguishable from a broken one. [PortableArchive] refuses these two calls itself as
+ * well, so the guard doesn't depend on this composable being the only way in.
+ */
 @Composable
-private fun PortableBackupSection(archive: PortableArchive) {
+private fun PortableBackupSection(archive: PortableArchive, viewOnly: Boolean) {
     val scope = rememberCoroutineScope()
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -465,7 +487,20 @@ private fun PortableBackupSection(archive: PortableArchive) {
             if (uri == null) return@rememberLauncherForActivityResult
             scope.launch {
                 statusMessage = runCatching { archive.importAdditive(uri) }.fold(
-                    { "Imported ${it.entryFilesFound} entry file(s), ${it.habitFilesFound} habit file(s)" },
+                    { result ->
+                        val applied = "Imported ${result.entryFilesFound} entry file(s), ${result.habitFilesFound} habit file(s)"
+                        // A record this build can't read is skipped, never applied half-way and
+                        // never written over the local copy — but it is said out loud, because an
+                        // import that landed nine records of ten looks exactly like one that
+                        // landed all ten until the day the tenth is missed.
+                        if (result.quarantinedRecords > 0) {
+                            "$applied. ${result.quarantinedRecords} record(s) were skipped — this " +
+                                "version of Tendril can't read them, most likely because they were " +
+                                "written by a newer one. Nothing of yours was changed for those."
+                        } else {
+                            applied
+                        }
+                    },
                     { it.message ?: "Import failed." },
                 )
             }
@@ -490,8 +525,12 @@ private fun PortableBackupSection(archive: PortableArchive) {
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { exportLauncher.launch("tendril-export.tendril") }) { Text("Export") }
-            Button(onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import") }
-            Button(onClick = { restoreLauncher.launch(arrayOf("*/*")) }) { Text("Restore backup") }
+            Button(enabled = !viewOnly, onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import") }
+            Button(enabled = !viewOnly, onClick = { restoreLauncher.launch(arrayOf("*/*")) }) { Text("Restore backup") }
+        }
+        if (viewOnly) {
+            Spacer(Modifier.height(8.dp))
+            ViewOnlyReason("Importing and restoring are")
         }
         statusMessage?.let {
             Spacer(Modifier.height(8.dp))
@@ -524,6 +563,45 @@ private fun PortableBackupSection(archive: PortableArchive) {
             },
             dismissButton = { DialogTextButton(onClick = { showRestoreConfirm = false }, label = "Cancel") },
         )
+    }
+}
+
+/**
+ * §3.1.2 — the one sentence every View-Only refusal on this screen says, so they read as one rule
+ * rather than as three separate malfunctions. It names where the toggle lives because Settings is
+ * the one place the eye in the Pages toolbar isn't on screen: without that, "unavailable" is just
+ * a dead button.
+ *
+ * [what] is the subject of the sentence, e.g. "Importing and restoring are".
+ */
+@Composable
+private fun ViewOnlyReason(what: String) {
+    Text(
+        "$what unavailable while View-Only is on. Turn it off with the eye in the Pages toolbar.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * §3.1.2 — what stands in for [NotionImportSection] while the lock is on. A Notion import creates
+ * pages, databases, rows and assets in bulk, which makes it the largest create operation in the
+ * app after Restore, and every one of those writes travels to every other device on the next sync
+ * pass (§9.4) — so it is exactly the kind of write the lock exists to prevent someone making by
+ * accident. The section keeps its heading and icon so the setting is visibly still there, and
+ * simply has no button while it's locked.
+ */
+@Composable
+private fun NotionImportLockedSection() {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Icon(Icons.Outlined.UploadFile, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Import from Notion", style = MaterialTheme.typography.bodyLarge)
+                ViewOnlyReason("Importing a Notion export is")
+            }
+        }
     }
 }
 

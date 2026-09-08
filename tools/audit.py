@@ -19,6 +19,7 @@ Checks
   6. leaked MutableStateFlow   `val x: StateFlow<T> = _x` without .asStateFlow()
   7. Regex built per call      allocated in a function body instead of a top-level val
   8. unguarded throwing I/O    a call to a documented-throwing file API with no try/catch
+ 10. write-only entity field  stored and synced, never read outside the sync mappers
   9. imported-name shadowed    `viewModel.x` in a function where `viewModel` is only the
                                imported *function* of that name, never a parameter or local
 
@@ -31,7 +32,7 @@ import argparse, os, re, sys
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKIP_DIRS = {".git", "build", ".gradle", ".idea"}
+SKIP_DIRS = {".git", "build", ".gradle", ".idea", ".claude"}
 TEST_PATH = re.compile(r"/(test|androidTest)/")
 
 
@@ -86,13 +87,45 @@ def strip_literals(src: str) -> str:
 CODEY = re.compile(
     r"^\s*//\s*(?:"
     r"(?:private |internal |public |override |suspend )*(?:val|var|fun|class|object|interface)\s+\w+\s*[:(=]"
-    r"|import\s+[\w.]+"
+    r"|import\s+\w+(?:\.[\w*]+)+"
     r"|(?:if|for|while|when)\s*\("
     r"|return\s+\w+"
     r"|\w+(?:\.\w+)*\([^)]*\)\s*[;{]?\s*$"
     r"|\w+(?:\.\w+)*\s*=\s*\w+.*[;)]\s*$"
     r")"
 )
+ENUM_HEAD = re.compile(r"\benum\s+class\s+\w+[^{]*\{")
+
+
+def enum_members(src: str) -> set[str]:
+    """Constant names from every `enum class` body.
+
+    The line-anchored pattern in main() only sees a member alone on its own line ending
+    in `,` or `(`. A one-line body — `enum class EntrySource { MANUAL, DATABASE_SYNC }` —
+    puts every member mid-line, and the last has no trailing comma, so none was ever
+    collected and every KDoc link naming an enum constant read as dangling.
+    """
+    out: set[str] = set()
+    for m in ENUM_HEAD.finditer(src):
+        i, depth = m.end(), 1
+        while i < len(src) and depth:
+            depth += (src[i] == "{") - (src[i] == "}")
+            i += 1
+        body = src[m.end(): i - 1].split(";", 1)[0]   # constants precede any member fun
+        body = re.sub(r"//[^\n]*", " ", body)
+        part, nest = [], 0
+        for ch in body + ",":
+            nest += (ch in "([") - (ch in ")]")
+            if ch == "," and nest == 0:
+                n = re.match(r"\s*(?:@\w+\s+)*([A-Za-z_]\w*)", "".join(part))
+                if n:
+                    out.add(n.group(1))
+                part = []
+            else:
+                part.append(ch)
+    return out
+
+
 MARKER = re.compile(r"^\s*(?://|/?\*+)\s.*\b(FIXME|HACK|XXX|WIP)\b|^\s*(?://|/?\*+)\s*TODO[: ]")
 # Top-level only: column 0, optionally with modifiers. Extension receivers included.
 TOP_DECL = re.compile(
@@ -110,6 +143,36 @@ LEAKED_FLOW = re.compile(r"^\s*val\s+\w+\s*:\s*StateFlow<.*>\s*=\s*_\w+\s*$")
 REGEX_IN_BODY = re.compile(r"^\s{8,}(?!.*\b(?:val|var)\s)[^*/].*\bRegex\(")
 FUN_DECL = re.compile(r"^\s*(?:@\w+\s+)*(?:private |internal |public |protected )?(?:suspend )?fun")
 THROWING = re.compile(r"\b(?:importAdditive|restoreFromBackup|readAndMerge|writeSnapshots)\s*\(|\b\w+\.(?:import|export)\s*\(")
+# --- check 10: an entity field stored, synced, and never read ------------------
+# The defect this encodes: a field with no `.name` access anywhere outside the sync
+# mappers, named in no @Query, is written to the database and replicated to every
+# device while being displayed to nobody. Sync is precisely what hides it from every
+# other check here — SnapshotMappers and PagesSyncEngine reference each dead field
+# exactly twice, encoding and decoding, so a plain reference count reads as healthy.
+# Discounting those files is therefore not an optimisation, it is the whole check.
+ENTITY_DECL = re.compile(r"@Entity[\s\S]{0,400}?data class (\w+)\(([\s\S]*?)\n\)", re.M)
+ENTITY_FIELD = re.compile(r"^\s*(?:@\w+(?:\([^)]*\))?\s+)*val\s+(\w+)\s*:", re.M)
+SQL_ANN = re.compile(r'@(?:Query|DatabaseView)\s*\(\s*(?:value\s*=\s*)?("""|")([\s\S]*?)\1')
+MAPPER_FILES = ("SnapshotMappers.kt", "PagesSyncEngine.kt", "SnapshotRecords.kt",
+                "PageSnapshotRecords.kt", "SnapshotSyncOrchestrator.kt", "PortableArchive.kt")
+
+# Read by something this text-level check cannot see. Permanent, not debt.
+FIELD_READ_OFF_LANGUAGE = {
+    "PageFtsEntry.plainText",   # SQLite's FTS engine reads the column via MATCH, never by name
+}
+
+# Fields that really are write-only today, each with the reason it still is.
+# This set may only SHRINK: an entry goes when its field gains a reader. A field not
+# listed here that stops being read is a finding, which is the point of baselining
+# rather than deleting the check. Baselined 2026-09-08, measured not assumed.
+FIELD_WRITE_ONLY_BASELINE = {
+    "Block.calloutColor",                   # P3 - stored and synced; no colour-swatch UI exists
+    "Block.imagePath",                      # P2 - the importer writes it; nothing draws it
+    "PageDatabaseView.visiblePropertyIds",  # DB8 - no column chooser exists
+    "Tag.color",                            # a palette tuned for dichromacy that renders nowhere
+    "EntryCompletion.occurrenceDate",       # written at both resolve sites, never read back
+}
+
 FRAMEWORK_ANN = ("@Test", "@Before", "@After", "@BeforeClass", "@AfterClass", "@RunWith",
                  "@Composable", "@TypeConverter", "@Dao", "@Database", "@Entity", "@Preview")
 
@@ -152,6 +215,7 @@ def main() -> int:
     imported |= set(re.findall(r"^import\s+([\w.]+)", all_code, re.M))
     declared = set(re.findall(r"\b(?:fun|class|object|interface|val|var)\s+(?:<[^>]+>\s+)?(?:[\w.]+\.)?(\w+)", all_code))
     declared |= set(re.findall(r"^\s*(\w+)\s*[,(]\s*$", all_code, re.M))          # enum members
+    declared |= enum_members(all_code)                                             # one-line enum bodies
     declared |= set(re.findall(r"^\s*(?:val|var)?\s*(\w+)\s*:", all_code, re.M))  # params/properties
     declared |= set(re.findall(r"[(,]\s*(?:val\s+|var\s+|vararg\s+)?(\w+)\s*:", all_code))  # inline params
     known = imported | declared | {"Dispatchers", "Boolean", "Int", "Long", "String"}
@@ -206,6 +270,29 @@ def main() -> int:
                 continue
             if len(re.findall(rf"\b{re.escape(name)}\b", all_code)) <= 1:
                 rep.add("dead declaration", f"{rel(f)}:{i}  {name}")
+
+    # entity fields that are stored and synced but never read
+    sql_text = " ".join(m.group(2) for s in srcs.values() for m in SQL_ANN.finditer(s))
+    readable = {f: s for f, s in srcs.items()
+                if not TEST_PATH.search("/" + rel(f))
+                and not any(rel(f).endswith(x) for x in MAPPER_FILES)}
+    for f, src in srcs.items():
+        if TEST_PATH.search("/" + rel(f)):
+            continue
+        for m in ENTITY_DECL.finditer(src):
+            entity = m.group(1)
+            for fm in ENTITY_FIELD.finditer(m.group(2)):
+                field = fm.group(1)
+                key = f"{entity}.{field}"
+                if key in FIELD_READ_OFF_LANGUAGE:
+                    continue
+                reads = sum(len(re.findall(rf"\.{re.escape(field)}\b", s)) for s in readable.values())
+                if reads or re.search(rf"\b{re.escape(field)}\b", sql_text):
+                    continue
+                if key in FIELD_WRITE_ONLY_BASELINE:
+                    continue
+                rep.add("write-only entity field", f"{rel(f)}  {key}")
+
 
     # A call on an identifier that is only ever an imported *function* of that name.
     #

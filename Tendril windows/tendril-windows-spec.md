@@ -13,13 +13,15 @@ Companion" / "§12" rows) and isn't repeated here.
 | 2026-08-30 | File created — §12.1–§12.5 of `tendril-spec.md` moved here verbatim (renumbered §1–§6), per §4's graduation trigger. No content changed in the move; see `tendril-spec.md`'s Revision Log for this content's full history before the split. | all |
 | 2026-08-30 (later same day) | Milestone 2 (folder-sync-on-desktop) implemented: new `SyncFileStore` interface + `SnapshotSyncOrchestrator` (ported from Android's `SnapshotSyncManager`) in a new `shared/jvmCommon` intermediate source set, platform implementations `AndroidSafSyncFileStore`/`DesktopFileSyncFileStore`, and a folder-picker/passphrase/"Sync now" UI in `Tendril windows`. §3's gate re-affirmed as still not triggered (desktop stays read-only this milestone too). Per §0's anti-drift rule, `tendril-spec.md`'s Revision Log has a matching entry. See §7. | §3, §6, §7 |
 | 2026-09-05 (re-key) | Anti-drift entry (§0): `SnapshotSyncOrchestrator` (`shared/jvmCommon`) gains `rekey(store, currentPassphrase, newPassphrase)` and a `RekeyOutcome`, which merge under the current passphrase and refuse to rewrite the folder if anything failed to decrypt — re-encrypting can only preserve what the device can read. The desktop does not surface this yet: its passphrase box is session-only, so it has no stored passphrase to change and no Settings screen to offer the action from. The shared operation is available to it whenever that changes. No desktop behaviour changed this pass. | §1, §6, §7 |
-| 2026-09-05 (integration) | Anti-drift entry (§0): the recurrence branch and the audit branch were merged, and the resolution changed `shared\` again. `PagesSyncEngine` gains recurrence-aware queries and loses `getInRange`/`observeOnDate` (a date-window query never returns a recurring series, anchored as it is at its first occurrence). `SnapshotSyncOrchestrator`'s `readAndMerge` returns a `SnapshotMergeResult` again — the count of files it could not decrypt — with the tally carried on the same value as the folder key rather than threaded separately; the desktop's "Sync now" reads it to refuse a write over a folder it could not read, alongside the write guard already there. `PageSearchHit` widens to carry title and icon. **Room schema is v8** (see `tendril-spec.md` for why neither branch's number survived). Desktop behaviour is otherwise unchanged; `Tendril windows` compiles and CI now assembles all three projects. | §1, §6, §7 |
+| 2026-09-05 (integration) | Anti-drift entry (§0): the recurrence branch and the audit branch were merged, and the resolution changed `shared\` again. ~~`PagesSyncEngine` gains recurrence-aware queries and loses `getInRange`/`observeOnDate` (a date-window query never returns a recurring series, anchored as it is at its first occurrence).~~ (**Corrected 2026-09-06:** the class is `EntryDao`, not `PagesSyncEngine`. What the integration actually did was *keep* the recurrence-aware queries the 2026-09-04 (later same day) row below already recorded — `getAllDated`/`getExceptionsOf`/`getAllExceptions` — and drop `getInRange`/`observeOnDate`, the reasoning being unchanged: a date-window query never returns a recurring series, anchored as it is at its first occurrence, so expansion replaces both. `PagesSyncEngine` merges page snapshots and was never involved. Struck rather than quietly retyped because this row and `tendril-spec.md`'s row of the same date are two accounts of one change, which §0's rule exists to keep in agreement — and for a day they named different classes. The rule produced both rows on time and still did not catch that; an audit did.) `SnapshotSyncOrchestrator`'s `readAndMerge` returns a `SnapshotMergeResult` again — the count of files it could not decrypt — with the tally carried on the same value as the folder key rather than threaded separately; the desktop's "Sync now" reads it to refuse a write over a folder it could not read, alongside the write guard already there. `PageSearchHit` widens to carry title and icon. **Room schema is v8** (see `tendril-spec.md` for why neither branch's number survived). Desktop behaviour is otherwise unchanged; `Tendril windows` compiles and CI now assembles all three projects. | §1, §6, §7 |
 | 2026-09-05 | Anti-drift entry (§0): a large pass over `shared\` landed on `main` — full reasoning in `tendril-spec.md`'s Revision Log, summarised here because the shared core changed under both consumers. `SnapshotSyncOrchestrator` and `SnapshotEncryption` (both `shared/jvmCommon`) gained a per-folder PBKDF2 salt in `sync_meta.json`, a refusal to trust plaintext inside a folder that declares itself encrypted, and a refusal to overwrite an encrypted folder the supplied key cannot open. `PagesSyncEngine` (`shared/commonMain`) stopped orphaning pages whose parent arrives in a later batch, and now returns the records that *lost* a last-write-wins race so the orchestrator can preserve them beside the winner rather than discarding them. `PurgeRegistry` gained `PurgedKind.HABIT` and a `HabitDao`; `EntryScheduleCoordinator` gained a defaulted `onHabitRemoved` (a no-op on desktop, which has no alarms — §1). New shared domain files: `BlockOutline.kt` (one level of block nesting, drawn on both platforms) and `HabitSchedule.kt`. `CheckboxOnlyState` now takes an injected `appLockEnabled` predicate, defaulted false for desktop. `DesktopAppContainer` updated for the `PurgeRegistry` signature; no desktop behaviour changes otherwise. | §1, §6, §7 |
 | 2026-08-30 (later still) | Milestone 3 (Workbench UI port), first slice implemented: theming, the 5-tab nav shell, and Pages/PageDetail/PageDatabase (the actual block editor) moved into `shared/src/commonMain` and now render on both Android and desktop from one implementation, not two. Calendar/Tasks & Habits/Road Map/Settings and the Canvas page kind stay Android-only this pass (out of scope — see §8). §3's gate is now genuinely triggered: desktop originates edits for the first time. Per §0's anti-drift rule, `tendril-spec.md`'s Revision Log has a matching entry. See §8. | §3, §6, §8 |
 | 2026-09-04 | Anti-drift-rule entry — a consistency audit of the whole app against both specs. Summary only, since it touches `shared\`; full detail in `tendril-spec.md`'s entry of the same date. What lands in `shared\`: Room's `@Database` `version` bumped 5→6 (three Canvas tables had been added to `entities` without it, and Room throws on an identity-hash mismatch *before* `fallbackToDestructiveMigration` can act, so it crashed on open rather than recreating); `ResolveEntryUseCase` now advances a recurring TASK to the first occurrence **not already past**, keeping §6.2's phase but ending the case where resolving one late left it still overdue, logged a fabricated `EntryCompletion` per catch-up tap, and — via §9.7's past-alarm rule — silently unscheduled it; `SnapshotSyncOrchestrator.readAndMerge` returns a `SnapshotMergeResult` so a caller can refuse to write when the folder holds snapshots it cannot decrypt (it previously merged nothing and then overwrote the folder's only copy under the wrong key — §9.4.2 promises "unreadable," not "destroyed"); `PageFtsDao.search` joins `pages` to exclude trashed rows and had `snippet()`'s arguments off by one position; `HabitSnapshotRecord` carries the undo stash; `EntryDao.getAllSchedulableTasks` is now `getAllSchedulable` and covers EVENTs. **Desktop-side changes**: `Main.kt`'s Sync now honours the new merge result, wraps the call in try/finally per `SyncFileStore`'s documented throwing contract, surfaces the error in the sync bar, and masks the passphrase field. §3's block-level-merge gate is untouched and still open. | §1, §3, §7, §8 |
 | 2026-09-04 (later same day) | Anti-drift-rule entry — recurring EVENT expansion. Full reasoning in `tendril-spec.md` §4.1.1 and its Revision Log entry of the same date; summary only, since it adds to `shared\`. New `com.tendril.app.domain.recurrence` package in `shared/src/commonMain`: `RecurrenceSpec` (a hand-rolled RFC5545 subset parser) and `EntryOccurrences` (stored rows plus a date range → one occurrence per covered day, honouring multi-day spans and §4.1's skip/override exception rows). `EntryDao` gains `getAllDated`, `getExceptionsOf` and `getAllExceptions`. **No desktop-side change**: Calendar is one of the four tabs still showing `NotAvailableOnDesktop` (§8's scope boundary), so nothing in `Tendril windows` consumes the expander yet — it is there for when Calendar is ported, and the desktop build only needs to keep compiling against the widened `EntryDao`. §3's block-level-merge gate is unaffected. | §1, §6, §8 |
 | 2026-09-04 (last of the day) | Sync now runs from the Android lifecycle rather than only from the Settings button — new `SyncCoordinator`, full detail in `tendril-spec.md` §9.4. **No `shared\` change**, so §0's rule doesn't compel this entry; it is here because the change carries a decision *about desktop*: desktop stays on its explicit "Sync now" button, and the reason is not just the missing lifecycle callbacks but the session-only passphrase (§7) — at launch there is nothing to decrypt an encrypted folder with. Recorded in §1. | §1, §7 |
 | 2026-09-04 (last, really) | Anti-drift-rule entry — `.tendril` exports now honour §9.4.2's encryption toggle; full detail in `tendril-spec.md` §9.4.2 and its Revision Log entry of the same date. The `shared\` part is one field: `TendrilManifest` gains `encrypted`, defaulted false so archives written before this still decode. Everything else is in `Tendril android`'s `PortableArchive`, which desktop has no counterpart to — desktop reads and writes the sync folder (§7) but has no portable export/import UI at all. When it gets one it inherits the same constraint noted for automatic sync in §1: the passphrase is session-only, so an export would be unencrypted unless one had been typed that session. | §1, §7 |
+| 2026-09-06 (audit corrections, and §0's own breach) | **The breach is recorded as part of the entry, because a rule whose failures go unlogged reads like a rule nobody breaks.** Four commits changed `shared\` after the rows above were written and none of them reached this file, while `tendril-spec.md` got rows for all of them. `0d2a932` (2026-09-05) added `PageDao.touch` and the launchers that carry it, so an edit *inside* a page finally moves `pages.updatedAt` — the change that turned §3's gate from nominal into load-bearing, and the one this file most needed to know about; see §3. `76b072e` and `8679d7f` (2026-09-06) stopped the merge destroying the *local* copy a winning record overwrites, and stopped it unlinking a page's own images while rebuilding blocks. `1f96a70` (2026-09-06) made a deleted column travel as a `PurgedKind.PROPERTY` tombstone rather than as mere absence, which added a `PropertyDao` to `PurgeRegistry`'s constructor and so edited `DesktopAppContainer.kt` directly — a `shared\` change that reached into desktop source and still produced no row here, which is as clear a demonstration as the rule will get of what it is for. `d0f7bd9` (2026-09-04) is the older half of the same story: it put `purgeRegistry` into `WorkbenchCore` and `DesktopAppContainer`, and the 2026-09-05 row above names `PurgeRegistry` only in passing, which is why §8's parameter list was wrong. Full reasoning for all five lives in `tendril-spec.md`'s rows of those dates; no desktop behaviour was changed by this pass, only the record of it. **Also corrected, from an audit of every claim in this file against `shared/src`, `Tendril windows/src` and git history:** the integration row's `PagesSyncEngine`→`EntryDao` misattribution (two files describing one change and naming different classes — exactly what §0 exists to catch, caught here by an audit instead); §4's out-of-scope analogy, whose two cited exclusions were reopened on 2026-09-06; §5's `EntryScheduleCoordinator` method count; §8's `WorkbenchCore` parameter list; and §0's own account of what `shared\` contains, which had not kept up with Milestone 3 moving the UI there. | §0, §3, §4, §5, §8 |
+| 2026-09-07 (Canvas written up) | Anti-drift entry (§0): **no code changed in this pass — only the record of it** — but the record that changed is about `shared\`, which is where §0's rule keys, and the missing entry it repairs is itself a §0 breach. The Canvas page kind (`PageKind.CANVAS` and the `PageCanvas`/`CanvasNode`/`CanvasEdge` tables, all in `shared/commonMain`, plus its pass in `PagesSyncEngine`) shipped with no section in either spec and no row in either Revision Log; `tendril-spec.md` §3.4 recorded that breach on 2026-09-04 and said reconstructing the reasoning was beyond what a correction could do. It is now written up as `tendril-spec.md` **§3.7**, with the three entities added to that file's **§4** — per §0, the data model stays documented there and this file points at it rather than restating it. **The one part a desktop reader should not have to follow a pointer for:** the Canvas *surface* is Android-only and `Main.kt` renders `NotAvailableOnDesktop("Canvas")` for it (§8's scope boundary, unchanged), but the entities, the DAOs and the merge pass are all in `shared\` — so this desktop build already reads, merges and re-exports canvas nodes and edges it cannot draw. That is correct and deliberate (a client must never drop what it cannot render, or a sync becomes a data loss), and it means Canvas is not "not on desktop" in the way the four stubbed tabs are: it is invisible here and fully synced here. §3's block-level-merge gate is unaffected — a canvas replaces whole, keyed on the page row like every other page kind. | §0, §8; see `tendril-spec.md` §3.7, §4 |
 
 ---
 
@@ -32,6 +34,30 @@ the Room schema, the to-do database sync mechanism, the JSON snapshot format, an
 originated there and Android remains the primary client. This file references those section numbers
 rather than re-explaining them. If you're reading this file looking for what a `shared\` type or
 table actually means, go there first.
+
+**Corrected 2026-09-06 — that list is no longer what `shared\` holds, and the gap leaves things
+with no owner.** It is kept above because it is the scope the rule was written against, back when
+`shared\` was a domain/data/sync core and nothing else. `shared/src/commonMain` now also carries
+`ViewLockState`, `CheckboxOnlyState`, `BlockOutline`, `HabitSchedule`, `PurgeRegistry` and
+`WorkbenchCore`, a `domain/recurrence` package, and seventeen UI files — the theming, the nav shell
+and the whole block editor, moved there by Milestone 3 (§8). None of that is named on either side,
+so for anything in it neither file is obviously the owner, and the cost is not hypothetical: the
+partial `ColorScheme` remap and the lost variable-weight font rendering are recorded here (§8) and
+in no section of `tendril-spec.md`, and the shared checkbox-only confirm dialog still tells whoever
+reads it that the page "will show over your lock screen" and that turning the mode off "needs a full
+unlock" — two sentences a desktop user is shown and neither of which is true on a machine with no
+keyguard and no `BiometricPrompt`. That text is owned by `tendril-spec.md` §3.1.2 and contradicted
+by a platform only this file describes. Until the ownership question is settled the binding rule
+below is unaffected, because it keys on *code in `shared\`* and not on which section explains it.
+
+**Also stated plainly 2026-09-06, because two passes have now hesitated over it:** §5, §7 and §8
+are dated milestone records — an account of what was built and what was learned building it, as of
+the date in each heading — not live descriptions of the current tree. They get a dated note in
+place wherever a stale sentence would mislead a reader about what the code does *today*; they are
+not rewritten to track `shared\`'s present shape, and where no note exists the Revision Log is the
+newer record. That is why §5 still says "the 7 pure `domain/` classes" while that package now holds
+eleven files: the sentence is an accurate account of what Milestone 1 moved, and the three later
+arrivals each have a Revision Log row above.
 
 **Binding rule, stated identically in both files: whenever a change touches code in `shared\`, both
 this file's Revision Log and `tendril-spec.md`'s Revision Log get an entry the same day** — even if
@@ -143,6 +169,22 @@ happened — but it's no longer a hypothetical this file can defer past "the nex
 that adds editing." That milestone is this one. Revisit before recommending desktop as a primary
 (not occasional) editing surface.
 
+**Corrected 2026-09-06 — the gate only became real on 2026-09-05, not on Milestone 3.** The
+paragraph above says desktop "now writes locally-originated edits… between syncs," and that was
+true of the database on disk but not of the folder. Until `PageDao.touch` landed
+(`tendril-spec.md`'s 2026-09-05 write-path row), the only writers of `pages.updatedAt` were title,
+soft-delete and restore, so typing in a block, toggling a to-do or editing a database cell changed
+what a page's exported snapshot *contained* without changing the timestamp the merge decides on.
+What a person got was worse than a lost race: the edit persisted on desktop, travelled to the
+folder, arrived at the phone no newer than the copy already sitting there, and was skipped — and
+skipped silently, because an equal timestamp reads as the same version rather than as a conflict,
+so nothing was written down anywhere saying an edit had existed. Then it vanished on desktop too,
+the moment the phone made any edit that did move the timestamp. So for the whole of Milestone 3
+this gate was watching for a collision that could not yet occur. It can now: every desktop edit
+genuinely wins or loses. The granularity question is untouched — whole-page LWW is still
+`tendril-spec.md` §9.4's to state, not this file's to re-explain — but the gate has stopped being a
+precaution about traffic that might one day exist.
+
 ## 4. Why this content ever lived in `tendril-spec.md`, and why it's here now (documentation-structure decision, scored 2026-08-29 via `optimization-engines:meta-optimizer`, Harmony Search over four discrete candidates)
 
 Scored against goal-fit (does it give a clear build target), avoiding premature structure (weight
@@ -162,7 +204,10 @@ A fully separate file scored worst *at the time*: two living documents covering 
 sync/domain model (`Entry`, `RecurrenceRule`, the snapshot format) drift apart the moment one is
 updated and the other isn't, and nothing desktop-related had been built yet to justify the split —
 the same "real complexity, no case yet forcing it" reasoning that kept Timeline/Gantt views and a
-formula language out of scope elsewhere (`tendril-spec.md` §5.6, §10). A shared-core-plus-per-platform
+formula language out of scope elsewhere (`tendril-spec.md` §5.6, §10 — **both reopened 2026-09-06**,
+so read this as what the comparison was worth on the day the scoring ran, not as either feature's
+status; a reader who follows that cross-reference expecting to find "out of scope" now finds struck
+bullets there instead). A shared-core-plus-per-platform
 restructure scored almost as low: it would have required tearing apart the parent document's existing
 maintained structure for a platform with zero code written. A bare Open-item bullet would have
 under-delivered on the actual goal — it wouldn't have captured the platform-strategy decision (§2) at
@@ -198,7 +243,13 @@ three-folder layout.
 - **`EntryScheduleCoordinator` — one real gap found only during the move, not anticipated by §1's
   audit**: `ResolveEntryUseCase` took it as a concrete constructor dependency, but the concrete class
   itself depends on Android-only `AlarmScheduler`/`CalendarProviderSync`. Fixed by turning it into an
-  interface in `shared` (two methods, `onEntryChanged`/`onEntryRemoved`) with the existing Android
+  interface in `shared` (~~two methods, `onEntryChanged`/`onEntryRemoved`~~ — **corrected
+  2026-09-06:** two as Milestone 1 created it, three since 2026-09-05, when `onHabitRemoved` was
+  added for habit reminders and given an empty default body precisely so a platform that cannot
+  schedule need not implement it. Desktop's `NoOpEntryScheduleCoordinator` overrides the first two
+  and takes the default for the third, so a habit purged on the phone cancels a real alarm there
+  and cancels nothing here, which is the correct outcome and worth having written down rather
+  than inferred from a missing override) with the existing Android
   logic moved into a new `AndroidEntryScheduleCoordinator` implementation in `Tendril android\`'s
   `:app` — exactly the `expect`-style platform-abstraction point §1 anticipated in general terms,
   just as a plain interface rather than `expect`/`actual` (simpler, and sufficient since only one
@@ -341,12 +392,17 @@ item under build-sequence step 3 (§6).
 
 - **`WorkbenchCore`** (new, `shared`): a plain grouping class — `TendrilDatabase`,
   `DatabaseSyncManager`, `TemplateManager`, `ViewLockState`, `CheckboxOnlyState`,
-  `ResolveEntryUseCase`, `EntryScheduleCoordinator`, `PageContentRepository` — the slice of
+  `ResolveEntryUseCase`, `EntryScheduleCoordinator`, `PageContentRepository`, and — **added
+  2026-09-04, when purge tombstones started travelling between devices instead of staying on the
+  machine that made them** — `PurgeRegistry` — the slice of
   Android's `AppContainer` the ported screens actually depend on. `AppContainer` itself stays
   Android-only (it also builds Context-only services with no desktop equivalent) and now just
   holds one `WorkbenchCore` instance; `Tendril windows`'s new `DesktopAppContainer` builds an
   equivalent one from its own database, with a no-op `EntryScheduleCoordinator` (no
-  alarms/Calendar Provider on desktop, §1).
+  alarms/Calendar Provider on desktop, §1). It builds its own `PurgeRegistry` over that same
+  no-op coordinator, which is where the coordinator's defaulted `onHabitRemoved` earns its
+  default: a "Delete forever" arriving from the phone has an alarm to cancel there and nothing
+  to cancel here.
 - **Theming** (`ui/theme/{Palette,Theme,Type}.kt`, moved): `Palette.kt`'s one Android call
   (`android.graphics.Color.parseColor`) became a plain hex parser. `Type.kt`'s Android
   `R.font`/`FontVariation` weight-axis loading has no multiplatform equivalent — rewritten

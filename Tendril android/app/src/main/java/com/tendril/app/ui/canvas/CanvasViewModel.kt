@@ -14,6 +14,7 @@ import com.tendril.app.data.canvas.PageCanvas
 import com.tendril.app.data.canvas.PageCanvasDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.domain.ViewLockState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +39,16 @@ class CanvasViewModel(
     private val pageCanvasDao: PageCanvasDao,
     private val canvasNodeDao: CanvasNodeDao,
     private val canvasEdgeDao: CanvasEdgeDao,
+    private val viewLockState: ViewLockState,
 ) : ViewModel() {
+    /** §3.1.2 — the same single enforcement point every other editing ViewModel keeps (see
+     * [com.tendril.app.ui.pages.PageDetailViewModel.viewOnlyLocked] and
+     * [com.tendril.app.ui.pages.PageDatabaseViewModel.locked]), duplicated per ViewModel rather
+     * than shared because a Canvas's edits and a Page's edits go through entirely separate
+     * ViewModels. Read at call time rather than captured, so flipping the eye toggle in the
+     * Pages topbar takes effect on a board that is already open. */
+    private fun locked() = viewLockState.viewOnly.value
+
     val page: StateFlow<Page?> = pageDao.observeById(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val canvas: StateFlow<PageCanvas?> = pageCanvasDao.observeByPageId(pageId)
@@ -63,6 +73,17 @@ class CanvasViewModel(
     private val _pageSearchResults = MutableStateFlow<List<Page>>(emptyList())
     val pageSearchResults: StateFlow<List<Page>> = _pageSearchResults.asStateFlow()
 
+    /**
+     * The lazy [PageCanvas] shell, and the one write on this screen deliberately exempt from
+     * [locked] — the same decided exemption as
+     * [com.tendril.app.ui.pages.PageDatabaseViewModel.ensureDefaultView], for the same two
+     * reasons. It is idempotent repair-on-open, not an edit: a Canvas page created before this
+     * companion row existed (or whose row never landed) has no board at all until one is made,
+     * so gating it would leave that page permanently unopenable-as-a-canvas for as long as
+     * View-Only is on. And it claims no authorship — it is outside [launchAndTouch] on purpose,
+     * so it bumps no page row and can never outrank a real edit made on another device (§9.4).
+     * Every device performs the same repair for itself; the shell costs nothing by staying local.
+     */
     init {
         viewModelScope.launch {
             if (pageCanvasDao.getByPageId(pageId) == null) {
@@ -72,7 +93,14 @@ class CanvasViewModel(
         }
     }
 
+    /**
+     * §3.1.2 — gated on its own rather than by [launchAndTouch], because it is the one mutation
+     * on this screen that does not go through that funnel: it writes `pages` directly, so a guard
+     * placed only in the funnel would leave the rename — and the `updatedAt` bump it carries —
+     * completely ungated, exporting a title nobody chose to every other device on the next pass.
+     */
     fun updateTitle(title: String) {
+        if (locked()) return
         viewModelScope.launch {
             val current = page.value ?: pageDao.getById(pageId) ?: return@launch
             pageDao.update(current.copy(title = title, updatedAt = Instant.now()))
@@ -93,8 +121,17 @@ class CanvasViewModel(
      * The lazy [PageCanvas] shell in `init` is left out on purpose: it runs on open rather than
      * on an edit, and a bump is a claim of authorship that would let merely opening a board
      * outrank a real edit made on another device and not yet synced.
+     *
+     * §3.1.2 — [locked] is checked *here*, not in each caller, for the same reason the touch
+     * lives here: every node and edge mutation on this board already funnels through this one
+     * helper, so the gate is a property of making a canvas write rather than a line each future
+     * mutation has to remember. Refusing before [block] runs also refuses the bump, since a bump
+     * under the lock would be a claim of authorship for an edit the person never made — enough
+     * on its own to outrank a real edit waiting on another device (§9.4). [updateTitle] is the
+     * one mutation outside this funnel and carries its own gate.
      */
     private fun launchAndTouch(block: suspend () -> Unit) {
+        if (locked()) return
         viewModelScope.launch {
             block()
             pageDao.touch(pageId, Instant.now())

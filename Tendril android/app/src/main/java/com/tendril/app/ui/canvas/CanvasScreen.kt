@@ -77,6 +77,7 @@ import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.data.page.Page
 import com.tendril.app.ui.components.EmptyState
+import com.tendril.app.ui.pages.LocalViewOnly
 import kotlin.math.roundToInt
 
 private const val NODE_W = 180f
@@ -97,10 +98,15 @@ fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOp
         key = "canvas_$pageId",
         factory = viewModelFactory {
             initializer {
-                CanvasViewModel(pageId, container.database.pageDao(), container.database.pageCanvasDao(), container.database.canvasNodeDao(), container.database.canvasEdgeDao())
+                CanvasViewModel(pageId, container.database.pageDao(), container.database.pageCanvasDao(), container.database.canvasNodeDao(), container.database.canvasEdgeDao(), container.workbenchCore.viewLockState)
             }
         }
     )
+    // §3.1.2 — the same flag [CanvasViewModel.locked] refuses on, read here so the board stops
+    // *offering* the edits it would then silently swallow. Provided once by
+    // [com.tendril.app.ui.nav.WorkbenchScaffold]; a Canvas page is a Pages destination and
+    // renders inside that provider, so this is the same global toggle, not a second one.
+    val viewOnly = LocalViewOnly.current
     val page by viewModel.page.collectAsState()
     val nodes by viewModel.nodes.collectAsState()
     val edges by viewModel.edges.collectAsState()
@@ -128,6 +134,7 @@ fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOp
                     BasicTextField(
                         value = titleField,
                         onValueChange = { titleField = it; viewModel.updateTitle(it) },
+                        readOnly = viewOnly,
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
@@ -137,15 +144,20 @@ fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOp
             )
         },
         floatingActionButton = {
-            Box {
-                FloatingActionButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "Add card") }
-                DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                    DropdownMenuItem(text = { Text("Text card") }, onClick = {
-                        showAddMenu = false
-                        val center = screenToContent(Offset(200f, 200f))
-                        viewModel.addTextNode(center.x, center.y)
-                    })
-                    DropdownMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
+            // Hidden rather than disabled while View-Only is on, matching the Pages hub's own
+            // create FAB (§3.1.2) — there is nothing else on this control, so a greyed-out one
+            // would only advertise an action the lock has already refused.
+            if (!viewOnly) {
+                Box {
+                    FloatingActionButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "Add card") }
+                    DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
+                        DropdownMenuItem(text = { Text("Text card") }, onClick = {
+                            showAddMenu = false
+                            val center = screenToContent(Offset(200f, 200f))
+                            viewModel.addTextNode(center.x, center.y)
+                        })
+                        DropdownMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
+                    }
                 }
             }
         },
@@ -153,7 +165,10 @@ fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOp
         if (nodes.isEmpty()) {
             EmptyState(
                 icon = Icons.Outlined.Description,
-                message = "Nothing on this canvas yet — add a text or page card",
+                // The prompt half drops under View-Only, the same way the Pages hub drops its
+                // empty-state CTA: the add control is gone, so inviting the tap would be an
+                // instruction to use something that is no longer there.
+                message = if (viewOnly) "Nothing on this canvas yet" else "Nothing on this canvas yet — add a text or page card",
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
             )
         } else {
@@ -173,18 +188,24 @@ fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOp
                 onDeleteNode = { viewModel.deleteNode(it) },
                 onConnect = { from, to -> viewModel.addEdge(from.id, to.id) },
                 onTapEdge = { editingEdge = it },
+                viewOnly = viewOnly,
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
             )
         }
     }
 
+    // Both sheets stay *openable* under View-Only and turn into readers instead of closing:
+    // a card shows at most three lines on the board and an arrow's label is not drawn at all,
+    // so refusing to open them would hide content rather than protect it. What they lose is
+    // every control that writes — see each one's own note.
     editingNode?.let { node ->
-        TextNodeEditor(node = node, onDismiss = { editingNode = null }, onSave = { text -> viewModel.setNodeText(node, text); editingNode = null })
+        TextNodeEditor(node = node, viewOnly = viewOnly, onDismiss = { editingNode = null }, onSave = { text -> viewModel.setNodeText(node, text); editingNode = null })
     }
 
     editingEdge?.let { edge ->
         EdgeEditor(
             edge = edge,
+            viewOnly = viewOnly,
             onDismiss = { editingEdge = null },
             onCycleDirection = { viewModel.cycleEdgeDirection(edge) },
             onSetLabel = { viewModel.setEdgeLabel(edge, it) },
@@ -192,7 +213,10 @@ fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOp
         )
     }
 
-    if (showPagePicker) {
+    // Not `takeIf`-guarded like the delete dialog but `&&`-guarded for the same reason: the FAB
+    // that opens it is gone under the lock, and a pick made after a mid-flow toggle would add a
+    // card.
+    if (showPagePicker && !viewOnly) {
         CanvasPagePickerSheet(
             viewModel = viewModel,
             onDismiss = { showPagePicker = false },
@@ -219,6 +243,9 @@ private fun CanvasBoard(
     onDeleteNode: (CanvasNode) -> Unit,
     onConnect: (CanvasNode, CanvasNode) -> Unit,
     onTapEdge: (CanvasEdge) -> Unit,
+    /** §3.1.2 — pan, zoom, tapping a card open and tapping an arrow to read its label all stay
+     * live; only the four things that write (move, delete, connect, edit) come off the board. */
+    viewOnly: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -268,6 +295,7 @@ private fun CanvasBoard(
                         onMove = { x, y -> onMoveNode(node, x, y) },
                         onTap = { onTapNode(node) },
                         onDeleteRequest = { nodeMenuFor = node },
+                        viewOnly = viewOnly,
                         onLinkDragStart = { linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + NODE_H / 2) * density.density) },
                         onLinkDrag = { pointerInParent -> linkDrag = linkDrag?.let { (n, _) -> n to pointerInParent } },
                         onLinkDragEnd = { pointerInParent ->
@@ -285,7 +313,11 @@ private fun CanvasBoard(
         }
     }
 
-    nodeMenuFor?.let { node ->
+    // The `takeIf` is not redundant with the hidden badge: the badge is the only way to *open*
+    // this dialog, but View-Only can be turned on from the Pages topbar while it is already
+    // open, and a confirm tap after that would be exactly the destructive write the lock exists
+    // to stop.
+    nodeMenuFor?.takeIf { !viewOnly }?.let { node ->
         AlertDialog(
             onDismissRequest = { nodeMenuFor = null },
             title = { Text("Delete this card?") },
@@ -369,6 +401,7 @@ private fun CanvasNodeCard(
     onLinkDragStart: () -> Unit,
     onLinkDrag: (Offset) -> Unit,
     onLinkDragEnd: (Offset) -> Unit,
+    viewOnly: Boolean,
 ) {
     Surface(
         color = if (node.type == CanvasNodeType.PAGE_EMBED) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
@@ -376,7 +409,11 @@ private fun CanvasNodeCard(
         modifier = Modifier
             .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
             .size((NODE_W).dp, (NODE_H).dp)
-            .pointerInput(node.id, density) {
+            // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
+            // same lambda until a key changes, so a board already on screen when the eye toggle
+            // is flipped would otherwise go on dragging against the value captured at first
+            // composition.
+            .pointerInput(node.id, density, viewOnly) {
                 // Built on the manual awaitEachGesture loop, not detectDragGestures — the
                 // latter only fires onDragStart/onDragEnd once the pointer crosses touch
                 // slop, so a genuinely near-stationary tap would trigger neither and silently
@@ -394,8 +431,11 @@ private fun CanvasNodeCard(
                         if (change.pressed) {
                             val delta = change.position - change.previousPosition
                             if (delta != Offset.Zero) {
+                                // Accumulated even under View-Only, so the tap-vs-drag test below
+                                // stays honest: a smeared finger that would have been a drag must
+                                // not fall through and open the card's editor instead.
                                 totalDrag += delta
-                                onMove(node.x + delta.x / density, node.y + delta.y / density)
+                                if (!viewOnly) onMove(node.x + delta.x / density, node.y + delta.y / density)
                             }
                             change.consume()
                         }
@@ -410,7 +450,11 @@ private fun CanvasNodeCard(
             // to be underneath it (confirmed live: the delete badge covered the first letters
             // of "Empty card," the link handle sat mid-word before "edit"). A reserved row
             // makes overlap structurally impossible regardless of text length or wrapping.
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            // §3.1.2 — both badges are pure write affordances (destroy a card, draw an arrow),
+            // so both come off the card entirely while View-Only is on rather than sitting there
+            // greyed out. The row itself goes with them: with nothing left to reserve space for,
+            // an empty strip would only push the card's own text down for no reason.
+            if (!viewOnly) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
@@ -475,31 +519,40 @@ private fun CanvasNodeCard(
 }
 
 @Composable
-private fun TextNodeEditor(node: CanvasNode, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember(node.id) { mutableStateOf(node.text.orEmpty()) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Edit card", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
-            OutlinedTextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            // §3.1.2 — a reader, not an editor, while the lock is on: the field goes read-only
+            // (so the full text of a card the board truncates at three lines is still legible)
+            // and Save goes away, leaving one button that closes the sheet.
+            Text(if (viewOnly) "Card" else "Edit card", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+            OutlinedTextField(value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { onSave(text) }) { Text("Save") }
+                TextButton(onClick = onDismiss) { Text(if (viewOnly) "Done" else "Cancel") }
+                if (!viewOnly) {
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { onSave(text) }) { Text("Save") }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun EdgeEditor(edge: CanvasEdge, onDismiss: () -> Unit, onCycleDirection: () -> Unit, onSetLabel: (String) -> Unit, onDelete: () -> Unit) {
+private fun EdgeEditor(edge: CanvasEdge, viewOnly: Boolean, onDismiss: () -> Unit, onCycleDirection: () -> Unit, onSetLabel: (String) -> Unit, onDelete: () -> Unit) {
     var label by remember(edge.id) { mutableStateOf(edge.label.orEmpty()) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
             Text("Arrow", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+            // §3.1.2 — the sheet is how an arrow's label is read at all (the board draws the
+            // line, never the text), so the field stays and turns read-only. "Change" and
+            // "Delete arrow" both write, so both go.
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it; onSetLabel(it) },
+                readOnly = viewOnly,
                 label = { Text("Label (optional)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -508,16 +561,18 @@ private fun EdgeEditor(edge: CanvasEdge, onDismiss: () -> Unit, onCycleDirection
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Direction: ${edge.direction.name.lowercase().replace('_', ' ')}", modifier = Modifier.weight(1f))
-                TextButton(onClick = onCycleDirection) { Text("Change") }
+                if (!viewOnly) TextButton(onClick = onCycleDirection) { Text("Change") }
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Delete arrow")
+                if (!viewOnly) {
+                    TextButton(onClick = onDelete) {
+                        Icon(Icons.Filled.Delete, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Delete arrow")
+                    }
+                    Spacer(Modifier.width(8.dp))
                 }
-                Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onDismiss) { Text("Done") }
             }
         }

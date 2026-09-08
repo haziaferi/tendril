@@ -49,6 +49,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -90,6 +92,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
+/** §3.1.2 — what a refused `openJournal` says out loud. Names the lock (so the tap does not read
+ * as a fault), names what was refused (creating the day, not opening it), and names the way out,
+ * which is one tap away in the same top bar. */
+private const val JOURNAL_LOCKED_MESSAGE =
+    "Nothing is written for that day yet, and View-Only is on — turn it off to start it."
+
 @Composable
 fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modifier = Modifier) {
     val viewModel: PagesViewModel = viewModel(
@@ -118,9 +126,27 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
     var showTrash by remember { mutableStateOf(false) }
     var showJournalMenu by remember { mutableStateOf(false) }
     var showJournalDatePicker by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // §3.1.2 — both Journal entry points route through here rather than calling the ViewModel
+    // directly, so the one path that can refuse says so. [PagesViewModel.openJournal] is
+    // read-and-write: it navigates to a day already written (reading is not writing, so the lock
+    // must not block it) and refuses only the lazy creation of a day nobody has written yet.
+    // Under the lock that second case produces no navigation and no error — a dead tap — unless
+    // something speaks for it. A message costs a line; a button that appears broken costs trust
+    // in the lock itself.
+    val openJournalDay: (java.time.LocalDate) -> Unit = { date ->
+        viewModel.openJournal(
+            date = date,
+            onRefused = { scope.launch { snackbarHostState.showSnackbar(JOURNAL_LOCKED_MESSAGE) } },
+            onOpen = onOpenPage,
+        )
+    }
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.nav_pages)) },
@@ -129,13 +155,22 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                         Icon(Icons.Filled.Search, contentDescription = "Search pages")
                     }
                     Box {
+                        // §3.1.2 — deliberately *not* `enabled = !viewOnly`, and grouped with the
+                        // Trash button below rather than the FAB. [PagesViewModel.openJournal] was
+                        // restructured to keep navigating to a day that already exists while the
+                        // lock is on, because View-Only "makes pages read-only", it does not hide
+                        // them — and disabling the only way in made that read path unreachable
+                        // from the screen, so the guard and the affordance contradicted each other
+                        // inside one change. The guard is what makes the write safe; this button
+                        // withholds nothing. The refusal it can now produce is spoken instead —
+                        // see [openJournalDay].
                         IconButton(onClick = { showJournalMenu = true }) {
                             Icon(Icons.Filled.Book, contentDescription = "Journal")
                         }
                         DropdownMenu(expanded = showJournalMenu, onDismissRequest = { showJournalMenu = false }) {
                             DropdownMenuItem(
                                 text = { Text("Today's journal") },
-                                onClick = { showJournalMenu = false; viewModel.openJournal(java.time.LocalDate.now(), onOpenPage) },
+                                onClick = { showJournalMenu = false; openJournalDay(java.time.LocalDate.now()) },
                             )
                             DropdownMenuItem(
                                 text = { Text("Pick a date…") },
@@ -149,6 +184,10 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                             contentDescription = if (viewOnly) "Turn off View-Only" else "Turn on View-Only",
                         )
                     }
+                    // §3.1.2 — deliberately *outside* the `if (!viewOnly)` that hides the FAB.
+                    // The Trash is a list of pages; looking at one is reading, and View-Only
+                    // makes pages read-only rather than invisible. The two destructive actions
+                    // reachable from inside it go unavailable instead — see [TrashSheet].
                     IconButton(onClick = { showTrash = true }) {
                         Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
                     }
@@ -203,8 +242,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
             confirmButton = {
                 TextButton(onClick = {
                     state.selectedDateMillis?.let { millis ->
-                        val date = datePickerMillisToLocalDate(millis)
-                        viewModel.openJournal(date, onOpenPage)
+                        openJournalDay(datePickerMillisToLocalDate(millis))
                     }
                     showJournalDatePicker = false
                 }) { Text("Open") }
@@ -433,11 +471,20 @@ private fun highlightMatches(snippet: String): AnnotatedString = buildAnnotatedS
 }
 
 /** §5.5.1 — unified Trash for Page/Row (a Row is a Page with `databaseId` set, §5.1, so one
- * list and one query already cover both without a separate mechanism). */
+ * list and one query already cover both without a separate mechanism).
+ *
+ * §3.1.2 — the sheet itself opens under View-Only (reading the Trash is reading), but both of
+ * its actions are writes that leave this device: Restore rewrites `updatedAt` and so wins the
+ * next merge everywhere, and Delete forever records a propagating tombstone. Both therefore go
+ * `enabled = false` rather than disappearing — an absent button reads as "there is nothing to
+ * restore", a greyed one as "not while the lock is on", and the lock's own toggle is one tap
+ * away in the top bar. Both also route through [PagesViewModel] now: the earlier
+ * `core.database.pageDao().restore(…)` here in the `onClick` was a write with no ViewModel
+ * between it and the DAO, so there was no gate for the guard to live in. */
 @Composable
 private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss: () -> Unit) {
     val pages by core.database.pageDao().observeTrash().collectAsState(initial = emptyList())
-    val scope = rememberCoroutineScope()
+    val viewOnly by viewModel.viewOnly.collectAsState()
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteForever by remember { mutableStateOf<List<Long>?>(null) }
 
@@ -458,15 +505,17 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
             // deliberately closes.
             if (selectedIds.isNotEmpty()) {
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    TextButton(onClick = {
-                        val ids = selectedIds
-                        scope.launch {
-                            val now = java.time.Instant.now()
-                            ids.forEach { core.database.pageDao().restore(it, now) }
-                        }
-                        selectedIds = emptySet()
-                    }) { Text("Restore (${selectedIds.size})") }
-                    TextButton(onClick = { pendingDeleteForever = selectedIds.toList() }) { Text("Delete forever (${selectedIds.size})") }
+                    TextButton(
+                        enabled = !viewOnly,
+                        onClick = {
+                            viewModel.restore(selectedIds.toList())
+                            selectedIds = emptySet()
+                        },
+                    ) { Text("Restore (${selectedIds.size})") }
+                    TextButton(
+                        enabled = !viewOnly,
+                        onClick = { pendingDeleteForever = selectedIds.toList() },
+                    ) { Text("Delete forever (${selectedIds.size})") }
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -491,10 +540,14 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            TextButton(onClick = {
-                                scope.launch { core.database.pageDao().restore(page.id, java.time.Instant.now()) }
-                            }) { Text("Restore") }
-                            TextButton(onClick = { pendingDeleteForever = listOf(page.id) }) { Text("Delete forever") }
+                            TextButton(
+                                enabled = !viewOnly,
+                                onClick = { viewModel.restore(listOf(page.id)) },
+                            ) { Text("Restore") }
+                            TextButton(
+                                enabled = !viewOnly,
+                                onClick = { pendingDeleteForever = listOf(page.id) },
+                            ) { Text("Delete forever") }
                         }
                     }
                 }
