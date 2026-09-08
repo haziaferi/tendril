@@ -300,6 +300,13 @@ private fun TableBody(
     onOpenPage: (Long) -> Unit,
 ) {
     val viewOnly = LocalViewOnly.current
+    // §5.4/DB4 — "a column footer shows sum/avg/empty," recomputed whenever the schema or the
+    // currently displayed rows change (a filter narrowing the view changes what the sum is
+    // over, the same way it already changes everything else this screen shows).
+    var footerSummaries by remember { mutableStateOf<Map<Long, String?>>(emptyMap()) }
+    LaunchedEffect(properties, rows) {
+        footerSummaries = properties.associate { it.id to viewModel.computeColumnSummary(it, rows) }
+    }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             Row(modifier = Modifier.horizontalScroll(hScroll).padding(top = 8.dp)) {
@@ -346,6 +353,20 @@ private fun TableBody(
                     Spacer(Modifier.width(4.dp))
                     Text("Add row")
                 }
+            }
+        }
+        item { HorizontalDivider() }
+        item {
+            Row(modifier = Modifier.horizontalScroll(hScroll).padding(vertical = 6.dp)) {
+                Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
+                    Text("${rows.size} row(s)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                properties.forEach { property ->
+                    Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
+                        Text(footerSummaries[property.id] ?: "—", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Box(modifier = Modifier.width(40.dp))
             }
         }
     }
@@ -1073,17 +1094,79 @@ private fun RelationPickerSheet(
     }
 }
 
-/** §5.4/DB2+DB3 — a `COMPUTED` cell has no tap-to-edit interaction at all, whichever of the two
+/** §5.4/DB2+DB3+DB4 — a `COMPUTED` cell has no tap-to-*edit* interaction, whichever of the two
  * authoring paths created it (see [PropertyType.COMPUTED]'s own note): "compute on read" means
  * there is nothing stored here to edit, only the relation or the formula, neither of which this
- * cell holds a reference to editing. It resolves fresh whenever the row's own values change,
- * since either kind can shift with no edit to this cell at all — a related row's value moving,
- * or another formula this one references changing. */
+ * cell holds a reference to editing. Tapping it opens [ExplainValueSheet] instead — a read-only
+ * "where did this come from" view, not an editor — per DB4's "tapping a computed cell shows its
+ * inputs." The value itself resolves fresh whenever the row's own values change, since either
+ * kind can shift with no edit to this cell at all — a related row's value moving, or another
+ * formula this one references changing. */
 @Composable
 private fun ComputedCell(property: Property, row: TableRow, viewModel: PageDatabaseViewModel) {
     var display by remember(property.id, row.page.id) { mutableStateOf<String?>(null) }
+    var showExplain by remember { mutableStateOf(false) }
     LaunchedEffect(property.id, property.config, row.values) { display = viewModel.computeComputedValue(property, row) }
-    Text(display ?: "—", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(
+        display ?: "—",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.clickableRow { showExplain = true },
+    )
+    if (showExplain) {
+        ExplainValueSheet(property = property, row = row, viewModel = viewModel, onDismiss = { showExplain = false })
+    }
+}
+
+/** §5.4/DB4 — "Explain this value": what [PageDatabaseViewModel.explainComputedValue] found
+ * [property]'s cell on [row] was actually built from. Loaded once per open rather than kept
+ * live, the same one-shot shape [RelationPickerSheet] already uses for its own candidate list —
+ * a snapshot of the derivation is what "explain" means here, not a second live cell. */
+@Composable
+private fun ExplainValueSheet(
+    property: Property,
+    row: TableRow,
+    viewModel: PageDatabaseViewModel,
+    onDismiss: () -> Unit,
+) {
+    var explanation by remember { mutableStateOf<PageDatabaseViewModel.ComputedExplanation?>(null) }
+    LaunchedEffect(property.id, row.page.id) { explanation = viewModel.explainComputedValue(property, row) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
+            Text("Explain \"${property.name}\"", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+            when (val e = explanation) {
+                null -> Text("Loading…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                is PageDatabaseViewModel.ComputedExplanation.Formula -> {
+                    Text(e.expression, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+                    if (e.inputs.isEmpty()) {
+                        Text("References no properties.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        e.inputs.forEach { (name, value) -> Text("$name = $value", style = MaterialTheme.typography.bodyMedium) }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Result: ${e.result ?: "—"}", style = MaterialTheme.typography.titleSmall)
+                }
+                is PageDatabaseViewModel.ComputedExplanation.Rollup -> {
+                    val targetSuffix = e.targetName?.let { " → \"$it\"" }.orEmpty()
+                    Text(
+                        "${e.aggregation.name.lowercase()} over \"${e.relationName}\"$targetSuffix",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    if (e.relatedRows.isEmpty()) {
+                        Text("No related rows.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        e.relatedRows.forEach { (title, value) -> Text(title + (value?.let { " = $it" } ?: ""), style = MaterialTheme.typography.bodyMedium) }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Result: ${e.result ?: "—"}", style = MaterialTheme.typography.titleSmall)
+                }
+                PageDatabaseViewModel.ComputedExplanation.Unavailable -> Text("Nothing to explain.", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
 }
 
 @Composable

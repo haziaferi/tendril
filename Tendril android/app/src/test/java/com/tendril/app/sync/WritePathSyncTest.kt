@@ -40,6 +40,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -657,6 +658,98 @@ class WritePathSyncTest {
         val bTableRow = TableRow(bRow, mapOf(bPointsId to PropertyValue(propertyId = bPointsId, rowPageId = bRowId, value = bPointsValue)), linkedEntry = null)
 
         assertEquals("10", b.database(b.pageIdOf(seeded.databasePage.uid)).computeComputedValue(bDoubled, bTableRow))
+    }
+
+    // --------------------------------------------------------------------------- DB4 (summary + explain)
+
+    @Test
+    fun `a NUMBER column's footer summary is the sum and average of its currently displayed rows`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        val row2 = a.pageDao.getById(a.store.seedPage(Page(title = "Row 2", databaseId = dbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsId, seeded.row.id, "3")
+        a.propertyValueDao.setValue(pointsId, row2.id, "7")
+        val pointsProperty = a.propertyDao.getById(pointsId)!!
+
+        val rows = listOf(seeded.row, row2).map { page ->
+            val value = a.propertyValueDao.getForPropertyAndRow(pointsId, page.id)?.value
+            TableRow(page, mapOf(pointsId to PropertyValue(propertyId = pointsId, rowPageId = page.id, value = value)), linkedEntry = null)
+        }
+
+        assertEquals("Σ 10 · ⌀ 5", a.database(seeded.databasePage.id).computeColumnSummary(pointsProperty, rows))
+    }
+
+    @Test
+    fun `a non-numeric column's footer summary is empty`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val rows = listOf(TableRow(seeded.row, mapOf(seeded.property.id to PropertyValue(propertyId = seeded.property.id, rowPageId = seeded.row.id, value = "before")), linkedEntry = null))
+
+        assertNull(a.database(seeded.databasePage.id).computeColumnSummary(seeded.property, rows))
+    }
+
+    @Test
+    fun `a formula column's footer summary sums the computed values across rows`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        val row2 = a.pageDao.getById(a.store.seedPage(Page(title = "Row 2", databaseId = dbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsId, seeded.row.id, "3")
+        a.propertyValueDao.setValue(pointsId, row2.id, "7")
+        a.database(seeded.databasePage.id).addFormulaProperty("Doubled", "prop(\"Points\") * 2") {}
+        val doubled = a.propertyDao.getForDatabase(dbId).single { it.name == "Doubled" }
+
+        val rows = listOf(seeded.row, row2).map { page ->
+            val value = a.propertyValueDao.getForPropertyAndRow(pointsId, page.id)?.value
+            TableRow(page, mapOf(pointsId to PropertyValue(propertyId = pointsId, rowPageId = page.id, value = value)), linkedEntry = null)
+        }
+
+        assertEquals("Σ 20 · ⌀ 10", a.database(seeded.databasePage.id).computeColumnSummary(doubled, rows))
+    }
+
+    @Test
+    fun `explaining a formula cell lists its property references and the result`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        a.propertyValueDao.setValue(pointsId, seeded.row.id, "5")
+        a.database(seeded.databasePage.id).addFormulaProperty("Doubled", "prop(\"Points\") * 2") {}
+        val doubled = a.propertyDao.getForDatabase(dbId).single { it.name == "Doubled" }
+        val pointsValue = a.propertyValueDao.getForPropertyAndRow(pointsId, seeded.row.id)?.value
+        val tableRow = TableRow(seeded.row, mapOf(pointsId to PropertyValue(propertyId = pointsId, rowPageId = seeded.row.id, value = pointsValue)), linkedEntry = null)
+
+        val explanation = a.database(seeded.databasePage.id).explainComputedValue(doubled, tableRow) as PageDatabaseViewModel.ComputedExplanation.Formula
+
+        assertEquals("prop(\"Points\") * 2", explanation.expression)
+        assertEquals(listOf("Points" to "5"), explanation.inputs)
+        assertEquals("10", explanation.result)
+    }
+
+    @Test
+    fun `explaining a rollup cell lists the related rows and the value read from each`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val projectsPage = a.pageDao.getById(a.pageDatabaseDao.getById(projectsDbId)!!.pageId)!!
+        val pointsPropertyId = a.propertyDao.insert(Property(databaseId = tasksDbId, name = "Points", type = PropertyType.NUMBER, order = 0))
+        val task = a.pageDao.getById(a.store.seedPage(Page(title = "Task", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsPropertyId, task.id, "3")
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single { it.name == "Project" }
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single { it.name == "Tasks" }
+        a.database(tasksPage.id).setRelationValue(forward, task, setOf(projectRow.uid))
+        a.database(projectsPage.id).addRollupProperty("Total points", reverse.id, pointsPropertyId, RollupAggregation.SUM)
+        val rollupProperty = a.propertyDao.getForDatabase(projectsDbId).single { it.type == PropertyType.COMPUTED }
+        val reverseValue = a.propertyValueDao.getForPropertyAndRow(reverse.id, projectRow.id)?.value
+        val projectTableRow = TableRow(projectRow, mapOf(reverse.id to PropertyValue(propertyId = reverse.id, rowPageId = projectRow.id, value = reverseValue)), linkedEntry = null)
+
+        val explanation = a.database(projectsPage.id).explainComputedValue(rollupProperty, projectTableRow) as PageDatabaseViewModel.ComputedExplanation.Rollup
+
+        assertEquals("Tasks", explanation.relationName)
+        assertEquals(RollupAggregation.SUM, explanation.aggregation)
+        assertEquals("Points", explanation.targetName)
+        assertEquals(listOf("Task" to "3"), explanation.relatedRows)
+        assertEquals("3", explanation.result)
     }
 
     // ------------------------------------------------------------------------------ canvas

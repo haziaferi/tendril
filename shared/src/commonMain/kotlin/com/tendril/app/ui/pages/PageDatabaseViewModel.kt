@@ -57,6 +57,7 @@ import com.tendril.app.domain.formula.FormulaValue
 import com.tendril.app.domain.formula.checkAllFormulas
 import com.tendril.app.domain.formula.evaluateFormula
 import com.tendril.app.domain.formula.parseFormula
+import com.tendril.app.domain.formula.propertyReferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -754,6 +755,74 @@ class PageDatabaseViewModel(
         return formulaValueForProperty(property, expression, row, allProps, mutableSetOf()).toCellText()
     }
 
+    /** §5.4/DB4 — "tapping a computed cell shows its inputs." One `COMPUTED` cell's derivation,
+     * for whichever authoring path produced it: the referenced properties (and their current
+     * values) a formula reads, or the related rows (and the value read from each) a rollup
+     * aggregates — either way, exactly what the cell's own [result] was built from, not the cell
+     * value alone. */
+    sealed class ComputedExplanation {
+        data class Formula(val expression: String, val inputs: List<Pair<String, String>>, val result: String?) : ComputedExplanation()
+        data class Rollup(
+            val relationName: String,
+            val aggregation: RollupAggregation,
+            val targetName: String?,
+            val relatedRows: List<Pair<String, String?>>,
+            val result: String?,
+        ) : ComputedExplanation()
+
+        /** [property] isn't a `COMPUTED` property at all, or its config no longer parses as
+         * either shape (a schema change since it was authored) — nothing to explain. */
+        object Unavailable : ComputedExplanation()
+    }
+
+    /** §5.4/DB4 — builds [ComputedExplanation] for [property] on [row]. A formula's inputs are
+     * its *direct* `prop()` references only ([FormulaAst.propertyReferences] is not recursive
+     * through a nested formula reference) — one level is what a person tapping a cell actually
+     * wants to see, the same way [checkAllFormulas]'s own errors point at one formula at a time
+     * rather than unrolling an entire dependency chain into one report. */
+    suspend fun explainComputedValue(property: Property, row: TableRow): ComputedExplanation {
+        val expression = parseFormulaConfig(property.config)
+        if (expression != null) {
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return ComputedExplanation.Unavailable
+            val allProps = propertyDao.getForDatabase(db.id)
+            val ast = runCatching { parseFormula(expression) }.getOrNull() ?: return ComputedExplanation.Unavailable
+            val inputs = ast.propertyReferences().distinctBy { it.propertyName }.map { ref ->
+                val referenced = allProps.find { it.name == ref.propertyName }
+                val text = referenced?.let { resolvePropertyFormulaValue(it, row, allProps, mutableSetOf()).toCellText() } ?: "—"
+                ref.propertyName to (text ?: "—")
+            }
+            return ComputedExplanation.Formula(expression, inputs, computeComputedValue(property, row))
+        }
+
+        val rollup = parseRollupConfig(property.config) ?: return ComputedExplanation.Unavailable
+        val relationProperty = propertyDao.getByUid(rollup.relationPropertyUid) ?: return ComputedExplanation.Unavailable
+        val relatedUids = parseRelationValue(row.values[relationProperty.id]?.value)
+        val targetProperty = rollup.targetPropertyUid?.let { propertyDao.getByUid(it) }
+        val relatedRows = relatedUids.mapNotNull { uid ->
+            val relatedPage = pageDao.getByUid(uid) ?: return@mapNotNull null
+            val value = targetProperty?.let { propertyValueDao.getForPropertyAndRow(it.id, relatedPage.id)?.value }
+            relatedPage.title to value
+        }
+        return ComputedExplanation.Rollup(relationProperty.name, rollup.aggregation, targetProperty?.name, relatedRows, computeComputedValue(property, row))
+    }
+
+    /** §5.4/DB4 — "a column footer shows sum/avg/empty." Only `NUMBER` and `COMPUTED` columns
+     * carry a summary at all — a `SELECT`'s options or a `DATE`'s range aren't a sum/average
+     * either way, and this feature's own acceptance test only asks for the numeric case, so
+     * every other type reads as the "empty" half of that sentence rather than this function
+     * guessing at a summary shape nothing asked for. `null` here means exactly that — [rows]
+     * carried nothing numeric for this column, or the column isn't summarizable at all — and
+     * both render the same "—" the caller already uses for a blank cell. */
+    suspend fun computeColumnSummary(property: Property, rows: List<TableRow>): String? {
+        val values = when (property.type) {
+            PropertyType.NUMBER -> rows.mapNotNull { it.values[property.id]?.value?.toDoubleOrNull() }
+            PropertyType.COMPUTED -> rows.mapNotNull { computeComputedValue(property, it)?.toDoubleOrNull() }
+            else -> return null
+        }
+        if (values.isEmpty()) return null
+        return "Σ ${formatRollupNumber(values.sum())} · ⌀ ${formatRollupNumber(values.sum() / values.size)}"
+    }
+
     /** Resolves one formula-authored `COMPUTED` property's value against [row], row-local only —
      * no relation traversal, see [addFormulaProperty]'s own note on why that is cut from this PR.
      * [evaluating] guards a cycle at read time the same way write-time validation already rejects
@@ -775,14 +844,25 @@ class PageDatabaseViewModel(
             ast,
             FormulaPropertyResolver { name ->
                 val referenced = allProperties.find { it.name == name } ?: return@FormulaPropertyResolver FormulaValue.Empty
-                plainFormulaValue(referenced, row) ?: parseFormulaConfig(referenced.config)
-                    ?.let { formulaValueForProperty(referenced, it, row, allProperties, evaluating) }
-                    ?: FormulaValue.Empty
+                resolvePropertyFormulaValue(referenced, row, allProperties, evaluating)
             },
         )
         evaluating -= property.id
         return result
     }
+
+    /** Any property's current value as a [FormulaValue], whichever of [plainFormulaValue] or
+     * [formulaValueForProperty] applies — the one place both [formulaValueForProperty]'s own
+     * resolver and [explainComputedValue] need this same "resolve by property, not by which kind
+     * it is" logic, factored out so the two could not silently drift apart. */
+    private fun resolvePropertyFormulaValue(
+        property: Property,
+        row: TableRow,
+        allProperties: List<Property>,
+        evaluating: MutableSet<Long>,
+    ): FormulaValue = plainFormulaValue(property, row)
+        ?: parseFormulaConfig(property.config)?.let { formulaValueForProperty(property, it, row, allProperties, evaluating) }
+        ?: FormulaValue.Empty
 
     /** A row-local, non-`COMPUTED` property's stored value as a [FormulaValue], typed per its own
      * [PropertyType] — `null` for a `RELATION` or `COMPUTED` property, which [formulaValueForProperty]
