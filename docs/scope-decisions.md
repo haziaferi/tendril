@@ -75,6 +75,20 @@ the repo outside build output:
 An imported picture is invisible in the app that stores it and travels faithfully to a
 second device that also cannot show it.
 
+**A fifth, found 2026-09-08 by the check written to catch this class.** `Tag.color` is
+computed from an eight-colour palette whose own comment records tuning every pair to at
+least 12 CIEDE2000 apart under normal vision, deuteranopia and protanopia — and nothing
+reads it. `PageDetailViewModel` re-reads a tag from the DAO rather than constructing one,
+specifically to preserve the derived colour it then does not use. Careful accessibility
+work on a value that renders nowhere.
+
+**`audit.py` was weaker locally than in CI.** Its scan walked `.claude/worktrees/`, a
+gitignored full copy of the repository, so every symbol counted twice on a developer
+machine and once on the runner. The dead-declaration check can never fire on a doubled
+symbol, which is the dangerous direction: a local PASS that CI would not give. Fixed by
+excluding `.claude`; the check is now stronger locally than it has ever been, and still
+finds nothing.
+
 **The mechanism is a tooling gap, not carelessness.** `tools/audit.py`'s dead-declaration
 check anchors its regex at column 0 — its own comment says so. Every entity field, member
 function and enum member is indented, so the audit has never checked one. It reports clean

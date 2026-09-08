@@ -20,9 +20,14 @@ the one place a reader consults to learn what is not built — declined to say w
 - X6 (harden `tools/audit.py`) is scheduled **last**, in Stage 9. That is the wrong place.
   It is the detector for the entire class of drift this plan exists to clean up, its
   finding was confirmed by measurement on 2026-09-08, and it is sized S.
-  **Half done 2026-09-08, in PR #11**: the two checks that were failing on correct code are
-  fixed. The additive half — a field-with-no-non-mapper-reader check, which is what would
-  actually catch the four dead fields listed in `scope-decisions.md` — is still open.
+  **Done 2026-09-08, in PR #11**, both halves. The two checks that were failing on correct
+  code are fixed, and the additive check is in. Its shape had to change: the row's proposed
+  "no non-mapper reader" rule does not work, because `NotionImporter` *writes* two of the
+  four dead fields, so they have references and no readers. The rule that does work is **no
+  `.field` property access anywhere outside the sync mappers, and not named in any `@Query`
+  SQL** — 6 findings out of 112 entity fields, where a plain no-UI-reference rule gives 24
+  of which 20 are legitimate infrastructure. Baselined with reasons rather than deleted, so
+  the list can only shrink and a new dead field fails the build.
 
 ---
 
