@@ -129,7 +129,12 @@ def enum_members(src: str) -> set[str]:
 MARKER = re.compile(r"^\s*(?://|/?\*+)\s.*\b(FIXME|HACK|XXX|WIP)\b|^\s*(?://|/?\*+)\s*TODO[: ]")
 # Top-level only: column 0, optionally with modifiers. Extension receivers included.
 TOP_DECL = re.compile(
-    r"^(?:(?:private|internal|public|abstract|open|sealed|data|enum|expect|actual|inline|suspend)\s+)*"
+    # "fun" is in the modifier list as well as the keyword list, because `fun interface Name`
+    # (a SAM/functional interface) is two keywords in a row — without it, "fun" satisfies the
+    # keyword alternative on its own and "interface" is captured as if it were the declared
+    # name. An ordinary `fun foo()` still matches correctly: Python's `re` backtracks off
+    # treating "fun" as a modifier the moment nothing at the keyword position follows it.
+    r"^(?:(?:private|internal|public|abstract|open|sealed|data|enum|expect|actual|inline|suspend|fun)\s+)*"
     r"(?:fun|class|object|interface)\s+(?:<[^>]+>\s+)?(?:[\w.]+\.)?(\w+)"
 )
 TOP_VAL = re.compile(r"^(?:(?:private|internal|public|const|expect|actual)\s+)*va[lr]\s+(\w+)")
@@ -214,6 +219,12 @@ def main() -> int:
     imported = set(re.findall(r"^import\s+(?:[\w.]+\.)?(\w+)", all_code, re.M))
     imported |= set(re.findall(r"^import\s+([\w.]+)", all_code, re.M))
     declared = set(re.findall(r"\b(?:fun|class|object|interface|val|var)\s+(?:<[^>]+>\s+)?(?:[\w.]+\.)?(\w+)", all_code))
+    # `fun interface Name` (a SAM/functional interface) is two keywords in a row. The pattern
+    # above matches starting at "fun", then expects a name right after — "interface" fills that
+    # slot instead, wrongly consumed as if it were the declared symbol, and the actual name is
+    # never captured. First one this repository has ever declared (`FormulaPropertyResolver`,
+    # `FormulaPropertyTypeLookup`) is what surfaced it — nothing existing depended on this gap.
+    declared |= set(re.findall(r"\bfun\s+interface\s+(\w+)", all_code))
     declared |= set(re.findall(r"^\s*(\w+)\s*[,(]\s*$", all_code, re.M))          # enum members
     declared |= enum_members(all_code)                                             # one-line enum bodies
     declared |= set(re.findall(r"^\s*(?:val|var)?\s*(\w+)\s*:", all_code, re.M))  # params/properties
