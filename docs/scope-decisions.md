@@ -52,9 +52,33 @@ pass — pages, entries, habits, purges — rather than degrading one column. Af
 column is quarantined and everything else syncs. For DB1 this means Milestone 0 must be
 *installed* on both machines, not merely merged.
 
-**Room comes off destructive migration before any schema-changing item.**
-`fallbackToDestructiveMigration(dropAllTables = true)` is still live. DB1, DB2 and DB3 need
-no schema change and are unaffected; DB6, DB12, DB13, P13, P14 and P18 all are.
+**Room comes off destructive migration before any schema-changing item.** Split in two,
+because only one half can be finished responsibly today.
+
+- **S1a — done 2026-09-08.** `exportSchema = true`, and
+  `shared/schemas/com.tendril.app.data.TendrilDatabase/8.json` is committed. Eight versions
+  had been compiled and none could be migrated *from*, because Room builds an
+  `@AutoMigration` by diffing the previous version's JSON and there was none. Both KSP
+  targets write one file, verified byte-identical rather than assumed.
+- **S1b — not done.** `fallbackToDestructiveMigration(dropAllTables = true)` is still live.
+  Removing it is safe while the version does not move, and its value only arrives at the
+  first bump — so it belongs immediately before DB6/DB12/DB13, which change the schema, and
+  is not a gate on DB1/DB2/DB3, which do not.
+
+**Open, and I cannot close it.** §9.10's acceptance criterion for S1b asks that the
+snapshot-restore fallback be exercised once on a *populated* device against a deliberately
+broken migration. §9.10's own 2026-09-06 correction records that the path does not do what
+the section describes: Restore merges page-shaped data rather than wiping, and the
+"snapshot-folder export" recovery it names does not exist. The two cases are
+indistinguishable on a fresh install, because a destructive migration has already emptied
+Room by the time Restore runs — so testing it the easy way returns green and proves nothing.
+This needs real hardware with real data on it, and until then S1b removes a safety net whose
+replacement is unverified.
+
+**A related fragility, found while verifying the above.** `room.schemaLocation` is a KSP
+argument, not a declared Gradle output. Deleting a committed schema file does not invalidate
+any task, so no ordinary build restores it — it comes back only when KSP itself re-runs. A
+schema JSON deleted by accident stays deleted through a green build.
 
 ---
 
