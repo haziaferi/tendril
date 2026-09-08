@@ -1045,10 +1045,24 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
         PropertyType.RELATION -> RelationCell(property, row, viewModel)
         PropertyType.COMPUTED -> ComputedCell(property, row, viewModel)
         else -> {
-            var text by remember(value) { mutableStateOf(value ?: "") }
+            // §B3 — keyed on identity, not `value`: keying on `value` reset `text` to whatever
+            // Room last emitted on every recomposition, so a merge write landing mid-keystroke
+            // clobbered the character just typed. `lastWrittenValue` tracks what this field
+            // itself last wrote (mirrors the block editor's `lastWrittenContent` guard in
+            // PageDetailScreen.kt) so only a change from elsewhere — not this field's own
+            // fire-and-forget write echoing back — pulls `text` forward.
+            val currentValue = value ?: ""
+            var text by remember(property.id, row.page.id) { mutableStateOf(currentValue) }
+            var lastWrittenValue by remember(property.id, row.page.id) { mutableStateOf(currentValue) }
+            LaunchedEffect(currentValue) {
+                if (currentValue != lastWrittenValue) {
+                    text = currentValue
+                    lastWrittenValue = currentValue
+                }
+            }
             BasicTextField(
                 value = text,
-                onValueChange = { text = it; viewModel.setCellValue(property, row.page, it) },
+                onValueChange = { text = it; lastWrittenValue = it; viewModel.setCellValue(property, row.page, it) },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                 readOnly = viewOnly,
                 singleLine = true,
