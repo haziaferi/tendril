@@ -932,10 +932,22 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             }
         }
         else -> {
-            var text by remember(storedValue) { mutableStateOf(storedValue ?: "") }
+            // §B3 — same `lastWrittenValue` guard as the sibling fix in
+            // `PageDatabaseScreen.kt`'s `UnboundCell`: keying `remember` on `storedValue`
+            // reset `text` on every Room emission, including a merge write landing
+            // mid-keystroke, which clobbered the character just typed.
+            val currentValue = storedValue ?: ""
+            var text by remember(property.id) { mutableStateOf(currentValue) }
+            var lastWrittenValue by remember(property.id) { mutableStateOf(currentValue) }
+            LaunchedEffect(currentValue) {
+                if (currentValue != lastWrittenValue) {
+                    text = currentValue
+                    lastWrittenValue = currentValue
+                }
+            }
             BasicTextField(
                 value = text,
-                onValueChange = { text = it; viewModel.setRowPropertyValue(property, it) },
+                onValueChange = { text = it; lastWrittenValue = it; viewModel.setRowPropertyValue(property, it) },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                 readOnly = locked,
                 singleLine = true,
