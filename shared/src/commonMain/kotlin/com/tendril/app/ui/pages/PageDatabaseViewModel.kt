@@ -261,16 +261,44 @@ class PageDatabaseViewModel(
         result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Board view (§5.6) — one column per option of the grouping Select property; a row
-     * whose value doesn't match any current option is dropped rather than shown in a
-     * synthetic "other" column, matching the spec's "no silent fallback" instruction for a
-     * database with no Select property yet (empty column list, handled by the UI). */
+    /** Board view (§5.6/DB5) — one column per group. A `SELECT` group property's columns are
+     * its fixed `config` option list, same as always; a row whose value doesn't match any
+     * current option is dropped rather than shown in a synthetic "other" column, matching the
+     * spec's "no silent fallback" instruction. A formula-authored `COMPUTED` group property (see
+     * [PropertyType.COMPUTED]'s own note — a rollup is not offered here, see [groupPropertyValue]'s
+     * note on why) has no such fixed list — there is nothing in its `config` to read one from —
+     * so its columns are instead every distinct non-empty value the formula actually produced
+     * across the currently displayed rows, sorted for a stable column order across
+     * recompositions. Either way a row
+     * with no value for the group property (a blank `SELECT` cell, or a formula that evaluated to
+     * [FormulaValue.Empty]) has no column of its own — the same "no silent fallback" rule, not a
+     * bug specific to one group-property kind. */
     val boardColumns: StateFlow<List<Pair<String, List<TableRow>>>> = combine(displayedRows, selectedView, properties) { rowsList, view, props ->
         if (view?.viewType != ViewType.BOARD) return@combine emptyList()
         val groupProperty = props.find { it.id == view.groupByPropertyId } ?: return@combine emptyList()
-        val options = groupProperty.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
-        options.map { option -> option to rowsList.filter { valueForCell(it, groupProperty.id) == option } }
+        val valueOf: (TableRow) -> String? = { row -> groupPropertyValue(groupProperty, row, props) }
+        val columns = if (groupProperty.type == PropertyType.COMPUTED) {
+            rowsList.mapNotNull(valueOf).distinct().sorted()
+        } else {
+            groupProperty.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
+        }
+        columns.map { option -> option to rowsList.filter { valueOf(it) == option } }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** A Board group property's value for one row — [valueForCell] for everything already
+     * synchronous, or [resolvePropertyFormulaValue] for a formula-authored `COMPUTED` property
+     * (row-local, so still synchronous — no suspend inside a `combine` block). A rollup-authored
+     * `COMPUTED` property ([parseFormulaConfig] `null` for it) is deliberately not offered by the
+     * group-by picker in the first place ([PageDatabaseScreen]'s `ViewConfigSheet`) — aggregating
+     * across a relation needs suspend DAO calls, which grouping every displayed row on every
+     * recomposition cannot afford to make one-by-one, the same "not yet, needs its own PR" scope
+     * cut [addFormulaProperty] already made for referencing a relation from a formula. */
+    private fun groupPropertyValue(groupProperty: Property, row: TableRow, allProperties: List<Property>): String? =
+        if (groupProperty.type == PropertyType.COMPUTED) {
+            parseFormulaConfig(groupProperty.config)?.let { resolvePropertyFormulaValue(groupProperty, row, allProperties, mutableSetOf()).toCellText() }
+        } else {
+            valueForCell(row, groupProperty.id)
+        }
 
     fun moveRowToColumn(row: TableRow, groupPropertyId: Long, option: String) {
         if (locked()) return

@@ -10,10 +10,12 @@ import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.pagedatabase.PageDatabase
+import com.tendril.app.data.pagedatabase.PageDatabaseView
 import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.RollupAggregation
+import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.data.pagedatabase.parseRelationConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.setValue
@@ -33,6 +35,7 @@ import com.tendril.app.ui.pages.TableRow
 import com.tendril.app.ui.roadmap.RoadMapViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -750,6 +753,73 @@ class WritePathSyncTest {
         assertEquals("Points", explanation.targetName)
         assertEquals(listOf("Task" to "3"), explanation.relatedRows)
         assertEquals("3", explanation.result)
+    }
+
+    // --------------------------------------------------------------------------- DB5 (formula board grouping)
+
+    @Test
+    fun `a Board grouped by a formula property partitions rows by the computed result`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        val lowRow = seeded.row
+        val highRow = a.pageDao.getById(a.store.seedPage(Page(title = "High row", databaseId = dbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsId, lowRow.id, "3")
+        a.propertyValueDao.setValue(pointsId, highRow.id, "8")
+        val vm = a.database(seeded.databasePage.id)
+        vm.addFormulaProperty("Tier", "if(prop(\"Points\") >= 5, \"High\", \"Low\")") {}
+        val tier = a.propertyDao.getForDatabase(dbId).single { it.name == "Tier" }
+        val boardViewId = a.viewDao.insert(PageDatabaseView(databaseId = dbId, name = "Board", viewType = ViewType.BOARD, order = 1, groupByPropertyId = tier.id))
+        vm.selectView(boardViewId)
+
+        val columns = vm.boardColumns.first()
+
+        assertEquals(setOf("High", "Low"), columns.map { it.first }.toSet())
+        assertEquals(listOf(highRow.title), columns.single { it.first == "High" }.second.map { it.page.title })
+        assertEquals(listOf(lowRow.title), columns.single { it.first == "Low" }.second.map { it.page.title })
+    }
+
+    @Test
+    fun `a row whose grouping formula evaluates to empty has no Board column`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        // seeded.row never gets a "Points" value, so prop("Points") resolves to Empty and the
+        // whole if(...) — not just the comparison — degrades to Empty per §5.4's "a formula
+        // referencing a blank cell should read as blank" rule (FormulaEvaluator.kt's own note).
+        val vm = a.database(seeded.databasePage.id)
+        vm.addFormulaProperty("Tier", "if(prop(\"Points\") >= 5, \"High\", \"Low\")") {}
+        val tier = a.propertyDao.getForDatabase(dbId).single { it.name == "Tier" }
+        val boardViewId = a.viewDao.insert(PageDatabaseView(databaseId = dbId, name = "Board", viewType = ViewType.BOARD, order = 1, groupByPropertyId = tier.id))
+        vm.selectView(boardViewId)
+
+        val columns = vm.boardColumns.first()
+
+        assertTrue("a row with no computed value should not appear in any column", columns.isEmpty())
+    }
+
+    @Test
+    fun `grouping by a rollup-authored COMPUTED property degrades to no columns rather than crashing`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val projectsPage = a.pageDao.getById(a.pageDatabaseDao.getById(projectsDbId)!!.pageId)!!
+        val pointsPropertyId = a.propertyDao.insert(Property(databaseId = tasksDbId, name = "Points", type = PropertyType.NUMBER, order = 0))
+        val task = a.pageDao.getById(a.store.seedPage(Page(title = "Task", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsPropertyId, task.id, "3")
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single { it.name == "Project" }
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single { it.name == "Tasks" }
+        a.database(tasksPage.id).setRelationValue(forward, task, setOf(projectRow.uid))
+        val vm = a.database(projectsPage.id)
+        vm.addRollupProperty("Total points", reverse.id, pointsPropertyId, RollupAggregation.SUM)
+        val rollupProperty = a.propertyDao.getForDatabase(projectsDbId).single { it.type == PropertyType.COMPUTED }
+        val boardViewId = a.viewDao.insert(PageDatabaseView(databaseId = projectsDbId, name = "Board", viewType = ViewType.BOARD, order = 1, groupByPropertyId = rollupProperty.id))
+        vm.selectView(boardViewId)
+
+        val columns = vm.boardColumns.first()
+
+        assertTrue(columns.isEmpty())
     }
 
     // ------------------------------------------------------------------------------ canvas

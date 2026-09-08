@@ -70,6 +70,7 @@ import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.data.pagedatabase.RollupAggregation
+import com.tendril.app.data.pagedatabase.parseFormulaConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.ui.WorkbenchCore
@@ -385,13 +386,19 @@ private fun BoardBody(
         EmptyBoardPrompt()
         return
     }
+    // §5.4/DB5 — a formula-grouped column has no cell to move a card *into*: a `COMPUTED`
+    // value is derived, never stored (see [ComputedCell]'s own "no tap-to-edit" rule), so
+    // there is nothing [PageDatabaseViewModel.moveRowToColumn] could write. `editable` gates
+    // [BoardCard]'s "Move…" menu on that, the same distinction a `SELECT` group already draws
+    // between its stored, reassignable value and everything else.
+    val editable = groupProperty.type != PropertyType.COMPUTED
     Row(modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         columns.forEach { (option, rows) ->
             Column(modifier = Modifier.width(240.dp)) {
                 Text(option, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(rows, key = { it.page.id }) { row ->
-                        BoardCard(row, option, columns.map { it.first }, groupProperty.id, viewModel, onOpenPage)
+                        BoardCard(row, option, columns.map { it.first }, groupProperty.id, editable, viewModel, onOpenPage)
                     }
                 }
             }
@@ -403,7 +410,7 @@ private fun BoardBody(
 private fun EmptyBoardPrompt() {
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            "Board needs a Select property to group by. Add one, then configure this view.",
+            "Board needs a Select property, or a formula property, to group by. Add one, then configure this view.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -411,7 +418,15 @@ private fun EmptyBoardPrompt() {
 }
 
 @Composable
-private fun BoardCard(row: TableRow, currentOption: String, allOptions: List<String>, groupPropertyId: Long, viewModel: PageDatabaseViewModel, onOpenPage: (Long) -> Unit) {
+private fun BoardCard(
+    row: TableRow,
+    currentOption: String,
+    allOptions: List<String>,
+    groupPropertyId: Long,
+    editable: Boolean,
+    viewModel: PageDatabaseViewModel,
+    onOpenPage: (Long) -> Unit,
+) {
     // A tap-to-reassign menu rather than a literal drag gesture — the same call already made
     // for block reordering (§3.1.1's Move Up/Down over a drag handle): same end capability
     // (any card can move to any column), far less gesture-tracking risk on touch targets this size.
@@ -423,12 +438,14 @@ private fun BoardCard(row: TableRow, currentOption: String, allOptions: List<Str
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(row.page.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickableRow { onOpenPage(row.page.id) })
-            Spacer(Modifier.height(6.dp))
-            Box {
-                TextButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) { Text("Move…") }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    allOptions.filter { it != currentOption }.forEach { option ->
-                        DropdownMenuItem(text = { Text(option) }, onClick = { viewModel.moveRowToColumn(row, groupPropertyId, option); showMenu = false })
+            if (editable) {
+                Spacer(Modifier.height(6.dp))
+                Box {
+                    TextButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) { Text("Move…") }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        allOptions.filter { it != currentOption }.forEach { option ->
+                            DropdownMenuItem(text = { Text(option) }, onClick = { viewModel.moveRowToColumn(row, groupPropertyId, option); showMenu = false })
+                        }
                     }
                 }
             }
@@ -552,7 +569,15 @@ private fun ViewConfigSheet(
             Text("Configure \"${view.name}\"", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
 
             when (view.viewType) {
-                ViewType.BOARD -> BindingPicker("Group by (Select property)", properties.filter { it.type == PropertyType.SELECT }, view.groupByPropertyId) { id ->
+                // §5.4/DB5 — a formula-authored COMPUTED property groups too (parseFormulaConfig
+                // non-null); a rollup-authored one is deliberately excluded here — see
+                // PageDatabaseViewModel.groupPropertyValue's own note on why aggregating across
+                // a relation can't fit this screen's synchronous grouping path yet.
+                ViewType.BOARD -> BindingPicker(
+                    "Group by (Select or formula property)",
+                    properties.filter { it.type == PropertyType.SELECT || parseFormulaConfig(it.config) != null },
+                    view.groupByPropertyId,
+                ) { id ->
                     onUpdate(view.copy(groupByPropertyId = id))
                 }
                 ViewType.CALENDAR -> BindingPicker("Plot by (Date property)", properties.filter { it.type == PropertyType.DATE }, view.datePropertyId) { id ->
