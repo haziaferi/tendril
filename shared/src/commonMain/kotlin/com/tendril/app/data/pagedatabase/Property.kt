@@ -19,11 +19,15 @@ import java.util.UUID
  * `COMPUTED` is the second step, and deliberately arrives under its *final* name rather than as
  * a separate `ROLLUP` — §5.4 states the eventual shape as one type with two authoring paths onto
  * one evaluator (pickers that write an expression, and a `ƒ` that reveals it as editable text).
- * What exists today is only the picker half: [RollupConfig] is a small structured descriptor, not
- * an expression, and there is no evaluator yet — see [computeRollupValue][
- * com.tendril.app.ui.pages.PageDatabaseViewModel.computeRollupValue]. Naming it `COMPUTED` now
- * means the formula-language step that completes §5.4 extends this member's meaning rather than
- * renaming it out from under every property and value already stored under `RELATION`/`COMPUTED`. */
+ * DB3's wiring PR (docs/scope-decisions.md) landed the `ƒ` half: [Property.config] for a
+ * `COMPUTED` property is now one of two tagged shapes, told apart by [parseFormulaConfig] vs.
+ * [parseRollupConfig] — the untagged `"<relationUid>:<targetUid>:<AGGREGATION>"` [RollupConfig]
+ * pickers create, unchanged since DB2, or a `"formula:"`-tagged expression the real
+ * [com.tendril.app.domain.formula.parseFormula] evaluator runs. The two are not yet the *same*
+ * mechanism — a formula can reference this database's own plain properties and other
+ * formula-authored `COMPUTED` properties, but not a relation or a rollup — see
+ * [com.tendril.app.ui.pages.PageDatabaseViewModel.addFormulaProperty]'s own note on why that
+ * slice was cut here rather than unifying the two paths in one PR. */
 enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL, RELATION, COMPUTED }
 
 @Entity(
@@ -127,13 +131,30 @@ private const val NO_ROLLUP_TARGET = "-"
 fun encodeRollupConfig(relationPropertyUid: String, targetPropertyUid: String?, aggregation: RollupAggregation): String =
     "$relationPropertyUid:${targetPropertyUid ?: NO_ROLLUP_TARGET}:${aggregation.name}"
 
+/** `null` for a `"formula:"`-tagged config (see [parseFormulaConfig]) as well as for anything
+ * that simply doesn't split into three fields — a rollup and a formula share [PropertyType.COMPUTED]
+ * but never share a config string, so the prefix check has to come first rather than falling
+ * through to "3 parts, but not really a rollup" by accident. */
 fun parseRollupConfig(config: String?): RollupConfig? {
-    if (config == null) return null
+    if (config == null || config.startsWith(FORMULA_CONFIG_PREFIX)) return null
     val parts = config.split(":")
     if (parts.size != 3) return null
     val aggregation = RollupAggregation.entries.find { it.name == parts[2] } ?: return null
     return RollupConfig(parts[0], parts[1].takeIf { it != NO_ROLLUP_TARGET }, aggregation)
 }
+
+/** The tag prefix distinguishing a formula-authored `COMPUTED` config from a rollup-picker one
+ * (see [PropertyType.COMPUTED]'s own note). Not a [UUID] and not a [RollupAggregation.name], so
+ * it can never collide with either half of an existing, already-synced rollup config. */
+private const val FORMULA_CONFIG_PREFIX = "formula:"
+
+fun encodeFormulaConfig(expression: String): String = "$FORMULA_CONFIG_PREFIX$expression"
+
+/** `null` for anything not formula-tagged — including every existing rollup's untagged
+ * three-field config, so an already-stored, already-synced DB2 rollup keeps parsing exactly as
+ * it did before `COMPUTED` gained this second authoring path. */
+fun parseFormulaConfig(config: String?): String? =
+    config?.takeIf { it.startsWith(FORMULA_CONFIG_PREFIX) }?.removePrefix(FORMULA_CONFIG_PREFIX)
 
 /** Display form for a `SUM`/`MIN`/`MAX` rollup result — `3` rather than Kotlin's default `3.0`
  * for a whole-number [Double], while a genuine fraction keeps its decimal part. */

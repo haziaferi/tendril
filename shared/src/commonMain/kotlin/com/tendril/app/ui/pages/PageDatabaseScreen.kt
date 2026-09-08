@@ -208,6 +208,16 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                 viewModel.addRollupProperty(name, relationPropertyId, targetPropertyId, aggregation)
                 showAddProperty = false
             },
+            onAddFormula = { name, expression, onResult ->
+                viewModel.addFormulaProperty(name, expression) { result ->
+                    onResult(result)
+                    // Only a successful check dismisses the sheet — a failed one stays open so
+                    // the person can see FormulaError.position-anchored feedback and fix the
+                    // expression in place, the same "errors caught when written" shape §5.4 asks
+                    // for, rather than closing on every attempt and losing what they typed.
+                    if (result.errors.isEmpty()) showAddProperty = false
+                }
+            },
         )
     }
 
@@ -1063,15 +1073,16 @@ private fun RelationPickerSheet(
     }
 }
 
-/** §5.4/DB2 — a rollup cell has no tap-to-edit interaction at all: "compute on read" means
- * there is nothing stored here to edit, only the underlying relation, which this cell does not
- * even hold a reference to editing. It resolves fresh whenever the row's own values change,
- * since a rollup can shift with no edit to this cell at all — the related row's own value
- * moving is enough. */
+/** §5.4/DB2+DB3 — a `COMPUTED` cell has no tap-to-edit interaction at all, whichever of the two
+ * authoring paths created it (see [PropertyType.COMPUTED]'s own note): "compute on read" means
+ * there is nothing stored here to edit, only the relation or the formula, neither of which this
+ * cell holds a reference to editing. It resolves fresh whenever the row's own values change,
+ * since either kind can shift with no edit to this cell at all — a related row's value moving,
+ * or another formula this one references changing. */
 @Composable
 private fun ComputedCell(property: Property, row: TableRow, viewModel: PageDatabaseViewModel) {
     var display by remember(property.id, row.page.id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(property.id, row.values) { display = viewModel.computeRollupValue(property, row) }
+    LaunchedEffect(property.id, property.config, row.values) { display = viewModel.computeComputedValue(property, row) }
     Text(display ?: "—", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
@@ -1107,6 +1118,10 @@ private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUn
     }
 }
 
+/** §5.4/DB3 wiring — which authoring path a new `COMPUTED` property takes; see
+ * [PropertyType.COMPUTED]'s own note on why the two remain distinct pickers rather than one. */
+private enum class ComputedMode { ROLLUP, FORMULA }
+
 @Composable
 private fun AddPropertySheet(
     existingProperties: List<Property>,
@@ -1116,6 +1131,7 @@ private fun AddPropertySheet(
     onAdd: (String, PropertyType, String?) -> Unit,
     onAddRelation: (String, Long) -> Unit,
     onAddRollup: (String, Long, Long?, RollupAggregation) -> Unit,
+    onAddFormula: (String, String, (com.tendril.app.domain.formula.FormulaCheckResult) -> Unit) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(PropertyType.TEXT) }
@@ -1137,6 +1153,9 @@ private fun AddPropertySheet(
     LaunchedEffect(selectedRelationProperty) {
         rollupTargetProperties = selectedRelationProperty?.let { viewModel.relationCandidateProperties(it) }.orEmpty()
     }
+    var computedMode by remember { mutableStateOf(ComputedMode.ROLLUP) }
+    var formulaExpression by remember { mutableStateOf("") }
+    var formulaError by remember { mutableStateOf<String?>(null) }
     // §5.2.2 — INTERVAL is never offered here; it's only ever created inside the
     // recurrence-binding flow, to avoid a second, uglier way to represent a plain number.
     val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL }
@@ -1183,50 +1202,73 @@ private fun AddPropertySheet(
                 }
             }
             if (type == PropertyType.COMPUTED) {
-                Text("Relation to aggregate", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                if (relationProperties.isEmpty()) {
-                    Text("No relation property yet — add one first", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
-                } else {
-                    Box {
-                        TextButton(onClick = { showRelationMenu = true }) { Text(selectedRelationProperty?.name ?: "Choose…") }
-                        DropdownMenu(expanded = showRelationMenu, onDismissRequest = { showRelationMenu = false }) {
-                            relationProperties.forEach { option ->
-                                DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRelationProperty = option; showRelationMenu = false })
+                Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = computedMode == ComputedMode.ROLLUP, onClick = { computedMode = ComputedMode.ROLLUP }, label = { Text("Rollup") })
+                    FilterChip(selected = computedMode == ComputedMode.FORMULA, onClick = { computedMode = ComputedMode.FORMULA }, label = { Text("Formula (ƒ)") })
+                }
+                if (computedMode == ComputedMode.ROLLUP) {
+                    Text("Relation to aggregate", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    if (relationProperties.isEmpty()) {
+                        Text("No relation property yet — add one first", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                    } else {
+                        Box {
+                            TextButton(onClick = { showRelationMenu = true }) { Text(selectedRelationProperty?.name ?: "Choose…") }
+                            DropdownMenu(expanded = showRelationMenu, onDismissRequest = { showRelationMenu = false }) {
+                                relationProperties.forEach { option ->
+                                    DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRelationProperty = option; showRelationMenu = false })
+                                }
                             }
                         }
-                    }
-                    Box {
-                        TextButton(onClick = { showAggregationMenu = true }) { Text("Aggregation: ${aggregation.name.lowercase()}") }
-                        DropdownMenu(expanded = showAggregationMenu, onDismissRequest = { showAggregationMenu = false }) {
-                            RollupAggregation.entries.forEach { option ->
-                                DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { aggregation = option; showAggregationMenu = false })
+                        Box {
+                            TextButton(onClick = { showAggregationMenu = true }) { Text("Aggregation: ${aggregation.name.lowercase()}") }
+                            DropdownMenu(expanded = showAggregationMenu, onDismissRequest = { showAggregationMenu = false }) {
+                                RollupAggregation.entries.forEach { option ->
+                                    DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { aggregation = option; showAggregationMenu = false })
+                                }
                             }
                         }
-                    }
-                    if (aggregation != RollupAggregation.COUNT) {
-                        Text("Property to read from each related row", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                        if (rollupTargetProperties.isEmpty()) {
-                            Text("The related database has no properties yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
-                        } else {
-                            Box {
-                                TextButton(onClick = { showRollupTargetMenu = true }) { Text(selectedRollupTarget?.name ?: "Choose…") }
-                                DropdownMenu(expanded = showRollupTargetMenu, onDismissRequest = { showRollupTargetMenu = false }) {
-                                    rollupTargetProperties.forEach { option ->
-                                        DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRollupTarget = option; showRollupTargetMenu = false })
+                        if (aggregation != RollupAggregation.COUNT) {
+                            Text("Property to read from each related row", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                            if (rollupTargetProperties.isEmpty()) {
+                                Text("The related database has no properties yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                            } else {
+                                Box {
+                                    TextButton(onClick = { showRollupTargetMenu = true }) { Text(selectedRollupTarget?.name ?: "Choose…") }
+                                    DropdownMenu(expanded = showRollupTargetMenu, onDismissRequest = { showRollupTargetMenu = false }) {
+                                        rollupTargetProperties.forEach { option ->
+                                            DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRollupTarget = option; showRollupTargetMenu = false })
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } else {
+                    Text(
+                        "References plain properties by name, e.g. prop(\"Score\") * 2 — not relations yet.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    BasicTextField(
+                        value = formulaExpression,
+                        onValueChange = { formulaExpression = it; formulaError = null },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    )
+                    formulaError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 }
             }
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = {
-                when (type) {
-                    PropertyType.RELATION -> selectedTarget?.let { (_, targetDatabaseId) -> onAddRelation(name, targetDatabaseId) }
-                    PropertyType.COMPUTED -> selectedRelationProperty?.let { relationProperty ->
+                when {
+                    type == PropertyType.RELATION -> selectedTarget?.let { (_, targetDatabaseId) -> onAddRelation(name, targetDatabaseId) }
+                    type == PropertyType.COMPUTED && computedMode == ComputedMode.ROLLUP -> selectedRelationProperty?.let { relationProperty ->
                         val targetId = if (aggregation == RollupAggregation.COUNT) null else selectedRollupTarget?.id
                         onAddRollup(name, relationProperty.id, targetId, aggregation)
+                    }
+                    type == PropertyType.COMPUTED && computedMode == ComputedMode.FORMULA -> onAddFormula(name, formulaExpression) { result ->
+                        formulaError = result.errors.firstOrNull()?.message
                     }
                     else -> {
                         val config = if (type == PropertyType.SELECT || type == PropertyType.MULTI_SELECT) {
