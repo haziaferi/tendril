@@ -261,6 +261,17 @@ class PageDatabaseViewModel(
         result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** §DB8 — `PageDatabaseView.visiblePropertyIds`'s own doc comment: "Empty means all
+     * properties," so every view created before this shipped (and every view whose chooser
+     * nobody has touched since) keeps showing every column unchanged. Consumed by the Table and
+     * Gallery bodies; schema-management surfaces (rebind candidates, the chooser itself,
+     * `AddPropertySheet`, `EnableSyncSheet`) read [properties] directly instead — hiding a
+     * column changes what's *displayed*, not what a property picker can still reach. */
+    val visibleProperties: StateFlow<List<Property>> = combine(properties, selectedView) { props, view ->
+        val ids = view?.visiblePropertyIds.orEmpty()
+        if (ids.isEmpty()) props else props.filter { it.id in ids }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Board view (§5.6/DB5) — one column per group. A `SELECT` group property's columns are
      * its fixed `config` option list, same as always; a row whose value doesn't match any
      * current option is dropped rather than shown in a synthetic "other" column, matching the

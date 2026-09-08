@@ -113,6 +113,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
     val displayedRows by viewModel.displayedRows.collectAsState()
     val views by viewModel.views.collectAsState()
     val selectedView by viewModel.selectedView.collectAsState()
+    val visibleProperties by viewModel.visibleProperties.collectAsState()
     val boardColumns by viewModel.boardColumns.collectAsState()
     val rowCovers by viewModel.rowCovers.collectAsState()
     val pendingEnable by viewModel.pendingSyncEnable.collectAsState()
@@ -185,9 +186,9 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
             HorizontalDivider()
             when (selectedView?.viewType) {
                 ViewType.BOARD -> BoardBody(boardColumns, properties, selectedView, viewModel, onOpenPage)
-                ViewType.GALLERY -> GalleryBody(displayedRows, properties, rowCovers, viewModel, onOpenPage)
+                ViewType.GALLERY -> GalleryBody(displayedRows, visibleProperties, rowCovers, viewModel, onOpenPage)
                 ViewType.CALENDAR -> CalendarBody(displayedRows, selectedView, viewModel, onOpenPage)
-                else -> TableBody(displayedRows, properties, database, hScroll, viewModel, onOpenPage)
+                else -> TableBody(displayedRows, visibleProperties, properties, database, hScroll, viewModel, onOpenPage)
             }
         }
     }
@@ -295,6 +296,7 @@ private fun Modifier.clickableRow(onClick: () -> Unit): Modifier = this.clickabl
 private fun TableBody(
     rows: List<TableRow>,
     properties: List<Property>,
+    allProperties: List<Property>,
     database: com.tendril.app.data.pagedatabase.PageDatabase?,
     hScroll: androidx.compose.foundation.ScrollState,
     viewModel: PageDatabaseViewModel,
@@ -303,7 +305,8 @@ private fun TableBody(
     val viewOnly = LocalViewOnly.current
     // §5.4/DB4 — "a column footer shows sum/avg/empty," recomputed whenever the schema or the
     // currently displayed rows change (a filter narrowing the view changes what the sum is
-    // over, the same way it already changes everything else this screen shows).
+    // over, the same way it already changes everything else this screen shows). Only over the
+    // *visible* columns (§DB8) — a hidden column's footer would just be dead work.
     var footerSummaries by remember { mutableStateOf<Map<Long, String?>>(emptyMap()) }
     LaunchedEffect(properties, rows) {
         footerSummaries = properties.associate { it.id to viewModel.computeColumnSummary(it, rows) }
@@ -316,7 +319,10 @@ private fun TableBody(
                 }
                 properties.forEach { property ->
                     Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                        PropertyHeaderCell(property, database, properties, viewModel)
+                        // §DB8 — rebind candidates (inside this cell's menu) still search
+                        // `allProperties`: a hidden property remains a valid rebind target, only
+                        // the display of its own column is what's toggled off.
+                        PropertyHeaderCell(property, database, allProperties, viewModel)
                     }
                 }
                 Box(modifier = Modifier.width(40.dp))
@@ -584,6 +590,32 @@ private fun ViewConfigSheet(
                     onUpdate(view.copy(datePropertyId = id))
                 }
                 else -> {}
+            }
+
+            // §DB8 — `PageDatabaseView.visiblePropertyIds`'s own doc comment scopes this to
+            // TABLE/GALLERY; BOARD's cards and CALENDAR's date-grouped list have no column grid.
+            if (view.viewType == ViewType.TABLE || view.viewType == ViewType.GALLERY) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Columns", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                val visibleIds = view.visiblePropertyIds.ifEmpty { properties.map { it.id } }.toSet()
+                properties.forEach { property ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickableRow {
+                            val toggled = if (property.id in visibleIds) visibleIds - property.id else visibleIds + property.id
+                            // A toggle that would empty the set is dropped rather than applied:
+                            // `visiblePropertyIds = emptyList()` means "show everything" (the
+                            // field's own convention, needed so every view predating this picker
+                            // keeps showing all its columns unchanged), so writing the empty set
+                            // here would flip "hide the last column" into "show every column."
+                            if (toggled.isNotEmpty()) onUpdate(view.copy(visiblePropertyIds = toggled.toList()))
+                        },
+                    ) {
+                        Checkbox(checked = property.id in visibleIds, onCheckedChange = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text(property.name, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
