@@ -32,6 +32,13 @@ interface PageDao {
     @Query("SELECT * FROM pages")
     suspend fun getAll(): List<Page>
 
+    /** The "relate to" database picker (§5.4/DB1) — every database in the app, by its own
+     * defining page. `:kind` binds through the existing [PageKind] converter, so this stays a
+     * parameterized query rather than a raw enum-name literal that would silently drift if the
+     * converter's format ever changed. */
+    @Query("SELECT * FROM pages WHERE kind = :kind AND deletedAt IS NULL ORDER BY title")
+    suspend fun getByKind(kind: PageKind): List<Page>
+
     /** Pages hub default list (§3.1) — root-level, non-template, undeleted pages. */
     @Query("SELECT * FROM pages WHERE parentId IS NULL AND isTemplate = 0 AND databaseId IS NULL AND deletedAt IS NULL ORDER BY title")
     fun observeRootPages(): Flow<List<Page>>

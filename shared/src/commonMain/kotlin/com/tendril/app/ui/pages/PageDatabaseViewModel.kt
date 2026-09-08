@@ -13,6 +13,7 @@ import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.PageDatabaseView
@@ -22,6 +23,10 @@ import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
+import com.tendril.app.data.pagedatabase.encodeRelationConfig
+import com.tendril.app.data.pagedatabase.encodeRelationValue
+import com.tendril.app.data.pagedatabase.parseRelationConfig
+import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.formatPeriodAsInterval
 import com.tendril.app.data.pagedatabase.ViewFilter
@@ -48,6 +53,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 
 /** One Table-view row (§5.1/§5.6): the Row page itself, its stored cell values keyed by
  * property id, and its linked Task Entry if this database is Sync-to-Tasks-enabled. */
@@ -316,12 +322,75 @@ class PageDatabaseViewModel(
 
     fun addProperty(name: String, type: PropertyType, config: String? = null) {
         if (locked()) return
-        val db = database.value ?: return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        launchAndTouch(pageId) {
-            val order = (properties.value.maxOfOrNull { it.order } ?: -1) + 1
+        // Not routed through `launchAndTouch`: its `block(); pageDao.touch(...)` shape runs the
+        // touch unconditionally after the block returns, including when the block itself
+        // early-returns via `return@launchAndTouch` — a bump with nothing behind it. Fetching
+        // `db` needs to suspend (see the note below), which an early return inside that block
+        // cannot prevent, so this inlines the same two steps in an order that can skip both.
+        viewModelScope.launch {
+            // `database.value ?: return` would silently drop the whole call whenever this runs
+            // before anything has actually collected `database` — a freshly-constructed
+            // ViewModel's `StateFlow.value` stays at its `null` initial value until a
+            // `WhileSubscribed` upstream gets a subscriber, which a Compose `collectAsState()`
+            // gives it in the app but nothing does in a direct call. `updateTitle` already falls
+            // back to a direct fetch for the same reason; this does the same rather than trust
+            // the cache is warm.
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launch
+            val order = (propertyDao.getForDatabase(db.id).maxOfOrNull { it.order } ?: -1) + 1
             propertyDao.insert(Property(databaseId = db.id, name = trimmed, type = type, config = config, order = order))
+            pageDao.touch(pageId, Instant.now())
+        }
+    }
+
+    /** §5.4/DB1 — a `RELATION` property is created against a *target database* rather than
+     * typed config text, and always creates its reverse alongside it in the same write: a
+     * relation is never one-way by construction, so a device that only ever opens the target
+     * database still sees the link looking back. Both inserts happen before either page is
+     * touched, so a process death between them can never leave one side stitched to a uid the
+     * other side does not have yet — the insert that didn't run simply didn't happen, same as
+     * any other single insert failing.
+     *
+     * A self-relation (`targetDatabaseId == db.id`, e.g. "Blocked by" within one Tasks database)
+     * needs no special case: both properties land in the same database as two ordinary columns,
+     * and touching the same page twice with the same instant is harmless. */
+    fun addRelationProperty(name: String, targetDatabaseId: Long) {
+        if (locked()) return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            // See [addProperty]'s note on the same fallback — `database.value`/`page.value`
+            // stay at their `null` initial value until something has actually collected them.
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launch
+            val thisPage = page.value ?: pageDao.getById(pageId) ?: return@launch
+            val targetDb = pageDatabaseDao.getById(targetDatabaseId) ?: return@launch
+            val targetPage = pageDao.getById(targetDb.pageId) ?: return@launch
+
+            val forwardUid = UUID.randomUUID().toString()
+            val reverseUid = UUID.randomUUID().toString()
+            val forwardOrder = (propertyDao.getForDatabase(db.id).maxOfOrNull { it.order } ?: -1) + 1
+            val reverseOrder = (propertyDao.getForDatabase(targetDb.id).maxOfOrNull { it.order } ?: -1) + 1
+
+            propertyDao.insert(
+                Property(
+                    uid = forwardUid, databaseId = db.id, name = trimmed, type = PropertyType.RELATION,
+                    config = encodeRelationConfig(targetPage.uid, reverseUid), order = forwardOrder,
+                )
+            )
+            // Named after the source database's own page title — the target database's schema
+            // gets a reciprocal column it never asked for, so it should read as "this links back
+            // to that thing", not an unlabelled duplicate of the forward property's name. Just a
+            // starting value: renaming either side afterward is an ordinary property edit.
+            propertyDao.insert(
+                Property(
+                    uid = reverseUid, databaseId = targetDb.id, name = thisPage.title, type = PropertyType.RELATION,
+                    config = encodeRelationConfig(thisPage.uid, forwardUid), order = reverseOrder,
+                )
+            )
+            val now = Instant.now()
+            pageDao.touch(pageId, now)
+            pageDao.touch(targetPage.id, now)
         }
     }
 
@@ -446,6 +515,63 @@ class PageDatabaseViewModel(
         if (locked()) return
         launchAndTouch(row.id) { propertyValueDao.setValue(property.id, row.id, value) }
     }
+
+    /** §5.4/DB1 — a relation cell edit writes both sides. This row's own value always updates;
+     * the related row's *reverse* cell updates too, provided the reverse property still exists
+     * — [addRelationProperty] always creates one, but nothing stops a person deleting one side
+     * afterward (§5.5), and a relation orphaned that way degrades to one-way rather than being
+     * blocked or auto-repaired, the same tolerant-reference posture the rest of this cell type
+     * already takes on a missing row uid.
+     *
+     * Every affected row's page gets touched, not just this one — the reverse cell lives inside
+     * the *other* row's own snapshot payload (§9.4), so a change there needs its own bump or it
+     * never leaves this device. */
+    fun setRelationValue(property: Property, row: Page, newRelatedUids: Set<String>) {
+        if (locked() || property.type != PropertyType.RELATION) return
+        viewModelScope.launch {
+            val reverseProperty = parseRelationConfig(property.config)?.reversePropertyUid?.let { propertyDao.getByUid(it) }
+            val oldUids = parseRelationValue(propertyValueDao.getForPropertyAndRow(property.id, row.id)?.value)
+            val added = newRelatedUids - oldUids
+            val removed = oldUids - newRelatedUids
+
+            val touched = mutableSetOf(row.id)
+            if (reverseProperty != null) {
+                for (uid in added + removed) {
+                    val otherRow = pageDao.getByUid(uid) ?: continue
+                    val current = parseRelationValue(propertyValueDao.getForPropertyAndRow(reverseProperty.id, otherRow.id)?.value)
+                    val next = if (uid in added) current + row.uid else current - row.uid
+                    propertyValueDao.setValue(reverseProperty.id, otherRow.id, encodeRelationValue(next))
+                    touched += otherRow.id
+                }
+            }
+
+            propertyValueDao.setValue(property.id, row.id, encodeRelationValue(newRelatedUids))
+            val now = Instant.now()
+            touched.forEach { pageDao.touch(it, now) }
+        }
+    }
+
+    /** Rows to offer in the relation picker (§5.4/DB1) — every row of the property's target
+     * database. One-shot rather than a live Flow: the picker sheet reads this once on open, the
+     * same shape [EnableSyncSheet] already uses for its own row list. */
+    suspend fun relationCandidateRows(property: Property): List<Page> {
+        val target = parseRelationConfig(property.config) ?: return emptyList()
+        val targetPage = pageDao.getByUid(target.targetDatabasePageUid) ?: return emptyList()
+        val targetDb = pageDatabaseDao.getByPageId(targetPage.id) ?: return emptyList()
+        return pageDao.getRowsOf(targetDb.id)
+    }
+
+    /** Resolves a relation cell's stored uids to display titles for [RelationCell], dropping
+     * any this device cannot currently find rather than showing a bare uid — deleted, or still
+     * quarantined (§9.4). */
+    suspend fun resolveRelatedTitles(uids: Set<String>): List<Pair<String, String>> =
+        uids.mapNotNull { uid -> pageDao.getByUid(uid)?.let { uid to it.title } }
+
+    /** Every database in the app, as candidates for a new relation property's target
+     * (§5.4/DB1) — including this database's own page, since a self-relation ("Blocked by"
+     * within one Tasks database) is a real, ordinary case rather than one needing separate UI. */
+    suspend fun relationTargetOptions(): List<Pair<Page, Long>> =
+        pageDao.getByKind(PageKind.DATABASE).mapNotNull { p -> pageDatabaseDao.getByPageId(p.id)?.let { p to it.id } }
 
     fun toggleDone(entry: Entry, checked: Boolean) {
         if (locked()) return

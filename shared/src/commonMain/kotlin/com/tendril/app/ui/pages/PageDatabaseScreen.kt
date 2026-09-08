@@ -69,6 +69,7 @@ import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
+import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
@@ -190,7 +191,17 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
     }
 
     if (showAddProperty) {
-        AddPropertySheet(onDismiss = { showAddProperty = false }, onAdd = { name, type, config -> viewModel.addProperty(name, type, config); showAddProperty = false })
+        // Fetched fresh each time the sheet opens rather than kept live — the candidate list
+        // (every database in the app) changes rarely enough that a one-shot load, the same
+        // shape `EnableSyncSheet` already uses, is not worth a live Flow's extra machinery.
+        var relationTargets by remember { mutableStateOf<List<Pair<Page, Long>>>(emptyList()) }
+        LaunchedEffect(Unit) { relationTargets = viewModel.relationTargetOptions() }
+        AddPropertySheet(
+            targetDatabases = relationTargets,
+            onDismiss = { showAddProperty = false },
+            onAdd = { name, type, config -> viewModel.addProperty(name, type, config); showAddProperty = false },
+            onAddRelation = { name, targetDatabaseId -> viewModel.addRelationProperty(name, targetDatabaseId); showAddProperty = false },
+        )
     }
 
     if (showAddView) {
@@ -588,6 +599,11 @@ private fun PropertyHeaderCell(
     // no real schema-editable field there to convert." Bound properties keep Delete (routed
     // into the sync-disable/unbind confirm flow) but never offer Change type; instead they offer
     // §5.2.1's rebind/unbind, the correction lever a plain delete-and-recreate can't provide.
+    // §5.4/DB1 — a RELATION property is excluded from Change type for the same reason: its
+    // real "schema" is the target database and its paired reverse property, neither of which
+    // this generic dialog knows how to re-derive. Delete-and-recreate through
+    // [addRelationProperty][PageDatabaseViewModel.addRelationProperty] is the correction lever.
+    val canChangeType = role == null && property.type != PropertyType.RELATION
     Box {
         Text(
             property.name,
@@ -597,9 +613,9 @@ private fun PropertyHeaderCell(
             modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true },
         )
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            if (role == null) {
+            if (canChangeType) {
                 DropdownMenuItem(text = { Text("Edit property type") }, onClick = { viewModel.requestChangeType(property); showMenu = false })
-            } else {
+            } else if (role != null) {
                 DropdownMenuItem(text = { Text("Change binding…") }, onClick = { showMenu = false; showRebindPicker = true })
             }
             DropdownMenuItem(text = { Text("Delete property") }, onClick = { viewModel.requestDeleteProperty(property); showMenu = false })
@@ -758,7 +774,13 @@ private fun ChangeTypeDialog(
 ) {
     var newType by remember(property.id) { mutableStateOf(property.type) }
     var showTypeMenu by remember { mutableStateOf(false) }
-    val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL }
+    // RELATION is never a *target* of a generic type change (same reasoning as INTERVAL):
+    // converting some other property to it here would set `type = RELATION` with no target
+    // database and no reverse property, since only `addRelationProperty` knows how to create
+    // that pairing. This dialog never opens for a property that already *is* a relation —
+    // `PropertyHeaderCell` hides "Edit property type" for those — so this filter only needs to
+    // cover the "convert into" direction.
+    val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL && it != PropertyType.RELATION }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -953,6 +975,7 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
                 }
             }
         }
+        PropertyType.RELATION -> RelationCell(property, row, viewModel)
         else -> {
             var text by remember(value) { mutableStateOf(value ?: "") }
             BasicTextField(
@@ -962,6 +985,68 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
                 readOnly = viewOnly,
                 singleLine = true,
             )
+        }
+    }
+}
+
+/** §5.4/DB1 — displays a relation cell as the related rows' titles rather than their stored
+ * uids, resolved fresh whenever the stored set changes; a uid this device cannot currently
+ * resolve (deleted, or still quarantined, §9.4) is silently absent from the title list rather
+ * than shown as a bare id. */
+@Composable
+private fun RelationCell(property: Property, row: TableRow, viewModel: PageDatabaseViewModel) {
+    val viewOnly = LocalViewOnly.current
+    val uids = parseRelationValue(row.values[property.id]?.value)
+    var showPicker by remember { mutableStateOf(false) }
+    var titles by remember(property.id, row.page.id) { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    LaunchedEffect(uids) { titles = viewModel.resolveRelatedTitles(uids) }
+    Text(
+        if (titles.isEmpty()) "—" else titles.joinToString(", ") { it.second },
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.clickableRow { if (!viewOnly) showPicker = true },
+    )
+    if (showPicker) {
+        RelationPickerSheet(
+            property = property,
+            selectedUids = uids,
+            viewModel = viewModel,
+            onDismiss = { showPicker = false },
+            onToggle = { uid -> viewModel.setRelationValue(property, row.page, if (uid in uids) uids - uid else uids + uid) },
+        )
+    }
+}
+
+/** A checklist of the target database's rows, matching [PropertyType.MULTI_SELECT]'s own
+ * dropdown-with-checkmarks shape — no search field, since the same "cheap enough at personal
+ * scale" reasoning this codebase already applies elsewhere (e.g. [PageDao.findRootByTitle])
+ * applies here too. Loaded once per open rather than kept live, the same shape
+ * [relationTargetOptions][PageDatabaseViewModel.relationTargetOptions]'s caller already uses. */
+@Composable
+private fun RelationPickerSheet(
+    property: Property,
+    selectedUids: Set<String>,
+    viewModel: PageDatabaseViewModel,
+    onDismiss: () -> Unit,
+    onToggle: (String) -> Unit,
+) {
+    var candidates by remember { mutableStateOf<List<Page>>(emptyList()) }
+    LaunchedEffect(property.id) { candidates = viewModel.relationCandidateRows(property) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
+            Text("Relate to", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+            if (candidates.isEmpty()) {
+                Text("No rows in the related database yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                candidates.forEach { candidate ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickableRow { onToggle(candidate.uid) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = candidate.uid in selectedUids, onCheckedChange = { onToggle(candidate.uid) })
+                        Text(candidate.title, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
         }
     }
 }
@@ -999,11 +1084,18 @@ private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUn
 }
 
 @Composable
-private fun AddPropertySheet(onDismiss: () -> Unit, onAdd: (String, PropertyType, String?) -> Unit) {
+private fun AddPropertySheet(
+    targetDatabases: List<Pair<Page, Long>>,
+    onDismiss: () -> Unit,
+    onAdd: (String, PropertyType, String?) -> Unit,
+    onAddRelation: (String, Long) -> Unit,
+) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(PropertyType.TEXT) }
     var showTypeMenu by remember { mutableStateOf(false) }
     var optionsText by remember { mutableStateOf("") }
+    var showTargetMenu by remember { mutableStateOf(false) }
+    var selectedTarget by remember(targetDatabases) { mutableStateOf(targetDatabases.firstOrNull()) }
     // §5.2.2 — INTERVAL is never offered here; it's only ever created inside the
     // recurrence-binding flow, to avoid a second, uglier way to represent a plain number.
     val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL }
@@ -1034,12 +1126,31 @@ private fun AddPropertySheet(onDismiss: () -> Unit, onAdd: (String, PropertyType
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 )
             }
+            if (type == PropertyType.RELATION) {
+                Text("Related database", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                if (targetDatabases.isEmpty()) {
+                    Text("No other databases yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                } else {
+                    Box {
+                        TextButton(onClick = { showTargetMenu = true }) { Text(selectedTarget?.first?.title ?: "Choose…") }
+                        DropdownMenu(expanded = showTargetMenu, onDismissRequest = { showTargetMenu = false }) {
+                            targetDatabases.forEach { option ->
+                                DropdownMenuItem(text = { Text(option.first.title) }, onClick = { selectedTarget = option; showTargetMenu = false })
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = {
-                val config = if (type == PropertyType.SELECT || type == PropertyType.MULTI_SELECT) {
-                    optionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
-                } else null
-                onAdd(name, type, config)
+                if (type == PropertyType.RELATION) {
+                    selectedTarget?.let { (_, targetDatabaseId) -> onAddRelation(name, targetDatabaseId) }
+                } else {
+                    val config = if (type == PropertyType.SELECT || type == PropertyType.MULTI_SELECT) {
+                        optionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
+                    } else null
+                    onAdd(name, type, config)
+                }
             }) { Text("Add") }
         }
     }

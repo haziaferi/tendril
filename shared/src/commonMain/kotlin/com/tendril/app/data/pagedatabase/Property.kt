@@ -9,8 +9,13 @@ import java.util.UUID
 
 /** §4/§7 — the set a Notion CSV export can actually carry, plus the Tendril-native `Interval`
  * type (§5.2.2), which is never offered in the general "New property" picker outside the
- * recurrence-binding context — enforced by the UI, not the schema. */
-enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL }
+ * recurrence-binding context — enforced by the UI, not the schema. `RELATION` (§5.4, reopened
+ * 2026-09-06) is the first computed-properties step: a stored, two-way link to a row in another
+ * database, encoded entirely in the existing `config`/`value` string columns — see
+ * [encodeRelationConfig] and [encodeRelationValue]. Zero schema change, and deliberately gated:
+ * §5.4's non-negotiable precondition is that every device runs the tolerant `PropertyType` decode
+ * (Milestone 0) before this member exists anywhere it might sync to. */
+enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL, RELATION }
 
 @Entity(
     tableName = "properties",
@@ -43,9 +48,45 @@ data class PropertyValue(
     val propertyId: Long,
     val rowPageId: Long,
     /** Raw stored value, encoded per [PropertyType]: number/checkbox/date as their string
-     * form, select as the chosen option text, multi-select as `"opt1,opt2"`. */
+     * form, select as the chosen option text, multi-select as `"opt1,opt2"`, relation as
+     * [encodeRelationValue]. */
     val value: String? = null,
 )
+
+/**
+ * A `RELATION`-type [Property.config]: which database this property points at, and which
+ * property on that database's own schema is its reverse. Both travel as page/property **uid**s,
+ * never local ids — the same convention as [com.tendril.app.data.page.SpanStyle.PageMention]'s
+ * `pageUid` and [com.tendril.app.data.canvas.CanvasNode]'s `embeddedPageUid`, since a local id is
+ * only ever valid on the device that assigned it. Pairing by the reverse property's own uid
+ * (rather than only the target database's) disambiguates two relation properties that both point
+ * at the same pair of databases — "Blocked by" and "Related to" between the same two tables would
+ * otherwise be indistinguishable from one database's own schema list.
+ *
+ * The colon separator is safe against every value this ever holds: both halves are
+ * `UUID.randomUUID()` strings, which contain only hex digits and hyphens.
+ */
+data class RelationConfig(val targetDatabasePageUid: String, val reversePropertyUid: String)
+
+fun encodeRelationConfig(targetDatabasePageUid: String, reversePropertyUid: String): String =
+    "$targetDatabasePageUid:$reversePropertyUid"
+
+fun parseRelationConfig(config: String?): RelationConfig? {
+    if (config == null) return null
+    val i = config.indexOf(':')
+    if (i < 0) return null
+    return RelationConfig(config.substring(0, i), config.substring(i + 1))
+}
+
+/** `PropertyValue.value` encoding for a `RELATION`-type property — the related rows' Page
+ * **uid**s, comma-joined, the same list shape [PropertyType.MULTI_SELECT] already uses for its
+ * option set. A uid with no local match (the row was deleted, or is still quarantined on this
+ * device, §9.4) is dropped silently wherever this is resolved, the same tolerant-reference
+ * pattern the rest of the sync layer already uses rather than a special case here. */
+fun encodeRelationValue(relatedRowUids: Set<String>): String = relatedRowUids.joinToString(",")
+
+fun parseRelationValue(value: String?): Set<String> =
+    value?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
 
 /** `PropertyValue.value` encoding for an `INTERVAL`-type property — "<count>:<unit>", the
  * same `"n:UNIT"` shape [Converters] already uses for `HabitFrequency`/`ReminderOffset`. */
