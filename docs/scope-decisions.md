@@ -16,7 +16,8 @@ has checked. Do not promote an `asserted` row to fact by citing it.
 
 | # | Item | Ruling | Note |
 |---|---|---|---|
-| DB1–DB5 | Relation, rollup, formula, summary/explain, computed grouping | **Build** — **DB1 done, commit `b26c92d`** | Reversal of §5.4's original deferral, already recorded 2026-09-06. Zero schema change: relation edges encode into the existing `PropertyValue.value`, rollups compute on read, the expression lives in `Property.config`. Gated on Milestone 0 reaching **every** device first — see the precondition below, confirmed satisfied 2026-09-08 (both installs verified as descendants of Milestone 0's commit). DB1 shipped with zero *sync* code changes too: a relation cell is a plain string in a column the sync layer already carries opaquely, so `PagesSyncEngine` needed nothing. DB2 (rollup) is next. |
+| DB1–DB5 | Relation, rollup, formula, summary/explain, computed grouping | **Build** — **DB1 done (`b26c92d`), DB2 done (`5595563`)** | Reversal of §5.4's original deferral, already recorded 2026-09-06. Zero schema change: relation edges encode into the existing `PropertyValue.value`, rollups compute on read, the expression lives in `Property.config`. Gated on Milestone 0 reaching **every** device first — see the precondition below, confirmed satisfied 2026-09-08 (both installs verified as descendants of Milestone 0's commit). Both DB1 and DB2 shipped with zero *sync* code changes: a relation cell and a rollup's own definition are both plain strings in columns the sync layer already carries opaquely, so `PagesSyncEngine` needed nothing for either. **DB2 ships under the type name `COMPUTED`, not `ROLLUP`** — ruled 2026-09-08 (see below), and its config is a structured picker descriptor, not yet the expression text §5.4 describes; DB3 upgrades the encoding rather than the type. DB3 (formula) is next. |
+| — | DB2's shape: `PropertyType.ROLLUP` now with a rename later, vs. `PropertyType.COMPUTED` now with structured (non-expression) config | **`COMPUTED` now, structured config** | §5.4 states the final shape as one type with two authoring paths onto one evaluator — pickers that write an expression, revealed and editable as text behind a `ƒ` toggle. Building that literally would require at least a minimal expression parser inside DB2, which is DB3's declared scope. Shipping `ROLLUP` now would mean DB3 renaming the enum member and migrating every stored property's config — exactly the churn §5.4's own reasoning was written to avoid. `COMPUTED`'s meaning is *extended* by DB3, not replaced. |
 | — | `INTERVAL` in the general New-property picker | **Stays hidden** | Confirmed as intentional, not a gap. §4's reasoning stands: a general-purpose Interval is a second, uglier way to represent a plain number when `NUMBER` exists. The two `filter { it != PropertyType.INTERVAL }` calls in `PageDatabaseScreen.kt` are the design, and removing them would be a regression. |
 | X3 | Wallpaper contrast for widgets | **Build the hinted half only** | `WallpaperManager.getDrawable()` is restricted to the default launcher from Android 13 and is genuinely unbuildable here. `getWallpaperColors(FLAG_SYSTEM)` is API 27+, needs no permission, and returns `HINT_SUPPORTS_DARK_TEXT`. Build that; do not plan the sampled half. |
 | X2 | Live embed blocks | **Build as static preview cards** | Compose Desktop has no WebView and `PageDetailScreen` now renders on both platforms, so a live embed cannot work on one of its two targets. A preview card renders identically on both. |
@@ -121,6 +122,18 @@ because it structurally cannot look where these live.
 **A naive fix would still miss them.** `SnapshotMappers` and `PagesSyncEngine` reference
 every one of these fields exactly twice, encoding and decoding. Sync makes dead data look
 alive, so a "field with no readers" check has to discount the sync lane specifically.
+
+**A recorded limitation, disclosed rather than found by accident: a DB2 rollup cell can go
+stale across databases.** `ComputedCell` recomputes when the row it sits on changes, since
+that is what its `LaunchedEffect` key observes. It does not recompute when a *related* row's
+target property changes on the database the rollup points at — this ViewModel only observes
+its own database's `property_values`, so an edit on the other side produces no signal here at
+all. Re-opening the page always shows the current truth; a live cross-database update does
+not arrive on its own. Accepted for now because full reactivity would mean watching every
+possible target row, which "compute on read" was chosen specifically to avoid — and because
+DB3's evaluator will need real dependency-graph invalidation for arbitrary formulas anyway,
+which is the more natural place to solve this once, rather than build a rollup-specific
+partial answer now.
 
 ---
 

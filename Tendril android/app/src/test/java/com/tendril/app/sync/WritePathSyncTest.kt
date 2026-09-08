@@ -12,6 +12,8 @@ import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
+import com.tendril.app.data.pagedatabase.PropertyValue
+import com.tendril.app.data.pagedatabase.RollupAggregation
 import com.tendril.app.data.pagedatabase.parseRelationConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.setValue
@@ -26,6 +28,7 @@ import com.tendril.app.ui.canvas.CanvasViewModel
 import com.tendril.app.ui.pages.PageDatabaseViewModel
 import com.tendril.app.ui.pages.PageDetailViewModel
 import com.tendril.app.ui.pages.PagesViewModel
+import com.tendril.app.ui.pages.TableRow
 import com.tendril.app.ui.roadmap.RoadMapViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -459,6 +462,91 @@ class WritePathSyncTest {
             "Y shows X in its reverse property, per the acceptance test's own wording",
             setOf(taskRow.uid),
             parseRelationValue(b.propertyValueDao.getForPropertyAndRow(bReverse.id, bProjectRowId)?.value),
+        )
+    }
+
+    // ----------------------------------------------------------------------- rollup (DB2)
+
+    /** §5.4/DB2 — a rollup created on the *reverse* side of a relation (the auto-created "Tasks"
+     * property on Projects) can aggregate a property that lives on the relation's target
+     * database, proving `relationCandidateProperties` resolves through a reverse property
+     * correctly, not only a forward one — the direction every real rollup is actually created
+     * from, since the reverse is what a database gets automatically. */
+    @Test
+    fun `a SUM rollup totals the related rows' numeric property, recomputed fresh each read`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val projectsPage = a.pageDao.getById(a.pageDatabaseDao.getById(projectsDbId)!!.pageId)!!
+        val pointsPropertyId = a.propertyDao.insert(Property(databaseId = tasksDbId, name = "Points", type = PropertyType.NUMBER, order = 0))
+        val task1 = a.pageDao.getById(a.store.seedPage(Page(title = "Task 1", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val task2 = a.pageDao.getById(a.store.seedPage(Page(title = "Task 2", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsPropertyId, task1.id, "3")
+        a.propertyValueDao.setValue(pointsPropertyId, task2.id, "5")
+
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single { it.name == "Project" }
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single { it.name == "Tasks" }
+        a.database(tasksPage.id).setRelationValue(forward, task1, setOf(projectRow.uid))
+        a.database(tasksPage.id).setRelationValue(forward, task2, setOf(projectRow.uid))
+
+        a.database(projectsPage.id).addRollupProperty("Total points", reverse.id, pointsPropertyId, RollupAggregation.SUM)
+        val rollupProperty = a.propertyDao.getForDatabase(projectsDbId).single { it.type == PropertyType.COMPUTED }
+
+        val reverseValue = a.propertyValueDao.getForPropertyAndRow(reverse.id, projectRow.id)?.value
+        val projectTableRow = TableRow(
+            projectRow,
+            mapOf(reverse.id to PropertyValue(propertyId = reverse.id, rowPageId = projectRow.id, value = reverseValue)),
+            linkedEntry = null,
+        )
+
+        assertEquals("8", a.database(projectsPage.id).computeRollupValue(rollupProperty, projectTableRow))
+
+        // Never stored: raising Task 2's points changes the total with no edit to the rollup
+        // cell, the row, or the relation at all — the entire point of "compute on read".
+        a.propertyValueDao.setValue(pointsPropertyId, task2.id, "10")
+        assertEquals("13", a.database(projectsPage.id).computeRollupValue(rollupProperty, projectTableRow))
+    }
+
+    /** The acceptance shape named for DB2 in the build plan: a rollup column shows the sum of a
+     * related database's number column *and updates when the source changes* — proven here
+     * across the real two-device sync harness. Both the rollup's definition (a schema item,
+     * synced with the database's own properties) and its computed value (never stored, so there
+     * is nothing to sync — only the ingredients: the relation cell and the target values) reach
+     * device B. */
+    @Test
+    fun `a rollup's definition and its computed value both reach the other device`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        val projectsPage = a.pageDao.getById(a.pageDatabaseDao.getById(projectsDbId)!!.pageId)!!
+        val pointsPropertyId = a.propertyDao.insert(Property(databaseId = tasksDbId, name = "Points", type = PropertyType.NUMBER, order = 0))
+        val task = a.pageDao.getById(a.store.seedPage(Page(title = "Task", databaseId = tasksDbId, createdAt = t0, updatedAt = t0)))!!
+        val projectRow = a.pageDao.getById(a.store.seedPage(Page(title = "Launch", databaseId = projectsDbId, createdAt = t0, updatedAt = t0)))!!
+        a.propertyValueDao.setValue(pointsPropertyId, task.id, "3")
+
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+        val forward = a.propertyDao.getForDatabase(tasksDbId).single { it.name == "Project" }
+        val reverse = a.propertyDao.getForDatabase(projectsDbId).single { it.name == "Tasks" }
+        a.database(tasksPage.id).setRelationValue(forward, task, setOf(projectRow.uid))
+        a.database(projectsPage.id).addRollupProperty("Total points", reverse.id, pointsPropertyId, RollupAggregation.SUM)
+        syncAtoB()
+
+        val bProjectsDbId = b.pageDatabaseDao.getByPageId(b.pageIdOf(projectsPage.uid))!!.id
+        val bRollupProperty = b.propertyDao.getForDatabase(bProjectsDbId).single { it.type == PropertyType.COMPUTED }
+        val bReverseProperty = b.propertyDao.getForDatabase(bProjectsDbId).single { it.name == "Tasks" }
+        val bProjectRowId = b.pageIdOf(projectRow.uid)
+        val bProjectRow = b.pageDao.getById(bProjectRowId)!!
+        val bReverseValue = b.propertyValueDao.getForPropertyAndRow(bReverseProperty.id, bProjectRowId)?.value
+        val bTableRow = TableRow(
+            bProjectRow,
+            mapOf(bReverseProperty.id to PropertyValue(propertyId = bReverseProperty.id, rowPageId = bProjectRowId, value = bReverseValue)),
+            linkedEntry = null,
+        )
+
+        assertEquals(
+            "the rollup's definition (relation + target property + aggregation) travelled, and computes the same total on B",
+            "3",
+            b.database(b.pageIdOf(projectsPage.uid)).computeRollupValue(bRollupProperty, bTableRow),
         )
     }
 

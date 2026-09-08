@@ -69,6 +69,7 @@ import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
+import com.tendril.app.data.pagedatabase.RollupAggregation
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.ui.WorkbenchCore
@@ -197,10 +198,16 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
         var relationTargets by remember { mutableStateOf<List<Pair<Page, Long>>>(emptyList()) }
         LaunchedEffect(Unit) { relationTargets = viewModel.relationTargetOptions() }
         AddPropertySheet(
+            existingProperties = properties,
             targetDatabases = relationTargets,
+            viewModel = viewModel,
             onDismiss = { showAddProperty = false },
             onAdd = { name, type, config -> viewModel.addProperty(name, type, config); showAddProperty = false },
             onAddRelation = { name, targetDatabaseId -> viewModel.addRelationProperty(name, targetDatabaseId); showAddProperty = false },
+            onAddRollup = { name, relationPropertyId, targetPropertyId, aggregation ->
+                viewModel.addRollupProperty(name, relationPropertyId, targetPropertyId, aggregation)
+                showAddProperty = false
+            },
         )
     }
 
@@ -603,7 +610,10 @@ private fun PropertyHeaderCell(
     // real "schema" is the target database and its paired reverse property, neither of which
     // this generic dialog knows how to re-derive. Delete-and-recreate through
     // [addRelationProperty][PageDatabaseViewModel.addRelationProperty] is the correction lever.
-    val canChangeType = role == null && property.type != PropertyType.RELATION
+    // §5.4/DB2 — COMPUTED is excluded on the same reasoning again: its schema is the relation,
+    // target property and aggregation triple, authored through [addRollupProperty]
+    // [PageDatabaseViewModel.addRollupProperty], not a field this dialog could ever convert into.
+    val canChangeType = role == null && property.type != PropertyType.RELATION && property.type != PropertyType.COMPUTED
     Box {
         Text(
             property.name,
@@ -777,10 +787,11 @@ private fun ChangeTypeDialog(
     // RELATION is never a *target* of a generic type change (same reasoning as INTERVAL):
     // converting some other property to it here would set `type = RELATION` with no target
     // database and no reverse property, since only `addRelationProperty` knows how to create
-    // that pairing. This dialog never opens for a property that already *is* a relation —
-    // `PropertyHeaderCell` hides "Edit property type" for those — so this filter only needs to
-    // cover the "convert into" direction.
-    val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL && it != PropertyType.RELATION }
+    // that pairing. COMPUTED is excluded for the same reason — no target property, aggregation,
+    // or relation to aggregate across. This dialog never opens for a property that already *is*
+    // one of these — `PropertyHeaderCell` hides "Edit property type" for those — so this filter
+    // only needs to cover the "convert into" direction.
+    val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL && it != PropertyType.RELATION && it != PropertyType.COMPUTED }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -976,6 +987,7 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
             }
         }
         PropertyType.RELATION -> RelationCell(property, row, viewModel)
+        PropertyType.COMPUTED -> ComputedCell(property, row, viewModel)
         else -> {
             var text by remember(value) { mutableStateOf(value ?: "") }
             BasicTextField(
@@ -1051,6 +1063,18 @@ private fun RelationPickerSheet(
     }
 }
 
+/** §5.4/DB2 — a rollup cell has no tap-to-edit interaction at all: "compute on read" means
+ * there is nothing stored here to edit, only the underlying relation, which this cell does not
+ * even hold a reference to editing. It resolves fresh whenever the row's own values change,
+ * since a rollup can shift with no edit to this cell at all — the related row's own value
+ * moving is enough. */
+@Composable
+private fun ComputedCell(property: Property, row: TableRow, viewModel: PageDatabaseViewModel) {
+    var display by remember(property.id, row.page.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(property.id, row.values) { display = viewModel.computeRollupValue(property, row) }
+    Text(display ?: "—", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
 @Composable
 private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUnit) -> Unit) {
     var countText by remember { mutableStateOf("1") }
@@ -1085,10 +1109,13 @@ private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUn
 
 @Composable
 private fun AddPropertySheet(
+    existingProperties: List<Property>,
     targetDatabases: List<Pair<Page, Long>>,
+    viewModel: PageDatabaseViewModel,
     onDismiss: () -> Unit,
     onAdd: (String, PropertyType, String?) -> Unit,
     onAddRelation: (String, Long) -> Unit,
+    onAddRollup: (String, Long, Long?, RollupAggregation) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(PropertyType.TEXT) }
@@ -1096,6 +1123,20 @@ private fun AddPropertySheet(
     var optionsText by remember { mutableStateOf("") }
     var showTargetMenu by remember { mutableStateOf(false) }
     var selectedTarget by remember(targetDatabases) { mutableStateOf(targetDatabases.firstOrNull()) }
+    // §5.4/DB2 — a rollup can only aggregate across a relation that already exists on this
+    // database; there is no "and also create the relation" shortcut here, the same way
+    // creating a relation offers no "and also create the database" shortcut.
+    val relationProperties = existingProperties.filter { it.type == PropertyType.RELATION }
+    var showRelationMenu by remember { mutableStateOf(false) }
+    var selectedRelationProperty by remember(relationProperties) { mutableStateOf(relationProperties.firstOrNull()) }
+    var showAggregationMenu by remember { mutableStateOf(false) }
+    var aggregation by remember { mutableStateOf(RollupAggregation.COUNT) }
+    var rollupTargetProperties by remember { mutableStateOf<List<Property>>(emptyList()) }
+    var showRollupTargetMenu by remember { mutableStateOf(false) }
+    var selectedRollupTarget by remember(rollupTargetProperties) { mutableStateOf(rollupTargetProperties.firstOrNull()) }
+    LaunchedEffect(selectedRelationProperty) {
+        rollupTargetProperties = selectedRelationProperty?.let { viewModel.relationCandidateProperties(it) }.orEmpty()
+    }
     // §5.2.2 — INTERVAL is never offered here; it's only ever created inside the
     // recurrence-binding flow, to avoid a second, uglier way to represent a plain number.
     val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL }
@@ -1141,15 +1182,58 @@ private fun AddPropertySheet(
                     }
                 }
             }
+            if (type == PropertyType.COMPUTED) {
+                Text("Relation to aggregate", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                if (relationProperties.isEmpty()) {
+                    Text("No relation property yet — add one first", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                } else {
+                    Box {
+                        TextButton(onClick = { showRelationMenu = true }) { Text(selectedRelationProperty?.name ?: "Choose…") }
+                        DropdownMenu(expanded = showRelationMenu, onDismissRequest = { showRelationMenu = false }) {
+                            relationProperties.forEach { option ->
+                                DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRelationProperty = option; showRelationMenu = false })
+                            }
+                        }
+                    }
+                    Box {
+                        TextButton(onClick = { showAggregationMenu = true }) { Text("Aggregation: ${aggregation.name.lowercase()}") }
+                        DropdownMenu(expanded = showAggregationMenu, onDismissRequest = { showAggregationMenu = false }) {
+                            RollupAggregation.entries.forEach { option ->
+                                DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { aggregation = option; showAggregationMenu = false })
+                            }
+                        }
+                    }
+                    if (aggregation != RollupAggregation.COUNT) {
+                        Text("Property to read from each related row", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        if (rollupTargetProperties.isEmpty()) {
+                            Text("The related database has no properties yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                        } else {
+                            Box {
+                                TextButton(onClick = { showRollupTargetMenu = true }) { Text(selectedRollupTarget?.name ?: "Choose…") }
+                                DropdownMenu(expanded = showRollupTargetMenu, onDismissRequest = { showRollupTargetMenu = false }) {
+                                    rollupTargetProperties.forEach { option ->
+                                        DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRollupTarget = option; showRollupTargetMenu = false })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = {
-                if (type == PropertyType.RELATION) {
-                    selectedTarget?.let { (_, targetDatabaseId) -> onAddRelation(name, targetDatabaseId) }
-                } else {
-                    val config = if (type == PropertyType.SELECT || type == PropertyType.MULTI_SELECT) {
-                        optionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
-                    } else null
-                    onAdd(name, type, config)
+                when (type) {
+                    PropertyType.RELATION -> selectedTarget?.let { (_, targetDatabaseId) -> onAddRelation(name, targetDatabaseId) }
+                    PropertyType.COMPUTED -> selectedRelationProperty?.let { relationProperty ->
+                        val targetId = if (aggregation == RollupAggregation.COUNT) null else selectedRollupTarget?.id
+                        onAddRollup(name, relationProperty.id, targetId, aggregation)
+                    }
+                    else -> {
+                        val config = if (type == PropertyType.SELECT || type == PropertyType.MULTI_SELECT) {
+                            optionsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
+                        } else null
+                        onAdd(name, type, config)
+                    }
                 }
             }) { Text("Add") }
         }

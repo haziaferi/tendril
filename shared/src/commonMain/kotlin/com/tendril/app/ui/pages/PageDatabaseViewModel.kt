@@ -25,8 +25,12 @@ import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.encodeRelationConfig
 import com.tendril.app.data.pagedatabase.encodeRelationValue
+import com.tendril.app.data.pagedatabase.RollupAggregation
+import com.tendril.app.data.pagedatabase.encodeRollupConfig
+import com.tendril.app.data.pagedatabase.formatRollupNumber
 import com.tendril.app.data.pagedatabase.parseRelationConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
+import com.tendril.app.data.pagedatabase.parseRollupConfig
 import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.formatPeriodAsInterval
 import com.tendril.app.data.pagedatabase.ViewFilter
@@ -394,6 +398,33 @@ class PageDatabaseViewModel(
         }
     }
 
+    /** §5.4/DB2 — a rollup, authored from pickers rather than typed text: which `RELATION`
+     * property on *this* database to aggregate across, which property on the relation's target
+     * database to read from each related row, and how. [relationPropertyId] is validated to
+     * actually be a `RELATION` property on this database — the picker that calls this only ever
+     * offers those, but the check makes an invalid config unrepresentable rather than merely
+     * unintended. Stores no value anywhere: a `COMPUTED` property never gets a `PropertyValue`
+     * row at all, since [computeRollupValue] derives it fresh every time it is read. */
+    fun addRollupProperty(name: String, relationPropertyId: Long, targetPropertyId: Long?, aggregation: RollupAggregation) {
+        if (locked()) return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launch
+            val relationProperty = propertyDao.getById(relationPropertyId)?.takeIf { it.databaseId == db.id && it.type == PropertyType.RELATION } ?: return@launch
+            val targetProperty = targetPropertyId?.let { propertyDao.getById(it) }
+
+            val order = (propertyDao.getForDatabase(db.id).maxOfOrNull { it.order } ?: -1) + 1
+            propertyDao.insert(
+                Property(
+                    databaseId = db.id, name = trimmed, type = PropertyType.COMPUTED,
+                    config = encodeRollupConfig(relationProperty.uid, targetProperty?.uid, aggregation), order = order,
+                )
+            )
+            pageDao.touch(pageId, Instant.now())
+        }
+    }
+
     private fun deleteProperty(property: Property) {
         val db = database.value
         launchAndTouch(pageId) {
@@ -572,6 +603,48 @@ class PageDatabaseViewModel(
      * within one Tasks database) is a real, ordinary case rather than one needing separate UI. */
     suspend fun relationTargetOptions(): List<Pair<Page, Long>> =
         pageDao.getByKind(PageKind.DATABASE).mapNotNull { p -> pageDatabaseDao.getByPageId(p.id)?.let { p to it.id } }
+
+    /** The rollup picker's second step (§5.4/DB2): every property on the chosen relation's
+     * *target* database, as candidates for what to aggregate. Deliberately unrestricted by
+     * [RollupAggregation] — a `SUM` over a non-numeric property is a valid, if useless, choice
+     * that computes to nothing rather than one the picker has to know how to forbid, the same
+     * posture [computeRollupValue] itself takes on a mismatch. */
+    suspend fun relationCandidateProperties(relationProperty: Property): List<Property> {
+        val target = parseRelationConfig(relationProperty.config) ?: return emptyList()
+        val targetPage = pageDao.getByUid(target.targetDatabasePageUid) ?: return emptyList()
+        val targetDb = pageDatabaseDao.getByPageId(targetPage.id) ?: return emptyList()
+        return propertyDao.getForDatabase(targetDb.id)
+    }
+
+    /** §5.4/DB2 — a `COMPUTED` rollup cell's value, derived fresh from the currently related
+     * rows rather than stored: "compute on read" is the whole reason this needed no schema
+     * change, since caching a result in a column would have been exactly that. Cross-database,
+     * so — like [resolveRelatedTitles] — this suspends and is meant to be driven from a
+     * `LaunchedEffect`, not read synchronously the way every stored cell type is. */
+    suspend fun computeRollupValue(property: Property, row: TableRow): String? {
+        val rollup = parseRollupConfig(property.config) ?: return null
+        val relationProperty = propertyDao.getByUid(rollup.relationPropertyUid) ?: return null
+        val relatedUids = parseRelationValue(row.values[relationProperty.id]?.value)
+
+        if (rollup.aggregation == RollupAggregation.COUNT) return relatedUids.size.toString()
+        if (relatedUids.isEmpty()) return null
+        val targetProperty = rollup.targetPropertyUid?.let { propertyDao.getByUid(it) } ?: return null
+
+        val rawValues = relatedUids.mapNotNull { uid ->
+            pageDao.getByUid(uid)?.let { propertyValueDao.getForPropertyAndRow(targetProperty.id, it.id)?.value }
+        }
+        if (rawValues.isEmpty()) return null
+
+        return when (rollup.aggregation) {
+            RollupAggregation.SUM -> rawValues.mapNotNull { it.toDoubleOrNull() }.sum().let(::formatRollupNumber)
+            RollupAggregation.MIN -> rawValues.mapNotNull { it.toDoubleOrNull() }.minOrNull()?.let(::formatRollupNumber)
+            RollupAggregation.MAX -> rawValues.mapNotNull { it.toDoubleOrNull() }.maxOrNull()?.let(::formatRollupNumber)
+            RollupAggregation.EARLIEST -> rawValues.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.minOrNull()?.toString()
+            RollupAggregation.LATEST -> rawValues.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.maxOrNull()?.toString()
+            RollupAggregation.SHOW_ORIGINAL -> rawValues.joinToString(", ")
+            RollupAggregation.COUNT -> relatedUids.size.toString() // unreachable — handled above
+        }
+    }
 
     fun toggleDone(entry: Entry, checked: Boolean) {
         if (locked()) return

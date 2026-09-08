@@ -274,7 +274,7 @@ class UnknownEnumQuarantineTest {
             pageRecord(
                 UID_DB, "Tasks", updatedAt = 1_000L, kind = PageKind.DATABASE.name,
                 database = PageDatabaseSnapshotRecord(
-                    properties = listOf(PropertySnapshotRecord(UID_PROP, "Owner", "COMPUTED", order = 0)),
+                    properties = listOf(PropertySnapshotRecord(UID_PROP, "Owner", "LOOKUP", order = 0)),
                 ),
             ),
             goodSibling(),
@@ -1088,7 +1088,7 @@ class UnknownEnumQuarantineTest {
                 pageRecord(
                     UID_DB, "People", updatedAt = 9_000L, kind = PageKind.DATABASE.name,
                     database = PageDatabaseSnapshotRecord(
-                        properties = listOf(known, PropertySnapshotRecord(UID_PROP_NEW, "Owner", "COMPUTED", order = 1)),
+                        properties = listOf(known, PropertySnapshotRecord(UID_PROP_NEW, "Owner", "LOOKUP", order = 1)),
                     ),
                 )
             ),
@@ -1126,7 +1126,7 @@ class UnknownEnumQuarantineTest {
                 pageRecord(
                     UID_DB, "People", updatedAt = 9_000L, kind = PageKind.DATABASE.name,
                     database = PageDatabaseSnapshotRecord(
-                        properties = listOf(PropertySnapshotRecord(UID_PROP_NEW, "Owner", "COMPUTED", order = 0)),
+                        properties = listOf(PropertySnapshotRecord(UID_PROP_NEW, "Owner", "LOOKUP", order = 0)),
                     ),
                 )
             ),
@@ -1752,7 +1752,7 @@ class UnknownEnumQuarantineTest {
             Pair("stringToHabitFrequency", { c.stringToHabitFrequency("1:FORTNIGHT") }),
             Pair("stringToPageKind", { c.stringToPageKind("TIMELINE") }),
             Pair("stringToBlockType", { c.stringToBlockType("SUPER_CALLOUT") }),
-            Pair("stringToPropertyType", { c.stringToPropertyType("COMPUTED") }),
+            Pair("stringToPropertyType", { c.stringToPropertyType("LOOKUP") }),
             Pair("stringToViewType", { c.stringToViewType("TIMELINE") }),
             Pair("stringToSortDirection", { c.stringToSortDirection("RANDOM") }),
             Pair("stringToPurgedKind", { c.stringToPurgedKind("WORKSPACE") }),
