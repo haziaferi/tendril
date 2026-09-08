@@ -218,7 +218,20 @@ def main() -> int:
     declared |= enum_members(all_code)                                             # one-line enum bodies
     declared |= set(re.findall(r"^\s*(?:val|var)?\s*(\w+)\s*:", all_code, re.M))  # params/properties
     declared |= set(re.findall(r"[(,]\s*(?:val\s+|var\s+|vararg\s+)?(\w+)\s*:", all_code))  # inline params
-    known = imported | declared | {"Dispatchers", "Boolean", "Int", "Long", "String"}
+    # Kotlin's own prelude — every one of these resolves in any file with no import statement,
+    # so a KDoc link to one has nothing to import or declare. The set was five names, missing
+    # `Double` among others; a KDoc link naming a whole-file first-of-its-kind stdlib reference
+    # (this repo's first `[Double]`) read as dangling for exactly that reason. Kotlin's own
+    # implicit-import list (`kotlin.*`, `kotlin.collections.*`) is the actual boundary, not a
+    # handful of names someone happened to need before.
+    KOTLIN_PRELUDE = {
+        "Dispatchers", "Any", "Unit", "Nothing", "Boolean", "Byte", "Short", "Int", "Long",
+        "Float", "Double", "Char", "String", "Array", "List", "MutableList", "Set", "MutableSet",
+        "Map", "MutableMap", "Pair", "Triple", "Comparable", "Iterable", "Iterator", "Sequence",
+        "Function", "Throwable", "Exception", "RuntimeException", "IllegalArgumentException",
+        "IllegalStateException", "IntArray", "LongArray", "DoubleArray", "BooleanArray",
+    }
+    known = imported | declared | KOTLIN_PRELUDE
 
     for f, src in srcs.items():
         lines = src.splitlines()

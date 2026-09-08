@@ -14,8 +14,17 @@ import java.util.UUID
  * database, encoded entirely in the existing `config`/`value` string columns — see
  * [encodeRelationConfig] and [encodeRelationValue]. Zero schema change, and deliberately gated:
  * §5.4's non-negotiable precondition is that every device runs the tolerant `PropertyType` decode
- * (Milestone 0) before this member exists anywhere it might sync to. */
-enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL, RELATION }
+ * (Milestone 0) before this member exists anywhere it might sync to.
+ *
+ * `COMPUTED` is the second step, and deliberately arrives under its *final* name rather than as
+ * a separate `ROLLUP` — §5.4 states the eventual shape as one type with two authoring paths onto
+ * one evaluator (pickers that write an expression, and a `ƒ` that reveals it as editable text).
+ * What exists today is only the picker half: [RollupConfig] is a small structured descriptor, not
+ * an expression, and there is no evaluator yet — see [computeRollupValue][
+ * com.tendril.app.ui.pages.PageDatabaseViewModel.computeRollupValue]. Naming it `COMPUTED` now
+ * means the formula-language step that completes §5.4 extends this member's meaning rather than
+ * renaming it out from under every property and value already stored under `RELATION`/`COMPUTED`. */
+enum class PropertyType { TEXT, NUMBER, CHECKBOX, SELECT, MULTI_SELECT, DATE, URL, EMAIL, PHONE, INTERVAL, RELATION, COMPUTED }
 
 @Entity(
     tableName = "properties",
@@ -87,6 +96,49 @@ fun encodeRelationValue(relatedRowUids: Set<String>): String = relatedRowUids.jo
 
 fun parseRelationValue(value: String?): Set<String> =
     value?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
+
+/** The aggregation a `COMPUTED` rollup applies over its relation's related rows. `COUNT` needs
+ * no target property; every other member reads [RollupConfig.targetPropertyUid] on each related
+ * row and either aggregates it (`SUM`/`MIN`/`MAX` over a parseable number, `EARLIEST`/`LATEST`
+ * over a parseable [java.time.LocalDate]) or lists it as-is (`SHOW_ORIGINAL`). The picker that
+ * creates a rollup does not restrict which target property pairs with which aggregation — a
+ * mismatch (e.g. `SUM` over a non-numeric property) simply has nothing to parse and the cell
+ * reads empty, the same tolerant-degrade posture [parseRelationValue] already takes on a uid
+ * that cannot be resolved, rather than a picker that has to know every property type's shape. */
+enum class RollupAggregation { COUNT, SUM, MIN, MAX, EARLIEST, LATEST, SHOW_ORIGINAL }
+
+/**
+ * A `COMPUTED`-type [Property.config], today always this shape — see [PropertyType.COMPUTED]'s
+ * own note on why the type is not called `ROLLUP`. [relationPropertyUid] names a `RELATION`
+ * property on *this* property's own database; [targetPropertyUid] names the property being
+ * aggregated on the relation's target database, `null` only for [RollupAggregation.COUNT].
+ *
+ * Three colon-delimited fields rather than [RelationConfig]'s two-field `indexOf`-based split,
+ * because a third field genuinely needs its own boundary: an aggregation name is plain
+ * `[A-Z_]+`, and every field here — the two uids and the name — is guaranteed free of `:`,
+ * a uid because it is always a [UUID], the name because [RollupAggregation.name] is.
+ */
+data class RollupConfig(val relationPropertyUid: String, val targetPropertyUid: String?, val aggregation: RollupAggregation)
+
+/** The one placeholder value below is never itself mistaken for a uid: it is one character,
+ * while [UUID.randomUUID] never produces a string shorter than 36. */
+private const val NO_ROLLUP_TARGET = "-"
+
+fun encodeRollupConfig(relationPropertyUid: String, targetPropertyUid: String?, aggregation: RollupAggregation): String =
+    "$relationPropertyUid:${targetPropertyUid ?: NO_ROLLUP_TARGET}:${aggregation.name}"
+
+fun parseRollupConfig(config: String?): RollupConfig? {
+    if (config == null) return null
+    val parts = config.split(":")
+    if (parts.size != 3) return null
+    val aggregation = RollupAggregation.entries.find { it.name == parts[2] } ?: return null
+    return RollupConfig(parts[0], parts[1].takeIf { it != NO_ROLLUP_TARGET }, aggregation)
+}
+
+/** Display form for a `SUM`/`MIN`/`MAX` rollup result — `3` rather than Kotlin's default `3.0`
+ * for a whole-number [Double], while a genuine fraction keeps its decimal part. */
+fun formatRollupNumber(value: Double): String =
+    if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
 
 /** `PropertyValue.value` encoding for an `INTERVAL`-type property — "<count>:<unit>", the
  * same `"n:UNIT"` shape [Converters] already uses for `HabitFrequency`/`ReminderOffset`. */
