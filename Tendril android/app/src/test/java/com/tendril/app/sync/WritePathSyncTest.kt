@@ -19,6 +19,7 @@ import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
+import com.tendril.app.domain.formula.FormulaCheckResult
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
@@ -548,6 +549,114 @@ class WritePathSyncTest {
             "3",
             b.database(b.pageIdOf(projectsPage.uid)).computeRollupValue(bRollupProperty, bTableRow),
         )
+    }
+
+    // ------------------------------------------------------------------------- formula (DB3 wiring)
+
+    /** §5.4/DB3 wiring — the plain-property half: `prop("Points") * 2` evaluates against the
+     * row's own stored value, with no relation or rollup involved at all. */
+    @Test
+    fun `a formula referencing a plain number property computes correctly`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        a.propertyValueDao.setValue(pointsId, seeded.row.id, "5")
+
+        var result: FormulaCheckResult? = null
+        a.database(seeded.databasePage.id).addFormulaProperty("Doubled", "prop(\"Points\") * 2") { result = it }
+        assertTrue("a valid formula over a plain property should check clean", result?.errors.orEmpty().isEmpty())
+
+        val doubled = a.propertyDao.getForDatabase(dbId).single { it.name == "Doubled" }
+        val pointsValue = a.propertyValueDao.getForPropertyAndRow(pointsId, seeded.row.id)?.value
+        val tableRow = TableRow(seeded.row, mapOf(pointsId to PropertyValue(propertyId = pointsId, rowPageId = seeded.row.id, value = pointsValue)), linkedEntry = null)
+
+        assertEquals("10", a.database(seeded.databasePage.id).computeComputedValue(doubled, tableRow))
+    }
+
+    /** A formula-authored `COMPUTED` property can itself be referenced by name from another one
+     * — [checkAllFormulas] and [computeComputedValue]'s own resolver both check every other
+     * formula-authored property on the database together, per that function's own doc comment,
+     * so a two-deep chain has to resolve through the middle property rather than only ever
+     * seeing one level. */
+    @Test
+    fun `a formula referencing another formula resolves through the chain`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        a.propertyValueDao.setValue(pointsId, seeded.row.id, "5")
+
+        a.database(seeded.databasePage.id).addFormulaProperty("Doubled", "prop(\"Points\") * 2") {}
+        var result: FormulaCheckResult? = null
+        a.database(seeded.databasePage.id).addFormulaProperty("Quadrupled", "prop(\"Doubled\") * 2") { result = it }
+        assertTrue("a chained formula reference should check clean", result?.errors.orEmpty().isEmpty())
+
+        val quadrupled = a.propertyDao.getForDatabase(dbId).single { it.name == "Quadrupled" }
+        val pointsValue = a.propertyValueDao.getForPropertyAndRow(pointsId, seeded.row.id)?.value
+        val tableRow = TableRow(seeded.row, mapOf(pointsId to PropertyValue(propertyId = pointsId, rowPageId = seeded.row.id, value = pointsValue)), linkedEntry = null)
+
+        assertEquals("20", a.database(seeded.databasePage.id).computeComputedValue(quadrupled, tableRow))
+    }
+
+    /** §5.4/DB3 — "errors are caught when the formula is written." A formula naming itself is
+     * the one cycle reachable through today's write path at all: there is no formula-*editing*
+     * API yet (matching [addRollupProperty]/[addRelationProperty]'s own precedent — none of
+     * DB1/DB2/DB3's `COMPUTED` config is editable after creation, only delete-and-recreate), so a
+     * genuine multi-property cycle would need one formula changed out from under another after
+     * both already exist, which this slice cannot do. Self-reference needs only one call. */
+    @Test
+    fun `a formula referencing itself is rejected as a cycle, not inserted`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+
+        var result: FormulaCheckResult? = null
+        a.database(seeded.databasePage.id).addFormulaProperty("Loopy", "prop(\"Loopy\") + 1") { result = it }
+
+        assertTrue("a self-reference is a cycle of length one and must be rejected", result?.errors.orEmpty().isNotEmpty())
+        assertTrue(
+            "the rejected formula must not have been inserted as a property",
+            a.propertyDao.getForDatabase(dbId).none { it.name == "Loopy" },
+        )
+    }
+
+    /** A formula cannot traverse a relation yet (see [PropertyType.COMPUTED]'s own note) — naming
+     * one is a real write-time error, exactly the shape [FormulaPropertyKind.Relation] already
+     * documents for a bare reference, not a silent no-op or a value that only fails once a cell
+     * tries to render it. */
+    @Test
+    fun `a formula referencing a relation property is rejected, not inserted`() = runTest(mainDispatcher) {
+        val (tasksPage, projectsDbId) = seedTwoDatabasesOnA()
+        val tasksDbId = a.pageDatabaseDao.getByPageId(tasksPage.id)!!.id
+        a.database(tasksPage.id).addRelationProperty("Project", projectsDbId)
+
+        var result: FormulaCheckResult? = null
+        a.database(tasksPage.id).addFormulaProperty("Bad", "prop(\"Project\")") { result = it }
+
+        assertTrue("referencing a relation by name must fail type-checking", result?.errors.orEmpty().isNotEmpty())
+        assertTrue(a.propertyDao.getForDatabase(tasksDbId).none { it.name == "Bad" })
+    }
+
+    /** The formula's *definition* is an ordinary [Property] row and travels as part of the
+     * database's schema like any other; its computed value is never stored, so there is nothing
+     * else to sync — only the ingredient ([Property.NUMBER] cell value) it reads on each device,
+     * the exact shape the rollup sync test above already proves for the relation-and-rollup case. */
+    @Test
+    fun `a formula's definition reaches the other device and computes the same result there`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val pointsId = a.propertyDao.insert(Property(databaseId = dbId, name = "Points", type = PropertyType.NUMBER, order = 1))
+        a.propertyValueDao.setValue(pointsId, seeded.row.id, "5")
+        a.database(seeded.databasePage.id).addFormulaProperty("Doubled", "prop(\"Points\") * 2") {}
+        syncAtoB()
+
+        val bDbId = b.pageDatabaseDao.getByPageId(b.pageIdOf(seeded.databasePage.uid))!!.id
+        val bDoubled = b.propertyDao.getForDatabase(bDbId).single { it.name == "Doubled" }
+        val bPointsId = b.propertyDao.getForDatabase(bDbId).single { it.name == "Points" }.id
+        val bRowId = b.pageIdOf(seeded.row.uid)
+        val bRow = b.pageDao.getById(bRowId)!!
+        val bPointsValue = b.propertyValueDao.getForPropertyAndRow(bPointsId, bRowId)?.value
+        val bTableRow = TableRow(bRow, mapOf(bPointsId to PropertyValue(propertyId = bPointsId, rowPageId = bRowId, value = bPointsValue)), linkedEntry = null)
+
+        assertEquals("10", b.database(b.pageIdOf(seeded.databasePage.uid)).computeComputedValue(bDoubled, bTableRow))
     }
 
     // ------------------------------------------------------------------------------ canvas

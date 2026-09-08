@@ -26,8 +26,10 @@ import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.encodeRelationConfig
 import com.tendril.app.data.pagedatabase.encodeRelationValue
 import com.tendril.app.data.pagedatabase.RollupAggregation
+import com.tendril.app.data.pagedatabase.encodeFormulaConfig
 import com.tendril.app.data.pagedatabase.encodeRollupConfig
 import com.tendril.app.data.pagedatabase.formatRollupNumber
+import com.tendril.app.data.pagedatabase.parseFormulaConfig
 import com.tendril.app.data.pagedatabase.parseRelationConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.parseRollupConfig
@@ -43,6 +45,18 @@ import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.domain.formula.FormulaCheckResult
+import com.tendril.app.domain.formula.FormulaError
+import com.tendril.app.domain.formula.FormulaNode
+import com.tendril.app.domain.formula.FormulaPropertyKind
+import com.tendril.app.domain.formula.FormulaPropertyResolver
+import com.tendril.app.domain.formula.FormulaPropertyTypeLookup
+import com.tendril.app.domain.formula.FormulaSyntaxError
+import com.tendril.app.domain.formula.FormulaType
+import com.tendril.app.domain.formula.FormulaValue
+import com.tendril.app.domain.formula.checkAllFormulas
+import com.tendril.app.domain.formula.evaluateFormula
+import com.tendril.app.domain.formula.parseFormula
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -425,6 +439,80 @@ class PageDatabaseViewModel(
         }
     }
 
+    /** §5.4/DB3 wiring — the `ƒ` half of a `COMPUTED` property (docs/scope-decisions.md's DB3
+     * wiring entry): a real formula, checked with [checkAllFormulas] before it is ever stored,
+     * exactly the way §5.4 requires ("errors are caught when the formula is written"). Deliberately
+     * narrower than [addRollupProperty] in one way — [expression] may reference this database's
+     * own plain properties and other formula-authored `COMPUTED` properties, never a `RELATION` or
+     * a rollup — because a formula that *does* traverse a relation needs the evaluator to resolve
+     * a relation's related rows, which [FormulaPropertyResolver] has no way to do yet (it is a
+     * synchronous, row-local function; a relation's related rows live on a different database and
+     * resolving them needs suspend DAO calls the same way [computeRollupValue] already makes).
+     * Building that is real, separate scope, cut from this PR rather than rushed — see this file's
+     * own note by [computeComputedValue].
+     *
+     * [onResult] always fires — including the empty-errors success case — so the sheet that calls
+     * this can dismiss on success and stay open showing [FormulaError.position]-anchored errors on
+     * failure, the same shape a compiler gives an editor. Every other formula-authored `COMPUTED`
+     * property on this database is checked *together* with the new one, via [checkAllFormulas],
+     * so a formula referencing another formula gets a real cross-check — including cycle rejection
+     * — rather than being validated alone and only failing once a cell tries to render it. */
+    fun addFormulaProperty(name: String, expression: String, onResult: (FormulaCheckResult) -> Unit) {
+        if (locked()) return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || expression.isBlank()) return
+        viewModelScope.launch {
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launch
+            val allProps = propertyDao.getForDatabase(db.id)
+
+            val ast = try {
+                parseFormula(expression)
+            } catch (e: FormulaSyntaxError) {
+                onResult(FormulaCheckResult(FormulaType.ANY, listOf(FormulaError(e.message ?: "syntax error", e.position))))
+                return@launch
+            }
+
+            // Every other formula-authored COMPUTED property, so a chained reference resolves
+            // against a real checked type rather than falling through to `lookup` and getting
+            // rejected as "no property named" — see checkAllFormulas' own note on why `nodes`
+            // has to carry the whole set to be accurate, not just the one being added.
+            val existingFormulaNodes = allProps.mapNotNull { p ->
+                parseFormulaConfig(p.config)?.let { expr -> runCatching { parseFormula(expr) }.getOrNull()?.let { FormulaNode(p.name, it) } }
+            }
+            val results = checkAllFormulas(existingFormulaNodes + FormulaNode(trimmed, ast), formulaPropertyTypeLookup(allProps))
+            val result = results[trimmed] ?: FormulaCheckResult(FormulaType.ANY, listOf(FormulaError("could not check this formula", 0)))
+            onResult(result)
+            if (result.errors.isNotEmpty()) return@launch
+
+            val order = (allProps.maxOfOrNull { it.order } ?: -1) + 1
+            propertyDao.insert(
+                Property(databaseId = db.id, name = trimmed, type = PropertyType.COMPUTED, config = encodeFormulaConfig(expression), order = order)
+            )
+            pageDao.touch(pageId, Instant.now())
+        }
+    }
+
+    /** Maps every plain-typed property on this database to the [FormulaPropertyKind] a formula
+     * needs to type-check against it. A `RELATION` property resolves to [FormulaPropertyKind.Relation]
+     * — a real, already-checked write-time error (see that case's own doc). A `COMPUTED` property
+     * resolves to `null`, i.e. "no property by this name" — a formula-authored one is meant to be
+     * found through [checkAllFormulas]'s own `nodes` list instead (see [addFormulaProperty]'s
+     * note), and a rollup-authored one is not referenceable by a formula yet at all, matching
+     * [formulaValueForProperty]'s identical exclusion at evaluation time. */
+    private fun formulaPropertyTypeLookup(allProperties: List<Property>): FormulaPropertyTypeLookup =
+        FormulaPropertyTypeLookup { name ->
+            when (allProperties.find { it.name == name }?.type) {
+                null -> null
+                PropertyType.NUMBER -> FormulaPropertyKind.Typed(FormulaType.NUMBER)
+                PropertyType.CHECKBOX -> FormulaPropertyKind.Typed(FormulaType.BOOLEAN)
+                PropertyType.DATE -> FormulaPropertyKind.Typed(FormulaType.DATE)
+                PropertyType.TEXT, PropertyType.URL, PropertyType.EMAIL, PropertyType.PHONE,
+                PropertyType.SELECT, PropertyType.MULTI_SELECT, PropertyType.INTERVAL -> FormulaPropertyKind.Typed(FormulaType.TEXT)
+                PropertyType.RELATION -> FormulaPropertyKind.Relation
+                PropertyType.COMPUTED -> null
+            }
+        }
+
     private fun deleteProperty(property: Property) {
         val db = database.value
         launchAndTouch(pageId) {
@@ -644,6 +732,84 @@ class PageDatabaseViewModel(
             RollupAggregation.SHOW_ORIGINAL -> rawValues.joinToString(", ")
             RollupAggregation.COUNT -> relatedUids.size.toString() // unreachable — handled above
         }
+    }
+
+    /** §5.4/DB3 wiring — a `COMPUTED` cell's value, dispatching on which of the two config shapes
+     * [property] carries (see [PropertyType.COMPUTED]'s own note): [parseFormulaConfig] for a
+     * formula-authored property, [computeRollupValue] otherwise. This is the one entry point
+     * [ComputedCell] calls regardless of which authoring path created the property — the same way
+     * a cell never needs to know how its own value came to be stored.
+     *
+     * Formula evaluation itself never suspends — every value a plain-property formula can
+     * reference already lives in [row] and the database's own schema — but this fetches the
+     * schema fresh via [propertyDao] rather than trusting `properties.value`, the same
+     * StateFlow-race fix already applied to [addProperty]/[addRelationProperty]: a freshly
+     * constructed ViewModel's `properties` stays at its `emptyList()` initial value until
+     * something has actually collected it, which nothing does the first time a cell renders in a
+     * newly opened database screen. */
+    suspend fun computeComputedValue(property: Property, row: TableRow): String? {
+        val expression = parseFormulaConfig(property.config) ?: return computeRollupValue(property, row)
+        val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return null
+        val allProps = propertyDao.getForDatabase(db.id)
+        return formulaValueForProperty(property, expression, row, allProps, mutableSetOf()).toCellText()
+    }
+
+    /** Resolves one formula-authored `COMPUTED` property's value against [row], row-local only —
+     * no relation traversal, see [addFormulaProperty]'s own note on why that is cut from this PR.
+     * [evaluating] guards a cycle at read time the same way write-time validation already rejects
+     * one via [checkAllFormulas]/`topologicallySortFormulas` — a defensive backstop for a database
+     * whose schema changed after a formula was saved (another formula it referenced got deleted
+     * and a new one with the same name recreated a cycle), not a path any freshly-validated
+     * formula should reach. */
+    private fun formulaValueForProperty(
+        property: Property,
+        expression: String,
+        row: TableRow,
+        allProperties: List<Property>,
+        evaluating: MutableSet<Long>,
+    ): FormulaValue {
+        if (property.id in evaluating) return FormulaValue.Empty
+        val ast = runCatching { parseFormula(expression) }.getOrNull() ?: return FormulaValue.Empty
+        evaluating += property.id
+        val result = evaluateFormula(
+            ast,
+            FormulaPropertyResolver { name ->
+                val referenced = allProperties.find { it.name == name } ?: return@FormulaPropertyResolver FormulaValue.Empty
+                plainFormulaValue(referenced, row) ?: parseFormulaConfig(referenced.config)
+                    ?.let { formulaValueForProperty(referenced, it, row, allProperties, evaluating) }
+                    ?: FormulaValue.Empty
+            },
+        )
+        evaluating -= property.id
+        return result
+    }
+
+    /** A row-local, non-`COMPUTED` property's stored value as a [FormulaValue], typed per its own
+     * [PropertyType] — `null` for a `RELATION` or `COMPUTED` property, which [formulaValueForProperty]
+     * handles itself (a rollup is not referenceable by a formula yet; a formula-authored one
+     * recurses). Kept `null`-returning rather than folding into one big `when` so the "is this
+     * even a plain property" question reads as its own check at the call site. */
+    private fun plainFormulaValue(property: Property, row: TableRow): FormulaValue? {
+        val raw = row.values[property.id]?.value
+        return when (property.type) {
+            PropertyType.NUMBER -> raw?.toDoubleOrNull()?.let { FormulaValue.Number(it) } ?: FormulaValue.Empty
+            PropertyType.CHECKBOX -> raw?.toBooleanStrictOrNull()?.let { FormulaValue.Bool(it) } ?: FormulaValue.Empty
+            PropertyType.DATE -> raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { FormulaValue.DateValue(it) } ?: FormulaValue.Empty
+            PropertyType.TEXT, PropertyType.URL, PropertyType.EMAIL, PropertyType.PHONE, PropertyType.SELECT, PropertyType.MULTI_SELECT, PropertyType.INTERVAL ->
+                raw?.let { FormulaValue.Text(it) } ?: FormulaValue.Empty
+            PropertyType.RELATION, PropertyType.COMPUTED -> null
+        }
+    }
+
+    /** A formula result's cell text — `null` (rendered as "—" by [ComputedCell]) for [FormulaValue.Empty],
+     * and [formatRollupNumber]'s same whole-number-drops-its-decimal form for a [FormulaValue.Number]
+     * result, so `prop("Score") * 2` reads `6` rather than `6.0` the same way a rollup total already does. */
+    private fun FormulaValue.toCellText(): String? = when (this) {
+        is FormulaValue.Number -> formatRollupNumber(value)
+        is FormulaValue.Text -> value
+        is FormulaValue.Bool -> value.toString()
+        is FormulaValue.DateValue -> value.toString()
+        FormulaValue.Empty -> null
     }
 
     fun toggleDone(entry: Entry, checked: Boolean) {
