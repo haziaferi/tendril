@@ -76,7 +76,7 @@ import kotlinx.coroutines.Dispatchers
     version = 8, // §3.2/§9.9/§5.5.1.1 — v5 providerEventId; Canvas tables; purge tombstones; destructive pre-v1 (§9.10)
     // No schema-history export while Room migration policy is destructive-only pre-v1
     // (§9.10) — nothing to diff against yet. Revisit alongside the @AutoMigration switch.
-    exportSchema = false,
+    exportSchema = true, // §9.10 — see `shared/schemas/`; a version with no JSON cannot be migrated from
 )
 @TypeConverters(Converters::class)
 @ConstructedBy(TendrilDatabaseConstructor::class)

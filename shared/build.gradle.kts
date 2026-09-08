@@ -72,6 +72,20 @@ dependencies {
     add("kspDesktop", libs.androidx.room.compiler)
 }
 
+// §9.10 — Room writes the schema of every version it compiles to `shared/schemas/`, and those
+// files are committed. Room needs the *previous* version's JSON on disk to generate an
+// @AutoMigration to the next one, so an unexported version is a version nothing can migrate
+// from: the file has to exist before the bump that needs it, not after.
+//
+// Set as a KSP argument rather than through the `androidx.room` Gradle plugin. The plugin is
+// the documented route on Room 2.8, but it is another plugin to resolve, and this argument is
+// all it configures here. Both `kspAndroid` and `kspDesktop` write the same path, which is
+// correct: one @Database compiled for two targets has one schema, and two copies that could
+// ever disagree would be the bug, not the safeguard.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Milestone 3 — explicit package for the generated Res class (fonts/strings for the ported
 // Workbench UI); default resolves from group+module name, pinned here so it doesn't shift if
 // either changes later. Stays module-internal (publicResClass defaults to false) since only
