@@ -171,7 +171,6 @@ FIELD_READ_OFF_LANGUAGE = {
 # listed here that stops being read is a finding, which is the point of baselining
 # rather than deleting the check. Baselined 2026-09-08, measured not assumed.
 FIELD_WRITE_ONLY_BASELINE = {
-    "Block.calloutColor",                   # P3 - stored and synced; no colour-swatch UI exists
     "Block.imagePath",                      # P2 - the importer writes it; nothing draws it
     "PageDatabaseView.visiblePropertyIds",  # DB8 - no column chooser exists
     "Tag.color",                            # a palette tuned for dichromacy that renders nowhere

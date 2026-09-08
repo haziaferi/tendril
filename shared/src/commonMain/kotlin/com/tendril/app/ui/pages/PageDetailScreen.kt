@@ -3,6 +3,8 @@
 package com.tendril.app.ui.pages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -44,6 +47,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
@@ -58,6 +62,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -293,6 +298,11 @@ fun PageDetailScreen(
             canOutdent = block.parentBlockId != null,
             onIndent = { viewModel.indentBlock(block); blockActionSheetFor = null },
             onOutdent = { viewModel.outdentBlock(block); blockActionSheetFor = null },
+            // Dismisses on pick like every other row here — `block` is a snapshot captured
+            // when the sheet opened, not a live reference, so leaving the sheet open would
+            // show a selection ring that never moves to the newly picked swatch/language.
+            onSetLanguage = { language -> viewModel.setCodeLanguage(block, language); blockActionSheetFor = null },
+            onSetCalloutColor = { color -> viewModel.setCalloutColor(block, color); blockActionSheetFor = null },
             onTurnInto = { type -> viewModel.changeType(block, type); blockActionSheetFor = null },
             onDelete = { viewModel.deleteBlock(block); blockActionSheetFor = null },
         )
@@ -426,6 +436,17 @@ private fun BlockRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp + indent, end = 16.dp, top = 2.dp, bottom = 2.dp)
+                .then(
+                    // §P3 — a callout always has a tinted background, even before a swatch is
+                    // chosen, matching the "icon + colored background" design §3.1.1 called for.
+                    if (block.type == BlockType.CALLOUT) {
+                        Modifier
+                            .background(calloutBackgroundColor(block.calloutColor), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    } else {
+                        Modifier
+                    },
+                )
                 .combinedClickable(onClick = {}, onLongClick = if (locked) null else onLongPress),
             verticalAlignment = Alignment.Top,
         ) {
@@ -435,6 +456,15 @@ private fun BlockRow(
                 if (block.type == BlockType.DIVIDER) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 } else if (block.type != BlockType.PAGE_MENTION) {
+                    // §P1 — free-form, matching `Block.codeLanguage`'s own shape (the Notion
+                    // importer stores a fence tag verbatim); "Plain text" is `null`, not "".
+                    if (block.type == BlockType.CODE) {
+                        Text(
+                            block.codeLanguage?.takeIf { it.isNotBlank() } ?: "Plain text",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     BasicTextField(
                         value = fieldValue,
                         onValueChange = { newValue ->
@@ -637,6 +667,33 @@ private fun FormattingToolbar(onApply: (SpanStyle) -> Unit, onMention: () -> Uni
     }
 }
 
+/** §P1 — a fixed preset list rather than free text entry: no syntax highlighting depends on
+ * this (§3.1.1 — "no syntax highlighting required for v1"), so it only needs to round-trip
+ * with the Notion importer's fence-tag strings (`NotionMarkdownParser`), and a short tap
+ * list is faster than typing on every device. Lowercase to match the importer's own tags. */
+private val CODE_LANGUAGES = listOf(
+    "kotlin", "java", "swift", "python", "javascript", "typescript",
+    "bash", "sql", "json", "yaml", "html", "css", "c", "cpp", "csharp", "go", "rust", "ruby", "php", "markdown",
+)
+
+/** §P3 — a small fixed palette, the same shape as [com.tendril.app.data.page.TagColors]'s,
+ * rather than a full color picker; picked for card-style backgrounds (readable text over
+ * them at full opacity), unlike the tag palette's mid-tone hues meant to be their own swatch. */
+private val CALLOUT_COLORS = listOf(
+    "#FDE68A", "#BFDBFE", "#BBF7D0", "#FBCFE8", "#DDD6FE", "#FED7AA", "#E5E7EB",
+)
+
+private fun calloutBackgroundColor(stored: String?): Color = parseHexColor(stored ?: CALLOUT_COLORS.first())
+
+/** Parses a "#RRGGBB" hex string into a Compose [Color]. `android.graphics.Color.parseColor`
+ * is Android-only and this file is `commonMain` (Android + desktop JVM both render it), so
+ * this is hand-rolled rather than reused from a platform API. */
+private fun parseHexColor(hex: String): Color {
+    val clean = hex.removePrefix("#")
+    val argb = if (clean.length == 6) "FF$clean" else clean
+    return Color(argb.toLong(16).toInt())
+}
+
 @Composable
 private fun BlockActionSheet(
     block: Block,
@@ -647,6 +704,8 @@ private fun BlockActionSheet(
     canOutdent: Boolean,
     onIndent: () -> Unit,
     onOutdent: () -> Unit,
+    onSetLanguage: (String?) -> Unit,
+    onSetCalloutColor: (String) -> Unit,
     onTurnInto: (BlockType) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -658,6 +717,46 @@ private fun BlockActionSheet(
             // nothing to tuck under, or already tucked under, and the row is simply absent.
             if (canIndent) SheetActionRow(Icons.Filled.FormatIndentIncrease, "Indent", onIndent)
             if (canOutdent) SheetActionRow(Icons.Filled.FormatIndentDecrease, "Outdent", onOutdent)
+
+            // §P1 — free-form language, same shape the Notion importer already stores.
+            if (block.type == BlockType.CODE) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Language", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+                val currentLanguage = block.codeLanguage?.takeIf { it.isNotBlank() }
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = currentLanguage == null, onClick = { onSetLanguage(null) }, label = { Text("Plain text") })
+                    CODE_LANGUAGES.forEach { language ->
+                        FilterChip(selected = currentLanguage == language, onClick = { onSetLanguage(language) }, label = { Text(language) })
+                    }
+                }
+            }
+
+            // §P3 — a fixed swatch row rather than a full color picker; matches Tag's own
+            // small-fixed-palette choice (`TagColors`) rather than introducing a second,
+            // heavier color-picking pattern for one field.
+            if (block.type == BlockType.CALLOUT) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Color", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+                val currentColor = block.calloutColor ?: CALLOUT_COLORS.first()
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CALLOUT_COLORS.forEach { hex ->
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(parseHexColor(hex), CircleShape)
+                                .then(
+                                    if (hex == currentColor) {
+                                        Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .clickable { onSetCalloutColor(hex) },
+                        )
+                    }
+                }
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text("Turn into", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
             listOf(
