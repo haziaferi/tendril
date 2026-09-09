@@ -490,5 +490,13 @@ class ViewOnlyPagesGuardTest {
 
         override fun observeForEntry(entryId: Long): Flow<List<EntryCompletion>> =
             flowOf(rows.filter { it.entryId == entryId })
+        /** §9.4 / S2 — the snapshot write pass republishes the whole table. */
+        override suspend fun getAll(): List<EntryCompletion> = rows.toList()
+
+        override suspend fun getByUid(uid: String): EntryCompletion? =
+            rows.firstOrNull { it.uid == uid }
+
+
+        override suspend fun deleteAll() { rows.clear() }
     }
 }

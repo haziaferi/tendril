@@ -60,7 +60,8 @@ class AppContainer(context: Context) {
         database.pageRelationDao(), purgeRegistry, pageContentRepository,
     )
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
-        database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, purgeRegistry,
+        database.entryDao(), database.habitDao(), database.pageDao(),
+        database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, purgeRegistry,
     )
     /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
      * takes it: the lock is absolute and it covers Settings, so import and restore refuse at
@@ -68,6 +69,7 @@ class AppContainer(context: Context) {
     val viewLockState = ViewLockState()
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
+        database.reminderDao(), database.entryCompletionDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
         // `.tendril` package. "Off" is simply no passphrase set.

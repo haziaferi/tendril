@@ -386,6 +386,8 @@ class ViewOnlySurfacesGuardTest {
         entryDao = entryDao,
         habitDao = FakeHabitDao(),
         pageDao = mockk<PageDao>(relaxed = true),
+        reminderDao = FakeReminderDao(),
+        entryCompletionDao = FakeEntryCompletionDao(),
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         passphrase = { null },
@@ -541,4 +543,12 @@ private class RecordingEntryCompletionDao : EntryCompletionDao {
 
     override fun observeForEntry(entryId: Long): Flow<List<EntryCompletion>> =
         flowOf(rows.filter { it.entryId == entryId })
+    /** §9.4 / S2 — the snapshot write pass republishes the whole table. */
+    override suspend fun getAll(): List<EntryCompletion> = rows.toList()
+
+    override suspend fun getByUid(uid: String): EntryCompletion? =
+        rows.firstOrNull { it.uid == uid }
+
+
+    override suspend fun deleteAll() { rows.clear() }
 }

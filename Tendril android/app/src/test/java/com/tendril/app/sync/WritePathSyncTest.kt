@@ -980,14 +980,6 @@ class WritePathSyncTest {
  * test; nothing here asserts on completions. Hand-written to match the rest of this package, and
  * because two members is less code than the `every { }` stanzas would be.
  */
-private class FakeEntryCompletionDao : EntryCompletionDao {
-    private val rows = mutableListOf<EntryCompletion>()
-
-    override suspend fun insert(completion: EntryCompletion): Long {
-        rows += completion
-        return rows.size.toLong()
-    }
-
-    override fun observeForEntry(entryId: Long): Flow<List<EntryCompletion>> =
-        flowOf(rows.filter { it.entryId == entryId })
-}
+// FakeEntryCompletionDao moved to SyncTestDoubles.kt when S2 gave EntryCompletionDao its
+// snapshot reads: two doubles for one DAO in one package is a redeclaration, and the doubles
+// file is where the others already live.

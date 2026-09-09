@@ -44,11 +44,19 @@ import com.tendril.app.data.reminder.ReminderDao
 import kotlinx.coroutines.Dispatchers
 
 /**
- * §9.10 (Decided 2026-08-26) — Room migration policy: `fallbackToDestructiveMigration()`
- * pre-v1 (Phases 1–7, current), since nothing stored yet is anything but trivially
- * re-creatable and the schema is still visibly moving. Post-v1 switches to
- * `@AutoMigration` + manual fallback + snapshot-backed recovery — not relevant until this
- * app is in real daily use, tracked here as a forward pointer rather than acted on now.
+ * §9.10 (Decided 2026-08-26, revised at v9) — Room migration policy. v1–v8 were
+ * `fallbackToDestructiveMigration()` pre-v1: nothing stored was anything but trivially
+ * re-creatable and the schema was still visibly moving. **v9 is the first version with a
+ * real migration path** ([MIGRATION_8_9], S2), so a bump from v8 preserves data instead of
+ * clearing it.
+ *
+ * The destructive fallback below is deliberately still in place, and is not dead code: it
+ * catches a jump from any version with *no* declared path — v1–v7, and any future bump
+ * that forgets its migration. Removing it is S1b, which stays open on its own terms: the
+ * snapshot-restore recovery meant to replace it has never been exercised against a
+ * deliberately-broken migration on a populated device (§9.10's own 2026-09-06 correction),
+ * so removing it today would trade a working safety net for an unverified one. v9 is what
+ * makes that test possible for the first time — until now there was no migration to break.
  *
  * §12.5 — moved into `:shared` (KMP): the platform-specific builder (`Context` on Android,
  * a file path on desktop) lives in each target's own source set; `@ConstructedBy` lets Room's
@@ -73,9 +81,10 @@ import kotlinx.coroutines.Dispatchers
     // v8 is a merge of two independent bumps that each reached a different number from a
     // shared v5: the Canvas tables took it to 6 on one branch, purge tombstones to 7 on
     // the other. The combined entity set hashes to neither, so it has to clear both.
-    version = 8, // §3.2/§9.9/§5.5.1.1 — v5 providerEventId; Canvas tables; purge tombstones; destructive pre-v1 (§9.10)
-    // No schema-history export while Room migration policy is destructive-only pre-v1
-    // (§9.10) — nothing to diff against yet. Revisit alongside the @AutoMigration switch.
+    //
+    // v9 adds `uid` to `reminders` and `entry_completions` (S2). Unlike every bump
+    // before it, it is migrated rather than destructive — see [MIGRATION_8_9].
+    version = 9, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid
     exportSchema = true, // §9.10 — see `shared/schemas/`; a version with no JSON cannot be migrated from
 )
 @TypeConverters(Converters::class)
@@ -112,5 +121,6 @@ internal fun finishBuilding(
     builder
         .setDriver(driver)
         .setQueryCoroutineContext(Dispatchers.IO)
-        .fallbackToDestructiveMigration(dropAllTables = true) // §9.10 pre-v1 policy
+        .addMigrations(MIGRATION_8_9) // §9.10 — the declared v8 → v9 path, tried before any fallback
+        .fallbackToDestructiveMigration(dropAllTables = true) // §9.10 — only for a version with no declared path (S1b)
         .build()

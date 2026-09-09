@@ -62,6 +62,62 @@ data class HabitSnapshotRecord(
 )
 
 /**
+ * §4 / S2 — a reminder, as it travels.
+ *
+ * **No `createdAt`/`updatedAt`, unlike every other record here, and that is a property of the
+ * entity rather than an omission.** `ReminderDao` has no update path at all: a reminder is
+ * inserted once and tombstoned once, never edited. So there is no second write for a timestamp
+ * to adjudicate, and the merge is monotonic — "deleted on any device wins" — which needs no
+ * ordering at all. Adding a timestamp would imply a last-write-wins race that cannot occur, and
+ * invite a later reader to write one.
+ *
+ * [deletedAt] is why the field exists on the entity. Every device rewrites `reminders.json` in
+ * full from its own rows, so a reminder deleted here but still present in a peer's copy would be
+ * re-adopted — and a resurrected reminder is not a stale row on a screen, it re-registers an
+ * alarm and fires. A tombstone travels; an absence cannot say anything. Tombstones need no
+ * collector of their own: the owning Entry's purge hard-deletes it and `CASCADE` takes them.
+ */
+@Serializable
+data class ReminderSnapshotRecord(
+    /** Cross-device identity (§9.4) — see [EntrySnapshotRecord.uid]. */
+    val uid: String,
+    /** References the owning [com.tendril.app.data.entry.Entry.uid], never the local `entryId`.
+     * A reminder cannot exist without its Entry — the column is a `CASCADE` foreign key — so
+     * unlike `originalEntryUid` this is never dropped-and-self-healed: a record whose Entry has
+     * not merged here yet is *held* and republished verbatim, because a write that simply
+     * omitted it would delete the peer's reminder from the folder for everyone. */
+    val entryUid: String,
+    /** "PRESET:<name>" / "CUSTOM:<count>:<unit>", the same encoding as the Room TypeConverter. */
+    val offset: String,
+    /** ISO-8601 local time. Set only for an occurrence whose own day has no real time (§4). */
+    val anchorTime: String? = null,
+    val deletedAt: Long? = null,
+)
+
+/**
+ * §4.1 / S2 — one completion, as it travels.
+ *
+ * The simplest record here, because the table is append-only: `EntryCompletionDao` has neither an
+ * update nor a delete, so the merge is a plain union by [uid]. No tombstone, because nothing
+ * deletes one; no `updatedAt`, because nothing edits one. A grow-only set converges whatever
+ * order the files arrive in, which is the strongest guarantee any record in this file has.
+ *
+ * [resolvedAt] is when the task was resolved, not when the row was written — content rather than
+ * merge metadata, and it orders nothing.
+ */
+@Serializable
+data class EntryCompletionSnapshotRecord(
+    /** Cross-device identity (§9.4) — see [EntrySnapshotRecord.uid]. */
+    val uid: String,
+    /** References the owning [com.tendril.app.data.entry.Entry.uid] — held, not dropped, for the
+     * reason [ReminderSnapshotRecord.entryUid] gives. */
+    val entryUid: String,
+    val occurrenceDate: String,
+    val resolvedAt: Long,
+    val status: String,
+)
+
+/**
  * §5.5.1.1 — one "deleted forever" fact, as it travels. Carrying [purgedAt] rather than just
  * the uid is what makes a purge comparable with an edit: the later of the two wins, so a stale
  * delete can't quietly destroy work a device did after it (see

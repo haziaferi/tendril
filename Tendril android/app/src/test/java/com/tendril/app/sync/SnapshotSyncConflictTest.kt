@@ -34,6 +34,8 @@ class SnapshotSyncConflictTest {
             pageDao = mockk<PageDao>(relaxed = true),
             pagesSyncEngine = mockk(relaxed = true),
             purgeRegistry = mockk(relaxed = true),
+            reminderDao = mockk(relaxed = true),
+            entryCompletionDao = mockk(relaxed = true),
         )
 
     private fun entryRecord(uid: String, title: String, updatedAt: Long = 1_000L) = EntrySnapshotRecord(

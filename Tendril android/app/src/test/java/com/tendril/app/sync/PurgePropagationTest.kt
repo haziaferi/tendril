@@ -5,6 +5,7 @@ import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -69,6 +70,8 @@ class PurgePropagationTest {
             pageDao = pageDao,
             pagesSyncEngine = engine,
             purgeRegistry = registry,
+            reminderDao = mockk(relaxed = true),
+            entryCompletionDao = mockk(relaxed = true),
         )
 
         fun seed(uid: String, title: String, updatedAt: Long): Long = store.seedPage(
