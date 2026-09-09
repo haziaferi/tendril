@@ -1,5 +1,6 @@
 package com.tendril.app
 
+import com.tendril.app.sync.AndroidLocalImageStore
 import android.content.Context
 import com.tendril.app.calendarprovider.CalendarProviderSync
 import com.tendril.app.data.TendrilDatabase
@@ -70,6 +71,7 @@ class AppContainer(context: Context) {
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
         database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, purgeRegistry,
+        AndroidLocalImageStore(context),
     )
     /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
      * takes it: the lock is absolute and it covers Settings, so import and restore refuse at

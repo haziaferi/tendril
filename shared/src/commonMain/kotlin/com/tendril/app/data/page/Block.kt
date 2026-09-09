@@ -74,8 +74,14 @@ data class Block(
     val mentionedPageId: Long? = null,
     /** TOGGLE only — "actually collapses" (§3.1.1), state persisted so it survives navigation. */
     val toggleExpanded: Boolean = true,
-    /** IMAGE only — copied into app-private storage on insert (§3.1.1), kept out of the
-     * SAF-synced snapshot folder to keep the sync payload small. */
+    /** IMAGE only — where *this device* keeps its copy: an app-private absolute path, written on
+     * insert (§3.1.1) and never synced, because it is meaningless on any other device.
+     *
+     * S4 did not change that. What travels is
+     * [com.tendril.app.sync.BlockSnapshotRecord.imageName] — `<block uid>.<extension>`, naming
+     * *which* image — while the bytes live in the folder's `images/` directory and each device
+     * resolves them to a path of its own. The two fields answer different questions, which is why
+     * adding the first did not require touching this one. */
     val imagePath: String? = null,
 
     val createdAt: Instant,

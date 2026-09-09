@@ -15,6 +15,7 @@ import kotlin.io.path.name
 class DesktopFileSyncFileStore(private val root: Path) : SyncFileStore {
 
     private val pagesDir get() = root.resolve("pages")
+    private val imagesDir get() = root.resolve("images")
 
     override suspend fun readRoot(name: String): ByteArray? = readBytes(resolveInside(root, name))
     override suspend fun writeRoot(name: String, bytes: ByteArray) = writeAtomic(root, name, bytes)
@@ -32,6 +33,17 @@ class DesktopFileSyncFileStore(private val root: Path) : SyncFileStore {
         return Files.list(pagesDir).use { stream -> stream.map { it.name }.toList() }
     }
     override suspend fun deletePage(name: String) { Files.deleteIfExists(resolveInside(pagesDir, name)) }
+
+    override suspend fun readImage(name: String): ByteArray? = readBytes(resolveInside(imagesDir, name))
+    override suspend fun writeImage(name: String, bytes: ByteArray) {
+        Files.createDirectories(imagesDir)
+        writeAtomic(imagesDir, name, bytes)
+    }
+    override suspend fun listImages(): List<String> {
+        if (!imagesDir.exists()) return emptyList()
+        return Files.list(imagesDir).use { stream -> stream.map { it.name }.toList() }
+    }
+    override suspend fun deleteImage(name: String) { Files.deleteIfExists(resolveInside(imagesDir, name)) }
 
     private fun readBytes(path: Path): ByteArray? = if (path.exists()) Files.readAllBytes(path) else null
 

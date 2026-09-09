@@ -59,8 +59,24 @@ data class BlockSnapshotRecord(
     val calloutColor: String? = null,
     val mentionedPageUid: String? = null,
     val toggleExpanded: Boolean = true,
-    // imagePath deliberately excluded — copied into app-private storage, kept out of the
-    // synced payload to keep it small (same rule Block.imagePath's own doc comment states).
+    /**
+     * §9.4 / S4 — the image's file name in the folder's `images/` directory, or null for a block
+     * that has none. `<block uid>.<extension>`.
+     *
+     * **`imagePath` is still deliberately excluded, and this is not the same thing.** That field
+     * is where *this device* keeps its copy — an app-private absolute path, meaningless anywhere
+     * else, and a peer has nothing to say about it. This one names *which image*, which every
+     * device can agree on. Separating the two is what lets an image travel without any device
+     * dictating another's filesystem layout, and it is why the merge still carries `imagePath`
+     * across a rebuild by uid exactly as it did before.
+     *
+     * Named after the block rather than a hash of the content: a block has exactly one image, so
+     * the uid already identifies it, replacing an image overwrites in place, and deleting the
+     * block makes its image unreachable by construction. Content addressing would add
+     * deduplication and cost a schema column to store the hash in; Joplin's resource model makes
+     * the same trade, with deduplication left to a plugin.
+     */
+    val imageName: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )

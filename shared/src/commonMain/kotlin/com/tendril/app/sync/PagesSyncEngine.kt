@@ -151,6 +151,53 @@ class PagesSyncEngine(
 ) {
     // ---------------------------------------------------------------- export
 
+    /**
+     * §9.4 / S4 — the images this device holds, as `<folder name> to <local path>` pairs.
+     *
+     * The folder name is derived the same way [Block.toSnapshot] derives it, from the same two
+     * inputs, so a block's file lands under exactly the name its record advertises. Derived twice
+     * rather than stored once because storing it would be a schema column for something already
+     * determined by the uid and the path.
+     */
+    suspend fun localImagesToPublish(): List<Pair<String, String>> =
+        blockDao.getWithLocalImage().mapNotNull { block ->
+            block.imagePath?.let { path -> imageNameFor(block.uid, path) to path }
+        }
+
+    /**
+     * §9.4 / S4 — which blocks in [records] name an image this device has no local copy of, as
+     * `<block uid> to <folder name>`.
+     *
+     * Driven by [folderImageNames] — what the folder actually holds — rather than by the page
+     * records, and that is deliberate. The name embeds the block uid, so the listing already says
+     * everything needed; taking it this way means an image and its page record can arrive in
+     * either order, and a fetch that failed once is simply retried on the next pass. Reading it
+     * from the records instead would tie this to whichever pass happened to merge them.
+     *
+     * Run after a merge, never during one. Pass 5 rebuilds a page's blocks wholesale and holds the
+     * local `imagePath` across by uid, so a block that comes back with none has genuinely not been
+     * fetched yet.
+     */
+    suspend fun imagesToFetch(folderImageNames: List<String>): List<Pair<String, String>> {
+        // A plain loop rather than a sequence chain: the local-copy check is a suspend DAO read,
+        // and `Sequence.filter` takes an ordinary lambda that cannot call one.
+        val fetch = mutableListOf<Pair<String, String>>()
+        for (name in folderImageNames) {
+            val uid = name.substringBeforeLast('.')
+            // A name matching no local block is not this device's business: either the page has
+            // not merged here yet, in which case a later pass picks it up, or the block is gone
+            // and S4's purge step is what removes the file.
+            val block = blockDao.getByUid(uid) ?: continue
+            if (block.imagePath == null) fetch += uid to name
+        }
+        return fetch
+    }
+
+    /** §9.4 / S4 — records where this device put its copy of an image that arrived from a peer. */
+    suspend fun attachLocalImage(blockUid: String, localPath: String) {
+        blockDao.attachImagePath(blockUid, localPath)
+    }
+
     suspend fun exportPages(): List<PageSnapshotRecord> {
         val pages = pageDao.getAll()
         val pageIdToUid = pages.associate { it.id to it.uid }
@@ -247,8 +294,25 @@ class PagesSyncEngine(
         checked = checked, codeLanguage = codeLanguage, calloutIcon = calloutIcon, calloutColor = calloutColor,
         mentionedPageUid = mentionedPageId?.let { pageIdToUid[it] },
         toggleExpanded = toggleExpanded,
+        imageName = imagePath?.let { imageNameFor(uid, it) },
         createdAt = createdAt.toEpochMilli(), updatedAt = updatedAt.toEpochMilli(),
     )
+
+    /**
+     * §9.4 / S4 — `<block uid>.<extension>`, the name this block's image travels under.
+     *
+     * The extension is carried so a reader can tell a PNG from a JPEG without opening the file,
+     * and is sanitised rather than trusted: it ends up in a file name inside the synced folder,
+     * and `DesktopFileSyncFileStore.resolveInside` exists precisely because a name that reached a
+     * store could otherwise address a file outside it. An extension that is not a short run of
+     * letters and digits is dropped, leaving a bare uid — a nameless image is a small loss, a
+     * traversal is not.
+     */
+    private fun imageNameFor(blockUid: String, localPath: String): String {
+        val extension = localPath.substringAfterLast('.', "")
+        val safe = extension.length in 1..8 && extension.all { it.isLetterOrDigit() }
+        return if (safe) "$blockUid.${extension.lowercase()}" else blockUid
+    }
 
     private fun FormattingSpan.toSnapshot(pageIdToUid: Map<Long, String>): FormattingSpanSnapshot? {
         val snapStyle = when (val s = style) {

@@ -30,4 +30,22 @@ interface SyncFileStore {
     suspend fun writePage(name: String, bytes: ByteArray)
     suspend fun listPages(): List<String>
     suspend fun deletePage(name: String)
+
+    /**
+     * §9.4 / S4 — the `images/` channel, the folder's only non-JSON content.
+     *
+     * A third set rather than a generalised `read(dir, name)`, for the reason the pages set is its
+     * own: every caller of these is a different kind of thing, and a store that took a directory
+     * name as a parameter would let a caller invent one. The names here are
+     * `<block uid>.<extension>` and nothing else creates them.
+     *
+     * The bytes are an image file, not text — which this interface has always been able to carry,
+     * since it deals in `ByteArray` and leaves JSON above it. What is genuinely new is that the
+     * *orchestrator* must stop assuming everything in the folder decodes as text, which is why the
+     * snapshot walker's `.endsWith(".json")` filter matters and is dealt with above this layer.
+     */
+    suspend fun readImage(name: String): ByteArray?
+    suspend fun writeImage(name: String, bytes: ByteArray)
+    suspend fun listImages(): List<String>
+    suspend fun deleteImage(name: String)
 }

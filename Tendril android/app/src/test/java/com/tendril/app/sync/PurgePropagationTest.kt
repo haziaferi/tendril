@@ -72,6 +72,7 @@ class PurgePropagationTest {
             purgeRegistry = registry,
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
+            localImages = InMemoryLocalImageStore(),
         )
 
         fun seed(uid: String, title: String, updatedAt: Long): Long = store.seedPage(

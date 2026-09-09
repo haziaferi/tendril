@@ -32,6 +32,24 @@ interface BlockDao {
     @Query("SELECT * FROM blocks WHERE id = :id")
     suspend fun getById(id: Long): Block?
 
+    /** §9.4 / S4 — the merge key, for attaching an image that arrived from another device to the
+     * block it belongs to. Blocks are rebuilt wholesale by uid on merge, so `id` is not stable
+     * across one and cannot be used here. */
+    @Query("SELECT * FROM blocks WHERE uid = :uid")
+    suspend fun getByUid(uid: String): Block?
+
+    /** §9.4 / S4 — every block this device holds an image file for, so the write pass can put
+     * those files in the folder. Not filtered on `type = 'IMAGE'`: the path is what says a file
+     * exists, and a block whose type was changed out from under an attached image should still
+     * have that image published rather than silently orphaned. */
+    @Query("SELECT * FROM blocks WHERE imagePath IS NOT NULL")
+    suspend fun getWithLocalImage(): List<Block>
+
+    /** §9.4 / S4 — column-scoped, like `PageDao.touch`: an image arriving from a peer must not
+     * carry a whole stale copy of the block back into the row with it. */
+    @Query("UPDATE blocks SET imagePath = :path WHERE uid = :uid")
+    suspend fun attachImagePath(uid: String, path: String)
+
     /** Standalone PAGE_MENTION blocks pointing at [pageId] — the cheap half of the mention
      * edge set (SQL can filter this column directly). */
     @Query("SELECT * FROM blocks WHERE mentionedPageId = :pageId")
