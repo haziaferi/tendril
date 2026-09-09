@@ -165,20 +165,39 @@ fun formatRollupNumber(value: Double): String =
  * same `"n:UNIT"` shape [Converters] already uses for `HabitFrequency`/`ReminderOffset`. */
 fun formatIntervalValue(count: Int, unit: IntervalUnit): String = "$count:${unit.name}"
 
+/** Period does not carry back which single IntervalUnit it was entered as, so this re-derives
+ * the closest whole-unit pair the way it must have been entered — Elastic recurrence only ever
+ * comes from one. Shared by [formatPeriodAsInterval] (the machine `"n:UNIT"` form) and
+ * [formatPeriodAsHumanInterval] (the cell-display form, §B6) so the two can't drift apart the
+ * way this decomposition itself once did — see [formatPeriodAsInterval]'s own note. */
+private fun periodAsCountUnit(period: java.time.Period): Pair<Int, IntervalUnit> = when {
+    period.months != 0 -> period.months to IntervalUnit.MONTH
+    period.days % 7 == 0 && period.days != 0 -> (period.days / 7) to IntervalUnit.WEEK
+    else -> period.days to IntervalUnit.DAY
+}
+
 /**
  * A [java.time.Period] as the same `"n:UNIT"` string [formatIntervalValue] produces.
  *
- * Period does not carry back which single IntervalUnit it was entered as, so this re-derives the
- * closest whole-unit pair the way it must have been entered — Elastic recurrence only ever comes
- * from one. It lives here, next to the format it produces, because it existed twice before and
- * the two copies had drifted: `DatabaseSyncManager.crystallize` wrote this form while
+ * It lives here, next to the format it produces, because it existed twice before and the two
+ * copies had drifted: `DatabaseSyncManager.crystallize` wrote this form while
  * `PageDatabaseViewModel.valueForCell` returned `Period.toString()`'s "P7D", so a filter on a
  * bound Recurrence column matched the frozen value or the live proxy but never both.
  */
-fun formatPeriodAsInterval(period: java.time.Period): String = when {
-    period.months != 0 -> formatIntervalValue(period.months, IntervalUnit.MONTH)
-    period.days % 7 == 0 && period.days != 0 -> formatIntervalValue(period.days / 7, IntervalUnit.WEEK)
-    else -> formatIntervalValue(period.days, IntervalUnit.DAY)
+fun formatPeriodAsInterval(period: java.time.Period): String {
+    val (count, unit) = periodAsCountUnit(period)
+    return formatIntervalValue(count, unit)
+}
+
+/** §B6 — the cell-display counterpart to [formatPeriodAsInterval]'s machine form: a bound
+ * Recurrence cell (`RecurrenceCell` in `PageDatabaseScreen.kt`) called `Period.toString()`
+ * directly and showed the raw ISO-8601 form ("P7D") to a person, while the same cell's *filter*
+ * value (via [formatPeriodAsInterval]) already read "1:WEEK" — two different strings for one
+ * value, neither of them this. */
+fun formatPeriodAsHumanInterval(period: java.time.Period): String {
+    val (count, unit) = periodAsCountUnit(period)
+    val unitName = unit.name.lowercase()
+    return if (count == 1) "Every $unitName" else "Every $count ${unitName}s"
 }
 
 fun parseIntervalValue(value: String): Pair<Int, IntervalUnit>? =

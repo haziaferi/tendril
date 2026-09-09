@@ -89,6 +89,7 @@ import com.tendril.app.data.page.SpanStyle
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
+import com.tendril.app.data.pagedatabase.formatPeriodAsHumanInterval
 import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.outlineOf
 import com.tendril.app.ui.WorkbenchCore
@@ -265,6 +266,7 @@ fun PageDetailScreen(
                     BlockRow(
                         block = entry.block,
                         depth = entry.depth,
+                        listPosition = entry.listPosition,
                         viewModel = viewModel,
                         onLongPress = { blockActionSheetFor = entry.block },
                         onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
@@ -401,6 +403,7 @@ fun PageDetailScreen(
 private fun BlockRow(
     block: Block,
     depth: Int,
+    listPosition: Int,
     viewModel: PageDetailViewModel,
     onLongPress: () -> Unit,
     onRequestMention: (baseContent: String) -> Unit,
@@ -450,7 +453,7 @@ private fun BlockRow(
                 .combinedClickable(onClick = {}, onLongClick = if (locked) null else onLongPress),
             verticalAlignment = Alignment.Top,
         ) {
-            BlockPrefix(block, viewModel)
+            BlockPrefix(block, listPosition, viewModel)
             Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 if (block.type == BlockType.DIVIDER) {
@@ -559,7 +562,7 @@ private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit
 }
 
 @Composable
-private fun BlockPrefix(block: Block, viewModel: PageDetailViewModel) {
+private fun BlockPrefix(block: Block, listPosition: Int, viewModel: PageDetailViewModel) {
     // §3.1.2 — the to-do checkbox is the one control on this page that checkbox-only mode
     // deliberately leaves tappable, so it reads the raw View-Only flag, not [LocalContentLocked]
     // (which also trips while checkbox-only is active for this page).
@@ -573,7 +576,10 @@ private fun BlockPrefix(block: Block, viewModel: PageDetailViewModel) {
             modifier = Modifier.size(24.dp),
         )
         BlockType.BULLETED_LIST_ITEM -> Text("•", modifier = Modifier.width(20.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        BlockType.NUMBERED_LIST_ITEM -> Text("${block.order + 1}.", modifier = Modifier.width(20.dp))
+        // §B7 — was `block.order + 1`: this block's position among every block on the page, not
+        // its position within the numbered run it visually belongs to. `listPosition` comes from
+        // `outlineOf`, which resets it at the start of each run (`BlockOutline.kt`'s own note).
+        BlockType.NUMBERED_LIST_ITEM -> Text("$listPosition.", modifier = Modifier.width(20.dp))
         BlockType.QUOTE -> Box(modifier = Modifier.width(3.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
         BlockType.TOGGLE -> IconButton(
             onClick = { viewModel.setToggleExpanded(block, !block.toggleExpanded) },
@@ -944,7 +950,13 @@ private fun RowRecurrenceEditor(entry: Entry?, viewModel: PageDetailViewModel) {
     var showPicker by remember { mutableStateOf(false) }
     val locked = LocalContentLocked.current
     val rule = entry?.recurrenceRule as? RecurrenceRule.Elastic
-    Text(rule?.period?.toString() ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }))
+    // §B6 — same fix as `PageDatabaseScreen.kt`'s `RecurrenceCell`: this was `Period.toString()`'s
+    // raw ISO form ("P7D") rather than anything a person reads as a recurrence.
+    Text(
+        rule?.period?.let(::formatPeriodAsHumanInterval) ?: "—",
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }),
+    )
     if (showPicker && entry != null) {
         var countText by remember { mutableStateOf("1") }
         var unit by remember { mutableStateOf(IntervalUnit.WEEK) }
