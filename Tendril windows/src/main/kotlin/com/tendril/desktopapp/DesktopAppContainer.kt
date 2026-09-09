@@ -1,6 +1,7 @@
 package com.tendril.desktopapp
 
 import com.tendril.app.data.TendrilDatabase
+import com.tendril.app.sync.DesktopLocalImageStore
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
@@ -35,6 +36,7 @@ class DesktopAppContainer(database: TendrilDatabase) {
         workbenchCore = WorkbenchCore(
             database, databaseSyncManager, templateManager, ViewLockState(), CheckboxOnlyState(),
             resolveEntryUseCase, NoOpEntryScheduleCoordinator, pageContentRepository, purgeRegistry,
+            DesktopLocalImageStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/images")),
         )
     }
 }

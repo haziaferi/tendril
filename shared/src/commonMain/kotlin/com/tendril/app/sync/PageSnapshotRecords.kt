@@ -71,8 +71,11 @@ data class BlockSnapshotRecord(
      * across a rebuild by uid exactly as it did before.
      *
      * Named after the block rather than a hash of the content: a block has exactly one image, so
-     * the uid already identifies it, replacing an image overwrites in place, and deleting the
-     * block makes its image unreachable by construction. Content addressing would add
+     * the uid already identifies it, and deleting the block makes its image unreachable by
+     * construction. Replacing an image overwrites in place **only when the new file has the same
+     * extension** -- swapping a PNG for a JPEG changes the name and leaves the old copy orphaned
+     * in local storage. Small, and S4's purge step is where it belongs; noted here because the
+     * uid-naming scheme is what makes it possible at all. Content addressing would add
      * deduplication and cost a schema column to store the hash in; Joplin's resource model makes
      * the same trade, with deduplication left to a plugin.
      */

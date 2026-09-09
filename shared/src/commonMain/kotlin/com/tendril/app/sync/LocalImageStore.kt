@@ -15,6 +15,11 @@ package com.tendril.app.sync
  * absolute path into local state, which is the bug the separation exists to make unspellable.
  *
  * Implementations own creating their directory on write and tolerating its absence on read.
+ *
+ * In `commonMain` rather than beside [SyncFileStore] in `jvmCommon`, despite being its
+ * counterpart: the UI reaches for this one. `WorkbenchCore` and `PageDetailViewModel` are
+ * common code, and common cannot see `jvmCommon`. Nothing here is platform-specific anyway --
+ * it is a path and some bytes.
  */
 interface LocalImageStore {
     /**

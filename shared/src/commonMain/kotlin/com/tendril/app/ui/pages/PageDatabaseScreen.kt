@@ -472,9 +472,18 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
             ) {
                 Column {
                     Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(MaterialTheme.colorScheme.surface)) {
+                        // P2 — this `if` had no `else`: a row *with* a cover drew nothing at
+                        // all, so the one case the gallery exists to show was the one it left
+                        // blank, and only the empty state was ever visible.
                         val cover = covers[row.page.id]
                         if (cover == null) {
                             Text("No image", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                        } else {
+                            BlockImage(
+                                cover.imagePath,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            )
                         }
                     }
                     Column(modifier = Modifier.padding(8.dp)) {

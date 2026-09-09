@@ -143,7 +143,7 @@ class WritePathSyncTest {
 
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, tagDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
-            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState,
+            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore()
         )
 
         fun database(pageId: Long) = PageDatabaseViewModel(
