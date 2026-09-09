@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalTime
 
 /**
@@ -53,7 +54,7 @@ class ReminderViewModel(
             // reminder rows back out of the DAO, so a reminder deleted first is invisible to
             // it — the row goes but its alarm stays registered and still fires.
             alarmScheduler.cancelReminder(entryId, reminderId)
-            reminderDao.delete(reminderId)
+            reminderDao.softDelete(reminderId, Instant.now())
             reschedule()
         }
     }

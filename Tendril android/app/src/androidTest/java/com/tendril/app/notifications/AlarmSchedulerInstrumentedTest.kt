@@ -43,7 +43,7 @@ class AlarmSchedulerInstrumentedTest {
         override suspend fun insert(reminder: Reminder): Long = 1L
         override suspend fun getForEntry(entryId: Long): List<Reminder> = byEntry[entryId].orEmpty()
         override fun observeForEntry(entryId: Long): Flow<List<Reminder>> = flowOf(byEntry[entryId].orEmpty())
-        override suspend fun delete(id: Long) = Unit
+        override suspend fun softDelete(id: Long, deletedAt: java.time.Instant) = Unit
     }
 
     @Before

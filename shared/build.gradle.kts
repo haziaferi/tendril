@@ -86,6 +86,24 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// ...and because they write the *same* file, they must not write it at the same time.
+// `org.gradle.parallel=true` (gradle.properties) lets both KSP tasks run concurrently, and
+// Room reads an existing schema JSON before replacing it — so one target can read the file
+// in the instant the other has truncated it and not yet refilled it, which surfaces as
+// `Expected start of the object '{', but had 'EOF' instead` with an empty JSON input.
+//
+// It is latent until a version actually moves: when `schemas/<version>.json` is already
+// present and current, neither task writes, so nothing races. v9 (S2) is the first bump
+// since `exportSchema = true` landed in S1a, and therefore the first build ever to ask two
+// parallel tasks to create the same schema file. Every future bump would hit it identically.
+//
+// Ordered rather than deduplicated: the two targets producing one identical file is the
+// property §9.10 wants (see above), so the fix is to stop them overlapping, not to give
+// each its own copy that could then silently disagree.
+tasks.matching { it.name == "kspKotlinDesktop" }.configureEach {
+    mustRunAfter("kspAndroidMain")
+}
+
 // Milestone 3 — explicit package for the generated Res class (fonts/strings for the ported
 // Workbench UI); default resolves from group+module name, pinned here so it doesn't shift if
 // either changes later. Stays module-internal (publicResClass defaults to false) since only
