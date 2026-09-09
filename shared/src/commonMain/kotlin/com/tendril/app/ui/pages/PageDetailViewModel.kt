@@ -63,6 +63,7 @@ class PageDetailViewModel(
     private val templateManager: TemplateManager,
     private val viewLockState: ViewLockState,
     private val checkboxOnlyState: CheckboxOnlyState,
+    private val localImages: com.tendril.app.sync.LocalImageStore,
 ) : ViewModel() {
     /** §3.1.2 — "every page under Pages becomes read-only as a group... no per-page exception."
      * Every mutating function below early-returns through this guard rather than relying on the
@@ -247,6 +248,21 @@ class PageDetailViewModel(
     }
 
     /** CALLOUT only (P3). */
+    /**
+     * §3.1.1 / P2 — store a chosen image and point [block] at this device's copy.
+     *
+     * Named after the block, matching what §9.4's sync would call it, so a picture inserted here
+     * and one fetched from the folder are the same thing on disk. `launchAndReindex` like every
+     * other block mutation: the image is not indexed, but `pages.updatedAt` still has to move or
+     * the change never reaches the other device (the §9.4 defect fixed in `0d2a932`).
+     */
+    fun setBlockImage(block: Block, fileName: String, bytes: ByteArray) = launchAndReindex {
+        val extension = fileName.substringAfterLast('.', "")
+        val name = if (extension.isBlank()) block.uid else "${block.uid}.$extension"
+        val path = localImages.write(name, bytes)
+        blockDao.update(block.copy(imagePath = path, updatedAt = java.time.Instant.now()))
+    }
+
     fun setCalloutColor(block: Block, color: String) = launchAndReindex {
         blockDao.update(block.copy(calloutColor = color, updatedAt = Instant.now()))
     }
