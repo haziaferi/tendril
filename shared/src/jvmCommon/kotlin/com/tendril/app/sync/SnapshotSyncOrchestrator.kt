@@ -15,10 +15,12 @@ import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
@@ -80,14 +82,24 @@ private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPL
  * suppression question in writing. That is the point: the previous three rounds all shipped
  * green, and the hole was only ever found by a human reading the write pass line by line.
  */
-private enum class FolderArrayFile(val fileName: String, val family: RecordFamily) {
-    ENTRIES_ACTIVE(FILE_ENTRIES_ACTIVE, RecordFamily.ENTRY),
-    ENTRIES_ARCHIVED(FILE_ENTRIES_ARCHIVED, RecordFamily.ENTRY),
-    HABITS(FILE_HABITS, RecordFamily.HABIT),
-    REMINDERS(FILE_REMINDERS, RecordFamily.REMINDER),
-    ENTRY_COMPLETIONS(FILE_ENTRY_COMPLETIONS, RecordFamily.COMPLETION),
-    RELATIONS(FILE_RELATIONS, RecordFamily.RELATION),
-    PURGED(FILE_PURGED, RecordFamily.PURGE),
+private enum class FolderArrayFile(
+    val fileName: String,
+    val family: RecordFamily,
+    /** §9.4 — the shape of one record in this file, so [mergeUnknownFields] can tell a field this
+     * build does not declare from one it declares and deliberately omitted. */
+    val elementDescriptor: SerialDescriptor,
+) {
+    ENTRIES_ACTIVE(FILE_ENTRIES_ACTIVE, RecordFamily.ENTRY, EntrySnapshotRecord.serializer().descriptor),
+    ENTRIES_ARCHIVED(FILE_ENTRIES_ARCHIVED, RecordFamily.ENTRY, EntrySnapshotRecord.serializer().descriptor),
+    HABITS(FILE_HABITS, RecordFamily.HABIT, HabitSnapshotRecord.serializer().descriptor),
+    REMINDERS(FILE_REMINDERS, RecordFamily.REMINDER, ReminderSnapshotRecord.serializer().descriptor),
+    ENTRY_COMPLETIONS(
+        FILE_ENTRY_COMPLETIONS,
+        RecordFamily.COMPLETION,
+        EntryCompletionSnapshotRecord.serializer().descriptor,
+    ),
+    RELATIONS(FILE_RELATIONS, RecordFamily.RELATION, PageRelationSnapshotRecord.serializer().descriptor),
+    PURGED(FILE_PURGED, RecordFamily.PURGE, PurgedRecordSnapshot.serializer().descriptor),
 }
 
 /**
@@ -578,6 +590,10 @@ class SnapshotSyncOrchestrator(
         // identity; minting one over a folder this key cannot read would claim it wrongly.
         if (key != null && salt != null) persistSalt(store, salt)
 
+        // §9.4 — the write pass reads before it writes now, to carry forward fields a newer
+        // build wrote. Resolved once per pass for the same reason [ReadKey] itself is: whether
+        // the folder is encrypted is a property of the folder, not of any one file.
+        val read = ReadKey(key, isEncryptedFolder(store))
         val allEntries = entryDao.getAll()
         val idToUid = allEntries.associate { it.id to it.uid }
         val rowIdToUid = pageDao.getAll().associate { it.id to it.uid }
@@ -646,7 +662,7 @@ class SnapshotSyncOrchestrator(
                 // it out.
                 FolderArrayFile.PURGED -> elementsOf(purgeRegistry.all().map { it.toSnapshot() })
             }
-            publishArrayFile(store, file, local, held, key)
+            publishArrayFile(store, file, local, held, key, read)
         }
 
         // Quarantined pages are the one exception to "publish everything local". Suppression is
@@ -654,7 +670,7 @@ class SnapshotSyncOrchestrator(
         // the device sharing everything else it holds, or a single unknown value from one peer
         // would freeze the whole folder.
         for (record in pagesSyncEngine.exportPages()) {
-            publishPageFile(store, record, held, key)
+            publishPageFile(store, record, held, key, read)
         }
 
         // Clear the snapshot files of pages purged here (§5.5.1). Only those: a file is deleted
@@ -729,11 +745,51 @@ class SnapshotSyncOrchestrator(
         localRecords: List<JsonElement>,
         held: QuarantinedExports,
         key: SecretKeySpec?,
+        read: ReadKey,
     ) {
         val holding = held.heldIn(file)
         if (holding.unreadable) preserveUnreadableArrayFile(store, file)
-        val content = json.encodeToString(JsonArray(localRecords + holding.records))
+        val carried = carryUnknownFields(localRecords, previousByUid(store, file.fileName, read), file.elementDescriptor)
+        val content = json.encodeToString(JsonArray(carried + holding.records))
         store.writeRoot(file.fileName, encryptText(content, key))
+    }
+
+    /**
+     * §9.4 — the folder's current copy of an array file, by uid, for [mergeUnknownFields].
+     *
+     * Best-effort by construction, and that is the whole contract: **preservation must never be
+     * able to fail a write.** An unreadable, missing, encrypted-under-another-key or
+     * differently-shaped file yields no map, the write proceeds exactly as it did before this
+     * existed, and the only thing lost is the carrying-forward. The alternative -- letting a
+     * damaged folder file stop this device publishing -- would be a far worse failure than the one
+     * being fixed.
+     */
+    private suspend fun previousByUid(
+        store: SyncFileStore,
+        name: String,
+        read: ReadKey,
+    ): Map<String, JsonObject> = runCatching {
+        val text = decryptText(store.readRoot(name), read)
+        if (text.isBlank()) return@runCatching emptyMap()
+        val array = json.parseToJsonElement(text) as? JsonArray ?: return@runCatching emptyMap()
+        array.mapNotNull { element ->
+            (element as? JsonObject)?.let { obj -> obj.uidOrNull()?.let { it to obj } }
+        }.toMap()
+    }.getOrElse { emptyMap() }
+
+    /** Pairs each outgoing record with the folder's copy of the same uid and carries its
+     * undeclared fields across. A record the folder does not hold is new here and has nothing to
+     * carry. */
+    private fun carryUnknownFields(
+        records: List<JsonElement>,
+        previous: Map<String, JsonObject>,
+        descriptor: SerialDescriptor,
+    ): List<JsonElement> {
+        if (previous.isEmpty()) return records
+        return records.map { element ->
+            val match = (element as? JsonObject)?.uidOrNull()?.let(previous::get)
+            if (match == null) element else mergeUnknownFields(element, match, descriptor)
+        }
     }
 
     /**
@@ -765,9 +821,22 @@ class SnapshotSyncOrchestrator(
         record: PageSnapshotRecord,
         held: QuarantinedExports,
         key: SecretKeySpec?,
+        read: ReadKey,
     ) {
         if (record.uid in held.pageUids) return
-        store.writePage("${record.uid}.json", encryptText(json.encodeToString(record), key))
+        val name = "${record.uid}.json"
+        // A page is one record per file, so there is no uid index to build -- but it is also the
+        // deepest shape in the format, and the one carrying the actual note content, so the
+        // recursion in [mergeUnknownFields] matters most here.
+        val previous = runCatching {
+            decryptText(store.readPage(name), read).takeIf { it.isNotBlank() }?.let(json::parseToJsonElement)
+        }.getOrNull()
+        val element = mergeUnknownFields(
+            json.encodeToJsonElement(record),
+            previous,
+            PageSnapshotRecord.serializer().descriptor,
+        )
+        store.writePage(name, encryptText(json.encodeToString(element), key))
     }
 
     /** Reads whatever snapshot files exist in the folder (any subset — a fresh install has
