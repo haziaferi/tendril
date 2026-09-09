@@ -46,6 +46,8 @@ class RecurringTaskAdvanceTest {
 
         override suspend fun getByUid(uid: String): EntryCompletion? =
             inserted.firstOrNull { it.uid == uid }
+
+        override suspend fun deleteAll() { inserted.clear() }
     }
 
     private val zone: ZoneId = ZoneId.systemDefault()

@@ -1,9 +1,12 @@
 package com.tendril.app.sync
 
 import com.tendril.app.data.entry.Entry
+import com.tendril.app.data.completion.EntryCompletion
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.reminder.Reminder
+import com.tendril.app.data.reminder.ReminderOffset
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -15,6 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * Regression tests for ARCH-01 — "Restore backup" wiping local data before it knew whether the
@@ -36,11 +40,15 @@ class PortableArchiveTest {
         habitDao: FakeHabitDao,
         backing: FakeContentResolverBacking,
         passphrase: String? = null,
+        reminderDao: FakeReminderDao = FakeReminderDao(),
+        entryCompletionDao: FakeEntryCompletionDao = FakeEntryCompletionDao(),
     ) = PortableArchive(
         context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
         entryDao = entryDao,
         habitDao = habitDao,
         pageDao = mockk<PageDao>(relaxed = true),
+        reminderDao = reminderDao,
+        entryCompletionDao = entryCompletionDao,
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         passphrase = { passphrase },
@@ -202,6 +210,95 @@ class PortableArchiveTest {
 
         assertEquals(listOf("Round trip me"), restored.getAll().map { it.title })
     }
+
+    /**
+     * S2's other half of the acceptance test: "`.tendril` export unzips with a `reminders` and
+     * `entry_completions` array".
+     *
+     * The tombstone assertion is the part worth having. An archive is the one place a *deleted*
+     * reminder could quietly come back even with the folder sync doing the right thing: exporting
+     * only live rows would produce a file that, imported onto a device that still held the
+     * reminder, says nothing about the delete — and `AlarmScheduler` would go on firing it.
+     */
+    @Test
+    fun `an exported archive carries reminders and completions, and a delete survives the round trip`() = runBlocking {
+        val entry = localEntry("e1", "Task with reminders")
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+
+        val sourceReminders = FakeReminderDao(
+            listOf(
+                archivedReminder(1, "r-live", entry.id),
+                archivedReminder(2, "r-gone", entry.id, deletedAt = Instant.ofEpochMilli(2_000)),
+            )
+        )
+        val sourceCompletions = FakeEntryCompletionDao(listOf(archivedCompletion(1, "c1", entry.id)))
+
+        archive(
+            FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
+            reminderDao = sourceReminders, entryCompletionDao = sourceCompletions,
+        ).export(destination)
+
+        val written = unzip(backing.bytesWrittenTo(destination))
+        assertTrue("no reminders.json in the archive", written.containsKey("reminders.json"))
+        assertTrue("no entry_completions.json in the archive", written.containsKey("entry_completions.json"))
+
+        val restoredReminders = FakeReminderDao()
+        val restoredCompletions = FakeEntryCompletionDao()
+        val reread = backing.givenFile(backing.bytesWrittenTo(destination))
+        archive(
+            FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
+            reminderDao = restoredReminders, entryCompletionDao = restoredCompletions,
+        ).importAdditive(reread)
+
+        // Both reminders travel; only the live one is visible to anything that schedules alarms.
+        assertEquals(2, restoredReminders.getAll().size)
+        assertEquals(listOf("r-live"), restoredReminders.getForEntry(entry.id).map { it.uid })
+        assertEquals(Instant.ofEpochMilli(2_000), restoredReminders.getByUid("r-gone")!!.deletedAt)
+
+        assertEquals(listOf("c1"), restoredCompletions.getAll().map { it.uid })
+    }
+
+    /** Append-only means importing the same archive twice must add nothing the second time. */
+    @Test
+    fun `importing an archive twice does not duplicate its completions`() = runBlocking {
+        val entry = localEntry("e1", "Task")
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+
+        archive(
+            FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
+            entryCompletionDao = FakeEntryCompletionDao(listOf(archivedCompletion(1, "c1", entry.id))),
+        ).export(destination)
+
+        val exported = backing.bytesWrittenTo(destination)
+        val restoredCompletions = FakeEntryCompletionDao()
+        repeat(2) {
+            archive(
+                FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
+                entryCompletionDao = restoredCompletions,
+            ).importAdditive(backing.givenFile(exported))
+        }
+
+        assertEquals(1, restoredCompletions.getAll().size)
+    }
+
+    private fun archivedReminder(id: Long, uid: String, entryId: Long, deletedAt: Instant? = null) = Reminder(
+        id = id,
+        uid = uid,
+        entryId = entryId,
+        offset = ReminderOffset.FromPreset(ReminderOffset.Preset.ONE_DAY),
+        deletedAt = deletedAt,
+    )
+
+    private fun archivedCompletion(id: Long, uid: String, entryId: Long) = EntryCompletion(
+        id = id,
+        uid = uid,
+        entryId = entryId,
+        occurrenceDate = LocalDate.of(2026, 9, 9),
+        resolvedAt = Instant.ofEpochMilli(1_500),
+        status = EntryStatus.DONE,
+    )
 
     // -------------------------------------------------- §9.4.2 at-rest export encryption
 

@@ -386,6 +386,8 @@ class ViewOnlySurfacesGuardTest {
         entryDao = entryDao,
         habitDao = FakeHabitDao(),
         pageDao = mockk<PageDao>(relaxed = true),
+        reminderDao = FakeReminderDao(),
+        entryCompletionDao = FakeEntryCompletionDao(),
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         passphrase = { null },
@@ -546,4 +548,7 @@ private class RecordingEntryCompletionDao : EntryCompletionDao {
 
     override suspend fun getByUid(uid: String): EntryCompletion? =
         rows.firstOrNull { it.uid == uid }
+
+
+    override suspend fun deleteAll() { rows.clear() }
 }

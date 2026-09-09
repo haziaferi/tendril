@@ -47,6 +47,9 @@ class AlarmSchedulerInstrumentedTest {
         override suspend fun getAll(): List<Reminder> = byEntry.values.flatten()
         override suspend fun getByUid(uid: String): Reminder? =
             byEntry.values.flatten().firstOrNull { it.uid == uid }
+
+        /** Read-only fixture — nothing here is ever wiped. */
+        override suspend fun deleteAll() = Unit
     }
 
     @Before

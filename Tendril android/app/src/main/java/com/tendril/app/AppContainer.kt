@@ -69,6 +69,7 @@ class AppContainer(context: Context) {
     val viewLockState = ViewLockState()
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
+        database.reminderDao(), database.entryCompletionDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
         // `.tendril` package. "Off" is simply no passphrase set.

@@ -2,10 +2,12 @@ package com.tendril.app.sync
 
 import android.content.Context
 import android.net.Uri
+import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
+import com.tendril.app.data.reminder.ReminderDao
 import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ViewLockState
@@ -24,6 +26,8 @@ private const val MANIFEST_NAME = "manifest.json"
 private const val FILE_ENTRIES_ACTIVE = "entries_active.json"
 private const val FILE_ENTRIES_ARCHIVED = "entries_archived.json"
 private const val FILE_HABITS = "habits.json"
+private const val FILE_REMINDERS = "reminders.json"
+private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
 private const val PAGES_DIR_PREFIX = "pages/"
@@ -62,6 +66,8 @@ class PortableArchive(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
+    private val reminderDao: ReminderDao,
+    private val entryCompletionDao: EntryCompletionDao,
     private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
     /**
@@ -105,6 +111,8 @@ class PortableArchive(
         val idToUid = allEntries.associate { it.id to it.uid }
         val rowIdToUid = pageDao.getAll().associate { it.id to it.uid }
         val allHabits = habitDao.getAll()
+        val allReminders = reminderDao.getAll()
+        val allCompletions = entryCompletionDao.getAll()
         val (active, archived) = allEntries.partition { it.isActive() }
         val pageRecords = pagesSyncEngine.exportPages()
         val relations = pagesSyncEngine.exportRelations()
@@ -121,7 +129,10 @@ class PortableArchive(
             appVersion = "0.1.0",
             exportedAtEpochMillis = Instant.now().toEpochMilli(),
             kind = "full",
-            includedFiles = listOf(FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS, FILE_RELATIONS, FILE_PURGED) +
+            includedFiles = listOf(
+                FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS,
+                FILE_REMINDERS, FILE_ENTRY_COMPLETIONS, FILE_RELATIONS, FILE_PURGED,
+            ) +
                 pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
             encrypted = key != null,
         )
@@ -138,6 +149,19 @@ class PortableArchive(
                 zip.writeEntry(FILE_ENTRIES_ACTIVE, json.encodeToString(active.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
                 zip.writeEntry(FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
                 zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }), key)
+                // S2. Both name their Entry by uid, so both are dropped rather than exported
+                // if that Entry is gone — an archive is a snapshot of consistent state, and a
+                // reminder pointing at nothing would import as an alarm with no task.
+                zip.writeEntry(
+                    FILE_REMINDERS,
+                    json.encodeToString(allReminders.mapNotNull { r -> idToUid[r.entryId]?.let { r.toSnapshot(it) } }),
+                    key,
+                )
+                zip.writeEntry(
+                    FILE_ENTRY_COMPLETIONS,
+                    json.encodeToString(allCompletions.mapNotNull { c -> idToUid[c.entryId]?.let { c.toSnapshot(it) } }),
+                    key,
+                )
                 zip.writeEntry(FILE_RELATIONS, json.encodeToString(relations), key)
                 // §5.5.1.1 — without these an export would quietly resurrect everything the
                 // person had deleted forever the moment it was imported anywhere. Encrypted
@@ -185,6 +209,10 @@ class PortableArchive(
         contents[FILE_ENTRIES_ACTIVE]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
         contents[FILE_ENTRIES_ARCHIVED]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
         contents[FILE_HABITS]?.let { quarantined += applyHabits(decodeHabits(it)); habitsFound++ }
+        // After the entries, necessarily: both resolve `entryUid` against rows applyEntries
+        // may only just have inserted.
+        quarantined += applyReminders(decodeReminders(contents[FILE_REMINDERS]))
+        quarantined += applyCompletions(decodeCompletions(contents[FILE_ENTRY_COMPLETIONS]))
         ImportResult(
             hadManifest = contents.containsKey(MANIFEST_NAME),
             entryFilesFound = entriesFound,
@@ -227,6 +255,8 @@ class PortableArchive(
         val activeEntries = decodeEntries(contents[FILE_ENTRIES_ACTIVE])
         val archivedEntries = decodeEntries(contents[FILE_ENTRIES_ARCHIVED])
         val habits = decodeHabits(contents[FILE_HABITS])
+        val reminders = decodeReminders(contents[FILE_REMINDERS])
+        val completions = decodeCompletions(contents[FILE_ENTRY_COMPLETIONS])
         val purged = decodePurged(contents)
 
         require(
@@ -246,6 +276,10 @@ class PortableArchive(
 
         entryDao.deleteAll()
         habitDao.deleteAll()
+        // Explicitly, not by cascade — see [ReminderDao.deleteAll]. `entry_completions` has
+        // no foreign key at all, so nothing would clear it otherwise.
+        reminderDao.deleteAll()
+        entryCompletionDao.deleteAll()
         // §5.5.1.1 — Restore is "become exactly what this archive says", so this device's own
         // purge history is discarded and the archive's adopted in its place. Keeping the local
         // tombstones would silently drop records the archive still holds.
@@ -261,6 +295,8 @@ class PortableArchive(
         applyEntries(activeEntries)
         applyEntries(archivedEntries)
         applyHabits(habits)
+        applyReminders(reminders)
+        applyCompletions(completions)
     }
 
     // Decode and apply are split so [restoreFromBackup] can prove an archive is readable
@@ -288,6 +324,18 @@ class PortableArchive(
             runCatching { PurgedKind.valueOf(record.kind) }.getOrNull()
                 ?.let { PurgedRecord(it, record.uid, Instant.ofEpochMilli(record.purgedAt)) }
         }
+    }
+
+    private fun decodeReminders(content: String?): List<ReminderSnapshotRecord> {
+        if (content.isNullOrBlank()) return emptyList()
+        return runCatching { json.decodeFromString<List<ReminderSnapshotRecord>>(content) }.getOrNull()
+            ?: emptyList()
+    }
+
+    private fun decodeCompletions(content: String?): List<EntryCompletionSnapshotRecord> {
+        if (content.isNullOrBlank()) return emptyList()
+        return runCatching { json.decodeFromString<List<EntryCompletionSnapshotRecord>>(content) }.getOrNull()
+            ?: emptyList()
     }
 
     private fun decodeEntries(content: String?): List<EntrySnapshotRecord> {
@@ -408,6 +456,57 @@ class PortableArchive(
 
     /** Quarantines an undecodable habit for the same reason [applyEntries] does — one record from
      * a newer build costs that record and nothing else. */
+    /**
+     * S2. Merged on exactly the rule the folder sync uses (`SnapshotSyncOrchestrator`'s
+     * `mergeReminderContent`): monotonic, delete wins, no timestamp to compare because a
+     * reminder is never edited. The one difference is what happens to a record whose Entry is
+     * not here — the folder sync *holds* it, because its next write would otherwise erase the
+     * peer's copy, whereas an archive is read-only and never rewritten, so dropping is the only
+     * option and costs nothing. It is not counted as quarantined: the record was perfectly
+     * readable, it simply has no owner in the dataset being imported into.
+     */
+    private suspend fun applyReminders(records: List<ReminderSnapshotRecord>): Int {
+        if (records.isEmpty()) return 0
+        val entryUidToId = entryDao.getAll().associate { it.uid to it.id }
+        var quarantined = 0
+        for (record in records) {
+            val entryId = entryUidToId[record.entryUid] ?: continue
+            val decoded = record.toEntityOrNull(entryId)
+            if (decoded == null) {
+                quarantined++
+                continue
+            }
+            val local = reminderDao.getByUid(record.uid)
+            val remoteDeletedAt = decoded.deletedAt
+            when {
+                local == null -> reminderDao.insert(decoded)
+                local.deletedAt == null && remoteDeletedAt != null ->
+                    reminderDao.softDelete(local.id, remoteDeletedAt)
+                else -> Unit
+            }
+        }
+        return quarantined
+    }
+
+    /** S2 — a union by uid, the same as the folder sync's, because the table is append-only.
+     * An archive imported twice therefore adds nothing the second time. */
+    private suspend fun applyCompletions(records: List<EntryCompletionSnapshotRecord>): Int {
+        if (records.isEmpty()) return 0
+        val entryUidToId = entryDao.getAll().associate { it.uid to it.id }
+        var quarantined = 0
+        for (record in records) {
+            if (entryCompletionDao.getByUid(record.uid) != null) continue
+            val entryId = entryUidToId[record.entryUid] ?: continue
+            val decoded = record.toEntityOrNull(entryId)
+            if (decoded == null) {
+                quarantined++
+                continue
+            }
+            entryCompletionDao.insert(decoded)
+        }
+        return quarantined
+    }
+
     private suspend fun applyHabits(records: List<HabitSnapshotRecord>): Int {
         if (records.isEmpty()) return 0
         var quarantined = 0

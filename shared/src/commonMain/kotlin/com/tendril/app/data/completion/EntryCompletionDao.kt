@@ -22,4 +22,11 @@ interface EntryCompletionDao {
      * re-inserted — the merge is a union, and nothing ever edits a completion. */
     @Query("SELECT * FROM entry_completions WHERE uid = :uid")
     suspend fun getByUid(uid: String): EntryCompletion?
+
+    /** §9.4.1 Restore's wipe-and-replace. This table has an `entryId` index but **no**
+     * foreign key, so unlike `reminders` there is no cascade that could stand in for it:
+     * without this call a restore would leave every completion of the replaced dataset
+     * behind, orphaned against entry ids the archive has just reassigned. */
+    @Query("DELETE FROM entry_completions")
+    suspend fun deleteAll()
 }

@@ -147,6 +147,9 @@ class FakeReminderDao(seed: List<Reminder> = emptyList()) : ReminderDao {
     override suspend fun softDelete(id: Long, deletedAt: Instant) {
         rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt) }
     }
+
+
+    override suspend fun deleteAll() { rows.clear() }
 }
 
 /** Autoincrementing in-memory [EntryCompletionDao]. Append-only, like the real one: there is no
@@ -170,6 +173,9 @@ class FakeEntryCompletionDao(seed: List<EntryCompletion> = emptyList()) : EntryC
 
     override suspend fun getByUid(uid: String): EntryCompletion? =
         rows.values.firstOrNull { it.uid == uid }
+
+
+    override suspend fun deleteAll() { rows.clear() }
 }
 
 /** Autoincrementing in-memory [HabitDao], same shape as [FakeEntryDao]. */

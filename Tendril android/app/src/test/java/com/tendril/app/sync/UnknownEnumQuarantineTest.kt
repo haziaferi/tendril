@@ -1664,6 +1664,8 @@ class UnknownEnumQuarantineTest {
             entryDao = entryDao,
             habitDao = habitDao,
             pageDao = mockk<PageDao>(relaxed = true),
+            reminderDao = FakeReminderDao(),
+            entryCompletionDao = FakeEntryCompletionDao(),
             purgeRegistry = mockk(relaxed = true),
             pagesSyncEngine = mockk(relaxed = true),
             passphrase = { null },

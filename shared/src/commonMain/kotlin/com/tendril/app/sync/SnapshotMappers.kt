@@ -240,6 +240,10 @@ fun ReminderSnapshotRecord.toEntity(entryId: Long): Reminder {
     )
 }
 
+/** [ReminderSnapshotRecord.toEntity]'s quarantining form — see [EntrySnapshotRecord.toEntityOrNull]. */
+fun ReminderSnapshotRecord.toEntityOrNull(entryId: Long): Reminder? =
+    runCatching { toEntity(entryId) }.getOrNull()
+
 /** See [Reminder.toSnapshot] — [entryUid] is the caller's to resolve, for the same reason. */
 fun EntryCompletion.toSnapshot(entryUid: String): EntryCompletionSnapshotRecord =
     EntryCompletionSnapshotRecord(
@@ -263,6 +267,11 @@ fun EntryCompletionSnapshotRecord.toEntity(entryId: Long): EntryCompletion = Ent
     resolvedAt = Instant.ofEpochMilli(resolvedAt),
     status = enumOrNull<EntryStatus>(status) ?: undecodable("completion status", status),
 )
+
+/** [EntryCompletionSnapshotRecord.toEntity]'s quarantining form — see
+ * [EntrySnapshotRecord.toEntityOrNull]. */
+fun EntryCompletionSnapshotRecord.toEntityOrNull(entryId: Long): EntryCompletion? =
+    runCatching { toEntity(entryId) }.getOrNull()
 
 /** §4 / §9.4 — the Active/Archived split resolved 2026-08-08: Active is the small,
  * frequently-edited set (`PENDING` TASK, or any live EVENT); Archived is everything else

@@ -28,6 +28,14 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE uid = :uid")
     suspend fun getByUid(uid: String): Reminder?
 
+    /** §9.4.1 Restore's wipe-and-replace. Called explicitly rather than left to the
+     * `entries` foreign key's `CASCADE`: the cascade only fires while SQLite's
+     * `foreign_keys` pragma is on, and a restore that silently kept every old reminder —
+     * each of which registers an alarm — is not a failure worth making conditional on a
+     * pragma. */
+    @Query("DELETE FROM reminders")
+    suspend fun deleteAll()
+
     /** Soft, not hard — see [Reminder.deletedAt]. Both reads above filter on
      * `deletedAt IS NULL`, which is what makes this safe to swap in underneath every existing
      * caller: a tombstoned reminder cannot reach [com.tendril.app.notifications.AlarmScheduler]

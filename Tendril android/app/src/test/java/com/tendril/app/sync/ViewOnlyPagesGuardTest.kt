@@ -495,5 +495,8 @@ class ViewOnlyPagesGuardTest {
 
         override suspend fun getByUid(uid: String): EntryCompletion? =
             rows.firstOrNull { it.uid == uid }
+
+
+        override suspend fun deleteAll() { rows.clear() }
     }
 }
