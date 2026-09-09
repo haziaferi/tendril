@@ -36,6 +36,7 @@ class SnapshotSyncConflictTest {
             purgeRegistry = mockk(relaxed = true),
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
+            localImages = InMemoryLocalImageStore(),
         )
 
     private fun entryRecord(uid: String, title: String, updatedAt: Long = 1_000L) = EntrySnapshotRecord(

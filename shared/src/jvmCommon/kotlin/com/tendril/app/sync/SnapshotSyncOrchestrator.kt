@@ -420,6 +420,10 @@ class SnapshotSyncOrchestrator(
     private val entryCompletionDao: EntryCompletionDao,
     private val pagesSyncEngine: PagesSyncEngine,
     private val purgeRegistry: PurgeRegistry,
+    /** §9.4 / S4 — where this device keeps its image files. Required rather than defaulted: a
+     * default would make "images do not sync on this platform" something a call site can cause by
+     * omission, which is the shape of mistake [writeWithKey]'s `held` parameter documents. */
+    private val localImages: LocalImageStore,
 ) {
     /**
      * What the last merge pass could not read, and which the next write pass must therefore
@@ -673,6 +677,22 @@ class SnapshotSyncOrchestrator(
             publishPageFile(store, record, held, key, read)
         }
 
+        // §9.4 / S4 — the image bytes, after the records that name them. Deliberately **not**
+        // encrypted with the folder key: §9.4.2's scheme wraps text payloads, and an image is the
+        // one thing here that is not one. Recorded as a gap rather than silently accepted — an
+        // encrypted folder currently protects the note that mentions the picture and not the
+        // picture, which is a smaller protection than §9.4.2 promises.
+        //
+        // Written only when the folder does not already hold the name. The name is derived from
+        // the block uid, so re-publishing identical bytes every pass would be pure churn on a
+        // Syncthing folder that replicates every change.
+        val alreadyInFolder = runCatching { store.listImages().toSet() }.getOrElse { emptySet() }
+        for ((name, localPath) in pagesSyncEngine.localImagesToPublish()) {
+            if (name in alreadyInFolder) continue
+            val bytes = localImages.read(localPath) ?: continue
+            store.writeImage(name, bytes)
+        }
+
         // Clear the snapshot files of pages purged here (§5.5.1). Only those: a file is deleted
         // because this device recorded a deliberate "Delete forever" for that exact uid, never
         // because a file merely looks unfamiliar. Inferring deletion from absence is what the
@@ -899,6 +919,7 @@ class SnapshotSyncOrchestrator(
         // uids into `read.tally`. Every later family that can name a page therefore reads them
         // from the same place — see [mergeEntryContent] and [mergeRelationsContent].
         mergePagesDir(store, read)
+        fetchImages(store)
         // After the pages, deliberately: a relation whose endpoint page was just quarantined has
         // no local row to attach to, and this is where that is noticed and the edge held back.
         mergeRelationsFile(store, read)
@@ -972,6 +993,24 @@ class SnapshotSyncOrchestrator(
             ),
             held = held,
         )
+    }
+
+    /**
+     * §9.4 / S4 — bring down any image the folder holds for a block this device has no copy of.
+     *
+     * Runs straight after the pages merge, because a block has to exist locally before a path can
+     * be attached to it. Each fetch is independent and best-effort: one unreadable file costs that
+     * image and nothing else, and because the work is driven by the folder listing rather than by
+     * this pass's records, anything skipped is simply retried next time.
+     */
+    private suspend fun fetchImages(store: SyncFileStore) {
+        val available = runCatching { store.listImages() }.getOrElse { return }
+        if (available.isEmpty()) return
+        for ((blockUid, name) in pagesSyncEngine.imagesToFetch(available)) {
+            val bytes = runCatching { store.readImage(name) }.getOrNull() ?: continue
+            val localPath = runCatching { localImages.write(name, bytes) }.getOrNull() ?: continue
+            pagesSyncEngine.attachLocalImage(blockUid, localPath)
+        }
     }
 
     private suspend fun mergePagesDir(store: SyncFileStore, read: ReadKey) {

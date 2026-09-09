@@ -24,17 +24,23 @@ import java.time.LocalDate
 class InMemorySyncFileStore(
     private val root: MutableMap<String, ByteArray> = linkedMapOf(),
     private val pages: MutableMap<String, ByteArray> = linkedMapOf(),
+    private val images: MutableMap<String, ByteArray> = linkedMapOf(),
 ) : SyncFileStore {
 
     val deletedRootNames = mutableListOf<String>()
     val deletedPageNames = mutableListOf<String>()
+    val deletedImageNames = mutableListOf<String>()
 
     fun putRoot(name: String, content: String) { root[name] = content.toByteArray(Charsets.UTF_8) }
     fun putRootBytes(name: String, bytes: ByteArray) { root[name] = bytes }
     fun putPage(name: String, content: String) { pages[name] = content.toByteArray(Charsets.UTF_8) }
 
+    fun putImage(name: String, bytes: ByteArray) { images[name] = bytes }
+
     fun rootNames(): Set<String> = root.keys.toSet()
     fun pageNames(): Set<String> = pages.keys.toSet()
+    fun imageNames(): Set<String> = images.keys.toSet()
+    fun imageBytes(name: String): ByteArray? = images[name]
 
     override suspend fun readRoot(name: String): ByteArray? = root[name]
     override suspend fun writeRoot(name: String, bytes: ByteArray) { root[name] = bytes }
@@ -48,6 +54,26 @@ class InMemorySyncFileStore(
     override suspend fun listPages(): List<String> = pages.keys.toList()
     override suspend fun deletePage(name: String) {
         if (pages.remove(name) != null) deletedPageNames += name
+    }
+
+    override suspend fun readImage(name: String): ByteArray? = images[name]
+    override suspend fun writeImage(name: String, bytes: ByteArray) { images[name] = bytes }
+    override suspend fun listImages(): List<String> = images.keys.toList()
+    override suspend fun deleteImage(name: String) {
+        if (images.remove(name) != null) deletedImageNames += name
+    }
+}
+
+/** In-memory [LocalImageStore]. Paths are `local:<name>` so a test can tell at a glance that a
+ * block's `imagePath` came from a fetch rather than from an importer. */
+class InMemoryLocalImageStore : LocalImageStore {
+    val written = linkedMapOf<String, ByteArray>()
+
+    override suspend fun read(path: String): ByteArray? = written[path.removePrefix("local:")]
+
+    override suspend fun write(name: String, bytes: ByteArray): String {
+        written[name] = bytes
+        return "local:$name"
     }
 }
 

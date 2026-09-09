@@ -46,6 +46,7 @@ class UnknownFieldPreservationTest {
             purgeRegistry = mockk(relaxed = true),
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
+            localImages = InMemoryLocalImageStore(),
         )
     }
 

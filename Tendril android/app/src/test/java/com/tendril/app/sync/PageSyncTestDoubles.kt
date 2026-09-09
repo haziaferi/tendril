@@ -188,6 +188,19 @@ class FakeBlockDao(private val store: FakePageStore) : BlockDao {
 
     override suspend fun getById(id: Long): Block? = store.blocks[id]
 
+    override suspend fun getByUid(uid: String): Block? = store.blocks.values.firstOrNull { it.uid == uid }
+
+    override suspend fun getWithLocalImage(): List<Block> =
+        store.blocks.values.filter { it.imagePath != null }
+
+    /** Column-scoped like the real query: only `imagePath` moves, so a test that expected a
+     * whole-row write would fail here rather than passing on a fake that was more generous than
+     * the DAO it stands in for. */
+    override suspend fun attachImagePath(uid: String, path: String) {
+        store.blocks.values.firstOrNull { it.uid == uid }
+            ?.let { store.blocks[it.id] = it.copy(imagePath = path) }
+    }
+
     override suspend fun getStandaloneMentionsOf(pageId: Long): List<Block> =
         store.blocks.values.filter { it.mentionedPageId == pageId }
 

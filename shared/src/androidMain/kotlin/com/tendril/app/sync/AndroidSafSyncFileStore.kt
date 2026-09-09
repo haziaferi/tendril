@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 
 private const val PAGES_DIR = "pages"
+private const val IMAGES_DIR = "images"
 
 /**
  * §12.5/Milestone 2 — the Android [SyncFileStore], wrapping SAF (`DocumentFile`/`ContentResolver`)
@@ -41,9 +42,19 @@ class AndroidSafSyncFileStore private constructor(
     override suspend fun listPages(): List<String> = pagesDirOrNull()?.listFiles()?.mapNotNull { it.name } ?: emptyList()
     override suspend fun deletePage(name: String) { pagesDirOrNull()?.findFile(name)?.delete() }
 
+    override suspend fun readImage(name: String): ByteArray? = readBytes(imagesDirOrNull()?.findFile(name))
+    override suspend fun writeImage(name: String, bytes: ByteArray) = writeAtomic(imagesDirOrCreate(), name, bytes)
+    override suspend fun listImages(): List<String> =
+        imagesDirOrNull()?.listFiles()?.mapNotNull { it.name } ?: emptyList()
+    override suspend fun deleteImage(name: String) { imagesDirOrNull()?.findFile(name)?.delete() }
+
     private fun pagesDirOrNull(): DocumentFile? = folder.findFile(PAGES_DIR)?.takeIf { it.isDirectory }
     private fun pagesDirOrCreate(): DocumentFile =
         pagesDirOrNull() ?: folder.createDirectory(PAGES_DIR) ?: error("Could not create '$PAGES_DIR' in sync folder")
+
+    private fun imagesDirOrNull(): DocumentFile? = folder.findFile(IMAGES_DIR)?.takeIf { it.isDirectory }
+    private fun imagesDirOrCreate(): DocumentFile =
+        imagesDirOrNull() ?: folder.createDirectory(IMAGES_DIR) ?: error("Could not create '$IMAGES_DIR' in sync folder")
 
     private fun readBytes(file: DocumentFile?): ByteArray? {
         file ?: return null

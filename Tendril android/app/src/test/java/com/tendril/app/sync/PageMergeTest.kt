@@ -336,6 +336,11 @@ class PageMergeTest {
         engine.mergePages(listOf(pageRecord(UID_A, "Trip", updatedAt = 2_000L, blocks = listOf(blockRecord(UID_BLOCK, "caption")))))
         // Attached after the block exists. `Block.imagePath` points into app-private storage and
         // is deliberately excluded from the snapshot, so no peer can ever send it back.
+        //
+        // S4 did not change this, which is worth stating because it easily could have. The
+        // snapshot now carries `imageName` — *which* image — but still never `imagePath`, where
+        // this device keeps it. So the rule below holds exactly as written, and the uid re-attach
+        // is still the only thing carrying a local path across a rebuild.
         blockDao.getForPage(id).single().let { blockDao.update(it.copy(imagePath = "/data/app/img-1.png")) }
 
         // The peer retitles the caption. Its record wins, and Pass 5 rebuilds every block here.
@@ -344,7 +349,8 @@ class PageMergeTest {
         val merged = blockDao.getForPage(id).single()
         assertEquals("the winner's content still applies", "new caption", merged.content)
         assertEquals(
-            "the merge is the only thing that can carry imagePath across, since the snapshot never holds it",
+            "the merge is the only thing that can carry imagePath across, since the snapshot holds " +
+                "the image's name but never this device's path to it",
             "/data/app/img-1.png",
             merged.imagePath,
         )

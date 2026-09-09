@@ -70,6 +70,7 @@ class HabitPurgeTest {
             purgeRegistry = registry,
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
+            localImages = InMemoryLocalImageStore(),
         )
     }
 

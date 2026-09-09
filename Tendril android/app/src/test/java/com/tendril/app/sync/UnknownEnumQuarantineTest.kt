@@ -152,6 +152,7 @@ class UnknownEnumQuarantineTest {
             purgeRegistry = registry,
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
+            localImages = InMemoryLocalImageStore(),
         )
 
         suspend fun blocksOf(uid: String): List<String> =

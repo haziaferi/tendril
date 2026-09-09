@@ -1,5 +1,6 @@
 package com.tendril.desktopapp
 
+import com.tendril.app.sync.DesktopLocalImageStore
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -72,6 +73,7 @@ fun main() {
     val orchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
         database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, container.purgeRegistry,
+        DesktopLocalImageStore(File(dbFile.parentFile, "images")),
     )
     val folderManager = DesktopSyncFolderManager()
 
