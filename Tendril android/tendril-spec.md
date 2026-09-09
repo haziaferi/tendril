@@ -3080,8 +3080,13 @@ honoured as written — a dialog needs a running app and there is no database to
 the file aside answers the same concern it was protecting, by the same rule `SnapshotSyncOrchestrator`
 applies with its `.tendril-lost-` marker. The empty database is then repopulated by the ordinary
 additive sync pass, which recovers everything the folder holds **and nothing that was never
-published** — stated as a test rather than left to be discovered. Still outstanding: the manual
-run on real hardware against a deliberately broken migration, which no JVM test can stand in for.)* **Pre-v1 the version number still has to
+published** — stated as a test rather than left to be discovered. **The manual run §9.10 asks for was carried out
+2026-09-09** — a OnePlus 9 Pro, a populated database, a v9→v10 migration made to throw on purpose. The
+app stayed up, the database was set aside with its `-wal`/`-shm` and still held every row when
+opened afterwards, and the next sync refilled the fresh one completely with the reminder
+tombstone intact. The folder was unchanged by the emptied device's own write pass. What this
+run does **not** cover: file-level corruption that SQLite refuses before Room's migration
+machinery runs, which `openOrRecover`'s probe would catch but which has not been exercised.)* **Pre-v1 the version number still has to
 move on every schema change**: Room compares a hash of the schema against the one stored in the
 database and throws before migration runs when the hash moved but `version` didn't, so
 `fallbackToDestructiveMigration` never gets the chance to recover — it only handles version
