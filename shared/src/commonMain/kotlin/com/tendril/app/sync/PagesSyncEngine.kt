@@ -60,6 +60,8 @@ data class QuarantinedRecord(val kind: String, val uid: String, val detail: Stri
         const val PAGE = "page"
         const val ENTRY = "entry"
         const val HABIT = "habit"
+        const val REMINDER = "reminder"
+        const val COMPLETION = "completion"
 
         /**
          * Not a record family at all: the whole-file case, where [uid] is a file name rather than

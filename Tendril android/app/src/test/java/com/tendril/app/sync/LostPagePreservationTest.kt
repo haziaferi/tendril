@@ -3,6 +3,7 @@ package com.tendril.app.sync
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -60,6 +61,8 @@ class LostPagePreservationTest {
             pageDao = pageDao,
             pagesSyncEngine = engine,
             purgeRegistry = registry,
+            reminderDao = mockk(relaxed = true),
+            entryCompletionDao = mockk(relaxed = true),
         )
     }
 

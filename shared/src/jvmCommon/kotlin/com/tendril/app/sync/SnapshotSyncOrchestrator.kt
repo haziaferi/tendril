@@ -1,5 +1,7 @@
 package com.tendril.app.sync
 
+import com.tendril.app.data.completion.EntryCompletion
+import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.enumOrNull
@@ -7,6 +9,8 @@ import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
+import com.tendril.app.data.reminder.Reminder
+import com.tendril.app.data.reminder.ReminderDao
 import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +36,8 @@ private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 private const val FILE_ENTRIES_ACTIVE = "entries_active.json"
 private const val FILE_ENTRIES_ARCHIVED = "entries_archived.json"
 private const val FILE_HABITS = "habits.json"
+private const val FILE_REMINDERS = "reminders.json"
+private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
 
@@ -49,7 +55,7 @@ private const val FILE_META = "sync_meta.json"
  * both would put one uid in two files at once. Pooling by family says that once, instead of
  * leaving each future file to remember it.
  */
-private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE }
+private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION }
 
 /**
  * **Every folder-wide array file the write pass publishes — the list a new one must join.**
@@ -78,6 +84,8 @@ private enum class FolderArrayFile(val fileName: String, val family: RecordFamil
     ENTRIES_ACTIVE(FILE_ENTRIES_ACTIVE, RecordFamily.ENTRY),
     ENTRIES_ARCHIVED(FILE_ENTRIES_ARCHIVED, RecordFamily.ENTRY),
     HABITS(FILE_HABITS, RecordFamily.HABIT),
+    REMINDERS(FILE_REMINDERS, RecordFamily.REMINDER),
+    ENTRY_COMPLETIONS(FILE_ENTRY_COMPLETIONS, RecordFamily.COMPLETION),
     RELATIONS(FILE_RELATIONS, RecordFamily.RELATION),
     PURGED(FILE_PURGED, RecordFamily.PURGE),
 }
@@ -290,6 +298,8 @@ private class ReadTally {
     val activeEntries = HeldBuilder(FolderArrayFile.ENTRIES_ACTIVE, quarantined)
     val archivedEntries = HeldBuilder(FolderArrayFile.ENTRIES_ARCHIVED, quarantined)
     val habits = HeldBuilder(FolderArrayFile.HABITS, quarantined)
+    val reminders = HeldBuilder(FolderArrayFile.REMINDERS, quarantined)
+    val completions = HeldBuilder(FolderArrayFile.ENTRY_COMPLETIONS, quarantined)
     val relations = HeldBuilder(FolderArrayFile.RELATIONS, quarantined)
     val purged = HeldBuilder(FolderArrayFile.PURGED, quarantined)
 
@@ -394,6 +404,8 @@ class SnapshotSyncOrchestrator(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
     private val pageDao: PageDao,
+    private val reminderDao: ReminderDao,
+    private val entryCompletionDao: EntryCompletionDao,
     private val pagesSyncEngine: PagesSyncEngine,
     private val purgeRegistry: PurgeRegistry,
 ) {
@@ -570,6 +582,8 @@ class SnapshotSyncOrchestrator(
         val idToUid = allEntries.associate { it.id to it.uid }
         val rowIdToUid = pageDao.getAll().associate { it.id to it.uid }
         val allHabits = habitDao.getAll()
+        val allReminders = reminderDao.getAll()
+        val allCompletions = entryCompletionDao.getAll()
         val (active, archived) = allEntries.partition { it.isActive() }
 
         // Quarantine's second half for every folder-wide array file (§9.4). Each is rewritten in
@@ -599,6 +613,22 @@ class SnapshotSyncOrchestrator(
                     elementsOf(archived.filterNot { it.uid in suppressed }.map { it.toSnapshot(idToUid, rowIdToUid) })
                 FolderArrayFile.HABITS ->
                     elementsOf(allHabits.filterNot { it.uid in suppressed }.map { it.toSnapshot() })
+                // §4 / S2. `mapNotNull` rather than `map` only as a belt: `entryId` is a CASCADE
+                // foreign key and [idToUid] is built from every Entry row, so a reminder whose
+                // owner is missing is a state the database does not permit. Dropping it beats
+                // inventing a uid for an Entry that is not there.
+                FolderArrayFile.REMINDERS ->
+                    elementsOf(
+                        allReminders.filterNot { it.uid in suppressed }
+                            .mapNotNull { r -> idToUid[r.entryId]?.let { r.toSnapshot(it) } }
+                    )
+                // §4.1 / S2 — append-only, so this file only ever grows. It is the one array file
+                // with no deletion semantics of any kind to get wrong.
+                FolderArrayFile.ENTRY_COMPLETIONS ->
+                    elementsOf(
+                        allCompletions.filterNot { it.uid in suppressed }
+                            .mapNotNull { c -> idToUid[c.entryId]?.let { c.toSnapshot(it) } }
+                    )
                 // §3.4's manual edges. Nothing is filtered against `suppressed`: a relation names
                 // no uid of its own, and what this device holds back is held whole — see
                 // [mergeRelationsContent], which keeps the edges it could not attach to a local
@@ -806,6 +836,11 @@ class SnapshotSyncOrchestrator(
         mergeEntryFile(store, FolderArrayFile.ENTRIES_ACTIVE, read)
         mergeEntryFile(store, FolderArrayFile.ENTRIES_ARCHIVED, read)
         mergeHabitFile(store, read)
+        // After the Entries, necessarily: both resolve `entryUid` to a local Entry id, and a
+        // record whose owner has not merged here yet is held rather than dropped — see
+        // [mergeReminderContent].
+        mergeReminderFile(store, read)
+        mergeCompletionFile(store, read)
 
         // Syncthing conflict siblings: <name>.sync-conflict-<date>-<deviceID>.json
         //
@@ -822,6 +857,9 @@ class SnapshotSyncOrchestrator(
                 name.startsWith("entries_active") || name.startsWith("entries_archived") ->
                     mergeEntryContent(readRootText(store, name, read), read.tally)
                 name.startsWith("habits") -> mergeHabitContent(readRootText(store, name, read), read.tally)
+                name.startsWith("reminders") -> mergeReminderContent(readRootText(store, name, read), read.tally)
+                name.startsWith("entry_completions") ->
+                    mergeCompletionContent(readRootText(store, name, read), read.tally)
                 name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, read))
                 name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, read))
                 else -> false
@@ -849,6 +887,8 @@ class SnapshotSyncOrchestrator(
                     FolderArrayFile.ENTRIES_ACTIVE -> read.tally.activeEntries
                     FolderArrayFile.ENTRIES_ARCHIVED -> read.tally.archivedEntries
                     FolderArrayFile.HABITS -> read.tally.habits
+                    FolderArrayFile.REMINDERS -> read.tally.reminders
+                    FolderArrayFile.ENTRY_COMPLETIONS -> read.tally.completions
                     FolderArrayFile.RELATIONS -> read.tally.relations
                     FolderArrayFile.PURGED -> read.tally.purged
                 }.frozen()
@@ -1240,6 +1280,142 @@ class SnapshotSyncOrchestrator(
                 continue
             }
             if (local == null) habitDao.insert(entity) else habitDao.update(entity.copy(id = local.id))
+        }
+        return allRead
+    }
+
+    private suspend fun mergeReminderFile(store: SyncFileStore, read: ReadKey) {
+        mergeReminderContent(
+            readRootText(store, FolderArrayFile.REMINDERS.fileName, read),
+            read.tally,
+            held = read.tally.reminders,
+        )
+    }
+
+    /**
+     * §4 / S2 — reminders. **Not a last-write-wins merge, and it needs no timestamp to be one.**
+     * `ReminderDao` has no update path, so a uid is inserted once and tombstoned once; the only
+     * transition is live → deleted, and it is monotonic. "Deleted on any device wins" therefore
+     * converges whatever order files arrive in, which is why [ReminderSnapshotRecord] carries no
+     * `updatedAt` for this to compare.
+     *
+     * A record whose Entry has not merged here yet is **held**, not dropped. Dropping is what the
+     * Entry mappers do for `originalEntryUid`, and it is safe there because the link self-heals on
+     * the next pass. It would not self-heal here: this device rewrites `reminders.json` in full,
+     * so a dropped reminder is *deleted from the folder for everyone* on the very next write, and
+     * the record that would have healed it is then gone. See [FolderArrayFile].
+     *
+     * @return true when the content decoded — one unreadable reminder costs that reminder, not
+     * the file. Same contract as [mergeHabitContent].
+     */
+    private suspend fun mergeReminderContent(
+        content: String,
+        tally: ReadTally,
+        held: HeldBuilder? = null,
+    ): Boolean {
+        val elements = decodeArray(content, held) ?: return false
+        val entryUidToId = entryDao.getAll().associate { it.uid to it.id }
+        var allRead = true
+        for (element in elements) {
+            val record = decodeRecord<ReminderSnapshotRecord>(element)
+            if (record == null) {
+                allRead = false
+                tally.quarantineElement(QuarantinedRecord.REMINDER, element)
+                // Held unconditionally, unlike the Entry and Habit paths, which hold only once
+                // the peer's copy is known to have won. Those two compare `updatedAt`; a reminder
+                // has none, so there is no sense in which this device's row could be "newer" and
+                // nothing to outrank. Not holding would simply delete the peer's record.
+                held?.hold(element, element.uidOrNull())
+                continue
+            }
+            val entryId = entryUidToId[record.entryUid]
+            if (entryId == null) {
+                allRead = false
+                held?.hold(element, record.uid)
+                continue
+            }
+            val entity: Reminder? = try {
+                record.toEntity(entryId)
+            } catch (e: SnapshotDecodeException) {
+                tally.quarantine(QuarantinedRecord.REMINDER, record.uid, e)
+                null
+            }
+            if (entity == null) {
+                allRead = false
+                held?.hold(element, record.uid)
+                continue
+            }
+            val local = reminderDao.getByUid(record.uid)
+            val remoteDeletedAt = entity.deletedAt
+            when {
+                // Includes an arriving tombstone for a reminder this device never had: storing it
+                // is what makes this device republish the delete instead of staying silent about
+                // it, which is the same reason §5.5.1.1's tombstones travel.
+                local == null -> reminderDao.insert(entity)
+                local.deletedAt == null && remoteDeletedAt != null ->
+                    reminderDao.softDelete(local.id, remoteDeletedAt)
+                // Live-over-deleted is deliberately not applied: the delete wins. Nothing else can
+                // differ — offset and anchorTime are immutable once written.
+                else -> Unit
+            }
+        }
+        return allRead
+    }
+
+    private suspend fun mergeCompletionFile(store: SyncFileStore, read: ReadKey) {
+        mergeCompletionContent(
+            readRootText(store, FolderArrayFile.ENTRY_COMPLETIONS.fileName, read),
+            read.tally,
+            held = read.tally.completions,
+        )
+    }
+
+    /**
+     * §4.1 / S2 — completions. A plain union by uid, and the strongest guarantee any merge here
+     * has: the table is append-only (`EntryCompletionDao` has neither an update nor a delete), so
+     * a grow-only set converges regardless of arrival order, with nothing to compare and no
+     * tombstone to carry.
+     *
+     * Held on an unresolvable Entry for the reason [mergeReminderContent] gives.
+     */
+    private suspend fun mergeCompletionContent(
+        content: String,
+        tally: ReadTally,
+        held: HeldBuilder? = null,
+    ): Boolean {
+        val elements = decodeArray(content, held) ?: return false
+        val entryUidToId = entryDao.getAll().associate { it.uid to it.id }
+        var allRead = true
+        for (element in elements) {
+            val record = decodeRecord<EntryCompletionSnapshotRecord>(element)
+            if (record == null) {
+                allRead = false
+                tally.quarantineElement(QuarantinedRecord.COMPLETION, element)
+                held?.hold(element, element.uidOrNull())
+                continue
+            }
+            // Already held locally: nothing to do, and nothing that *could* be done — a completion
+            // is never edited, so an existing row and an arriving one with the same uid are the
+            // same fact by construction.
+            if (entryCompletionDao.getByUid(record.uid) != null) continue
+            val entryId = entryUidToId[record.entryUid]
+            if (entryId == null) {
+                allRead = false
+                held?.hold(element, record.uid)
+                continue
+            }
+            val entity: EntryCompletion? = try {
+                record.toEntity(entryId)
+            } catch (e: SnapshotDecodeException) {
+                tally.quarantine(QuarantinedRecord.COMPLETION, record.uid, e)
+                null
+            }
+            if (entity == null) {
+                allRead = false
+                held?.hold(element, record.uid)
+                continue
+            }
+            entryCompletionDao.insert(entity)
         }
         return allRead
     }

@@ -16,6 +16,18 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE entryId = :entryId AND deletedAt IS NULL")
     suspend fun getForEntry(entryId: Long): List<Reminder>
 
+    /** Every reminder, tombstoned ones included — deliberately unfiltered, unlike the two reads
+     * above. §9.4's write pass rewrites `reminders.json` in full from these rows, so a tombstone
+     * that stopped travelling would let the reminder back in on the next device to merge, which
+     * is the resurrection [Reminder.deletedAt] exists to stop. */
+    @Query("SELECT * FROM reminders")
+    suspend fun getAll(): List<Reminder>
+
+    /** The §9.4 merge key. Also unfiltered: a merge has to see the local tombstone, or it
+     * re-inserts the peer's live copy over it. */
+    @Query("SELECT * FROM reminders WHERE uid = :uid")
+    suspend fun getByUid(uid: String): Reminder?
+
     /** Soft, not hard — see [Reminder.deletedAt]. Both reads above filter on
      * `deletedAt IS NULL`, which is what makes this safe to swap in underneath every existing
      * caller: a tombstoned reminder cannot reach [com.tendril.app.notifications.AlarmScheduler]

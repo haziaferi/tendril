@@ -1,9 +1,13 @@
 package com.tendril.app.sync
 
+import com.tendril.app.data.completion.EntryCompletion
+import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.data.reminder.Reminder
+import com.tendril.app.data.reminder.ReminderDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
@@ -107,6 +111,65 @@ class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
     override fun observeTasks(): Flow<List<Entry>> = flowOf(rows.values.toList())
     override fun observeDated(): Flow<List<Entry>> = flowOf(rows.values.toList())
     override fun observeTrash(): Flow<List<Entry>> = flowOf(emptyList())
+}
+
+/**
+ * Autoincrementing in-memory [ReminderDao], same shape as [FakeHabitDao].
+ *
+ * The tombstone filter is reproduced faithfully rather than simplified away, because the
+ * distinction is exactly what the S2 tests are about: `getForEntry`/`observeForEntry` hide a
+ * soft-deleted reminder (so no alarm is ever scheduled for one), while `getAll` deliberately
+ * does not (so the tombstone still travels). A fake that filtered both would make the
+ * resurrection bug untestable and pass regardless.
+ */
+class FakeReminderDao(seed: List<Reminder> = emptyList()) : ReminderDao {
+    private val rows = linkedMapOf<Long, Reminder>()
+    private var nextId = 1L
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) } }
+
+    override suspend fun insert(reminder: Reminder): Long {
+        val id = nextId++
+        rows[id] = reminder.copy(id = id)
+        return id
+    }
+
+    override suspend fun getForEntry(entryId: Long): List<Reminder> =
+        rows.values.filter { it.entryId == entryId && it.deletedAt == null }
+
+    override fun observeForEntry(entryId: Long): Flow<List<Reminder>> =
+        flowOf(rows.values.filter { it.entryId == entryId && it.deletedAt == null })
+
+    override suspend fun getAll(): List<Reminder> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): Reminder? = rows.values.firstOrNull { it.uid == uid }
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt) }
+    }
+}
+
+/** Autoincrementing in-memory [EntryCompletionDao]. Append-only, like the real one: there is no
+ * update or delete to model, which is the whole reason its merge is a plain union. */
+class FakeEntryCompletionDao(seed: List<EntryCompletion> = emptyList()) : EntryCompletionDao {
+    private val rows = linkedMapOf<Long, EntryCompletion>()
+    private var nextId = 1L
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) } }
+
+    override suspend fun insert(completion: EntryCompletion): Long {
+        val id = nextId++
+        rows[id] = completion.copy(id = id)
+        return id
+    }
+
+    override fun observeForEntry(entryId: Long): Flow<List<EntryCompletion>> =
+        flowOf(rows.values.filter { it.entryId == entryId }.sortedByDescending { it.resolvedAt })
+
+    override suspend fun getAll(): List<EntryCompletion> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): EntryCompletion? =
+        rows.values.firstOrNull { it.uid == uid }
 }
 
 /** Autoincrementing in-memory [HabitDao], same shape as [FakeEntryDao]. */

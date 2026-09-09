@@ -41,6 +41,11 @@ class RecurringTaskAdvanceTest {
         }
         override fun observeForEntry(entryId: Long): Flow<List<EntryCompletion>> =
             flowOf(inserted.filter { it.entryId == entryId })
+        /** §9.4 / S2 — the snapshot write pass republishes the whole table. */
+        override suspend fun getAll(): List<EntryCompletion> = inserted.toList()
+
+        override suspend fun getByUid(uid: String): EntryCompletion? =
+            inserted.firstOrNull { it.uid == uid }
     }
 
     private val zone: ZoneId = ZoneId.systemDefault()

@@ -40,6 +40,8 @@ class SyncMetaSaltTest {
         pageDao = mockk<PageDao>(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         purgeRegistry = mockk(relaxed = true),
+        reminderDao = mockk(relaxed = true),
+        entryCompletionDao = mockk(relaxed = true),
     )
 
     private fun InMemorySyncFileStore.putEncrypted(name: String, content: String, key: SecretKeySpec) =

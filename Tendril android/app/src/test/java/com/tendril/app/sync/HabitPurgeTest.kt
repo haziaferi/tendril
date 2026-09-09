@@ -68,6 +68,8 @@ class HabitPurgeTest {
             pageDao = pageDao,
             pagesSyncEngine = mockk(relaxed = true),
             purgeRegistry = registry,
+            reminderDao = mockk(relaxed = true),
+            entryCompletionDao = mockk(relaxed = true),
         )
     }
 

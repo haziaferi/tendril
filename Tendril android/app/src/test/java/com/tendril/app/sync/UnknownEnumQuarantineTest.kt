@@ -150,6 +150,8 @@ class UnknownEnumQuarantineTest {
             pageDao = pageDao,
             pagesSyncEngine = engine,
             purgeRegistry = registry,
+            reminderDao = mockk(relaxed = true),
+            entryCompletionDao = mockk(relaxed = true),
         )
 
         suspend fun blocksOf(uid: String): List<String> =

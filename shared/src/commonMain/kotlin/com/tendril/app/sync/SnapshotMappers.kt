@@ -1,6 +1,7 @@
 package com.tendril.app.sync
 
 import com.tendril.app.data.entry.Entry
+import com.tendril.app.data.completion.EntryCompletion
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.EntrySource
 import com.tendril.app.data.entry.EntryStatus
@@ -9,6 +10,8 @@ import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.enumOrNull
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitFrequency
+import com.tendril.app.data.reminder.Reminder
+import com.tendril.app.data.reminder.ReminderOffset
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -180,6 +183,86 @@ fun HabitSnapshotRecord.toEntity(): Habit {
 
 /** [HabitSnapshotRecord.toEntity]'s quarantining form — see [EntrySnapshotRecord.toEntityOrNull]. */
 fun HabitSnapshotRecord.toEntityOrNull(): Habit? = runCatching { toEntity() }.getOrNull()
+
+/**
+ * [entryUid] is resolved by the caller from the owning Entry rather than looked up here, which
+ * keeps this total: every local reminder has an Entry row behind its `CASCADE` foreign key, and a
+ * caller holding one that does not resolve is looking at a state this mapper has no useful answer
+ * for.
+ */
+fun Reminder.toSnapshot(entryUid: String): ReminderSnapshotRecord = ReminderSnapshotRecord(
+    uid = uid,
+    entryUid = entryUid,
+    offset = when (val o = offset) {
+        is ReminderOffset.FromPreset -> "PRESET:${o.preset.name}"
+        is ReminderOffset.Custom -> "CUSTOM:${o.count}:${o.unit.name}"
+    },
+    anchorTime = anchorTime?.toString(),
+    deletedAt = deletedAt?.toEpochMilli(),
+)
+
+/**
+ * Throws [SnapshotDecodeException] on an offset this build cannot read.
+ *
+ * **Deliberately stricter than [com.tendril.app.data.Converters.stringToReminderOffset]**, which
+ * falls back to `ONE_DAY`. That fallback is right for Room: the column is non-null, a throw would
+ * take the reminder list down with it, and the value being read is one this device itself wrote.
+ * It is wrong here, where the value came from another device possibly running a newer build.
+ * Flattening an offset this build has no member for would silently change *when someone's alarm
+ * fires*, and do it invisibly. Quarantining costs that one reminder and says so — the same trade
+ * [HabitSnapshotRecord.toEntity] makes for an unreadable frequency.
+ *
+ * [entryId] is the caller's to resolve, for the reason [ReminderSnapshotRecord.entryUid] gives.
+ */
+fun ReminderSnapshotRecord.toEntity(entryId: Long): Reminder {
+    val parts = offset.split(":")
+    val decoded = when (parts.firstOrNull()) {
+        "PRESET" -> ReminderOffset.FromPreset(
+            enumOrNull<ReminderOffset.Preset>(parts.getOrNull(1))
+                ?: undecodable("reminder offset preset", offset)
+        )
+        // Both halves checked, not just the unit. "CUSTOM:<count>:<unit>" is un-versioned, so a
+        // later build could change its arity as easily as add a unit, and positional indexing
+        // threw IndexOutOfBounds on that rather than quarantining it — the same shape of bug
+        // [HabitSnapshotRecord.toEntity] documents for frequency.
+        "CUSTOM" -> ReminderOffset.Custom(
+            parts.getOrNull(1)?.toIntOrNull() ?: undecodable("reminder offset count", offset),
+            enumOrNull<IntervalUnit>(parts.getOrNull(2)) ?: undecodable("reminder offset unit", offset),
+        )
+        else -> undecodable("reminder offset", offset)
+    }
+    return Reminder(
+        uid = uid,
+        entryId = entryId,
+        offset = decoded,
+        anchorTime = anchorTime?.let(LocalTime::parse),
+        deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+    )
+}
+
+/** See [Reminder.toSnapshot] — [entryUid] is the caller's to resolve, for the same reason. */
+fun EntryCompletion.toSnapshot(entryUid: String): EntryCompletionSnapshotRecord =
+    EntryCompletionSnapshotRecord(
+        uid = uid,
+        entryUid = entryUid,
+        occurrenceDate = occurrenceDate.toString(),
+        resolvedAt = resolvedAt.toEpochMilli(),
+        status = status.name,
+    )
+
+/**
+ * Throws [SnapshotDecodeException] on a status this build cannot read. Unlike
+ * [EntrySnapshotRecord.toEntity], where an *absent* status is legal because every EVENT has one,
+ * a completion always resolved to something — the column is non-null — so there is no "no status"
+ * reading for this to fall back to.
+ */
+fun EntryCompletionSnapshotRecord.toEntity(entryId: Long): EntryCompletion = EntryCompletion(
+    uid = uid,
+    entryId = entryId,
+    occurrenceDate = LocalDate.parse(occurrenceDate),
+    resolvedAt = Instant.ofEpochMilli(resolvedAt),
+    status = enumOrNull<EntryStatus>(status) ?: undecodable("completion status", status),
+)
 
 /** §4 / §9.4 — the Active/Archived split resolved 2026-08-08: Active is the small,
  * frequently-edited set (`PENDING` TASK, or any live EVENT); Archived is everything else

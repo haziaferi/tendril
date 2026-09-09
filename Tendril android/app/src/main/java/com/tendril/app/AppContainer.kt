@@ -60,7 +60,8 @@ class AppContainer(context: Context) {
         database.pageRelationDao(), purgeRegistry, pageContentRepository,
     )
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
-        database.entryDao(), database.habitDao(), database.pageDao(), pagesSyncEngine, purgeRegistry,
+        database.entryDao(), database.habitDao(), database.pageDao(),
+        database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, purgeRegistry,
     )
     /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
      * takes it: the lock is absolute and it covers Settings, so import and restore refuse at
