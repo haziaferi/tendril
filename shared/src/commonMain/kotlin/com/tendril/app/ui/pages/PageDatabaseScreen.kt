@@ -70,6 +70,7 @@ import com.tendril.app.data.pagedatabase.SortDirection
 import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.data.pagedatabase.RollupAggregation
+import com.tendril.app.data.pagedatabase.formatPeriodAsHumanInterval
 import com.tendril.app.data.pagedatabase.parseFormulaConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.domain.BindingRole
@@ -1000,7 +1001,10 @@ private fun RecurrenceCell(entry: Entry?, viewModel: PageDatabaseViewModel) {
     val viewOnly = LocalViewOnly.current
     val rule = entry?.recurrenceRule as? com.tendril.app.data.entry.RecurrenceRule.Elastic
     Text(
-        rule?.period?.toString() ?: "—",
+        // §B6 — was `Period.toString()`'s raw ISO form ("P7D"); this column's *filter* value
+        // already read "1:WEEK" via `valueForCell`'s own `formatPeriodAsInterval` call, so the
+        // cell and the filter disagreed about what the same value even looked like.
+        rule?.period?.let(::formatPeriodAsHumanInterval) ?: "—",
         style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.clickableRow { if (entry != null && !viewOnly) showPicker = true },
     )

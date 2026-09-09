@@ -3,8 +3,10 @@ package com.tendril.app.domain
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockType
 
-/** One block as the editor draws it: the block, and how far it is indented. */
-data class OutlineBlock(val block: Block, val depth: Int)
+/** One block as the editor draws it: the block, how far it is indented, and — for a
+ * `NUMBERED_LIST_ITEM` only, §B7 — its 1-based position within its own consecutive run of
+ * numbered items at that depth. `0` for every other block type, where it means nothing. */
+data class OutlineBlock(val block: Block, val depth: Int, val listPosition: Int = 0)
 
 /** §3.1.1 — "nestable one level via indent — matches typical personal-notes depth, not
  * arbitrary nesting". One level means depth 0 and depth 1, and nothing deeper. */
@@ -73,7 +75,31 @@ fun outlineOf(blocks: List<Block>): List<OutlineBlock> {
         if (root.type == BlockType.TOGGLE && !root.toggleExpanded) continue
         children[root.id]?.forEach { outline += OutlineBlock(it, MAX_BLOCK_DEPTH) }
     }
-    return outline
+    return withListPositions(outline)
+}
+
+/** §B7 — a `NUMBERED_LIST_ITEM`'s prefix was `block.order + 1`: its position among *every*
+ * block on the page, not its position in the list it visually belongs to, so a list starting
+ * partway down a page (after a heading, say) numbered from wherever `order` happened to be
+ * rather than from 1. A run breaks on any non-`NUMBERED_LIST_ITEM` neighbor, including a depth
+ * change — [outlineOf]'s own ordering guarantees siblings under a different parent are never
+ * adjacent without an intervening block, so a plain "same type, same depth as the previous
+ * entry" check is enough; nothing here needs to know about parents directly. */
+private fun withListPositions(outline: List<OutlineBlock>): List<OutlineBlock> {
+    val numbered = ArrayList<OutlineBlock>(outline.size)
+    var runCounter = 0
+    for (i in outline.indices) {
+        val entry = outline[i]
+        if (entry.block.type != BlockType.NUMBERED_LIST_ITEM) {
+            runCounter = 0
+            numbered += entry
+            continue
+        }
+        val previous = outline.getOrNull(i - 1)
+        runCounter = if (previous?.block?.type == BlockType.NUMBERED_LIST_ITEM && previous.depth == entry.depth) runCounter + 1 else 1
+        numbered += entry.copy(listPosition = runCounter)
+    }
+    return numbered
 }
 
 /**

@@ -213,4 +213,93 @@ class BlockOutlineTest {
 
         assertNull(indentTargetFor(blocks[2], blocks))
     }
+
+    // ------------------------------------------------------------------------------- §B7
+
+    private fun positions(outline: List<OutlineBlock>) = outline.map { it.listPosition }
+
+    @Test
+    fun `a run of numbered items counts from 1`() {
+        val out = outlineOf(
+            listOf(
+                block(1, 0, type = BlockType.NUMBERED_LIST_ITEM),
+                block(2, 1, type = BlockType.NUMBERED_LIST_ITEM),
+                block(3, 2, type = BlockType.NUMBERED_LIST_ITEM),
+            ),
+        )
+
+        assertEquals(listOf(1, 2, 3), positions(out))
+    }
+
+    @Test
+    fun `a list under a heading starts at 1, not the page position`() {
+        // The actual regression: `block.order + 1` numbered from wherever `order` happened to
+        // land, so a list starting partway down a page read "4.", "5.", "6." instead of "1.", "2.", "3.".
+        val out = outlineOf(
+            listOf(
+                block(1, 0, type = BlockType.HEADING_1),
+                block(2, 1, type = BlockType.PARAGRAPH),
+                block(3, 2, type = BlockType.PARAGRAPH),
+                block(4, 3, type = BlockType.NUMBERED_LIST_ITEM),
+                block(5, 4, type = BlockType.NUMBERED_LIST_ITEM),
+                block(6, 5, type = BlockType.NUMBERED_LIST_ITEM),
+            ),
+        )
+
+        assertEquals(listOf(0, 0, 0, 1, 2, 3), positions(out))
+    }
+
+    @Test
+    fun `deleting the middle item renumbers what follows`() {
+        // "Deleting item 2 renumbers 3→2" — simulated as the deleted block simply not being
+        // among the input, exactly how a real deletion reaches outlineOf.
+        val withAll = outlineOf(
+            listOf(
+                block(1, 0, type = BlockType.NUMBERED_LIST_ITEM),
+                block(2, 1, type = BlockType.NUMBERED_LIST_ITEM),
+                block(3, 2, type = BlockType.NUMBERED_LIST_ITEM),
+            ),
+        )
+        assertEquals(listOf(1, 2, 3), positions(withAll))
+
+        val afterDeletingItem2 = outlineOf(
+            listOf(
+                block(1, 0, type = BlockType.NUMBERED_LIST_ITEM),
+                block(3, 2, type = BlockType.NUMBERED_LIST_ITEM),
+            ),
+        )
+
+        assertEquals(listOf(1L, 3L), ids(afterDeletingItem2))
+        assertEquals("the old #3 becomes #2", listOf(1, 2), positions(afterDeletingItem2))
+    }
+
+    @Test
+    fun `a non-numbered block breaks the run, restarting the next list at 1`() {
+        val out = outlineOf(
+            listOf(
+                block(1, 0, type = BlockType.NUMBERED_LIST_ITEM),
+                block(2, 1, type = BlockType.NUMBERED_LIST_ITEM),
+                block(3, 2, type = BlockType.PARAGRAPH),
+                block(4, 3, type = BlockType.NUMBERED_LIST_ITEM),
+            ),
+        )
+
+        assertEquals(listOf(1, 2, 0, 1), positions(out))
+    }
+
+    @Test
+    fun `a numbered list indented under a toggle numbers independently of one before it`() {
+        val out = outlineOf(
+            listOf(
+                block(1, 0, type = BlockType.NUMBERED_LIST_ITEM),
+                block(2, 1, type = BlockType.NUMBERED_LIST_ITEM),
+                block(3, 2, type = BlockType.TOGGLE),
+                block(4, 3, type = BlockType.NUMBERED_LIST_ITEM, parent = 3),
+                block(5, 4, type = BlockType.NUMBERED_LIST_ITEM, parent = 3),
+            ),
+        )
+
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L), ids(out))
+        assertEquals("the toggle's own row (position 0, not numbered) breaks the run", listOf(1, 2, 0, 1, 2), positions(out))
+    }
 }

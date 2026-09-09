@@ -82,4 +82,35 @@ class IntervalFormatTest {
         assertEquals(formatIntervalValue(5, IntervalUnit.DAY), formatPeriodAsInterval(Period.ofDays(5)))
         assertEquals(formatIntervalValue(3, IntervalUnit.MONTH), formatPeriodAsInterval(Period.ofMonths(3)))
     }
+
+    // ------------------------------------------------------------------------------------- §B6
+    //
+    // The filter side of this same column was fixed above (`formatPeriodAsInterval`), but the
+    // *cell* — `RecurrenceCell` in `PageDatabaseScreen.kt`, and `RowRecurrenceEditor` in
+    // `PageDetailScreen.kt` — still called `Period.toString()` directly, so a person read "P7D"
+    // while the filter right next to it already read "1:WEEK". `formatPeriodAsHumanInterval`
+    // shares the same `periodAsCountUnit` decomposition, so it can't drift from the filter form
+    // the way the original two independent implementations did.
+
+    @Test
+    fun `a single unit reads without a count`() {
+        assertEquals("Every day", formatPeriodAsHumanInterval(Period.ofDays(1)))
+        assertEquals("Every week", formatPeriodAsHumanInterval(Period.ofDays(7)))
+        assertEquals("Every month", formatPeriodAsHumanInterval(Period.ofMonths(1)))
+    }
+
+    @Test
+    fun `more than one unit reads with a count and a plural`() {
+        assertEquals("Every 3 days", formatPeriodAsHumanInterval(Period.ofDays(3)))
+        assertEquals("Every 2 weeks", formatPeriodAsHumanInterval(Period.ofDays(14)))
+        assertEquals("Every 6 months", formatPeriodAsHumanInterval(Period.ofMonths(6)))
+    }
+
+    @Test
+    fun `the human form is never Period's own toString either`() {
+        val formatted = formatPeriodAsHumanInterval(Period.ofDays(7))
+
+        assertEquals("Every week", formatted)
+        assert(formatted != Period.ofDays(7).toString())
+    }
 }
