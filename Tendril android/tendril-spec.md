@@ -3086,7 +3086,16 @@ app stayed up, the database was set aside with its `-wal`/`-shm` and still held 
 opened afterwards, and the next sync refilled the fresh one completely with the reminder
 tombstone intact. The folder was unchanged by the emptied device's own write pass. What this
 run does **not** cover: file-level corruption that SQLite refuses before Room's migration
-machinery runs, which `openOrRecover`'s probe would catch but which has not been exercised.)* **Pre-v1 the version number still has to
+machinery runs, which `openOrRecover`'s probe would catch but which has not been exercised.)* *(**Narrowed 2026-09-09 — S1b.** The destructive fallback is no
+longer blanket: `fallbackToDestructiveMigrationFrom(dropAllTables = true, 1..7)` confines it to
+the pre-release schemas, which is the "destructive pre-v1" half of this section's own policy and
+nothing more. From v9 — the first release with a declared migration — a forgotten migration, a
+downgrade, and a moved schema hash all reach `openOrRecover` instead, which preserves the database
+rather than dropping it. This is what the acceptance clause "never a silent
+`fallbackToDestructiveMigration()` left in place after the first release" was asking for. v8 is
+deliberately excluded: it has a declared path to v9, and Room rejects a version that is both
+migrated-from and wiped-from. Verified on the same device by downgrading a populated v10 database
+to the v9 build — previously wiped, now set aside intact.)* **Pre-v1 the version number still has to
 move on every schema change**: Room compares a hash of the schema against the one stored in the
 database and throws before migration runs when the hash moved but `version` didn't, so
 `fallbackToDestructiveMigration` never gets the chance to recover — it only handles version
