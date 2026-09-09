@@ -193,6 +193,17 @@ class PagesSyncEngine(
         return fetch
     }
 
+    /**
+     * §9.4 / S4 — every local image path some block still points at.
+     *
+     * The complement is what the sweep deletes, so this must be *every* reference, not just the
+     * IMAGE-typed ones: a block whose type was changed away from IMAGE keeps its `imagePath`, and
+     * treating that file as unreferenced would delete a picture the person can still get back by
+     * changing the type again.
+     */
+    suspend fun localImagePathsInUse(): Set<String> =
+        blockDao.getWithLocalImage().mapNotNullTo(mutableSetOf()) { it.imagePath }
+
     /** §9.4 / S4 — records where this device put its copy of an image that arrived from a peer. */
     suspend fun attachLocalImage(blockUid: String, localPath: String) {
         blockDao.attachImagePath(blockUid, localPath)

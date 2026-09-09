@@ -27,6 +27,17 @@ class AndroidLocalImageStore(private val context: Context) : LocalImageStore {
         return target.absolutePath
     }
 
+    override suspend fun list(): List<String> =
+        dir.listFiles()?.map { it.absolutePath }.orEmpty()
+
+    override suspend fun delete(path: String) {
+        // Confined to this store's directory even though the caller is this app: a path that came
+        // out of a database row is a path that has outlived whatever wrote it, and `delete` is not
+        // an operation to point at an arbitrary location on the strength of that.
+        val file = File(path)
+        if (file.parentFile?.canonicalPath == dir.canonicalPath) file.delete()
+    }
+
     private companion object {
         const val DIR = "block_images"
     }

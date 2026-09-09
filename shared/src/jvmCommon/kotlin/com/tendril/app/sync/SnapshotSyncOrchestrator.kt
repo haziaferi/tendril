@@ -693,6 +693,18 @@ class SnapshotSyncOrchestrator(
             store.writeImage(name, bytes)
         }
 
+        // §9.4 / S4 — local image files no block points at any more.
+        //
+        // Three ways one appears: a block was deleted, its page was purged, or its picture was
+        // replaced by a file of a different type (which changes the name, so the write does not
+        // overwrite in place). All three leave bytes on the device that nothing can reach.
+        //
+        // Safe to drive from absence here, unlike anything in the folder: this reads *this
+        // device's own rows*, and a block that is not in them is not a block that has yet to
+        // arrive -- it is a block this device does not have. The folder is the opposite case,
+        // which is why the reclamation below needs a tombstone to act on.
+        collectOrphanedLocalImages()
+
         // Clear the snapshot files of pages purged here (§5.5.1). Only those: a file is deleted
         // because this device recorded a deliberate "Delete forever" for that exact uid, never
         // because a file merely looks unfamiliar. Inferring deletion from absence is what the
@@ -708,12 +720,21 @@ class SnapshotSyncOrchestrator(
             // purged_records.json, so a device that *can* read the page settles it properly and
             // the file goes then.
             val purgedUids = purgedFiles.mapTo(mutableSetOf()) { it.removeSuffix(".json") } - held.pageUids
+            val purgedImageNames = imageNamesOf(store, purgedUids, read)
             store.listPages().filter { name ->
                 // The page's own snapshot, and any copy of it preserved by §5.2's lost-race
                 // handling. "Delete forever" that leaves copies of the thing behind is not
                 // delete forever, and a preserved loser is still the person's page content.
                 purgedUids.any { name == "$it.json" || name.startsWith("$it$LOST_MARKER") }
             }.forEach { store.deletePage(it) }
+            // ...and the images those pages owned. Read *before* the delete above would have made
+            // them unknowable: the page file lists its blocks, and a block record names its image.
+            // That is positive evidence -- this device holds a "delete forever" for that exact
+            // page, and the page itself says which images belong to it -- rather than the
+            // absence-implies-deletion rule §9.4 forbids everywhere else.
+            for (name in purgedImageNames) {
+                runCatching { store.deleteImage(name) }
+            }
         }
     }
 
@@ -1003,6 +1024,41 @@ class SnapshotSyncOrchestrator(
      * image and nothing else, and because the work is driven by the folder listing rather than by
      * this pass's records, anything skipped is simply retried next time.
      */
+    /**
+     * §9.4 / S4 — the images named by the page files for [pageUids], read before those files go.
+     *
+     * Best-effort per page: one unreadable file costs its own images and nothing else. A page this
+     * build cannot parse is already excluded by the caller, which never deletes a quarantined
+     * page's file either.
+     */
+    private suspend fun imageNamesOf(
+        store: SyncFileStore,
+        pageUids: Set<String>,
+        read: ReadKey,
+    ): List<String> = pageUids.flatMap { uid ->
+        runCatching {
+            val text = readPageText(store, "$uid.json", read)
+            if (text.isBlank()) return@runCatching emptyList()
+            json.decodeFromString<PageSnapshotRecord>(text).blocks.mapNotNull { it.imageName }
+        }.getOrElse { emptyList() }
+    }
+
+    /**
+     * §9.4 / S4 — delete local image files no block references any more.
+     *
+     * Best-effort in both directions: a store that cannot be listed is left entirely alone, and one
+     * file that will not delete does not stop the rest. Reclaiming disk is never worth failing a
+     * sync pass over.
+     */
+    private suspend fun collectOrphanedLocalImages() {
+        val present = runCatching { localImages.list() }.getOrElse { return }
+        if (present.isEmpty()) return
+        val inUse = pagesSyncEngine.localImagePathsInUse()
+        for (path in present) {
+            if (path !in inUse) runCatching { localImages.delete(path) }
+        }
+    }
+
     private suspend fun fetchImages(store: SyncFileStore) {
         val available = runCatching { store.listImages() }.getOrElse { return }
         if (available.isEmpty()) return
