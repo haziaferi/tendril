@@ -172,7 +172,6 @@ FIELD_READ_OFF_LANGUAGE = {
 # rather than deleting the check. Baselined 2026-09-08, measured not assumed.
 FIELD_WRITE_ONLY_BASELINE = {
     "Block.imagePath",                      # P2 - the importer writes it; nothing draws it
-    "PageDatabaseView.visiblePropertyIds",  # DB8 - no column chooser exists
     "Tag.color",                            # a palette tuned for dichromacy that renders nowhere
     "EntryCompletion.occurrenceDate",       # written at both resolve sites, never read back
 }

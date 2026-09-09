@@ -850,6 +850,62 @@ class WritePathSyncTest {
         assertTrue(columns.isEmpty())
     }
 
+    // --------------------------------------------------------------------------- DB8 (column chooser)
+
+    @Test
+    fun `an untouched view's chooser shows every property, matching every view that predates it`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val notesId = a.propertyDao.insert(Property(databaseId = dbId, name = "Notes", type = PropertyType.TEXT, order = 1))
+        val tableViewId = a.viewDao.insert(PageDatabaseView(databaseId = dbId, name = "Table", viewType = ViewType.TABLE, order = 0))
+        val vm = a.database(seeded.databasePage.id)
+        vm.selectView(tableViewId)
+
+        assertEquals(setOf(seeded.property.id, notesId), vm.visibleProperties.first().map { it.id }.toSet())
+    }
+
+    @Test
+    fun `hiding a column narrows visibleProperties, and it survives a restart`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        val notesId = a.propertyDao.insert(Property(databaseId = dbId, name = "Notes", type = PropertyType.TEXT, order = 1))
+        val tableViewId = a.viewDao.insert(PageDatabaseView(databaseId = dbId, name = "Table", viewType = ViewType.TABLE, order = 0))
+        val vm = a.database(seeded.databasePage.id)
+        vm.selectView(tableViewId)
+        val tableView = a.viewDao.getForDatabase(dbId).single { it.id == tableViewId }
+
+        vm.updateView(tableView.copy(visiblePropertyIds = listOf(seeded.property.id)))
+
+        assertEquals(listOf(seeded.property.id), vm.visibleProperties.first().map { it.id })
+        // "Survives a restart" — a fresh ViewModel re-reads the same persisted view row rather
+        // than carrying any in-memory state forward.
+        val reopened = a.database(seeded.databasePage.id)
+        reopened.selectView(tableViewId)
+        assertEquals(
+            "Notes stays hidden",
+            listOf(seeded.property.id),
+            reopened.visibleProperties.first().map { it.id },
+        )
+    }
+
+    @Test
+    fun `a hidden column reaches the other device`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val dbId = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.id
+        a.propertyDao.insert(Property(databaseId = dbId, name = "Notes", type = PropertyType.TEXT, order = 1))
+        val tableViewId = a.viewDao.insert(PageDatabaseView(databaseId = dbId, name = "Table", viewType = ViewType.TABLE, order = 0))
+        syncAtoB()
+
+        val tableView = a.viewDao.getForDatabase(dbId).single { it.id == tableViewId }
+        a.database(seeded.databasePage.id).updateView(tableView.copy(visiblePropertyIds = listOf(seeded.property.id)))
+        syncAtoB()
+
+        val bDbId = b.pageDatabaseDao.getByPageId(b.pageIdOf(seeded.databasePage.uid))!!.id
+        val bStatusId = b.propertyDao.getForDatabase(bDbId).single { it.name == "Status" }.id
+        val bView = b.viewDao.getForDatabase(bDbId).single { it.name == "Table" }
+        assertEquals(listOf(bStatusId), bView.visiblePropertyIds)
+    }
+
     // ------------------------------------------------------------------------------ canvas
 
     @Test
