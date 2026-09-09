@@ -3,7 +3,7 @@ package com.tendril.app
 import android.content.Context
 import com.tendril.app.calendarprovider.CalendarProviderSync
 import com.tendril.app.data.TendrilDatabase
-import com.tendril.app.data.buildTendrilDatabase
+import com.tendril.app.data.openTendrilDatabase
 import com.tendril.app.domain.AndroidEntryScheduleCoordinator
 import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
@@ -36,7 +36,15 @@ import com.tendril.app.ui.WorkbenchCore
  * codegen and learning-curve cost for a single-developer app.
  */
 class AppContainer(context: Context) {
-    val database: TendrilDatabase = buildTendrilDatabase(context)
+    private val databaseOpen = openTendrilDatabase(context)
+    val database: TendrilDatabase = databaseOpen.database
+
+    /**
+     * §9.10 — true when this launch had to set an unopenable database aside and start from an
+     * empty one. Surfaced rather than swallowed: the app looks like a fresh install at that
+     * point, and someone who is not told will read a working sync as having lost their data.
+     */
+    val databaseWasRecovered: Boolean = databaseOpen.recovered
     val themePreferences = ThemePreferences(context)
     val syncFolderManager = SyncFolderManager(context)
     val secretStore = SecretStore(context)
