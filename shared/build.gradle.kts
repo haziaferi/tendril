@@ -33,7 +33,15 @@ kotlin {
         // though both current targets are JVM-based — jvmCommon is the standard fix, shared by both
         // without being reachable from a hypothetical future non-JVM target.
         val jvmCommon by creating { dependsOn(commonMain.get()) }
-        androidMain { dependsOn(jvmCommon) }
+        androidMain {
+            dependsOn(jvmCommon)
+            dependencies {
+                // P2 — `rememberLauncherForActivityResult`, for the system image picker.
+                // Android-only by nature: desktop opens an AWT dialog instead, so this sits
+                // here rather than in commonMain where it would have no meaning.
+                implementation(libs.androidx.activity.compose)
+            }
+        }
         getByName("desktopMain") { dependsOn(jvmCommon) }
 
         commonMain.dependencies {

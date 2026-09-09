@@ -9,6 +9,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -124,6 +125,7 @@ fun PageDetailScreen(
                     core.templateManager,
                     core.viewLockState,
                     core.checkboxOnlyState,
+                    core.localImages,
                 )
             }
         }
@@ -461,6 +463,25 @@ private fun BlockRow(
                 } else if (block.type != BlockType.PAGE_MENTION) {
                     // §P1 — free-form, matching `Block.codeLanguage`'s own shape (the Notion
                     // importer stores a fence tag verbatim); "Plain text" is `null`, not "".
+                    // §3.1.1 / P2 — the picture, above its caption. IMAGE keeps the text field
+                    // below: the Notion importer stores an image block's alt text as its content,
+                    // and a block that drew the image *instead* of the field would make that
+                    // uneditable and invisible at once.
+                    if (block.type == BlockType.IMAGE) {
+                        BlockImage(block.imagePath)
+                        // §3.1.1's "Image" block was in the slash menu with no way to put a
+                        // picture in it. Gated by the View-Only lock like every other write on
+                        // this screen; "Replace" rather than a second Choose, because the file is
+                        // named after the block and a new pick overwrites in place.
+                        if (!LocalViewOnly.current) {
+                            val pickImage = rememberImagePicker { fileName, bytes ->
+                                viewModel.setBlockImage(block, fileName, bytes)
+                            }
+                            TextButton(onClick = pickImage) {
+                                Text(if (block.imagePath == null) "Choose image" else "Replace image")
+                            }
+                        }
+                    }
                     if (block.type == BlockType.CODE) {
                         Text(
                             block.codeLanguage?.takeIf { it.isNotBlank() } ?: "Plain text",
@@ -546,7 +567,16 @@ private fun BlockRow(
 @Composable
 private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
+        // Scrollable, because the list is taller than the sheet. Without this the `Column`
+        // simply clipped whatever did not fit, and what did not fit was the last entry --
+        // "Image". The type was in this list all along and could not be picked, which is how
+        // §3.1.1's Image block came to be "offered" and yet impossible to insert.
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+                .padding(bottom = 24.dp)
+        ) {
             Text("Insert block", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
             listOf(
                 BlockType.PARAGRAPH to "Paragraph", BlockType.HEADING_1 to "Heading 1", BlockType.HEADING_2 to "Heading 2",

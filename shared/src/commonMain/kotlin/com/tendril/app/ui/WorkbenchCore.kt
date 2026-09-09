@@ -32,4 +32,8 @@ class WorkbenchCore(
     val entryScheduleCoordinator: EntryScheduleCoordinator,
     val pageContentRepository: PageContentRepository,
     val purgeRegistry: PurgeRegistry,
+    /** §3.1.1 / P2 — where a chosen image is copied to. The same store §9.4's sync writes
+     * fetched images into, so an image inserted here and one that arrived from a peer end up
+     * indistinguishable, which is what makes a round trip work. */
+    val localImages: com.tendril.app.sync.LocalImageStore,
 )

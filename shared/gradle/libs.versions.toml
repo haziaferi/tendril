@@ -1,5 +1,6 @@
 [versions]
 agp = "9.3.2"
+activityCompose = "1.13.0"
 kotlin = "2.4.10"
 ksp = "2.3.11"
 room = "2.8.4"
@@ -11,6 +12,7 @@ composeMultiplatform = "1.12.0"
 lifecycleViewmodelCompose = "2.9.1"
 
 [libraries]
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }

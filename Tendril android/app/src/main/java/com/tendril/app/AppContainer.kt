@@ -68,10 +68,14 @@ class AppContainer(context: Context) {
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
         database.pageRelationDao(), purgeRegistry, pageContentRepository,
     )
+    /** §3.1.1 / §9.4 — one instance for both: the picker writes here and the sync fetch writes
+     * here, so an image inserted on this device and one that arrived from a peer are the same
+     * kind of thing on disk. */
+    val localImages = AndroidLocalImageStore(context)
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
         database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, purgeRegistry,
-        AndroidLocalImageStore(context),
+        localImages,
     )
     /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
      * takes it: the lock is absolute and it covers Settings, so import and restore refuse at
@@ -124,6 +128,7 @@ class AppContainer(context: Context) {
     val workbenchCore = WorkbenchCore(
         database, databaseSyncManager, templateManager, viewLockState, checkboxOnlyState,
         resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository, purgeRegistry,
+        localImages,
     )
 
     companion object {
