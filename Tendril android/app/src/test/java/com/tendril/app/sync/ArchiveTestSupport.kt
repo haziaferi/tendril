@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 /**
@@ -76,3 +77,24 @@ fun zipOf(vararg entries: Pair<String, ByteArray>): ByteArray {
 
 fun zipOfText(vararg entries: Pair<String, String>): ByteArray =
     zipOf(*entries.map { (name, text) -> name to text.toByteArray(Charsets.UTF_8) }.toTypedArray())
+
+/**
+ * Reads a zip back into `name to bytes` — the inverse of [zipOf], for asserting on what an export
+ * actually packaged.
+ *
+ * Bytes rather than text, deliberately: since S4 an archive's `images/` entries are not text, and a
+ * helper that handed back Strings would quietly corrupt exactly the entries these tests exist to
+ * check. The JSON ones are `String(bytes)` at the call site where that is what is wanted.
+ */
+fun entriesOf(zipBytes: ByteArray): Map<String, ByteArray> {
+    val result = linkedMapOf<String, ByteArray>()
+    ZipInputStream(ByteArrayInputStream(zipBytes)).use { zip ->
+        var entry = zip.nextEntry
+        while (entry != null) {
+            if (!entry.isDirectory) result[entry.name] = zip.readBytes()
+            zip.closeEntry()
+            entry = zip.nextEntry
+        }
+    }
+    return result
+}

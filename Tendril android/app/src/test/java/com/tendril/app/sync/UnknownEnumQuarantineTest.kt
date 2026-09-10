@@ -1669,6 +1669,7 @@ class UnknownEnumQuarantineTest {
             entryCompletionDao = FakeEntryCompletionDao(),
             purgeRegistry = mockk(relaxed = true),
             pagesSyncEngine = mockk(relaxed = true),
+            localImages = InMemoryLocalImageStore(),
             passphrase = { null },
         )
 

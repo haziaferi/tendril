@@ -488,7 +488,13 @@ private fun PortableBackupSection(archive: PortableArchive, viewOnly: Boolean) {
             scope.launch {
                 statusMessage = runCatching { archive.importAdditive(uri) }.fold(
                     { result ->
-                        val applied = "Imported ${result.entryFilesFound} entry file(s), ${result.habitFilesFound} habit file(s)"
+                        // Pictures named separately from the record counts above: they travel
+                        // as their own archive entries, so "12 entry file(s)" can be true of an
+                        // import that carried no images at all.
+                        val pictures =
+                            if (result.imagesRestored > 0) ", ${result.imagesRestored} picture(s)" else ""
+                        val applied = "Imported ${result.entryFilesFound} entry file(s), " +
+                            "${result.habitFilesFound} habit file(s)$pictures"
                         // A record this build can't read is skipped, never applied half-way and
                         // never written over the local copy — but it is said out loud, because an
                         // import that landed nine records of ten looks exactly like one that

@@ -390,6 +390,7 @@ class ViewOnlySurfacesGuardTest {
         entryCompletionDao = FakeEntryCompletionDao(),
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
+        localImages = InMemoryLocalImageStore(),
         passphrase = { null },
         viewLockState = viewLockState,
     )

@@ -51,6 +51,7 @@ class PortableArchiveTest {
         entryCompletionDao = entryCompletionDao,
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
+        localImages = InMemoryLocalImageStore(),
         passphrase = { passphrase },
     )
 

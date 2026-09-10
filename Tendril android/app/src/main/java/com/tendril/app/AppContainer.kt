@@ -85,6 +85,10 @@ class AppContainer(context: Context) {
         context, database.entryDao(), database.habitDao(), database.pageDao(),
         database.reminderDao(), database.entryCompletionDao(),
         purgeRegistry, pagesSyncEngine,
+        // §9.4 / S4 — the same store the sync folder's fetch writes into, so a picture that
+        // arrived in a `.tendril` package and one that arrived from a peer are indistinguishable
+        // afterwards. Anything else would give the app two image directories to reason about.
+        localImages,
         // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
         // `.tendril` package. "Off" is simply no passphrase set.
         passphrase = { secretStore.syncPassphrase.value },
