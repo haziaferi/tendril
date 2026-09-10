@@ -27,6 +27,10 @@ class InMemorySyncFileStore(
     private val images: MutableMap<String, ByteArray> = linkedMapOf(),
 ) : SyncFileStore {
 
+    /** Names handed to `writePage`, so a test can assert that a pass wrote *nothing* — which
+     * byte comparison cannot show once §9.4.2 is on, since every encryption uses a fresh IV. */
+    val writtenPageNames = mutableListOf<String>()
+
     val deletedRootNames = mutableListOf<String>()
     val deletedPageNames = mutableListOf<String>()
     val deletedImageNames = mutableListOf<String>()
@@ -50,7 +54,10 @@ class InMemorySyncFileStore(
     }
 
     override suspend fun readPage(name: String): ByteArray? = pages[name]
-    override suspend fun writePage(name: String, bytes: ByteArray) { pages[name] = bytes }
+    override suspend fun writePage(name: String, bytes: ByteArray) {
+        pages[name] = bytes
+        writtenPageNames += name
+    }
     override suspend fun listPages(): List<String> = pages.keys.toList()
     override suspend fun deletePage(name: String) {
         if (pages.remove(name) != null) deletedPageNames += name

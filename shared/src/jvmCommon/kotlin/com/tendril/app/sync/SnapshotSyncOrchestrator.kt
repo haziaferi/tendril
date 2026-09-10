@@ -913,6 +913,22 @@ class SnapshotSyncOrchestrator(
             previous,
             PageSnapshotRecord.serializer().descriptor,
         )
+        // §9.4 — nothing to say, so nothing is written.
+        //
+        // A pass republished every page every time, and page files are the one thing here that
+        // scales with the person's data: seven array files stay seven whatever happens, while a
+        // thousand pages are a thousand files. Each write is a temp file, a rename and a delete
+        // through SAF's document provider, so a sync that changed one page was paying for a
+        // thousand three-step swaps and Syncthing was replicating every one of them.
+        //
+        // Compared as parsed JSON rather than as bytes, which is not a detail: under §9.4.2 the
+        // bytes are AES-GCM with a fresh IV each time, so identical content encrypts differently
+        // on every pass and a byte comparison would never once match. `JsonElement` equality is
+        // structural, so key order cannot cause a spurious write either.
+        //
+        // Safe by construction in the direction that matters: any difference at all still writes.
+        // The only thing skipped is a write that would have produced what is already there.
+        if (element == previous) return
         store.writePage(name, encryptText(json.encodeToString(element), key))
     }
 
