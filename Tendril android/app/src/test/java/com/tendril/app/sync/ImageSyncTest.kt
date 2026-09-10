@@ -362,4 +362,26 @@ class ImageSyncTest {
         assertTrue("$UID_BLOCK.png" in folder.deletedImageNames)
         assertNotEquals(0, folder.deletedImageNames.size)
     }
+
+    @Test
+    fun `the switch to encryption happens in one pass through the real entry point`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        a.seed(localPath = "local:holiday.png")
+        a.localImages.written["holiday.png"] = PNG
+
+        // [syncNow] rather than [writeSnapshots], which is what every other test here calls: the
+        // button a person presses runs a merge *and then* a write, and the sibling test covering
+        // this transition exercises only the second half. A hardware run raised the question of
+        // whether the merge could leave the publish with nothing to do -- it cannot, and this is
+        // where that stays answered.
+        a.orchestrator.syncNow(folder, null)
+        assertEquals(setOf("$UID_BLOCK.png"), folder.imageNames())
+
+        a.orchestrator.syncNow(folder, PASS)
+
+        // One pass, not two. A picture left in the clear until some later sync would be a window
+        // with nothing bounding it -- the person has been told encryption is on.
+        assertEquals(setOf("$UID_BLOCK.tdrlimg"), folder.imageNames())
+    }
 }
