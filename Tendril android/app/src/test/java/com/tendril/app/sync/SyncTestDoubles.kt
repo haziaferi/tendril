@@ -75,6 +75,10 @@ class InMemoryLocalImageStore : LocalImageStore {
         written[name] = bytes
         return "local:$name"
     }
+
+    override suspend fun list(): List<String> = written.keys.map { "local:$it" }
+
+    override suspend fun delete(path: String) { written.remove(path.removePrefix("local:")) }
 }
 
 /** Autoincrementing in-memory [EntryDao]. Only the members the sync paths touch have real

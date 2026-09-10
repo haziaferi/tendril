@@ -41,6 +41,20 @@ interface LocalImageStore {
      * same reason.
      */
     suspend fun write(name: String, bytes: ByteArray): String
+
+    /**
+     * Every image file this device holds, as paths of the kind [read] takes.
+     *
+     * Scoped to this store's own directory, which is why images that arrived with a Notion export
+     * are not in it: `NotionImporter` keeps those elsewhere, under names of its own. Two origins
+     * with two lifetimes, and a sweep that could not tell them apart would delete one while
+     * reclaiming the other.
+     */
+    suspend fun list(): List<String>
+
+    /** Removes one image. A path that no longer resolves is not an error — the file being gone is
+     * the outcome being asked for. */
+    suspend fun delete(path: String)
 }
 
 /**

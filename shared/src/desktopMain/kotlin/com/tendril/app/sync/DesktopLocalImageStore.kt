@@ -22,4 +22,12 @@ class DesktopLocalImageStore(private val dir: File) : LocalImageStore {
         target.writeBytes(bytes)
         return target.absolutePath
     }
+
+    override suspend fun list(): List<String> = dir.listFiles()?.map { it.absolutePath }.orEmpty()
+
+    override suspend fun delete(path: String) {
+        // Same containment rule as the Android store, for the same reason — see its `delete`.
+        val file = File(path)
+        if (file.parentFile?.canonicalPath == dir.canonicalPath) file.delete()
+    }
 }

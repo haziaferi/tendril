@@ -40,6 +40,10 @@ class ImageSyncTest {
         val blockDao = FakeBlockDao(store)
         val propertyDao = FakePropertyDao(store)
         val localImages = InMemoryLocalImageStore()
+        val purgeRegistry = PurgeRegistry(
+            FakePurgedRecordDao(), pageDao, FakeEntryDao(), FakeHabitDao(), propertyDao,
+            RecordingEntryScheduleCoordinator(),
+        )
 
         val engine = PagesSyncEngine(
             pageDao = pageDao,
@@ -53,10 +57,7 @@ class ImageSyncTest {
             canvasNodeDao = FakeCanvasNodeDao(store),
             canvasEdgeDao = FakeCanvasEdgeDao(store),
             pageRelationDao = FakePageRelationDao(store),
-            purgeRegistry = PurgeRegistry(
-                FakePurgedRecordDao(), pageDao, FakeEntryDao(), FakeHabitDao(), propertyDao,
-                RecordingEntryScheduleCoordinator(),
-            ),
+            purgeRegistry = purgeRegistry,
             pageContentRepository = PageContentRepository(blockDao, FakePageFtsDao(store)),
         )
 
@@ -181,5 +182,67 @@ class ImageSyncTest {
 
         assertTrue(folder.imageNames().isEmpty())
         assertNull(a.blockDao.getByUid(UID_BLOCK)!!.imagePath)
+    }
+
+    // ------------------------------------------------------------------ S4 stage 5: purge
+
+    @Test
+    fun `a local image no block points at is collected on the next write`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        a.seed(localPath = "local:$UID_BLOCK.png")
+        a.localImages.written["$UID_BLOCK.png"] = PNG
+        // The shape my own replace-with-a-different-type bug leaves behind: the block moved on to
+        // a new name, and the previous file is unreachable from any row.
+        a.localImages.written["$UID_BLOCK"] = byteArrayOf(1, 2, 3)
+
+        a.orchestrator.writeSnapshots(folder)
+
+        assertEquals(setOf("$UID_BLOCK.png"), a.localImages.written.keys)
+    }
+
+    @Test
+    fun `an image a block still points at is never collected`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        a.seed(localPath = "local:$UID_BLOCK.png")
+        a.localImages.written["$UID_BLOCK.png"] = PNG
+
+        repeat(3) { a.orchestrator.writeSnapshots(folder) }
+
+        assertArrayEquals(PNG, a.localImages.written["$UID_BLOCK.png"])
+    }
+
+    @Test
+    fun `purging a page forever takes its images out of the folder`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        val pageId = a.seed(localPath = "local:$UID_BLOCK.png")
+        a.localImages.written["$UID_BLOCK.png"] = PNG
+        a.orchestrator.writeSnapshots(folder)
+        assertEquals(setOf("$UID_BLOCK.png"), folder.imageNames())
+
+        // "Delete forever", the one deletion §5.5.1.1 lets travel.
+        a.purgeRegistry.purgePage(pageId)
+        a.orchestrator.writeSnapshots(folder)
+
+        // The page file goes, and so does the picture it owned -- read out of the page record
+        // before that file was removed, which is the only positive evidence available.
+        assertTrue("the page's snapshot should be gone", folder.pageNames().isEmpty())
+        assertTrue("and its image with it", folder.imageNames().isEmpty())
+    }
+
+    @Test
+    fun `a folder image whose page was not purged is left where it is`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        // Belongs to a page this device has never seen -- which is indistinguishable from a page
+        // that simply has not merged here yet. §9.4's rule is that absence never implies deletion,
+        // and this is exactly the case it protects.
+        folder.putImage("99999999-9999-4999-8999-999999999999.png", PNG)
+
+        val b = Device()
+        b.orchestrator.writeSnapshots(folder)
+
+        assertEquals(setOf("99999999-9999-4999-8999-999999999999.png"), folder.imageNames())
     }
 }
