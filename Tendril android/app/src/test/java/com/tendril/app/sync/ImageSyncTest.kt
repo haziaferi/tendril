@@ -10,6 +10,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +32,8 @@ class ImageSyncTest {
         const val UID_PAGE = "11111111-1111-4111-8111-111111111111"
         const val UID_BLOCK = "77777777-7777-4777-8777-777777777777"
         val PNG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1, 2, 3)
+        const val PASS = "correct horse battery staple"
+        const val OTHER = "a different passphrase entirely"
         fun at(m: Long): Instant = Instant.ofEpochMilli(m)
     }
 
@@ -244,5 +248,118 @@ class ImageSyncTest {
         b.orchestrator.writeSnapshots(folder)
 
         assertEquals(setOf("99999999-9999-4999-8999-999999999999.png"), folder.imageNames())
+    }
+
+    // ---------------------------------------------------- §9.4.2: the image channel, encrypted
+
+    /** A device holding one picture, having published it into [folder] under [passphrase]. */
+    private suspend fun publisher(folder: InMemorySyncFileStore, passphrase: String?): Device =
+        Device().also {
+            it.seed(localPath = "local:holiday.png")
+            it.localImages.written["holiday.png"] = PNG
+            it.orchestrator.writeSnapshots(folder, passphrase)
+        }
+
+    @Test
+    fun `an encrypted folder holds the picture sealed, under a name that does not say what it is`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        publisher(folder, PASS)
+
+        // The uid survives, because it is what lets a fetch be driven by the folder listing. The
+        // extension does not: `.png` here would announce the type of every picture in the folder
+        // to anyone who can read the directory, which is most of the point of encrypting them.
+        assertEquals(setOf("$UID_BLOCK.tdrlimg"), folder.imageNames())
+        val stored = folder.imageBytes("$UID_BLOCK.tdrlimg")!!
+        assertTrue("must be sealed", SnapshotEncryption.isEncrypted(stored))
+        assertEquals(
+            "and the plaintext must not be sitting inside it",
+            -1,
+            stored.toList().windowed(PNG.size).indexOf(PNG.toList()),
+        )
+    }
+
+    @Test
+    fun `a device with the passphrase gets the picture back under its real name`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        publisher(folder, PASS)
+
+        val b = Device()
+        b.orchestrator.readAndMerge(folder, PASS)
+
+        // `.png`, not `.tdrlimg`: the real name travelled inside the envelope, so this device
+        // writes a file that is what it claims to be. P2's hardware run already showed what an
+        // extensionless image costs, and the opaque folder name would reintroduce exactly that
+        // if the name were taken from the folder rather than from inside the ciphertext.
+        assertArrayEquals(PNG, b.localImages.written["$UID_BLOCK.png"])
+        assertEquals("local:$UID_BLOCK.png", b.blockDao.getByUid(UID_BLOCK)!!.imagePath)
+    }
+
+    @Test
+    fun `a device with the wrong passphrase gets no picture at all`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        publisher(folder, PASS)
+
+        val b = Device()
+        val result = b.orchestrator.readAndMerge(folder, OTHER)
+
+        assertTrue("nothing may be written from a file this device cannot open", b.localImages.written.isEmpty())
+        assertTrue("and the person has to be told why", result.passphraseMismatch)
+    }
+
+    @Test
+    fun `a plaintext picture in an encrypted folder is refused, not adopted`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        publisher(folder, PASS)
+        // Injected the way someone with write access to the synced folder would: named correctly
+        // for a block that exists, simply not encrypted. This was the one channel where that still
+        // worked -- and image bytes go to a platform decoder, a far less forgiving parser than the
+        // JSON one `decryptText` has guarded since audit 4.1.
+        folder.deleteImage("$UID_BLOCK.tdrlimg")
+        folder.putImage("$UID_BLOCK.png", byteArrayOf(6, 6, 6))
+
+        val b = Device()
+        val result = b.orchestrator.readAndMerge(folder, PASS)
+
+        assertTrue("an unencrypted image in an encrypted folder must not be taken", b.localImages.written.isEmpty())
+        assertTrue("and it counts as unreadable rather than absent", result.undecryptableFiles > 0)
+        // Refused, never deleted -- the same treatment an undecryptable snapshot gets, so the file
+        // stays on disk to be inspected instead of being destroyed unread.
+        assertTrue("$UID_BLOCK.png" in folder.imageNames())
+    }
+
+    @Test
+    fun `a re-key rewrites the picture instead of leaving it under the dead key`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = publisher(folder, PASS)
+        val before = folder.imageBytes("$UID_BLOCK.tdrlimg")!!.copyOf()
+
+        a.orchestrator.rekey(folder, PASS, OTHER)
+
+        // Snapshots re-encrypt themselves because they are rewritten every pass. An image is
+        // written once and skipped forever after, which is right for churn and exactly wrong
+        // here: without the re-key forcing a republish it would still be sealed under a key
+        // nobody holds, and nothing else in the pass would fail to say so.
+        val after = folder.imageBytes("$UID_BLOCK.tdrlimg")!!
+        assertFalse("the stored bytes must change", before.contentEquals(after))
+
+        val b = Device()
+        b.orchestrator.readAndMerge(folder, OTHER)
+        assertArrayEquals(PNG, b.localImages.written["$UID_BLOCK.png"])
+    }
+
+    @Test
+    fun `turning encryption on clears the plaintext copy it replaces`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = publisher(folder, null)
+        assertEquals(setOf("$UID_BLOCK.png"), folder.imageNames())
+
+        a.orchestrator.writeSnapshots(folder, PASS)
+
+        // The omission that would have made the whole change pointless: a picture nobody deleted
+        // is a picture still readable to anyone with the folder, however well the sealed copy
+        // beside it is written.
+        assertEquals(setOf("$UID_BLOCK.tdrlimg"), folder.imageNames())
+        assertTrue("$UID_BLOCK.png" in folder.deletedImageNames)
+        assertNotEquals(0, folder.deletedImageNames.size)
     }
 }

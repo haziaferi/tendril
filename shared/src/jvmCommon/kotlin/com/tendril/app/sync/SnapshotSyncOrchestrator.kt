@@ -122,6 +122,17 @@ private enum class FolderArrayFile(
 private const val LOST_MARKER = ".tendril-lost-"
 
 /**
+ * §9.4.2 — the extension an image takes in an **encrypted** folder, where the file is an
+ * [ImageEnvelope] under AES-GCM rather than a picture.
+ *
+ * A plaintext folder keeps `<block uid>.<real extension>` and raw bytes, deliberately: not
+ * encrypting is the choice to leave the folder browsable by anything, and renaming the files
+ * would take that away while protecting nothing. So the extension states the file's *form*, which
+ * is also what lets a plaintext image in an encrypted folder be spotted and refused.
+ */
+private const val ENCRYPTED_IMAGE_EXTENSION = "tdrlimg"
+
+/**
  * §9.4 — the snapshot-file sync engine. Tendril never syncs the live Room database; only these
  * per-domain JSON files inside the synced folder, which an external Syncthing-fork app is already
  * syncing on its own. This class only reads/writes those files (via [SyncFileStore], not any
@@ -553,6 +564,12 @@ class SnapshotSyncOrchestrator(
         allowRekey: Boolean = false,
         salt: ByteArray? = null,
     ) = withContext(Dispatchers.IO) {
+        // §9.4.2 — a re-key must rewrite the images too. Snapshots are rewritten every pass, so
+        // they re-encrypt themselves; images are written once and skipped forever after, which is
+        // right for churn and exactly wrong here. Tied to [allowRekey] because that flag is
+        // reachable only from [rekey], which is the only caller that changes the key under files
+        // that already exist.
+        val republishImages = allowRekey
         // The write is a full overwrite, so whatever it cannot read first, it destroys. Two ways
         // in, and neither needs an attacker:
         //
@@ -677,20 +694,32 @@ class SnapshotSyncOrchestrator(
             publishPageFile(store, record, held, key, read)
         }
 
-        // §9.4 / S4 — the image bytes, after the records that name them. Deliberately **not**
-        // encrypted with the folder key: §9.4.2's scheme wraps text payloads, and an image is the
-        // one thing here that is not one. Recorded as a gap rather than silently accepted — an
-        // encrypted folder currently protects the note that mentions the picture and not the
-        // picture, which is a smaller protection than §9.4.2 promises.
+        // §9.4 / S4 — the image bytes, after the records that name them, and §9.4.2's
+        // protection now covers them. What goes into an encrypted folder is an [ImageEnvelope]
+        // — the original file name and the bytes — sealed with the same key as every snapshot,
+        // under `<block uid>.tdrlimg`. Only the uid stays in the clear, and that is the one part
+        // worth keeping: the fetch is driven by the folder listing, so an image and its page
+        // record may still arrive in either order.
         //
-        // Written only when the folder does not already hold the name. The name is derived from
-        // the block uid, so re-publishing identical bytes every pass would be pure churn on a
-        // Syncthing folder that replicates every change.
+        // Written only when the folder does not already hold the name, because Syncthing
+        // replicates every change and republishing identical bytes each pass is pure churn.
+        // [republishImages] is what makes a re-key correct: the name does not change when only
+        // the key does, so without it every image would be skipped and left readable solely under
+        // a key nobody holds any more — silently, since nothing else in the pass would fail.
         val alreadyInFolder = runCatching { store.listImages().toSet() }.getOrElse { emptySet() }
         for ((name, localPath) in pagesSyncEngine.localImagesToPublish()) {
-            if (name in alreadyInFolder) continue
+            val folderName = folderImageName(name, key)
+            // Encryption was turned on after this image was published, so the plaintext copy is
+            // still lying there beside the encrypted one. Removing it is the whole point of the
+            // change: an image nobody deleted is an image still readable to anyone with the
+            // folder. Checked against the listing rather than deleted blindly, so a folder that
+            // has never held one does not pay an I/O call per image per pass.
+            if (folderName != name && name in alreadyInFolder) {
+                runCatching { store.deleteImage(name) }
+            }
+            if (!republishImages && folderName in alreadyInFolder) continue
             val bytes = localImages.read(localPath) ?: continue
-            store.writeImage(name, bytes)
+            store.writeImage(folderName, sealImage(name, bytes, key))
         }
 
         // §9.4 / S4 — local image files no block points at any more.
@@ -733,7 +762,14 @@ class SnapshotSyncOrchestrator(
             // page, and the page itself says which images belong to it -- rather than the
             // absence-implies-deletion rule §9.4 forbids everywhere else.
             for (name in purgedImageNames) {
+                // Both forms. The record names the image as it really is (`<uid>.png`); the
+                // folder may hold it under that name or, encrypted, under `<uid>.tdrlimg`. A
+                // delete of a name that is not there is already a no-op, and naming both here
+                // means a folder that changed encryption state between publish and purge still
+                // gets cleaned rather than keeping whichever copy this pass did not think of.
                 runCatching { store.deleteImage(name) }
+                val sealed = folderImageName(name, key)
+                if (sealed != name) runCatching { store.deleteImage(sealed) }
             }
         }
     }
@@ -940,7 +976,7 @@ class SnapshotSyncOrchestrator(
         // uids into `read.tally`. Every later family that can name a page therefore reads them
         // from the same place — see [mergeEntryContent] and [mergeRelationsContent].
         mergePagesDir(store, read)
-        fetchImages(store)
+        fetchImages(store, read)
         // After the pages, deliberately: a relation whose endpoint page was just quarantined has
         // no local row to attach to, and this is where that is noticed and the edge held back.
         mergeRelationsFile(store, read)
@@ -1059,14 +1095,67 @@ class SnapshotSyncOrchestrator(
         }
     }
 
-    private suspend fun fetchImages(store: SyncFileStore) {
+    private suspend fun fetchImages(store: SyncFileStore, read: ReadKey) {
         val available = runCatching { store.listImages() }.getOrElse { return }
         if (available.isEmpty()) return
-        for ((blockUid, name) in pagesSyncEngine.imagesToFetch(available)) {
-            val bytes = runCatching { store.readImage(name) }.getOrNull() ?: continue
-            val localPath = runCatching { localImages.write(name, bytes) }.getOrNull() ?: continue
+        for ((blockUid, folderName) in pagesSyncEngine.imagesToFetch(available)) {
+            val raw = runCatching { store.readImage(folderName) }.getOrNull() ?: continue
+            val (localName, bytes) = openImage(folderName, raw, read) ?: continue
+            // The local name comes from inside the envelope, not from the folder file, which in an
+            // encrypted folder is called `.tdrlimg` and is not a picture. `LocalImageStore.write`
+            // sanitises it, so a hostile envelope cannot place a file outside its directory.
+            val localPath = runCatching { localImages.write(localName, bytes) }.getOrNull() ?: continue
             pagesSyncEngine.attachLocalImage(blockUid, localPath)
         }
+    }
+
+    /**
+     * §9.4.2 — the folder file name for an image whose real name is [realName].
+     *
+     * The uid survives into both forms, which is what keeps [PagesSyncEngine.imagesToFetch]
+     * working unchanged: it reads the uid off the stem and never cared what followed it.
+     */
+    private fun folderImageName(realName: String, key: SecretKeySpec?): String =
+        // Concatenated rather than interpolated: `tools/audit.py` strips string literals before
+        // its dead-declaration scan, so a constant used only inside a template reads as unused.
+        if (key == null) realName
+        else realName.substringBeforeLast('.') + "." + ENCRYPTED_IMAGE_EXTENSION
+
+    /** §9.4.2 — an image as it should be written to this folder: sealed, or as it came. */
+    private fun sealImage(realName: String, bytes: ByteArray, key: SecretKeySpec?): ByteArray =
+        if (key == null) bytes
+        else SnapshotEncryption.wrapWithMagic(
+            SnapshotEncryption.encrypt(ImageEnvelope.wrap(realName, bytes), key)
+        )
+
+    /**
+     * §9.4.2 — the reverse: an image file's real name and bytes, or null when this device
+     * cannot read it.
+     *
+     * The plaintext branch carries the same rule `decryptText` applies to JSON, and for the same
+     * reason (audit 4.1). **In a folder known to be encrypted, an unencrypted image did not come
+     * from a device holding the key.** Trusting it would leave the one channel through which an
+     * attacker who can write to the folder could still inject content — and image bytes go to a
+     * platform decoder, which is a markedly less forgiving thing to hand attacker-controlled input
+     * than a JSON parser. Refused as "could not read this", never deleted: that is what an
+     * undecryptable snapshot gets, and it leaves the file on disk to be looked at.
+     */
+    private fun openImage(
+        folderName: String,
+        raw: ByteArray,
+        read: ReadKey,
+    ): Pair<String, ByteArray>? {
+        if (!SnapshotEncryption.isEncrypted(raw)) {
+            if (read.folderEncrypted) {
+                read.tally.undecryptable++
+                return null
+            }
+            return folderName to raw
+        }
+        val plain = read.key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(raw), it) }
+        val opened = plain?.let(ImageEnvelope::unwrap)
+        if (opened == null) read.tally.undecryptable++
+        return opened
     }
 
     private suspend fun mergePagesDir(store: SyncFileStore, read: ReadKey) {
