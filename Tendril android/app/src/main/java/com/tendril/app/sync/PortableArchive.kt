@@ -32,6 +32,11 @@ private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
 private const val PAGES_DIR_PREFIX = "pages/"
 
+/** §9.4 / S4 — the archive's image channel. Deliberately the same directory name the sync
+ * folder uses: it is the same channel carrying the same `<block uid>.<extension>` names, and a
+ * second name for it would suggest the two were different things. */
+private const val IMAGES_DIR_PREFIX = "images/"
+
 /** Ceiling on total inflated bytes from an imported archive — see [PortableArchive.readZipEntries]. */
 private const val MAX_ARCHIVE_BYTES = 128L * 1024 * 1024
 
@@ -70,6 +75,17 @@ class PortableArchive(
     private val entryCompletionDao: EntryCompletionDao,
     private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
+    /**
+     * §9.4 / S4 — this device's own image storage, both the source of what an export packages
+     * and the destination of what an import unpacks.
+     *
+     * Required rather than defaulted, unlike [viewLockState] below. That one is a guard a fixture
+     * can reasonably not care about; this one is where half the content goes, and a construction
+     * site that forgot it would export pages whose pictures were simply absent — a silent,
+     * per-image data loss that no test asserting on entries or habits would notice. Making the
+     * compiler name every call site is the cheaper way to be sure.
+     */
+    private val localImages: LocalImageStore,
     /**
      * §9.4.2's passphrase, read fresh at each export/import rather than passed in per call. A
      * constructor dependency on purpose: this whole gap existed because encryption was
@@ -117,6 +133,12 @@ class PortableArchive(
         val pageRecords = pagesSyncEngine.exportPages()
         val relations = pagesSyncEngine.exportRelations()
         val purged = purgeRegistry.all()
+        // §9.4 / S4 — names only. The bytes are read one at a time during the write below, so a
+        // photo library is never assembled in memory on the way out; an export's size limit is the
+        // person's storage, not this process's heap. The cost is that `includedFiles` can name a
+        // picture whose local file vanished between here and the write — acceptable because that
+        // list is documentation of what the package holds and nothing branches on it.
+        val imagesToPublish = pagesSyncEngine.localImagesToPublish()
 
         // §9.4.2 — "a `.tendril` export carries the same at-rest protection as continuous
         // sync, not a separate case to design." It didn't: this class never referenced
@@ -133,7 +155,8 @@ class PortableArchive(
                 FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS,
                 FILE_REMINDERS, FILE_ENTRY_COMPLETIONS, FILE_RELATIONS, FILE_PURGED,
             ) +
-                pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" },
+                pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" } +
+                imagesToPublish.map { (name, _) -> "$IMAGES_DIR_PREFIX$name" },
             encrypted = key != null,
         )
 
@@ -174,6 +197,19 @@ class PortableArchive(
                 for (record in pageRecords) {
                     zip.writeEntry("$PAGES_DIR_PREFIX${record.uid}.json", json.encodeToString(record), key)
                 }
+                // §9.4 / S4 — the image bytes, after the records that name them, and encrypted with
+                // everything else. Worth stating plainly because the two halves of S4 now differ:
+                // an exported picture *does* get §9.4.2's protection, while its copy in the sync
+                // folder does not yet. That asymmetry is recorded in `docs/scope-decisions.md`,
+                // and it falls out of this class encrypting per entry rather than per file type.
+                //
+                // A picture whose local file has gone is skipped, not fatal: `Block.imagePath`
+                // outlives the file it names (see [LocalImageStore.read]), and one unreadable
+                // image is no reason to fail a backup of everything else.
+                for ((name, localPath) in imagesToPublish) {
+                    val bytes = localImages.read(localPath) ?: continue
+                    zip.writeEntry("$IMAGES_DIR_PREFIX$name", bytes, key)
+                }
             }
         }
         ExportResult(encrypted = key != null)
@@ -192,7 +228,8 @@ class PortableArchive(
      * not. */
     suspend fun importAdditive(source: Uri): ImportResult = withContext(Dispatchers.IO) {
         check(!locked()) { VIEW_ONLY_IMPORT_REFUSAL }
-        val contents = readZipEntries(source).readable()
+        val archive = readZipEntries(source).readable()
+        val contents = archive.texts
         var entriesFound = 0
         var habitsFound = 0
         var quarantined = 0
@@ -205,6 +242,8 @@ class PortableArchive(
         purgeRegistry.adopt(decodePurged(contents))
         purgeRegistry.applyToLocalRecords()
         quarantined += pagesSyncEngine.mergePages(pageRecords).quarantined.size
+        // After the pages, necessarily — see [restoreImages].
+        val imagesRestored = restoreImages(archive.images)
         decodeRelations(contents).takeIf { it.isNotEmpty() }?.let { pagesSyncEngine.mergeRelations(it) }
         contents[FILE_ENTRIES_ACTIVE]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
         contents[FILE_ENTRIES_ARCHIVED]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
@@ -215,6 +254,7 @@ class PortableArchive(
         quarantined += applyCompletions(decodeCompletions(contents[FILE_ENTRY_COMPLETIONS]))
         ImportResult(
             hadManifest = contents.containsKey(MANIFEST_NAME),
+            imagesRestored = imagesRestored,
             entryFilesFound = entriesFound,
             habitFilesFound = habitsFound,
             quarantinedRecords = quarantined,
@@ -248,7 +288,8 @@ class PortableArchive(
     suspend fun restoreFromBackup(source: Uri): Unit = withContext(Dispatchers.IO) {
         check(!locked()) { VIEW_ONLY_RESTORE_REFUSAL }
         // Before the decode-then-wipe sequence below, and so before anything is deleted.
-        val contents = readZipEntries(source).readable()
+        val archive = readZipEntries(source).readable()
+        val contents = archive.texts
 
         val pageRecords = decodePages(contents)
         val relations = decodeRelations(contents)
@@ -291,6 +332,7 @@ class PortableArchive(
         // call each) — Restore only ever runs against a fresh/emptied install in practice,
         // so mergePages' whole-record LWW already behaves like a replace in that case.
         pagesSyncEngine.mergePages(pageRecords)
+        restoreImages(archive.images)
         if (relations.isNotEmpty()) pagesSyncEngine.mergeRelations(relations)
         applyEntries(activeEntries)
         applyEntries(archivedEntries)
@@ -346,6 +388,38 @@ class PortableArchive(
     private fun decodeHabits(content: String?): List<HabitSnapshotRecord> {
         if (content.isNullOrBlank()) return emptyList()
         return runCatching { json.decodeFromString<List<HabitSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
+    }
+
+    /**
+     * §9.4 / S4 — writes the archive's images into this device's own storage and points the
+     * matching blocks at them. Returns how many landed.
+     *
+     * Runs *after* the pages are merged, on both paths and necessarily:
+     * [PagesSyncEngine.imagesToFetch] answers from the blocks that exist here, so a block that
+     * arrived in this same archive has to be in the database before it can be asked about.
+     *
+     * That is the same call the sync folder's fetch uses, handed the archive's names instead of
+     * the folder's. An archive is another source of the same two facts, and nothing about which
+     * image belongs to which block changes with the container it travelled in — so the rule for
+     * deciding lives in one place and this supplies the listing.
+     *
+     * Two kinds of skip, both deliberate. A name for a block this device does not have belongs to
+     * a page the import quarantined or never carried, and storing it would leave bytes nothing can
+     * reach. A block that already has a local copy keeps it: an import is additive (§9.4.1), and
+     * overwriting this device's picture with an older one from a file is not additive.
+     */
+    private suspend fun restoreImages(images: Map<String, ByteArray>): Int {
+        if (images.isEmpty()) return 0
+        var restored = 0
+        for ((blockUid, name) in pagesSyncEngine.imagesToFetch(images.keys.toList())) {
+            val bytes = images[name] ?: continue
+            // Best-effort per image, matching the folder fetch: a name that sanitises away to
+            // nothing, or a write that fails, costs that one picture and not the import.
+            val localPath = runCatching { localImages.write(name, bytes) }.getOrNull() ?: continue
+            pagesSyncEngine.attachLocalImage(blockUid, localPath)
+            restored++
+        }
+        return restored
     }
 
     /**
@@ -527,14 +601,29 @@ class PortableArchive(
     }
 
     /**
-     * A `.tendril` archive is all JSON, so entries are held as text — but the source is a
-     * file the person picked, which may be corrupt, enormous, or not ours at all. The running
-     * total is capped so a malformed or deliberately-inflated zip fails with a message
-     * instead of an OutOfMemoryError partway through.
+     * Reads every entry into memory: JSON as text, `images/` as bytes.
+     *
+     * Two maps rather than one because an archive stopped being all JSON in S4. Decoding image
+     * bytes through a String would corrupt them outright, and carrying them as base64 inside the
+     * JSON would inflate them by a third and then double that again in UTF-16 — on the one
+     * channel here whose entire cost is its size.
+     *
+     * The source is a file the person picked, which may be corrupt, enormous, or not ours at all,
+     * so the running total is capped: a malformed or deliberately-inflated zip fails with a
+     * message instead of an OutOfMemoryError partway through.
+     *
+     * **The cap stays where it is now that images push archives towards it**, which is a real
+     * decision and not an oversight. Everything read here is resident at once, so the cap is what
+     * keeps that bounded. The obvious alternative — streaming image entries straight to
+     * [LocalImageStore] as they are read — would write files to this device before either caller
+     * has decided to proceed, and [restoreFromBackup] refuses with the words "nothing has been
+     * changed". Making that sentence false to raise a limit nobody has hit is a bad trade; if the
+     * limit does start biting, the honest fix is a staging area the refusal path can discard.
      */
     private fun readZipEntries(source: Uri): ArchiveContents {
         val key = keyOrNull()
         val result = mutableMapOf<String, String>()
+        val images = mutableMapOf<String, ByteArray>()
         var total = 0L
         var undecryptable = 0
         context.contentResolver.openInputStream(source)?.use { input ->
@@ -545,16 +634,27 @@ class PortableArchive(
                         val bytes = zip.readBytes()
                         total += bytes.size
                         require(total <= MAX_ARCHIVE_BYTES) {
-                            "This archive expands to more than ${MAX_ARCHIVE_BYTES / (1024 * 1024)} MB — too large to import."
+                            "This archive expands to more than ${MAX_ARCHIVE_BYTES / (1024 * 1024)} MB — " +
+                                "too large to import. Pictures count towards that, and are usually " +
+                                "what takes an archive over it."
                         }
                         // Per-entry, and driven by the magic prefix rather than the manifest's
                         // own flag: a plaintext archive still imports with a passphrase set,
                         // and an encrypted one is recognised even if its manifest is missing.
-                        if (SnapshotEncryption.isEncrypted(bytes)) {
-                            val plain = key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
-                            if (plain == null) undecryptable++ else result[entry.name] = plain.toString(Charsets.UTF_8)
+                        val plain = if (SnapshotEncryption.isEncrypted(bytes)) {
+                            key?.let { SnapshotEncryption.decrypt(SnapshotEncryption.stripMagic(bytes), it) }
                         } else {
-                            result[entry.name] = bytes.toString(Charsets.UTF_8)
+                            bytes
+                        }
+                        val name = entry.name
+                        when {
+                            plain == null -> undecryptable++
+                            // §9.4 / S4 — the one channel that is not text, sorted out here because
+                            // this is the last point that still holds the bytes. One
+                            // `toString(Charsets.UTF_8)` on a PNG is not recoverable afterwards.
+                            name.startsWith(IMAGES_DIR_PREFIX) ->
+                                images[name.removePrefix(IMAGES_DIR_PREFIX)] = plain
+                            else -> result[name] = plain.toString(Charsets.UTF_8)
                         }
                     }
                     zip.closeEntry()
@@ -562,7 +662,7 @@ class PortableArchive(
                 }
             }
         }
-        return ArchiveContents(result, undecryptable)
+        return ArchiveContents(result, images, undecryptable)
     }
 
     /**
@@ -575,7 +675,7 @@ class PortableArchive(
      * file is wrong* when the truth is *the passphrase is*, and invites someone to go looking
      * for another backup instead of fixing the passphrase they still have.
      */
-    private fun ArchiveContents.readable(): Map<String, String> {
+    private fun ArchiveContents.readable(): ArchiveContents {
         require(undecryptable == 0) {
             if (passphrase() == null) {
                 "This export is encrypted (§9.4.2). Set your sync passphrase under Settings → " +
@@ -585,14 +685,23 @@ class PortableArchive(
                     "most likely made with a different one. Nothing has been changed."
             }
         }
-        return texts
+        return this
     }
 
     /** Per-entry rather than one encrypted blob wrapping the whole zip: it matches what
      * [SnapshotSyncOrchestrator] already does to the same JSON in the sync folder, and it keeps
      * the archive a real zip whose manifest any reader can still see. */
-    private fun ZipOutputStream.writeEntry(name: String, content: String, key: SecretKeySpec?) {
-        val bytes = content.toByteArray(Charsets.UTF_8)
+    private fun ZipOutputStream.writeEntry(name: String, content: String, key: SecretKeySpec?) =
+        writeEntry(name, content.toByteArray(Charsets.UTF_8), key)
+
+    /**
+     * The bytes half, for the [IMAGES_DIR_PREFIX] entries that are not text.
+     *
+     * The String overload delegates here rather than the two sharing a copy of the encrypt call:
+     * one of them would eventually be changed alone, and the one left behind would be the one
+     * that quietly wrote plaintext.
+     */
+    private fun ZipOutputStream.writeEntry(name: String, bytes: ByteArray, key: SecretKeySpec?) {
         putNextEntry(ZipEntry(name))
         write(if (key == null) bytes else SnapshotEncryption.wrapWithMagic(SnapshotEncryption.encrypt(bytes, key)))
         closeEntry()
@@ -620,8 +729,24 @@ data class ImportResult(
      * ten, and the person finds out on the day they go looking for the tenth.
      */
     val quarantinedRecords: Int = 0,
+    /**
+     * §9.4 / S4 — pictures written into this device's storage and linked to their blocks.
+     *
+     * Reported for a different reason than [quarantinedRecords] is. This is the number that says
+     * the *other half* of the archive arrived: pages and their pictures travel as separate
+     * entries, so an import can land every block and none of the images (an export made by a
+     * build without S4, or one whose image entries were stripped) and look completely successful.
+     * A count the person can compare against what they expect is the cheapest way to notice.
+     */
+    val imagesRestored: Int = 0,
 )
 
 /** Decoded archive text plus how many entries were encrypted and unreadable — see
  * [PortableArchive.readable], which is what turns a non-zero count into a refusal. */
-private class ArchiveContents(val texts: Map<String, String>, val undecryptable: Int)
+private class ArchiveContents(
+    val texts: Map<String, String>,
+    /** §9.4 / S4 — keyed by folder-side name (`<block uid>.<extension>`), the `images/` prefix
+     * already stripped, so this is the same shape [SyncFileStore.listImages] yields. */
+    val images: Map<String, ByteArray>,
+    val undecryptable: Int,
+)

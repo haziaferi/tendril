@@ -2544,7 +2544,20 @@ the other's data).
   is deliberately **not** portable: `sync_meta.json`, which carries a folder's salt and its
   "this folder is encrypted" marker — properties of one sync folder, meaningless inside a package
   meant to leave it. That asymmetry is exactly why a `.tendril` and a sync folder do not in fact
-  encrypt identically; see §9.4.2's correction of the same date.)*
+  encrypt identically; see §9.4.2's correction of the same date.)* *(**Corrected 2026-09-10 — the
+  list has grown a third time, and this one is not JSON.** S4 added `images/<block uid>.<extension>`,
+  the block pictures §3.1.1 allows, carried as raw bytes. It is the same directory name and the same
+  naming rule the sync folder uses, because it is the same channel in a different container — which
+  is what lets the import path reuse the folder fetch's own "which image belongs to which block"
+  decision rather than restating it. The bullet's claim survives intact and is worth restating for
+  it: a portable export still invents no second format, it packages what §9.4 already defines. What
+  needs correcting is only the word "JSON" — an archive reader must now expect one directory whose
+  entries must not be decoded as text. **And the encryption asymmetry runs the other way here.** A
+  packaged picture *is* encrypted with everything else, because this class encrypts per zip entry
+  rather than per file type; the same picture in the sync folder is not, since §9.4.2's scheme wraps
+  text payloads. So an encrypted `.tendril` protects a photograph that an encrypted sync folder
+  leaves in the clear — recorded here rather than quietly evened out, because closing it on the
+  folder side is a decision with its own hazards, not a tidy-up.)*
 - **Packaging**: a zip, given a dedicated extension so it behaves as one shareable file rather than
   a loose folder (the same trick `.docx`/`.epub` use) — **`.tendril`**, decided 2026-08-04 alongside
   the app name itself. Contains a `manifest.json` (app version, export timestamp, `full` or
