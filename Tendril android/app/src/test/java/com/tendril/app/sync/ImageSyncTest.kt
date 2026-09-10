@@ -384,4 +384,61 @@ class ImageSyncTest {
         // with nothing bounding it -- the person has been told encryption is on.
         assertEquals(setOf("$UID_BLOCK.tdrlimg"), folder.imageNames())
     }
+
+    // -------------------------------------------- §9.4: a pass writes only what actually changed
+
+    @Test
+    fun `a second pass with nothing changed rewrites no page files`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        a.seed(localPath = "local:holiday.png")
+        a.localImages.written["holiday.png"] = PNG
+
+        a.orchestrator.writeSnapshots(folder)
+        assertEquals(listOf("$UID_PAGE.json"), folder.writtenPageNames)
+        folder.writtenPageNames.clear()
+
+        a.orchestrator.writeSnapshots(folder)
+
+        // Page files are the one thing here that scales with the person's data, and each write is
+        // a temp-file/rename/delete through SAF that Syncthing then replicates. A thousand
+        // unchanged pages must cost a thousand reads and no writes at all.
+        assertTrue("an unchanged page must not be republished", folder.writtenPageNames.isEmpty())
+    }
+
+    @Test
+    fun `an encrypted folder skips the same unchanged page, despite the ciphertext differing`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        a.seed(localPath = "local:holiday.png")
+        a.localImages.written["holiday.png"] = PNG
+
+        a.orchestrator.writeSnapshots(folder, PASS)
+        folder.writtenPageNames.clear()
+
+        a.orchestrator.writeSnapshots(folder, PASS)
+
+        // The load-bearing half: AES-GCM uses a fresh IV per encryption, so the same page encrypts
+        // to different bytes every pass. A comparison made on the stored bytes would never match
+        // and this optimisation would silently do nothing at all under §9.4.2 — which is exactly
+        // the configuration where write churn is most expensive.
+        assertTrue("comparison must be on plaintext, not ciphertext", folder.writtenPageNames.isEmpty())
+    }
+
+    @Test
+    fun `an edited page is still republished`() = runBlocking {
+        val folder = InMemorySyncFileStore()
+        val a = Device()
+        a.seed(localPath = "local:holiday.png")
+        a.localImages.written["holiday.png"] = PNG
+        a.orchestrator.writeSnapshots(folder)
+        folder.writtenPageNames.clear()
+
+        val page = a.pageDao.getByUid(UID_PAGE)!!
+        a.pageDao.update(page.copy(title = "Trip, renamed", updatedAt = at(9_000)))
+        a.orchestrator.writeSnapshots(folder)
+
+        // The direction that must never break: any difference at all still writes.
+        assertEquals(listOf("$UID_PAGE.json"), folder.writtenPageNames)
+    }
 }
