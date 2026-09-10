@@ -11,6 +11,7 @@ import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
+import com.tendril.app.markdown.MarkdownExporter
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -77,6 +78,10 @@ class AppContainer(context: Context) {
         database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, purgeRegistry,
         localImages,
     )
+    /** §7 in reverse — every live page as Markdown in a zip. Takes daos and a stream rather
+     * than a `Context`, so unlike [portableArchive] it is shared code and desktop can use it as
+     * it stands. */
+    val markdownExporter = MarkdownExporter(database.pageDao(), database.blockDao(), localImages)
     /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
      * takes it: the lock is absolute and it covers Settings, so import and restore refuse at
      * the class rather than only at the two Settings buttons. */

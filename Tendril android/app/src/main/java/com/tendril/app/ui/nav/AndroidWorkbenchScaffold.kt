@@ -56,6 +56,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 syncStatusPreferences = container.syncStatusPreferences,
                 syncCoordinator = container.syncCoordinator,
                 portableArchive = container.portableArchive,
+                markdownExporter = container.markdownExporter,
                 notionImporter = container.notionImporter,
                 databaseSyncManager = container.databaseSyncManager,
             )
