@@ -483,6 +483,9 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
                                 cover.imagePath,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                // A 100dp thumbnail has no use for a photograph's full resolution,
+                                // and a Gallery draws a grid of them at once.
+                                maxDimension = COVER_IMAGE_MAX_DIMENSION,
                             )
                         }
                     }
