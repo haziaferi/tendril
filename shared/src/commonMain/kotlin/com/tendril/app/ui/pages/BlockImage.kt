@@ -27,7 +27,22 @@ import java.io.File
  * Skia. Only the *decode* is platform-specific — reading the file is plain JVM I/O and stays in
  * [rememberBlockImage], so the caching, threading and failure handling are written once.
  */
-expect fun decodeImageBitmap(bytes: ByteArray): ImageBitmap?
+expect fun decodeImageBitmap(bytes: ByteArray, maxDimension: Int): ImageBitmap?
+
+/**
+ * How large a decoded block image is allowed to be, in pixels on its longest side.
+ *
+ * A block draws at `fillMaxWidth().heightIn(max = 320.dp)`, so on the widest phone this codebase
+ * targets it is never asked to fill more than about 1440 x 1120. Decoding a camera photograph at
+ * full resolution to draw it there is the difference between roughly 6 MB and roughly 48 MB of
+ * bitmap: a 12-megapixel image is 4000 x 3000 x 4 bytes, and two or three of them on one page is
+ * an OutOfMemoryError rather than a slow page.
+ */
+const val BLOCK_IMAGE_MAX_DIMENSION = 1600
+
+/** The same budget for a Gallery cover, which is a 100dp-tall thumbnail standing in for a page
+ * (§5.6) rather than the content itself, and needs a fraction of the pixels. */
+const val COVER_IMAGE_MAX_DIMENSION = 512
 
 /**
  * The bitmap at [path], or null while it loads and if it cannot be read.
@@ -42,10 +57,17 @@ expect fun decodeImageBitmap(bytes: ByteArray): ImageBitmap?
  * decodes. What the caller shows for null is a UI decision, made in [BlockImage].
  */
 @Composable
-fun rememberBlockImage(path: String?): State<ImageBitmap?> = produceState<ImageBitmap?>(null, path) {
+fun rememberBlockImage(
+    path: String?,
+    maxDimension: Int = BLOCK_IMAGE_MAX_DIMENSION,
+): State<ImageBitmap?> = produceState<ImageBitmap?>(null, path, maxDimension) {
     value = path?.let {
         withContext(Dispatchers.IO) {
-            runCatching { File(it).takeIf(File::isFile)?.readBytes()?.let(::decodeImageBitmap) }.getOrNull()
+            runCatching {
+                File(it).takeIf(File::isFile)?.readBytes()?.let { bytes ->
+                    decodeImageBitmap(bytes, maxDimension)
+                }
+            }.getOrNull()
         }
     }
 }
@@ -70,8 +92,11 @@ fun BlockImage(
      * passes [ContentScale.Crop]: it is a thumbnail standing in for a page, the whole image
      * is one tap away, and a uniform grid reads better than letterboxed cells. */
     contentScale: ContentScale = ContentScale.Fit,
+    /** The decode budget — see [BLOCK_IMAGE_MAX_DIMENSION]. A caller drawing a thumbnail should
+     * pass [COVER_IMAGE_MAX_DIMENSION] rather than pay for pixels it then crops away. */
+    maxDimension: Int = BLOCK_IMAGE_MAX_DIMENSION,
 ) {
-    val bitmap by rememberBlockImage(path)
+    val bitmap by rememberBlockImage(path, maxDimension)
     val image = bitmap
     if (image != null) {
         Image(
@@ -96,4 +121,27 @@ fun BlockImage(
             )
         }
     }
+}
+
+/**
+ * The largest power-of-two reduction that still leaves the picture at least [maxDimension] across.
+ *
+ * Erring *above* the budget rather than below it: `inSampleSize` only halves, so the choice for a
+ * 4000px photo against a 1600px budget is 2000px or 1000px, and 1000 would be visibly soft on a
+ * screen asked to draw it 1440 wide. 2000px costs about 12 MB against the 48 MB a full decode
+ * would have taken, which is the reduction that matters.
+ *
+ * Powers of two because that is what `BitmapFactory` honours: any other value is rounded down to
+ * one, so computing a precise ratio here would only disguise what actually happens.
+ *
+ * In `commonMain` though only Android applies it, because it is the one piece of this that is
+ * arithmetic rather than platform API, and arithmetic is what a test can hold still.
+ */
+fun imageSampleSizeFor(width: Int, height: Int, maxDimension: Int): Int {
+    // A header this build could not parse leaves the dimensions at -1. Decoding at full size is
+    // the safe reading of "unknown": it is what happened before this function existed.
+    if (width <= 0 || height <= 0 || maxDimension <= 0) return 1
+    var sample = 1
+    while (maxOf(width, height) / (sample * 2) >= maxDimension) sample *= 2
+    return sample
 }
