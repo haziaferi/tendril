@@ -63,6 +63,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.tendril.app.R
 import com.tendril.app.domain.DatabaseSyncManager
+import androidx.compose.ui.platform.LocalContext
+import com.tendril.app.markdown.MarkdownExporter
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.SecretStore
@@ -87,6 +89,7 @@ fun SettingsScreen(
     syncStatusPreferences: SyncStatusPreferences,
     syncCoordinator: SyncCoordinator,
     portableArchive: PortableArchive,
+    markdownExporter: MarkdownExporter,
     notionImporter: NotionImporter,
     databaseSyncManager: DatabaseSyncManager,
     modifier: Modifier = Modifier,
@@ -109,7 +112,7 @@ fun SettingsScreen(
             HorizontalDivider()
             AtRestEncryptionSection(secretStore, syncCoordinator)
             HorizontalDivider()
-            PortableBackupSection(portableArchive, viewOnly)
+            PortableBackupSection(portableArchive, markdownExporter, viewOnly)
             HorizontalDivider()
             // The whole section is swapped out rather than merely disabled: its file picker is
             // launched from inside it, and the honest thing to show someone is why the button
@@ -456,7 +459,12 @@ private fun DialogTextButton(onClick: () -> Unit, label: String = "Confirm") {
  * well, so the guard doesn't depend on this composable being the only way in.
  */
 @Composable
-private fun PortableBackupSection(archive: PortableArchive, viewOnly: Boolean) {
+private fun PortableBackupSection(
+    archive: PortableArchive,
+    markdownExporter: MarkdownExporter,
+    viewOnly: Boolean,
+) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -477,6 +485,28 @@ private fun PortableBackupSection(archive: PortableArchive, viewOnly: Boolean) {
                         }
                     },
                     { it.message ?: "Export failed." },
+                )
+            }
+        },
+    )
+    // §7 in reverse. A separate launcher rather than a mode on the one above: the two write
+    // different formats to different file names, and a picker that produced one or the other
+    // depending on a toggle elsewhere on the screen is how someone ends up with the wrong file.
+    val markdownLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+        onResult = { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                statusMessage = runCatching {
+                    // Throwing rather than no-op if the provider will not hand over a stream, for
+                    // the reason `PortableArchive.export` gives: an export that writes nothing and
+                    // reports success is discovered at the worst possible moment.
+                    val stream = context.contentResolver.openOutputStream(uri)
+                        ?: error("Couldn't open the chosen file for writing — nothing was exported.")
+                    stream.use { markdownExporter.export(it) }
+                }.fold(
+                    { "Exported ${it.pages} page(s) and ${it.images} picture(s) as Markdown" },
+                    { it.message ?: "Markdown export failed." },
                 )
             }
         },
@@ -534,6 +564,19 @@ private fun PortableBackupSection(archive: PortableArchive, viewOnly: Boolean) {
             Button(enabled = !viewOnly, onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import") }
             Button(enabled = !viewOnly, onClick = { restoreLauncher.launch(arrayOf("*/*")) }) { Text("Restore backup") }
         }
+        Spacer(Modifier.height(12.dp))
+        Text("Export as Markdown", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "A zip of .md files any editor can open — for keeping your notes readable without " +
+                "this app. Databases and canvases export their pages, not their layout.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        // Not gated by View-Only, like Export above and for the same reason: a lock that stopped
+        // someone taking a readable copy of their own notes would work against the data it exists
+        // to protect.
+        Button(onClick = { markdownLauncher.launch("tendril-markdown.zip") }) { Text("Export Markdown") }
         if (viewOnly) {
             Spacer(Modifier.height(8.dp))
             ViewOnlyReason("Importing and restoring are")
