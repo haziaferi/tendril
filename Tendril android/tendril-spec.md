@@ -2552,12 +2552,14 @@ the other's data).
   decision rather than restating it. The bullet's claim survives intact and is worth restating for
   it: a portable export still invents no second format, it packages what §9.4 already defines. What
   needs correcting is only the word "JSON" — an archive reader must now expect one directory whose
-  entries must not be decoded as text. **And the encryption asymmetry runs the other way here.** A
-  packaged picture *is* encrypted with everything else, because this class encrypts per zip entry
-  rather than per file type; the same picture in the sync folder is not, since §9.4.2's scheme wraps
-  text payloads. So an encrypted `.tendril` protects a photograph that an encrypted sync folder
-  leaves in the clear — recorded here rather than quietly evened out, because closing it on the
-  folder side is a decision with its own hazards, not a tidy-up.)*
+  entries must not be decoded as text. **The encryption asymmetry this bullet recorded is closed
+  (2026-09-10).** A packaged picture is encrypted because this class encrypts per zip entry rather
+  than per file type; for one item the same picture in the sync folder was not, since §9.4.2's
+  scheme wrapped text payloads only. The folder half now seals images too — see §9.4.2's own
+  entry below. The two containers still differ in one way, and deliberately: the folder gives an
+  encrypted image the opaque name `<block uid>.tdrlimg`, while an archive keeps `images/<block
+  uid>.<extension>`. Renaming inside an archive would buy nothing, because its entry list already
+  names every page uid in the clear — `manifest.json` is readable by design.)*
 - **Packaging**: a zip, given a dedicated extension so it behaves as one shareable file rather than
   a loose folder (the same trick `.docx`/`.epub` use) — **`.tendril`**, decided 2026-08-04 alongside
   the app name itself. Contains a `manifest.json` (app version, export timestamp, `full` or
@@ -2674,6 +2676,28 @@ the consequence: losing this passphrase makes the synced folder unreadable on an
   been encrypted yet, so any non-encrypted file was trusted — which made AES-GCM's authentication
   tag worth nothing at the system level, since nothing forced a file to be encrypted at all.
   Anyone who could write to the synced folder could inject records without the passphrase.
+  *(**Extended 2026-09-10 to the image channel, which it did not previously cover.** The rule was
+  implemented inside `decryptText`, so it guarded JSON and nothing else — which left §9.4's
+  `images/` directory as the one path an attacker with folder write access could still inject
+  through, and image bytes go to a platform image decoder rather than to a JSON parser. Refused as
+  unreadable, never deleted, exactly as an undecryptable snapshot is.)*
+- **Block images are encrypted too, and their names with them** (added 2026-09-10). §9.4's
+  `images/` channel carried raw bytes under `<block uid>.<extension>` regardless of the
+  passphrase, because this section'''s scheme wrapped text payloads and an image is the one payload
+  that is not text — so an encrypted folder protected the note that mentioned a photograph and not
+  the photograph. An encrypted folder now holds `images/<block uid>.tdrlimg`: the original file
+  name and the bytes, sealed with the same key as every snapshot. **The uid stays in the clear on
+  purpose** — it is what lets a fetch be driven by the folder listing rather than by whichever
+  pass merged the page record, so an image and its record may arrive in either order; hiding it
+  would cost that property and buy little beside an encrypted `pages/<uid>.json` naming the same
+  uid. The *type* and *size* are what the opaque name withholds. A folder with no passphrase is
+  unchanged and stays browsable, `<uid>.png` and raw bytes: not encrypting is the choice to leave
+  the folder readable by anything, and renaming files would remove that while protecting nothing.
+  Consequently a re-key must **rewrite** every image (snapshots re-encrypt themselves by being
+  rewritten each pass; an image is written once and skipped thereafter, so it would otherwise stay
+  sealed under a key nobody holds), and turning encryption on must **delete** the plaintext copy
+  the sealed one replaces. A `.tendril` package encrypts the same images but keeps
+  `images/<uid>.<extension>`, since its entry list already names every page uid in the clear.
 - **Changing the passphrase and re-keying the folder are different acts** (added 2026-09-05).
   Saving a passphrase changes what *this device* uses to read the folder; it does not touch the
   folder, so if the two disagree, sync pauses rather than overwriting anything. Re-keying changes
