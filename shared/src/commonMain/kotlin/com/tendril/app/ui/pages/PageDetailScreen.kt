@@ -155,6 +155,10 @@ fun PageDetailScreen(
     var blockActionSheetFor by remember { mutableStateOf<Block?>(null) }
     // §0.6.2 / B§9.6 — the armed map: the block whose subtree fills the viewport, or null.
     var armedMapRoot by remember { mutableStateOf<Long?>(null) }
+    // §0.6.3 — the armed canvas: the Canvas page filling the viewport, or null.
+    var armedCanvasPage by remember { mutableStateOf<Long?>(null) }
+    // The slash menu's "Canvas" needs a second choice — which canvas — before it can insert.
+    var canvasPickerAfterOrder by remember { mutableStateOf<Int?>(null) }
     // The block plus the definitively-current base content to insert the mention onto — never
     // `block.content` at insert time, which can be one async Room round-trip stale (typing '@'
     // strips it via a launched coroutine, not synchronously) and would duplicate/corrupt text.
@@ -282,6 +286,9 @@ fun PageDetailScreen(
                         onLongPress = { blockActionSheetFor = entry.block },
                         onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
                         onOpenPage = onOpenPage,
+                        core = core,
+                        onArmCanvas = { armedCanvasPage = it },
+                        onInsertCanvas = { afterOrder -> canvasPickerAfterOrder = afterOrder },
                     )
                     if (entry.block.mindMap) {
                         MindMapCard(subtree = subtreeOf(outline, entry.block.id), onArm = { armedMapRoot = entry.block.id })
@@ -323,6 +330,27 @@ fun PageDetailScreen(
             onDelete = { viewModel.deleteBlock(block); blockActionSheetFor = null },
             mindMap = block.mindMap,
             onToggleMindMap = { viewModel.setMindMap(block, !block.mindMap); blockActionSheetFor = null },
+        )
+    }
+
+    canvasPickerAfterOrder?.let { afterOrder ->
+        CanvasPickerSheet(
+            core = core,
+            onPickExisting = { id -> viewModel.insertCanvasBlock(afterOrder, id); canvasPickerAfterOrder = null },
+            onCreate = { title -> viewModel.createCanvasAndInsert(afterOrder, title); canvasPickerAfterOrder = null },
+            onDismiss = { canvasPickerAfterOrder = null },
+        )
+    }
+
+    // §0.6.3 / B§9.6 — armed: the real board, the whole screen's `CanvasScreen`, over the page.
+    // Its own back arrow disarms; so does the system back gesture.
+    armedCanvasPage?.let { canvasPageId ->
+        MapBackHandler { armedCanvasPage = null }
+        com.tendril.app.ui.canvas.CanvasScreen(
+            core = core,
+            pageId = canvasPageId,
+            onBack = { armedCanvasPage = null },
+            onOpenPage = onOpenPage,
         )
     }
 
@@ -444,6 +472,9 @@ private fun BlockRow(
     listPosition: Int,
     viewModel: PageDetailViewModel,
     onLongPress: () -> Unit,
+    core: WorkbenchCore? = null,
+    onArmCanvas: (Long) -> Unit = {},
+    onInsertCanvas: (Int) -> Unit = {},
     onRequestMention: (baseContent: String) -> Unit,
     onOpenPage: (Long) -> Unit,
 ) {
@@ -500,6 +531,10 @@ private fun BlockRow(
             Column(modifier = Modifier.weight(1f)) {
                 if (block.type == BlockType.DIVIDER) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                } else if (block.type == BlockType.CANVAS) {
+                    if (core != null) {
+                        CanvasBlockCard(core, block.mentionedPageId, fallbackTitle = block.content, onArm = { block.mentionedPageId?.let(onArmCanvas) })
+                    }
                 } else if (block.type != BlockType.PAGE_MENTION) {
                     // §P1 — free-form, matching `Block.codeLanguage`'s own shape (the Notion
                     // importer stores a fence tag verbatim); "Plain text" is `null`, not "".
@@ -598,7 +633,7 @@ private fun BlockRow(
             onDismiss = { showSlashMenu = false },
             onPick = { type ->
                 showSlashMenu = false
-                viewModel.addBlock(type, block.order)
+                if (type == BlockType.CANVAS) onInsertCanvas(block.order) else viewModel.addBlock(type, block.order)
             },
         )
     }
@@ -623,7 +658,7 @@ private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit
                 BlockType.HEADING_3 to "Heading 3", BlockType.BULLETED_LIST_ITEM to "Bulleted list",
                 BlockType.NUMBERED_LIST_ITEM to "Numbered list", BlockType.TODO to "To-do", BlockType.QUOTE to "Quote",
                 BlockType.CODE to "Code", BlockType.TOGGLE to "Toggle", BlockType.CALLOUT to "Callout", BlockType.DIVIDER to "Divider",
-                BlockType.IMAGE to "Image",
+                BlockType.IMAGE to "Image", BlockType.CANVAS to "Canvas",
             ).forEach { (type, label) ->
                 TextButton(onClick = { onPick(type) }) { Text(label) }
             }

@@ -115,6 +115,15 @@ class MarkdownWriterTest {
         assertEquals("closed\n\n    - one\n\n        - two", out)
     }
 
+    @Test
+    fun `a canvas block is a labelled link to the canvas page, or its label alone`() {
+        // §0.6.3 — the board itself is not Markdown; the link is the most the format can carry.
+        val linked = MarkdownWriter.render(listOf(block(BlockType.CANVAS, "Trip board", mentionedPageId = 7)), { null }, { if (it == 7L) "Trip board.md" else null })
+        assertEquals("[Canvas: Trip board](Trip%20board.md)\n", linked)
+        val unlinked = MarkdownWriter.render(listOf(block(BlockType.CANVAS, "Gone", mentionedPageId = 99)), { null }, { null })
+        assertEquals("Canvas: Gone\n", unlinked)
+    }
+
     // ------------------------------------------------------------------ inline spans
 
     @Test

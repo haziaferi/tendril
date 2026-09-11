@@ -125,6 +125,16 @@ object MarkdownWriter {
                 if (target == null) listOf(escapeLeadingMarkup(label))
                 else listOf("[$label](${encodePath(target)})")
             }
+
+            // §0.6.3 — a canvas is a page, so the block is a link to that page's file, labelled so
+            // a reader knows what stood here. Its board is not in Markdown at all (JSON Canvas is
+            // §0.6.7); the link is the honest most this format can carry.
+            BlockType.CANVAS -> {
+                val target = block.mentionedPageId?.let(pageLinkFor)
+                val label = "Canvas: " + text.ifBlank { "untitled" }
+                if (target == null) listOf(escapeLeadingMarkup(label))
+                else listOf("[$label](${encodePath(target)})")
+            }
         }
     }
 

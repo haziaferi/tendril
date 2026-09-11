@@ -8,6 +8,7 @@ import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.entry.intervalToPeriod
 import com.tendril.app.data.page.Block
+import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
@@ -234,6 +235,33 @@ class PageDetailViewModel(
             contentRepository.rebuildFtsForPage(pageId)
             touch()
         }
+    }
+
+    /** §0.6.3 — a block showing [canvasPageId], inserted after [afterOrder] like any other. */
+    fun insertCanvasBlock(afterOrder: Int, canvasPageId: Long) = launchAndReindex {
+        val existing = blockDao.getForPage(pageId).sortedBy { it.order }
+        val insertAt = (afterOrder + 1).coerceIn(0, existing.size)
+        val now = Instant.now()
+        val title = pageDao.getById(canvasPageId)?.title.orEmpty()
+        existing.drop(insertAt).forEach { b -> blockDao.update(b.copy(order = b.order + 1)) }
+        blockDao.insert(
+            Block(
+                pageId = pageId, type = BlockType.CANVAS, order = insertAt,
+                // The title as content, so the export and a device without the canvas still
+                // have a word for what stood here — the same reason a mention block keeps its text.
+                content = title, mentionedPageId = canvasPageId,
+                createdAt = now, updatedAt = now,
+            )
+        )
+    }
+
+    /** §0.6.3 — a new Canvas page under this one, then the block that shows it. */
+    fun createCanvasAndInsert(afterOrder: Int, title: String) = launchAndReindex {
+        val now = Instant.now()
+        val canvasPageId = pageDao.insert(
+            Page(title = title.ifBlank { "Untitled canvas" }, kind = PageKind.CANVAS, parentId = pageId, createdAt = now, updatedAt = now),
+        )
+        insertCanvasBlock(afterOrder, canvasPageId)
     }
 
     /** §0.6.2 — show or hide this block's subtree as a mind map. */

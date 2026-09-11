@@ -16,6 +16,9 @@ enum class BlockType {
     /** Standalone `@Page Title` block — inline mentions within any text block are a
      * [SpanStyle.PageMention] span instead, not this block type. */
     PAGE_MENTION,
+    /** §0.6.3 — a Canvas page shown in this page, inert until armed; [Block.mentionedPageId]
+     * names the page. Not a second canvas model: §3.7's page kind, embedded. */
+    CANVAS,
 }
 
 /** §3.1.1 — "inline formatting... is stored as (start, end, style) spans over a block's
