@@ -5,6 +5,9 @@ shared Kotlin Multiplatform core they both build on.
 
 Sideloaded and personal — not distributed through any store.
 
+Start with `Tendril android/tendril-spec.md` **§0 Objectives** — what the app is for, what it must
+never do, what it is measured against, and the order of work. Everything else follows from it.
+
 | folder | what it is | builds |
 |---|---|---|
 | `Tendril android/` | Kotlin + Compose Android app, single-module Gradle project | the APK |
