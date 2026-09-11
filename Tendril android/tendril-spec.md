@@ -78,10 +78,272 @@ second copy of the reasoning.
 | 2026-09-07 (Milestone 0 — written up after the fact) | **The largest change in the working tree had no row at all, in either spec; this is it.** Milestone 0 is hardening, not a feature, in two halves. **(1) §3.1.2's View-Only lock adopted on the surfaces that never had it** — the Pages hub (`PagesViewModel`: create, Restore, Delete forever), Canvas §3.7 (`CanvasViewModel`, gated in the `launchAndTouch` funnel every node and edge mutation already goes through, plus `updateTitle`, which sits outside that funnel and writes `pages` directly), the Road Map (`RoadMapViewModel.relate`, the screen's only write), and Settings' two portable-archive operations, Import and Restore backup — refused by `PortableArchive` itself as well as by disabled buttons, so the guard does not depend on the composable being the only way in, with the Notion import section swapped for a stand-in that says *why* rather than showing a dead button. Export is deliberately left ungated: it reads and changes nothing, and a lock that stopped someone taking a backup would work against the data it exists to protect. Each gate is a `locked()` read at call time rather than a captured value, so the eye toggle takes effect on a screen already open. The reason these four needed gating at all is that none of their writes is a local mistake: a create is exported to every peer on the next pass, Restore rewrites `pages.updatedAt` and so wins the next last-write-wins merge everywhere, a `page_relations` row is its own synced record merged off no page's timestamp, and Delete forever records a `PurgedKind.PAGE` tombstone that deletes the row on every device that adopts it (§5.5.1.1) — the one write in Tendril no `.tendril-lost-` copy can undo. **Two exemptions, deliberate and stated at their own call sites**, both pinned by `ViewOnlySurfacesGuardTest` so a later sweep that gates everything it can find breaks a test rather than a person's app: *idempotent repair-on-open* (`PageDatabaseViewModel.ensureDefaultView` and `CanvasViewModel`'s lazy `PageCanvas` shell) — gating those would leave a viewless database or a boardless canvas unopenable for exactly as long as View-Only stayed on, a lock hiding data instead of protecting it, and both sit outside `launchAndTouch` so they claim no authorship and move no `pages.updatedAt`; and *entry resolution* through `ResolveEntryUseCase` from the notification inline action (`EntryActionReceiver`), the Habits widget, `CalendarScreen` and `TasksHabitsScreen` — quick-capture surfaces outside the Pages hub where the eye toggle is not on screen and often the app is not even open, so a gate would swallow the tap silently at the moment someone was recording that something really happened, and an unlogged completion is itself lost data. Its one gated caller is `PageDatabaseViewModel.toggleDone`, which is inside Pages on a page whose lock the person can see. **(2) A quarantine policy for records this build cannot read, at every sync boundary.** Every enum persists as its `.name` String, so a newer build routinely writes values an older one must read; those values used to be parsed *in the middle of* a merge pass — `blockDao.deleteForPage(pageId)` and only then `BlockType.valueOf` — which destroyed this device's own blocks and *then* threw, aborting the pass for every other page in the batch. Now the whole record decodes before anything local is touched, an unreadable one is skipped entire with the local copy untouched, it is reported to the person through the channel sync problems already travel on (`SnapshotMergeResult` → `SyncCoordinator` → Settings' `lastError`), and — the clause that makes it quarantine rather than a plain skip — **it is suppressed from that same pass's export**, since the write half republishes every local record unconditionally and a mere skip would put this device's stale copy over the peer's newer file with no `.tendril-lost-` copy kept, manufacturing the exact loss the work exists to prevent. Restore-from-backup takes the opposite policy on purpose (§9.4.1): it clears the database first, so there is no local copy to fall back on and it refuses the whole archive up front via `undecodablePages` instead. **The suppression is now structural rather than remembered:** a private `FolderArrayFile` enum names the five folder-wide array files (`entries_active.json`, `entries_archived.json`, `habits.json`, `page_relations.json`, `purged_records.json`), `publishArrayFile` takes that enum rather than a filename and consults the held set itself so publishing without answering the suppression question is not something a caller can express, and two exhaustive `when`s with no `else` — one for where a file's local records come from, one for where its held records come from — make a sixth file a compile error in exactly two places rather than a silent omission. Held records travel as raw `JsonElement`s, not as decoded records, so republication is byte-faithful. **It took four rounds, and the shape of the sequence is the useful part.** Rounds 1–3 each turned up one more folder-wide file that had been forgotten: pages first, then the `entries_active`/`entries_archived`/`habits`/`purged_records` group, then `page_relations.json`. Round 4 named what made that third one hard to see and found it was general: **quarantine has to propagate along references between records.** No value in `page_relations.json` is unreadable at all — the file decodes perfectly, and the loss is second-order: an edge points at a page that was quarantined, so that page never lands locally, so `mergeRelations` drops the edge as having a missing endpoint, so it never appears in `exportRelations()`, and publishing that local view deletes the peer's link from the folder for everyone. The same shape, found the same round: a purge tombstone that this build reads perfectly well, naming a page file it cannot parse, deleted that file on the strength of half a comparison — `PurgeRegistry`'s supersede check lives inside `mergePages`, which a file that never decodes never reaches. Both are now held rather than dropped, and the tombstone still travels so a device that *can* read the page settles it properly. Counted rather than copied, at the time this row was written: 321 `@Test` methods across 29 classes under `Tendril android\app\src\test`, none carrying `@Ignore`. **What Milestone 0 did *not* close is recorded as an Open item in §9.4** — see the 2026-09-07 (deferred issue put on the record) row below. Note against convention: this row carries its own reasoning because Milestone 0 has no home-section write-up; §3.1.2 and §9.4 are still owed the prose, and that debt is the likeliest reason the change reached this log later than the code did. | §3.1.2, §3.7, §5.5.1.1, §9.4, §9.4.1 |
 | 2026-09-07 (Canvas written up; three stale statements retired) | **Canvas finally has a design record.** New **§3.7**, written from the tree rather than from memory: the page-kind-not-a-block-type decision and both arguments for it, the single-`graphicsLayer` transform that keeps cards and arrows aligned at any zoom, the node and edge model, the View-Only enforcement that landed the same day plus the one exemption it keeps (the lazy `PageCanvas` shell, ungated *and* unbumped — repair-on-open must not claim authorship), what travels in the snapshot and what deliberately does not, the desktop asymmetry (the surface is Android-only while the entities, DAOs and merge pass are in `shared\`, so desktop is a full participant in canvas sync while rendering a placeholder), and the two `docs/audit-2026-09-04.md` §1 defects that make arrows unreachable and are confirmed still open. This closes what §3.4's 2026-09-04 correction acknowledged and then explicitly declined to reconstruct in passing. **§4** gains the three Canvas entity rows, and its "seven entities have no row here" note is marked partly closed at four rather than edited down, since the size of the original omission is why the paragraph exists. **§1's "Five pages" is deliberately *not* changed to six** — it counts nav destinations (`WorkbenchDestination` has five) and Canvas is a page kind rendered inside the Pages destination; the fix is a note saying exactly that, because the ambiguity between "uncounted sixth tab" and "page kind that was never counted" is what let the absence go unnoticed. **§10**'s desktop-companion deferral struck: its own graduation condition was met by Milestone 1 on 2026-08-30 and three milestones have shipped since, leaving a superseded deferral in the one list a reader consults for what is not built. **§11**'s next-step bullet named a reopened backlog but not its first item — Milestone 0 has landed (View-Only gates on the four surfaces that had never adopted them, plus enum quarantine at every sync boundary) and the next step is §9.10's Room destructive-migration switch, first on a dependency argument: nearly every reopened item adds to the schema, so each one built before the switch is another migration to hand-write afterwards. Its test count is **recounted, not copied** — 321 `@Test` across 29 classes, static, none ignored — with the disagreement against the 313 handed over explained rather than smoothed over. Separately, `docs/audit-2026-09-04.md` row 5.1 (nested blocks — that audit's own top-ranked gap, still listed as open) is marked closed against `988f8c7` and `4e63f08`. | §1, §3.7, §4, §10, §11; `docs/audit-2026-09-04.md` |
 | 2026-09-07 (deferred issue put on the record) | **New Open item in §9.4: a record this build reads *well enough* is republished with the fields it did not understand stripped out.** Verified against the tree rather than assumed: `SnapshotSyncOrchestrator`'s `Json` is configured `ignoreUnknownKeys = true`, and all 24 `@Serializable` declarations in `SnapshotRecords.kt` and `PageSnapshotRecords.kt` are plain data classes with no catch-all — no `JsonObject`, no leftover-property map, in either file. A record from a newer build carrying one additional field therefore decodes with it silently discarded, is adopted into Room, and is re-encoded on the next write pass **from Room rows** (`exportPages()`, and the `SnapshotMappers` path off `entryDao.getAll()`) rather than from the bytes that arrived — so it goes back to the folder without the field, and every other device adopts that. The asymmetry is why it earns a written record: a record this build *cannot* read is now the safe case, because quarantine holds it as a raw `JsonElement` and republishes it byte-faithfully, so it is precisely the records understood *well enough to adopt* that lose data — the failure gets quieter as two builds grow closer, and no unreadable value exists anywhere for a guard to trip on. **Deferred, not fixed**: the fix is a format change (every record carrying its raw `JsonObject` alongside its typed fields, merged on re-encode), not a guard, and it rewrites `SnapshotRecords.kt` and `SnapshotMappers.kt` end to end — the same two files the backlog's SYNC lane (S2/S3/S4) already rewrites and marks strictly serial for that reason, so doing it separately would rewrite both twice. Stated in the section as plainly as it is here: it is not fixed today, and it bites the first time two builds of different versions share a folder. **(Fixed 2026-09-09.** Not as this row predicted: the fix is not a format change and does not touch `SnapshotRecords.kt` or `SnapshotMappers.kt` at all. Those records are re-encoded *from Room rows*, so carrying a raw `JsonObject` on the record class would preserve nothing unless the unknown JSON were also persisted — a column on every snapshot-bearing entity. The seam that works is the write path, which already republishes raw `JsonElement`s for quarantine: `publishArrayFile` and `publishPageFile` now read the folder's existing copy and carry across every key the record's serializer descriptor does not declare. "Not declared" rather than "not present" is load-bearing — an omitted default is indistinguishable from an unknown field otherwise, and copying those back would resurrect values this build had deliberately cleared. Recursive, matched by `uid`; the three record types without one are left alone rather than matched positionally. Preservation is best-effort and can never fail a write. **Detection remains open**: this stops the loss, not the silence.)* | §9.4 |
+| 2026-09-11 (§0 added) | **New §0 Objectives, upstream of every later section**: the eight hard constraints, purpose and goals, the bar per surface (`docs/benchmarks.md`), eight principles, ten decisions with acceptance criteria, out-of-scope, the order of work, risks, open items. Drafted as `OBJECTIVES.md` and folded in the same day so that one file needs no precedence rule. Three later sections are **Corrected** in place by §0.6 rows and owe their own amendment in the pass that builds them: §3.1.1 (nesting depth), §3.3 (streak-based habits), §3.1.6 (Tags → Label). | §0 (new), §1 (pointer) |
+
+---
+
+## 0. Objectives (Decided 2026-09-11 — the section every later one is filtered through)
+
+**Why this section exists, and why it is §0.** The rest of this file records *how*: one feature at
+a time, with the corrections each one accumulated. This section records *what for*, *what it must
+never do*, *what it is measured against*, and *in what order* — the things a reader needs before
+§1 and that, until now, lived in a session survey (2026-09-10) and a benchmark
+(`docs/benchmarks.md`, 2026-09-11, cited below as **B§n**). It was drafted as a separate
+`OBJECTIVES.md` and folded in the same day: two files addressing one product need a precedence
+rule between them, and a precedence rule is a drift rule in disguise. Inside one file the rule is
+ordinary — **a later section defers to §0**; where one disagrees, it is amended and tagged
+**Corrected** with a pointer here. The numbering starts at 0 so that nothing else moved.
+
+Reasoning lives once, at the pointer. Nothing is restated here that a `B§` or a `§` can carry.
+
+**Confidence tags used in this section:** **[Verified]** — checked against the tree on
+2026-09-11; **[Assumed]** — asserted from product knowledge, to be confirmed before anything is
+built on it.
+
+### 0.1 Hard constraints
+
+Non-negotiable. A proposal that needs one relaxed is out of scope by definition (§0.7), not an
+open item (§0.10).
+
+| # | Constraint | Source |
+|---|---|---|
+| 0.1.1 | **Personal use only.** Not distributed, not sold, no store. One person's data on that person's devices. | survey B5 |
+| 0.1.2 | **Offline-first.** Every feature works with no network. No network call unless the person explicitly enabled one (0.1.6; Google Calendar, §9.5). | survey D9; §3.5 |
+| 0.1.3 | **No telemetry.** Nothing leaves the device that the person did not put there. | survey D9 |
+| 0.1.4 | **No first-party sync.** Replication is an external Syncthing-fork over a folder of snapshot files this app reads and writes; the app never runs a server, an account or a relay. | survey D10; §9.4 |
+| 0.1.5 | **No collaboration.** No presence, no comments-as-conversation, no public sharing, no web clipper, no projects-as-teams. A different product. | survey A3; scope C1 |
+| 0.1.6 | **AI is opt-in, with the person's own key**, or a local model. Off, the app is whole. | survey A3; scope C4 |
+| 0.1.7 | **Two platforms: Android (primary) and Windows desktop.** No others. True parity is the goal; desktop waits for the shape to settle (§0.8). | survey C7, C8 |
+| 0.1.8 | **Unrooted, Storage Access Framework, no Play distribution.** | §1 |
+
+### 0.2 Purpose, goals, non-goals
+
+**Purpose.** One app for a single person's pages, databases, calendar, tasks, habits and the map
+between them — built to **improve on Notion's features for one person**, not to integrate a
+subset of them. Notion was the starting point, not the ceiling (survey A2).
+
+**Goals**
+
+1. **Exceed, including on the data model** (survey A4). The concrete meaning is §0.6.8: a schema
+   can be attached to a label, so any page anywhere can be a row of its kind.
+2. **A base as simple as possible on a structure as scalable as possible** (survey E11). One
+   person tracks groceries and a company roadmap without the app feeling like two products (§1).
+3. **Every power feature present, none obligatory** — progressive disclosure (survey E12; §0.5.1).
+4. **A human layer.** Habits are not a tracker (§0.5.2).
+5. **Durable data.** Everything the app stores can leave it in a form something else reads:
+   Markdown (§7 in reverse), JSON Canvas, `.tendril` (§9.4.1), ICS. The app is not a hostage-taker.
+6. **True parity between the two platforms**, reached by sharing code, not by porting twice.
+
+**Non-goals** — not "later", but *not this app*: anything in §0.1; a plain-files vault
+(Markdown is an export format, not the storage format — §3.1.1's span model stands, B§1.2);
+gamified upkeep (§0.5.2); inferred relationships between pages (§3.4).
+
+### 0.3 Blast radius of the 2026-09-11 pass
+
+What changes against the tree on that date; **[Verified]** where B§ says so.
+
+| | |
+|---|---|
+| **New** | Time on tasks — estimate, planning, tracking (§0.6.5, §0.8); a completion log and a presence view for habits (§0.6.6); a second task date, sub-tasks, an opt-in importance flag, Postpone (§0.6.4); schema on a label (§0.6.8); an outline mind map (§0.6.2); a live canvas block (§0.6.3); natural-language entry, calendar layers, an agenda, ICS (§0.8). |
+| **Changed** | Nesting depth unlimited (§0.6.1); the §3.1.6 feature renamed *Label* (§0.6.9); the streak retired from the habit row (§0.6.6); §3.2's "deadline" wording corrected to *When* (§0.6.4); the Canvas UI moves to `shared/` (§0.6.10). |
+| **Untouched** | The block/span model (§3.1.1); databases, views, bindings, computed properties (§5); snapshot sync, merge, encryption (§9.4); Notion import (§7); Canvas as a page kind (§3.7); the five nav destinations (§1). |
+
+### 0.4 The bar
+
+Per surface, the frame is the full-featured *paid* option where one exists; its reach is the
+ceiling scores are measured against. Scores are **[Assumed]**; the gaps are **[Verified]**
+against the tree. Full tables: B§1–4, B§8, B§10.
+
+| Surface | Frame | What it has that Tendril lacks, in one line |
+|---|---|---|
+| Pages | Notion Plus; data model: Tana / Anytype | Linked views in a page, sub-pages from inside a page, columns, history, transclusion; a schema on any page |
+| Calendar | Fantastical Premium | Natural-language entry, an agenda, drag-to-move, an edit path at all (§3.2 as corrected 2026-09-06) |
+| Tasks & Habits | TickTick Premium; restraint: Things 3 | Sub-tasks, a second date, an estimate; for habits, any memory beyond a streak |
+| Road Map | Obsidian's graph | Filters, colour by label, local depth, typed edges |
+| The human layer | **Tiimo** | A visual day, a focus mode showing one thing, notifications that offer rather than demand |
+
+Six ideas score high on every surface they touch (B§5): **time** (estimate → plan → track →
+compare), **a schema on a label**, **natural-language entry**, **a task with When, Deadline and
+Someday**, **habit presence**, **graph filters**. §0.6 and §0.8 are those six, in dependency order.
+
+### 0.5 Principles
+
+Each is a rule a future decision is checked against, with its home.
+
+- **0.5.1 Progressive disclosure.** A person who never opens a power feature has today's app. A
+  database gets a label only when asked; importance is a flag hidden until enabled; the streak is
+  a number behind a disclosure. Amazing Marvin is the reference (B§10.2).
+- **0.5.2 The human layer.** Habits exist to keep the things that are *not* work — rest, care,
+  practice — visible as part of a life, for a neurodiverse person as much as anyone. **Show
+  presence, never absence**: no misses, no gaps, no red, no chain, no percentage. Offer, don't
+  demand. The rule leaks, deliberately, into Tasks: a *When* is a plan that moves without guilt;
+  a *Deadline* is rare and real; there is no priority scale. Home: B§10.
+- **0.5.3 What is indexed is what is stored.** No second copy of content. The mind map is a view
+  of blocks; the export is a rendering; a schema's values live on the page. Home: §3.1.1, B§9.4.
+- **0.5.4 A page keeps its own home.** Membership in a database is shown, not contained.
+  Deleting a database never deletes a page that lived elsewhere. Home: B§12.5.
+- **0.5.5 Arm to interact.** A pannable surface inside a scrolling page is inert until tapped,
+  and grows in place when armed. Explicit modes over guessed gestures. Home: B§9.6.
+- **0.5.6 Absence never implies deletion.** In sync, in merge, and now in schema values on
+  untag. Home: §9.4.
+- **0.5.7 Explicit over inferred.** Edges are drawn or written, never scored from similarity.
+  Home: §3.4.
+- **0.5.8 Shared code is the parity mechanism.** A feature reaches desktop by living in
+  `shared/`, not by a second implementation. Home: §12, §0.6.10.
+
+### 0.6 Decisions of 2026-09-11
+
+Verdicts, each with **Finding / Decision / Acceptance** where something will be built against it.
+Reasoning lives at the pointer.
+
+**0.6.1 Nesting depth — unlimited.** Finding **[Verified]**: `Block.parentBlockId` is unbounded;
+`indentTargetFor` alone enforces one level. Decision: lift it; §3.1.1's "nestable one level" is
+**Corrected** by this row. Acceptance: a list nests to any depth; export renders the depth; FTS
+content unchanged. (B§9.5)
+
+**0.6.2 The in-page mind map is a rendering of a nested list.** Finding: an outline and a mind
+map are the same data (Xmind, markmap). Decision: no mind-map entity; a subtree drawn as a tree,
+inert inline until tapped, then armed and grown in place to edit; a page may hold several. §10's
+deferred "in-page mind-map block" is resolved by this row. Acceptance: creating, editing and
+deleting a node is creating, editing and deleting a block; the map has no table of its own; the
+Markdown export shows the list. (B§9.4, B§9.6)
+
+**0.6.3 The canvas block is the live board.** Finding: Canvas is a shipped page kind with an
+unbounded content space (§3.7). Decision: a block that embeds a Canvas page, inert until armed,
+grown in place; no second canvas model — §3.7's "a page kind, not a block type" stands, because
+the block *embeds* a page. Acceptance: the block points at a `CANVAS` page by id; arming captures
+pan/zoom/drag; Back disarms; the page list still scrolls when inert. (B§9.3, B§9.6)
+
+**0.6.4 A task has a When and an optional Deadline.** Finding **[Verified]**: `Entry.startDate`
+is a task's only date and is both where Calendar draws it and what §5.2 binds as "deadline".
+Decision: `startDate` stays the *When*; add optional `dueDate`; add `parentEntryId`
+(checklist-style sub-tasks), a hidden `estimate`, a single opt-in *important* flag, and a
+**Postpone** control that moves a date forward by minutes / hours / days / months. "Someday" is
+the undated task, named. Labels on entries after §0.6.8. Acceptance: an existing task gains no
+deadline by migration; §5.2's `deadlinePropertyId` is renamed to a *date* binding and a second,
+optional deadline binding exists. Open: which date Postpone moves by default (§0.10). (B§11)
+
+**0.6.5 Time is a first-class concern.** Decision in principle: estimate → plan → track →
+compare, in that order (§0.8). Shape: Tiimo's visible day and Llama Life's "now", not a workload
+chart. Nothing built yet; recorded so the estimate field (0.6.4) is not designed without its
+consumers. (B§5, B§10.3)
+
+**0.6.6 Habits keep a completion log and show presence.** Finding **[Verified]**: `Habit` holds
+only `streak`, `previousStreak`, `lastCompletedDate`. Decision: add a completion log; the streak
+leaves the row and becomes an opt-in derived number; the habit detail shows "four times this
+month", "usually mornings", "last: Tuesday" and never a miss. §3.3's "streak-based" is
+**Corrected** by this row to "log-based, presence shown". Acceptance: no screen shows a gap, a
+percentage or a broken chain by default. (B§10.3)
+
+**0.6.7 Canvas grows additively.** Colours, groups, image nodes, nested boards as a
+`PAGE_EMBED` of a Canvas page, a mind-map layout mode sharing 0.6.2's layout code, JSON Canvas
+export. (B§9.2, B§9.5)
+
+**0.6.8 A schema on a label — shape A, opt-in.** Finding **[Verified]**: `PropertyValue` is
+keyed by page, not by membership; a row is a page with a single `databaseId`. Decision: a database
+may *bind a label*; a page carrying it is a full row in that database's views and gains the
+database's fields in its header, while keeping its own home (§0.5.4). Untag hides the values;
+they purge with the database's own trash (§5.5.1.1). The first application of a label bound to a
+to-do database asks once. Acceptance: a plain page under any parent can be labelled into a
+database, edited in its table, unlabelled and relabelled without loss; deleting the database
+leaves the page where it was. (B§12)
+
+**0.6.9 The §3.1.6 feature is called *Label*.** So that *tag* keeps its Notion meaning — a Select
+property inside one database, which this app also has (§4). §3.1.6 is **Corrected** by this row
+in name only; the code's `Tag`/`PageTag` rename is separate and mechanical. (B§12.5)
+
+**0.6.10 The Canvas UI moves to `shared/` first.** Finding **[Verified]**: 821 lines in
+`Tendril android/…/ui/canvas/`, none in `shared/`. Decision: the move precedes every spatial
+feature. Acceptance: `CanvasScreen` compiles for both targets; desktop opens a canvas. (B§9.5)
+
+### 0.7 Explicitly out of scope
+
+Ruled out on purpose. Not to be reopened without amending §0.1 or §0.2. The evidence for each
+row is in `docs/scope-decisions.md`; this is the short list.
+
+- Everything §0.1 excludes: distribution, servers, accounts, presence, sharing, clipping,
+  telemetry.
+- A mind-map entity of its own (B§9.4, M3) and an always-live canvas inside a scrolling page
+  (B§9.3, O2) — 0.6.2 and 0.6.3 are the forms that survive.
+- Streak chains, heat-maps of misses, scores that punish (§0.5.2).
+- A priority *scale* (§0.6.4).
+- Inferred edges (§0.5.7). Character-level CRDT (scope X1). Embedded P2P sync (scope C3).
+  Desktop home-screen widgets (scope C5).
+- Markdown as the storage format (§0.2).
+
+### 0.8 Order of work
+
+By dependency, then by value (B§6, B§9.5). Each row is a PR or a short chain of them; the section
+of this file it touches is amended in the same pass (§0.11).
+
+| Step | Work | Unblocks |
+|---|---|---|
+| 1 | **0.6.10** Canvas UI → `shared/` | every spatial row on desktop |
+| 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view | 3, 6, 7 |
+| 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block, **0.6.7** as time allows | — |
+| 4 | **0.6.8** schema on a label; **0.6.9** rename | labels on entries; linked views in a page |
+| 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
+| 6 | Calendar: edit path, drag-to-move, agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
+| 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
+| 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
+| ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
+
+Desktop **[Assumed]**: four of five destinations are stubs and neither export reaches it
+(`tendril-windows-spec.md`); parity is tracked per row above rather than as one milestone, so it
+never becomes "later".
+
+### 0.9 Risks
+
+- **Pressure creep.** Every task feature is one badge away from a tracker. §0.5.2 is the check; a
+  reviewer asks "does this show absence?" of each new screen.
+- **Two implementations.** The Canvas UI already diverged onto one platform once. §0.5.8 and step
+  1 are the mitigation; a feature that lands Android-only is incomplete, not shipped.
+- **Scale.** Canvas and the mind map draw every node; past a few hundred, viewport culling is a
+  filter before drawing, not an architecture change (B§9.5). Images are already budgeted (#40).
+- **Schema on a label meets Sync-to-Tasks.** A label bound to a to-do database turns pages into
+  tasks. The once-per-label confirmation is the mitigation; the risk is a surprised person, not
+  broken data.
+- **The span model and transclusion.** Block references are a new span style; section embeds are
+  not. If transclusion of whole sections is ever wanted, that is a real design, not a span.
+
+### 0.10 Open items
+
+Genuinely undecided — distinct from §0.7.
+
+1. Which date **Postpone** moves by default — the When (recommended) or the Deadline (B§11).
+2. Whether the inert canvas block draws nodes live or a cached thumbnail (B§9.6).
+3. Whether habits become **measurable** (a value on the log entry) now or later (B§10.3).
+4. Whether a one-tap **mood/energy check-in** joins the human layer, and when — it is not a
+   habit.
+5. **Command palette / quick switcher**: reopens §3.1.7's deferral; the FTS title-not-indexed
+   defect (§3.1.1) is fixed first regardless.
+6. Where **JSON Canvas** files go — in the Markdown zip or beside `.tendril`.
+7. Whether the Canvas page kind and the block share one composable at two sizes exactly as the
+   mind map does (recommended) or the page kind keeps its own screen.
+8. Nesting **rendering** past a few levels on a phone width — an indentation budget, or a fold.
+9. Whether this file should move out of `Tendril android/` to the repository root, now that its
+   §0 is cross-platform — a mechanical move with a handful of path references to update.
+
+### 0.11 Relationship to the rest of this file and to the companion documents
+
+- **Within this file:** a later section defers to §0. Where one disagrees, it is amended at the
+  section, marked **Corrected** with a pointer here, and the Revision Log gets its one line.
+  Nothing in §0.6 is "done" until the section it touches says so.
+- **`tendril-windows-spec.md`:** §12's anti-drift rule gains a third line — §0 is cross-platform
+  content, so any change to it gets that file's Revision Log a same-day pointer, as a `shared/`
+  change would.
+- **`docs/scope-decisions.md`** remains the register of what is *not* built and why; §0.7 is the
+  short list, that file is the evidence.
+- **`docs/benchmarks.md`** is dated and **[Assumed]** by nature; rescore before relying on any row
+  older than a release of the app it describes.
 
 ---
 
 ## 1. Overview
+
+*The purpose this overview serves, the constraints it is filtered through, and the bar it is
+measured against are §0 (added 2026-09-11); this section keeps the description and the build
+environment.*
 
 Tendril is a personal productivity app — an Android app plus a Windows desktop companion (§12) over
 a shared Kotlin Multiplatform core — combining a Notion-like page/database system, a
