@@ -24,6 +24,9 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 # still alpha/beta-only for Compose Multiplatform at this pin (tendril-windows-spec.md §6 step 3
 # note); WorkbenchScaffold's nav is hand-rolled instead, see WorkbenchNavState.kt.
 androidx-lifecycle-viewmodel-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
+# 0.6.2 - the armed mind map closes on Back; CMP's own handler, so desktop's Escape and Android's
+# gesture reach the same code. Separate artifact since CMP 1.8.
+compose-ui-backhandler = { group = "org.jetbrains.compose.ui", name = "ui-backhandler", version.ref = "composeMultiplatform" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

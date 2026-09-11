@@ -74,6 +74,10 @@ data class Block(
     val mentionedPageId: Long? = null,
     /** TOGGLE only — "actually collapses" (§3.1.1), state persisted so it survives navigation. */
     val toggleExpanded: Boolean = true,
+    /** §0.6.2 — this block's subtree is shown as a mind map instead of as indented rows. A view
+     * preference on the content it applies to, persisted for the same reason [toggleExpanded] is;
+     * the map itself is a drawing of the subtree and stores nothing (v12). */
+    val mindMap: Boolean = false,
     /** IMAGE only — where *this device* keeps its copy: an app-private absolute path, written on
      * insert (§3.1.1) and never synced, because it is meaningless on any other device.
      *

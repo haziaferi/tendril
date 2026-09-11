@@ -307,6 +307,7 @@ class PagesSyncEngine(
         checked = checked, codeLanguage = codeLanguage, calloutIcon = calloutIcon, calloutColor = calloutColor,
         mentionedPageUid = mentionedPageId?.let { pageIdToUid[it] },
         toggleExpanded = toggleExpanded,
+        mindMap = mindMap,
         imageName = imagePath?.let { imageNameFor(uid, it) },
         createdAt = createdAt.toEpochMilli(), updatedAt = updatedAt.toEpochMilli(),
     )
@@ -686,6 +687,7 @@ class PagesSyncEngine(
                         checked = b.checked, codeLanguage = b.codeLanguage, calloutIcon = b.calloutIcon, calloutColor = b.calloutColor,
                         mentionedPageId = b.mentionedPageUid?.let { uidToId[it] },
                         toggleExpanded = b.toggleExpanded,
+                        mindMap = b.mindMap,
                         createdAt = Instant.ofEpochMilli(b.createdAt), updatedAt = Instant.ofEpochMilli(b.updatedAt),
                     )
                 )

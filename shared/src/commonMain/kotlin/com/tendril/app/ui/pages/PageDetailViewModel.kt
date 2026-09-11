@@ -32,6 +32,7 @@ import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
 import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.outdentPlanFor
+import com.tendril.app.domain.outlineOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -233,6 +234,44 @@ class PageDetailViewModel(
             contentRepository.rebuildFtsForPage(pageId)
             touch()
         }
+    }
+
+    /** §0.6.2 — show or hide this block's subtree as a mind map. */
+    fun setMindMap(block: Block, mindMap: Boolean) = launchAndReindex {
+        blockDao.update(block.copy(mindMap = mindMap, updatedAt = Instant.now()))
+    }
+
+    /**
+     * §0.6.2 — a new child at the end of [parent]'s subtree: the map's "add child" is an
+     * ordinary block insert. Placed after the last block of the parent's subtree in outline
+     * order (so it reads last among its siblings in the list too), then parented, with the same
+     * dense renumbering [addBlock] does.
+     */
+    fun addBlockUnder(parent: Block, content: String) = launchAndReindex {
+        val existing = blockDao.getForPage(pageId)
+        val outline = outlineOf(existing, expandAll = true)
+        val parentIndex = outline.indexOfFirst { it.block.id == parent.id }
+        if (parentIndex < 0) return@launchAndReindex
+        val parentDepth = outline[parentIndex].depth
+        // The subtree ends where the next entry is no deeper than the parent.
+        var end = parentIndex
+        while (end + 1 < outline.size && outline[end + 1].depth > parentDepth) end++
+        val afterOrder = outline[end].block.order
+        val sorted = existing.sortedBy { it.order }
+        val insertAt = (afterOrder + 1).coerceIn(0, sorted.size)
+        val now = Instant.now()
+        sorted.drop(insertAt).forEach { b -> blockDao.update(b.copy(order = b.order + 1)) }
+        blockDao.insert(
+            Block(
+                pageId = pageId,
+                type = BlockType.BULLETED_LIST_ITEM,
+                order = insertAt,
+                content = content,
+                parentBlockId = parent.id,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
     }
 
     fun setToggleExpanded(block: Block, expanded: Boolean) = launchAndReindex {

@@ -128,3 +128,11 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `dueDatePropertyId` INTEGER")
     }
 }
+
+/** §9.10 / §0.6.2 — v11 → v12. `Block.mindMap`, a view preference on a block: whether its
+ * subtree is drawn as a mind map. Defaults to the list every block was until now. */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `blocks` ADD COLUMN `mindMap` INTEGER NOT NULL DEFAULT 0")
+    }
+}
