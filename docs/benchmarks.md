@@ -684,3 +684,8 @@ text or a dead link). The question was only two smaller things, both **decided a
   precedent is the linked view: rows that live elsewhere, shown in full.
 
 So "show" does not mean a weaker kind of row. It means the page keeps its own home.
+
+**Naming, decided the same day:** the §3.1.6 feature is called **Label** from here on — in the
+UI, in the objectives file, and in the spec on its next pass — so that "tag" can keep meaning
+what Notion users expect (a Select property inside a database). The code's `Tag`/`PageTag` rename
+is mechanical and separate; until it lands, the word in the tree is the old one.
