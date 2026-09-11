@@ -371,7 +371,7 @@ promise — the map is never a second copy of anything — where a mind-map enti
 | Proposal | Viable | Depends on | Decision needed |
 |---|---|---|---|
 | 19 · **Canvas preview block** (O1) | yes, small | — | Whether the thumbnail is drawn live from nodes or cached as an image |
-| 20 · **Outline mind map** (M2) | yes, small once #13 lands | **#13** — lift the one-level cap (`indentTargetFor`), choose a depth cap | Depth cap (6 is Workflowy's practical floor; unlimited is Logseq's); full-screen only, or also an inline read-only rendering |
+| 20 · **Outline mind map** (M2) | yes, small once #13 lands | **#13** — lift the one-level cap (`indentTargetFor`) | *Decided 2026-09-11:* depth unlimited; inline (read) and full-screen (edit) are the two options a person picks between per map |
 | 21 · **Canvas mind-map layout** (M1) | yes, small | Canvas; shares #20's layout code | Whether the root is chosen per board or inferred (the node with no incoming edge) |
 | 22 · **JSON Canvas export** | yes, small | #37 | Whether `.canvas` files go in the Markdown zip or beside `.tendril` |
 | 23 · **Canvas depth** — colours, groups, image nodes, nested boards, body preview | yes, additive | — | Order; nested boards are free (a `PAGE_EMBED` of a Canvas page) and could go first |
@@ -387,7 +387,7 @@ with content; Xmind and markmap both cap the visible text per node and show the 
 platform until #24.
 
 **Decided 2026-09-11, after §9 was read:** nesting depth is **unlimited** (Logseq's answer);
-the outline mind map ships **both** full-screen and as an inline read-only rendering; and
+the outline mind map offers **two options, chosen per map**: an inline rendering in the page (a read view; tap to open) or a full-screen map (where editing happens) — not both at once; and
 **#24 goes first** — the Canvas UI moves to `shared/` before any canvas or mind-map row is built,
 so nothing above lands on one platform.
 
