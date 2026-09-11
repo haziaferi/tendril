@@ -647,3 +647,40 @@ Decisions the author owns:
    lives; the database *shows* it, does not *contain* it).
 5. **One confirmation the first time a binding-carrying schema-tag is applied**, or a per-page
    prompt every time? (Recommendation: once per tag.)
+
+### 12.5 Decided 2026-09-11 — A, opt-in, hide, show; and the two words that confused it
+
+**Shape A, opt-in per database** — agreed by the author. The other three were decided on the
+recommendation, after the following clarification, which is recorded because the confusion will
+recur for anyone coming from Notion.
+
+**Two different things are both called "tags".** Notion's *Tags* is a **property** — a Select or
+Multi-select column that exists inside one database; its values are rows' values, and a page has
+it only because it is a row there. Tendril's tags (§3.1.6) are **labels outside any database**,
+the Joplin/Bear/Obsidian kind, applied to any page. Notion has no equivalent of the second, and
+Tendril already has both: a database can have a Select property named anything, including "Tags",
+and that is untouched by §12. Schema-on-a-tag concerns only the §3.1.6 label.
+
+**Which values are hidden when a bound tag is removed.** Exactly the page's values for *that
+database's* properties — *Notes on Dune*'s Author, Status and Rating, and nothing else. Its body,
+its other tags, its place in the tree, and any values it carries for a *different* bound tag stay
+as they are. **Decided: hide, not delete.** Re-applying the tag restores them; removing a tag by
+accident is common and this makes it free. They are purged when the database itself is deleted
+forever (§5.5.1.1), which is the same lifecycle their row-mates already have. Absence never implies
+deletion (§9.4) is the same rule one level down.
+
+**"Contain" versus "show".** In Notion a row lives *inside* its database — the database is its
+only home, so deleting the database deletes the row. Tendril's native rows are the same, and stay
+the same. A *tagged* page already has a home — *Notes on Dune* lives under *Reading* — so the
+question was never whether it appears in the database (it does: **a full row in every view**,
+fields editable in the table, a card on the board, opens the page on tap — never a title as plain
+text or a dead link). The question was only two smaller things, both **decided as "show"**:
+
+- **Deleting the Books database does not delete *Notes on Dune*.** It loses its three fields and
+  stays under *Reading*. A native row, which has no other home, goes to the trash with its
+  database as today.
+- **The Pages-hub tree lists *Notes on Dune* once, under *Reading*** — not a second time under
+  *Books*. Its membership is visible from the tag chip and from the database's views. Notion's own
+  precedent is the linked view: rows that live elsewhere, shown in full.
+
+So "show" does not mean a weaker kind of row. It means the page keeps its own home.
