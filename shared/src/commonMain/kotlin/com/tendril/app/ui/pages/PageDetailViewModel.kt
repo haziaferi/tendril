@@ -340,7 +340,7 @@ class PageDetailViewModel(
     fun removeTag(tag: Tag) = launchTouching { tagDao.removeFromPage(pageId, tag.id) }
 
     /** Unbound cell edit for this Row — a bound role (Done/Deadline/Recurrence) never reaches
-     * this path; those edit through [toggleRowDone]/[setRowDeadline]/[setRowRecurrence]. */
+     * this path; those edit through [toggleRowDone]/[setRowBoundDate]/[setRowRecurrence]. */
     fun setRowPropertyValue(property: Property, value: String?) =
         launchTouching { propertyValueDao.setValue(property.id, pageId, value) }
 
