@@ -5,6 +5,8 @@ import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitCompletion
+import com.tendril.app.data.habit.HabitCompletionDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
@@ -211,6 +213,36 @@ class FakeEntryCompletionDao(seed: List<EntryCompletion> = emptyList()) : EntryC
     override suspend fun getByUid(uid: String): EntryCompletion? =
         rows.values.firstOrNull { it.uid == uid }
 
+
+    override suspend fun deleteAll() { rows.clear() }
+}
+
+/** In-memory [HabitCompletionDao] — tombstoned like [FakeReminderDao], not append-only. */
+class FakeHabitCompletionDao(seed: List<HabitCompletion> = emptyList()) : HabitCompletionDao {
+    private val rows = linkedMapOf<Long, HabitCompletion>()
+    private var nextId = 1L
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) } }
+
+    override suspend fun insert(completion: HabitCompletion): Long {
+        val id = nextId++
+        rows[id] = completion.copy(id = id)
+        return id
+    }
+
+    override fun observeForHabit(habitId: Long): Flow<List<HabitCompletion>> =
+        flowOf(rows.values.filter { it.habitId == habitId && it.deletedAt == null }.sortedByDescending { it.date })
+
+    override suspend fun getLiveForDay(habitId: Long, date: LocalDate): List<HabitCompletion> =
+        rows.values.filter { it.habitId == habitId && it.date == date && it.deletedAt == null }
+
+    override suspend fun getAll(): List<HabitCompletion> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): HabitCompletion? = rows.values.firstOrNull { it.uid == uid }
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt) }
+    }
 
     override suspend fun deleteAll() { rows.clear() }
 }

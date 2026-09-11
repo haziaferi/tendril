@@ -56,6 +56,7 @@ class ReminderCompletionSyncTest {
             purgeRegistry = mockk(relaxed = true),
             reminderDao = reminderDao,
             entryCompletionDao = completionDao,
+            habitCompletionDao = FakeHabitCompletionDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

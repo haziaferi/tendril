@@ -73,7 +73,7 @@ fun main() {
     )
     val orchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, container.purgeRegistry,
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), pagesSyncEngine, container.purgeRegistry,
         DesktopLocalImageStore(File(dbFile.parentFile, "images")),
     )
     val folderManager = DesktopSyncFolderManager()

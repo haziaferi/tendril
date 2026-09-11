@@ -21,6 +21,7 @@ import com.tendril.app.notifications.AlarmScheduler
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.CalendarProviderPreferences
+import com.tendril.app.storage.TaskPreferences
 import com.tendril.app.storage.GoogleCalendarPreferences
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
@@ -54,6 +55,8 @@ class AppContainer(context: Context) {
     val syncStatusPreferences = SyncStatusPreferences(context)
     val alarmScheduler = AlarmScheduler(context, database.reminderDao())
     val calendarProviderPreferences = CalendarProviderPreferences(context)
+    /** §0.5.1 — the two disclosure switches for Tasks & Habits; off by default. */
+    val taskPreferences = TaskPreferences(context)
     val calendarProviderSync = CalendarProviderSync(context, database.entryDao(), calendarProviderPreferences)
     val entryScheduleCoordinator =
         AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
@@ -75,7 +78,7 @@ class AppContainer(context: Context) {
     val localImages = AndroidLocalImageStore(context)
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), pagesSyncEngine, purgeRegistry,
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), pagesSyncEngine, purgeRegistry,
         localImages,
     )
     /** §7 in reverse — every live page as Markdown in a zip. Takes daos and a stream rather
@@ -88,7 +91,7 @@ class AppContainer(context: Context) {
     val viewLockState = ViewLockState()
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(),
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4 / S4 — the same store the sync folder's fetch writes into, so a picture that
         // arrived in a `.tendril` package and one that arrived from a peer are indistinguishable
@@ -113,7 +116,7 @@ class AppContainer(context: Context) {
         context, database.pageDao(), database.blockDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), pageContentRepository,
     )
-    val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao())
+    val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao())
     val googleCalendarPreferences = GoogleCalendarPreferences(context)
     // `by lazy`, not an eager val: GoogleCalendarAuthManager's constructor calls
     // Identity.getAuthorizationClient(...), so an eager one built a Play Services

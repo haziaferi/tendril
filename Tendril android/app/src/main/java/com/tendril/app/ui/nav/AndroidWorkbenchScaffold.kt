@@ -53,6 +53,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 syncFolderManager = container.syncFolderManager,
                 secretStore = container.secretStore,
                 appLockPreferences = container.appLockPreferences,
+                taskPreferences = container.taskPreferences,
                 syncStatusPreferences = container.syncStatusPreferences,
                 syncCoordinator = container.syncCoordinator,
                 portableArchive = container.portableArchive,

@@ -21,7 +21,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -53,6 +56,8 @@ import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.formatHabitDuration
+import com.tendril.app.domain.TaskWithSubtasks
+import com.tendril.app.domain.withSubtasks
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.reminders.ReminderSheet
 import com.tendril.app.ui.trash.EntryTrashSheet
@@ -60,6 +65,8 @@ import com.tendril.app.ui.trash.HabitTrashSheet
 import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 
 private enum class TabSelection { TASKS, HABITS, MERGED }
 private enum class TimeFilter { TODAY, WEEK, MONTH }
@@ -72,6 +79,7 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
                 TasksHabitsViewModel(
                     container.database.entryDao(),
                     container.database.habitDao(),
+                    container.database.habitCompletionDao(),
                     container.resolveEntryUseCase,
                     container.entryScheduleCoordinator,
                     container.checkInHabitUseCase,
@@ -89,6 +97,21 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
     var reminderTarget by remember { mutableStateOf<Entry?>(null) }
     // §5.5.1 — Entry Trash, the counterpart to Pages' own Trash sheet.
     var showTrash by remember { mutableStateOf(false) }
+    // §0.6.4 — the three task sheets and §0.6.6's habit detail; null means closed.
+    var postponeTarget by remember { mutableStateOf<Entry?>(null) }
+    var subtaskParent by remember { mutableStateOf<Entry?>(null) }
+    var deadlineTarget by remember { mutableStateOf<Entry?>(null) }
+    var habitDetail by remember { mutableStateOf<Habit?>(null) }
+    val showImportance by container.taskPreferences.showImportance.collectAsState()
+    val showStreaks by container.taskPreferences.showHabitStreaks.collectAsState()
+    val rowActions = remember(showImportance) {
+        TaskRowActions(
+            onPostpone = { postponeTarget = it },
+            onAddSubtask = { subtaskParent = it },
+            onSetDeadline = { deadlineTarget = it },
+            showImportance = showImportance,
+        )
+    }
 
     val tasks by viewModel.tasks.collectAsState()
     val habits by viewModel.habits.collectAsState()
@@ -160,11 +183,11 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
 
             when (tab) {
                 TabSelection.TASKS -> TasksList(
-                    tasks, filter, showUndated, { showUndated = it }, viewModel,
+                    tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
                     onAdd = { showAddDialog = true },
                 ) { reminderTarget = it }
-                TabSelection.HABITS -> HabitsList(habits, viewModel, onAdd = { showAddDialog = true })
-                TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel) { reminderTarget = it }
+                TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, onOpen = { habitDetail = it }, onAdd = { showAddDialog = true })
+                TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions) { reminderTarget = it }
             }
         }
     }
@@ -173,12 +196,27 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
         if (tab == TabSelection.HABITS) {
             AddHabitDialog(onDismiss = { showAddDialog = false }, onAdd = viewModel::addHabit)
         } else {
-            AddTaskDialog(onDismiss = { showAddDialog = false }, onAdd = viewModel::addTask)
+            AddTaskDialog(
+                onDismiss = { showAddDialog = false },
+                onAdd = { title, date, time, repeat, deadline -> viewModel.addTask(title, date, time, repeat, deadline) },
+            )
         }
     }
 
     reminderTarget?.let { entry ->
         ReminderSheet(container = container, entry = entry, onDismiss = { reminderTarget = null })
+    }
+    postponeTarget?.let { entry ->
+        PostponeSheet(entry, onPostpone = { viewModel.postpone(entry.id, it) }, onDismiss = { postponeTarget = null })
+    }
+    subtaskParent?.let { parent ->
+        SubtaskDialog(parent, onAdd = { viewModel.addSubtask(parent.id, it) }, onDismiss = { subtaskParent = null })
+    }
+    deadlineTarget?.let { entry ->
+        DeadlineDialog(entry.dueDate, onSet = { viewModel.setDeadline(entry.id, it) }, onDismiss = { deadlineTarget = null })
+    }
+    habitDetail?.let { habit ->
+        HabitDetailSheet(habit, viewModel, showStreak = showStreaks, onDismiss = { habitDetail = null })
     }
 
     if (showTrash) {
@@ -213,11 +251,15 @@ private fun TasksList(
     showUndated: Boolean,
     onShowUndatedChange: (Boolean) -> Unit,
     viewModel: TasksHabitsViewModel,
+    actions: TaskRowActions,
     onAdd: () -> Unit,
     onOpenReminders: (Entry) -> Unit,
 ) {
-    val dated = tasks.filter { it.startDate != null && inFilterRange(it.startDate, filter) }
-    val undated = tasks.filter { it.startDate == null }
+    // §0.6.4 — grouped first, then filtered on the *parent's* date: a step under a task that is
+    // due this week belongs in this week's list even though the step itself carries no date.
+    val grouped = tasks.withSubtasks()
+    val dated = grouped.filter { it.task.startDate != null && inFilterRange(it.task.startDate, filter) }
+    val undated = grouped.filter { it.task.startDate == null }
 
     if (tasks.isEmpty()) {
         EmptyState(
@@ -246,17 +288,48 @@ private fun TasksList(
                 }
             }
             if (showUndated) {
-                items(undated, key = { it.id }) { TaskRow(it, viewModel, onOpenReminders) }
+                items(undated, key = { it.task.id }) { TaskWithSteps(it, viewModel, actions, onOpenReminders) }
             }
         }
-        items(dated, key = { it.id }) { TaskRow(it, viewModel, onOpenReminders) }
+        items(dated, key = { it.task.id }) { TaskWithSteps(it, viewModel, actions, onOpenReminders) }
+    }
+}
+
+/** What a task row can open, handed down once rather than threaded as four lambdas. */
+internal class TaskRowActions(
+    val onPostpone: (Entry) -> Unit,
+    val onAddSubtask: (Entry) -> Unit,
+    val onSetDeadline: (Entry) -> Unit,
+    /** §0.5.1 — the flag is drawn, and offered, only while Settings says so. */
+    val showImportance: Boolean,
+)
+
+@Composable
+private fun TaskWithSteps(
+    group: TaskWithSubtasks,
+    viewModel: TasksHabitsViewModel,
+    actions: TaskRowActions,
+    onOpenReminders: (Entry) -> Unit,
+) {
+    Column {
+        TaskRow(group.task, viewModel, actions, onOpenReminders, stepsDone = group.done, stepsTotal = group.subtasks.size)
+        group.subtasks.forEach { step -> TaskRow(step, viewModel, actions, onOpenReminders, isStep = true) }
     }
 }
 
 @Composable
-private fun TaskRow(entry: Entry, viewModel: TasksHabitsViewModel, onOpenReminders: (Entry) -> Unit) {
+private fun TaskRow(
+    entry: Entry,
+    viewModel: TasksHabitsViewModel,
+    actions: TaskRowActions,
+    onOpenReminders: (Entry) -> Unit,
+    isStep: Boolean = false,
+    stepsDone: Int = 0,
+    stepsTotal: Int = 0,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = if (isStep) 40.dp else 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(
@@ -264,23 +337,61 @@ private fun TaskRow(entry: Entry, viewModel: TasksHabitsViewModel, onOpenReminde
             onCheckedChange = { checked -> viewModel.setDone(entry.id, checked) },
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(entry.title, style = MaterialTheme.typography.bodyLarge)
-            val subtitle = listOfNotNull(entry.startDate?.toString(), entry.startTime?.toString()).joinToString(" · ")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (actions.showImportance && entry.important) {
+                    Icon(Icons.Filled.Star, contentDescription = "Important", modifier = Modifier.padding(end = 4.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                Text(entry.title, style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge)
+            }
+            // The When, the Deadline and the steps, in that order and in one colour: a deadline
+            // that has passed is information, not an alarm (§0.5.2).
+            val subtitle = listOfNotNull(
+                entry.startDate?.toString(),
+                entry.startTime?.toString(),
+                entry.dueDate?.let { "due $it" },
+                if (stepsTotal > 0) "$stepsDone/$stepsTotal steps" else null,
+            ).joinToString(" · ")
             if (subtitle.isNotEmpty()) {
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        IconButton(onClick = { onOpenReminders(entry) }) {
-            Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.reminders_open))
+        if (!isStep) {
+            IconButton(onClick = { onOpenReminders(entry) }) {
+                Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.reminders_open))
+            }
         }
-        IconButton(onClick = { viewModel.trashTask(entry.id) }) {
-            Icon(Icons.Filled.Close, contentDescription = "Delete")
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (!isStep) {
+                    DropdownMenuItem(text = { Text("Postpone…") }, onClick = { menuOpen = false; actions.onPostpone(entry) })
+                    DropdownMenuItem(text = { Text("Add a step") }, onClick = { menuOpen = false; actions.onAddSubtask(entry) })
+                    DropdownMenuItem(
+                        text = { Text(if (entry.dueDate == null) "Set deadline…" else "Change deadline…") },
+                        onClick = { menuOpen = false; actions.onSetDeadline(entry) },
+                    )
+                }
+                if (actions.showImportance) {
+                    DropdownMenuItem(
+                        text = { Text(if (entry.important) "Not important" else "Important") },
+                        leadingIcon = { Icon(if (entry.important) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null) },
+                        onClick = { menuOpen = false; viewModel.setImportant(entry.id, !entry.important) },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                    onClick = { menuOpen = false; viewModel.trashTask(entry.id) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, onAdd: () -> Unit) {
+private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, showStreaks: Boolean, onOpen: (Habit) -> Unit, onAdd: () -> Unit) {
     if (habits.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.LocalFireDepartment,
@@ -294,7 +405,8 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, onA
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
         items(habits, key = { it.id }) { habit ->
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                // §0.6.6 — the row opens the presence view; the checkbox stays its own target.
+                modifier = Modifier.fillMaxWidth().clickable { onOpen(habit) }.padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val checkedToday = habit.lastCompletedDate == LocalDate.now()
@@ -314,7 +426,8 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, onA
                             "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
                             habit.time?.toString(),
                             habit.duration?.let(::formatHabitDuration),
-                            "streak ${habit.streak}",
+                            // §0.6.6 — retired from the row by default; a plain number when asked for.
+                            if (showStreaks && habit.streak > 0) "streak ${habit.streak}" else null,
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -334,15 +447,18 @@ private fun MergedList(
     habits: List<Habit>,
     filter: TimeFilter,
     viewModel: TasksHabitsViewModel,
+    actions: TaskRowActions,
     onOpenReminders: (Entry) -> Unit,
 ) {
-    val dated = tasks.filter { it.startDate != null && inFilterRange(it.startDate, filter) }
+    // Merged is day-shaped, so sub-tasks are folded into their parent's step count here rather
+    // than listed: the steps are undated and would only lengthen a list meant to be read as a day.
+    val dated = tasks.withSubtasks().filter { it.task.startDate != null && inFilterRange(it.task.startDate, filter) }
     if (dated.isEmpty() && habits.isEmpty()) {
         EmptyState(icon = Icons.Filled.Check, message = stringResource(R.string.empty_tasks_message), modifier = Modifier.fillMaxSize())
         return
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-        items(dated, key = { "task_${it.id}" }) { TaskRow(it, viewModel, onOpenReminders) }
+        items(dated, key = { "task_${it.task.id}" }) { TaskRow(it.task, viewModel, actions, onOpenReminders, stepsDone = it.done, stepsTotal = it.subtasks.size) }
         // Habits with a time get a delicate highlight to distinguish them (§3.3).
         items(habits.filter { it.time != null }, key = { "habit_${it.id}" }) { habit ->
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {

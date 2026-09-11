@@ -167,10 +167,14 @@ FIELD_READ_OFF_LANGUAGE = {
 }
 
 # Fields that really are write-only today, each with the reason it still is.
-# This set may only SHRINK: an entry goes when its field gains a reader. A field not
+# This set may only SHRINK - an entry goes when its field gains a reader - with one
+# exception, added 2026-09-11: a field may be ADDED when the spec has decided it is stored
+# ahead of its reader and names that reader (a 0.6 row citing a 0.8 step). The citation
+# goes on the line, so the entry is a promise with an address, not debt. A field not
 # listed here that stops being read is a finding, which is the point of baselining
 # rather than deleting the check. Baselined 2026-09-08, measured not assumed.
 FIELD_WRITE_ONLY_BASELINE = {
+    "Entry.estimate",                       # spec 0.6.4: stored now, read by 0.8 step 7 (Plan mode, tracking)
     "Block.imagePath",                      # P2 - the importer writes it; nothing draws it
     "Tag.color",                            # a palette tuned for dichromacy that renders nowhere
     "EntryCompletion.occurrenceDate",       # written at both resolve sites, never read back

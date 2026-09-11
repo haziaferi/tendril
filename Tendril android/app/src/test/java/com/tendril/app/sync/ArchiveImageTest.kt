@@ -73,6 +73,7 @@ class ArchiveImageTest {
             pageDao = pageDao,
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
+            habitCompletionDao = FakeHabitCompletionDao(),
             purgeRegistry = purgeRegistry,
             pagesSyncEngine = engine,
             localImages = localImages,

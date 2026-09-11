@@ -26,6 +26,12 @@ data class EntrySnapshotRecord(
     val originalOccurrenceDate: String? = null,
     val isExceptionSkip: Boolean? = null,
     val status: String? = null,
+    /** §0.6.4 (v10). All four default so a v9 peer's record, which lacks them, reads as a task
+     * with no deadline, no parent, no estimate and no flag — which is what it is. */
+    val dueDate: String? = null,
+    val parentEntryUid: String? = null,
+    val estimateSeconds: Long? = null,
+    val important: Boolean = false,
     /** References a Row's (Page's) [com.tendril.app.data.page.Page.uid] — resolved against
      * [PagesSyncEngine]'s page-uid map the same drop-and-self-heal way `originalEntryUid` is,
      * if the Row hasn't merged in on this device yet. */
@@ -115,6 +121,18 @@ data class EntryCompletionSnapshotRecord(
     val occurrenceDate: String,
     val resolvedAt: Long,
     val status: String,
+)
+
+/** §0.6.6 / v10 — one habit check-in, travelling as [com.tendril.app.data.habit.HabitCompletion]
+ * does locally: by `habitUid`, with a tombstone and no `updatedAt`, because the only transition
+ * is live → deleted and "deleted on any device wins" needs nothing to compare. */
+@Serializable
+data class HabitCompletionSnapshotRecord(
+    val uid: String,
+    val habitUid: String,
+    val date: String,
+    val checkedAt: Long,
+    val deletedAt: Long? = null,
 )
 
 /**

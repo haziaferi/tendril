@@ -73,6 +73,7 @@ class ImageSyncTest {
             purgeRegistry = mockk(relaxed = true),
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
+            habitCompletionDao = FakeHabitCompletionDao(),
             localImages = localImages,
         )
 
