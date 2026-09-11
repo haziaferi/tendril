@@ -53,9 +53,10 @@ import javax.swing.JFileChooser
  * PageDatabase block editor). This is also the point desktop starts originating edits rather
  * than only ever writing back data just merged in from sync — see §3's re-affirmed gate.
  *
- * Calendar/Tasks & Habits/Road Map/Settings and the Canvas page kind aren't ported this pass
- * (Android-integration-heavy: AlarmManager, Calendar Provider, Google Calendar, Notion import,
- * BiometricPrompt) — [NotAvailableOnDesktop] stands in for each. Theme is fixed (Ink/Light/Sans)
+ * Calendar/Tasks & Habits/Road Map/Settings aren't ported this pass (Android-integration-heavy:
+ * AlarmManager, Calendar Provider, Google Calendar, Notion import, BiometricPrompt) —
+ * [NotAvailableOnDesktop] stands in for each. Canvas was on that list until 2026-09-11, when it
+ * moved into `shared/` and the scaffold began routing to it itself (`tendril-spec.md` §0.6.10). Theme is fixed (Ink/Light/Sans)
  * since there's no Settings screen yet to pick one on desktop.
  */
 fun main() {
@@ -107,7 +108,6 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                 tasksHabitsContent = { NotAvailableOnDesktop("Tasks & Habits") },
                 roadMapContent = { NotAvailableOnDesktop("Road Map") },
                 settingsContent = { NotAvailableOnDesktop("Settings") },
-                canvasContent = { _, _, _ -> NotAvailableOnDesktop("Canvas") },
             )
         }
     }

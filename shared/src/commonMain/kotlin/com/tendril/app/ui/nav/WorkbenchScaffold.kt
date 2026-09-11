@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
+import com.tendril.app.ui.canvas.CanvasScreen
 import com.tendril.app.ui.pages.PageDatabaseScreen
 import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
@@ -46,7 +47,6 @@ fun WorkbenchScaffold(
     tasksHabitsContent: @Composable () -> Unit,
     roadMapContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
-    canvasContent: @Composable (pageId: Long, onBack: () -> Unit, onOpenPage: (Long) -> Unit) -> Unit,
 ) {
     val viewOnly by core.viewLockState.viewOnly.collectAsState()
     val checkboxOnlyPageId by core.checkboxOnlyState.activePageId.collectAsState()
@@ -110,7 +110,12 @@ fun WorkbenchScaffold(
                                 onBack = { navState.back() },
                                 onOpenPage = navState::openPage,
                             )
-                            PageKind.CANVAS -> canvasContent(current.pageId, { navState.back() }, navState::openPage)
+                            PageKind.CANVAS -> CanvasScreen(
+                                core = core,
+                                pageId = current.pageId,
+                                onBack = { navState.back() },
+                                onOpenPage = navState::openPage,
+                            )
                             else -> PageDetailScreen(
                                 core = core,
                                 pageId = current.pageId,
