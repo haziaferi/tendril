@@ -250,6 +250,7 @@ class PagesSyncEngine(
             syncToTasks = db.syncToTasks,
             donePropertyUid = db.donePropertyId?.let { propertyIdToUid[it] },
             deadlinePropertyUid = db.deadlinePropertyId?.let { propertyIdToUid[it] },
+            dueDatePropertyUid = db.dueDatePropertyId?.let { propertyIdToUid[it] },
             recurrencePropertyUid = db.recurrencePropertyId?.let { propertyIdToUid[it] },
             properties = properties.map { PropertySnapshotRecord(it.uid, it.name, it.type.name, it.config, it.order) },
             views = pageDatabaseViewDao.getForDatabase(db.id).map { v ->
@@ -616,6 +617,7 @@ class PagesSyncEngine(
                     syncToTasks = db.syncToTasks,
                     donePropertyId = db.donePropertyUid?.let { propertyUidToId[it] },
                     deadlinePropertyId = db.deadlinePropertyUid?.let { propertyUidToId[it] },
+                    dueDatePropertyId = db.dueDatePropertyUid?.let { propertyUidToId[it] },
                     recurrencePropertyId = db.recurrencePropertyUid?.let { propertyUidToId[it] },
                     updatedAt = Instant.ofEpochMilli(page.updatedAt),
                 )

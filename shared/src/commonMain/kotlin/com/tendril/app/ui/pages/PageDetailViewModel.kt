@@ -23,6 +23,7 @@ import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.setValue
+import com.tendril.app.domain.BindingRole
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.PageContentRepository
@@ -339,7 +340,7 @@ class PageDetailViewModel(
     fun removeTag(tag: Tag) = launchTouching { tagDao.removeFromPage(pageId, tag.id) }
 
     /** Unbound cell edit for this Row — a bound role (Done/Deadline/Recurrence) never reaches
-     * this path; those edit through [toggleRowDone]/[setRowDeadline]/[setRowRecurrence]. */
+     * this path; those edit through [toggleRowDone]/[setRowBoundDate]/[setRowRecurrence]. */
     fun setRowPropertyValue(property: Property, value: String?) =
         launchTouching { propertyValueDao.setValue(property.id, pageId, value) }
 
@@ -349,10 +350,15 @@ class PageDetailViewModel(
         viewModelScope.launch { resolveEntryUseCase.setDone(entry.id, checked) }
     }
 
-    fun setRowDeadline(date: java.time.LocalDate?) {
+    /** The row's bound date — the When or, for [BindingRole.DUE_DATE], the deadline (§0.6.4). */
+    fun setRowBoundDate(role: BindingRole, date: java.time.LocalDate?) {
         if (contentLocked()) return
         val entry = rowLinkedEntry.value ?: return
         viewModelScope.launch {
+            if (role == BindingRole.DUE_DATE) {
+                entryDao.update(entry.copy(dueDate = date, updatedAt = Instant.now()))
+                return@launch
+            }
             val updated = entry.copy(startDate = date, updatedAt = Instant.now())
             entryDao.update(updated)
             entryScheduleCoordinator.onEntryChanged(updated)

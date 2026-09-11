@@ -245,7 +245,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
             properties = properties,
             rows = tableRows.map { it.page },
             onDismiss = { viewModel.dismissEnableSync() },
-            onConfirm = { done, deadline, recurrence, rowIds -> viewModel.confirmEnableSync(done, deadline, recurrence, rowIds) },
+            onConfirm = { done, deadline, recurrence, rowIds, dueDate -> viewModel.confirmEnableSync(done, deadline, recurrence, rowIds, dueDate) },
         )
     }
 
@@ -729,6 +729,20 @@ private fun PropertyHeaderCell(
             } else if (role != null) {
                 DropdownMenuItem(text = { Text("Change binding…") }, onClick = { showMenu = false; showRebindPicker = true })
             }
+            // §5.2.1's "post-hoc bind of a previously-unbound optional role", which
+            // `DatabaseSyncManager.bindProperty` has offered since it was written and no menu
+            // ever reached (found 2026-09-11 while binding a deadline on a to-do database, whose
+            // sync is on from creation with Done alone). One item per unfilled role this
+            // property's type can fill: a DATE offers the When and the Deadline, an INTERVAL
+            // the recurrence. Done is never offered here — it is required, so it is never unfilled.
+            if (role == null && database?.syncToTasks == true) {
+                unfilledRolesFor(property.type, database).forEach { candidate ->
+                    DropdownMenuItem(
+                        text = { Text("Bind as ${bindingRoleLabel(candidate)}") },
+                        onClick = { showMenu = false; viewModel.bindProperty(candidate, property.id) },
+                    )
+                }
+            }
             DropdownMenuItem(text = { Text("Delete property") }, onClick = { viewModel.requestDeleteProperty(property); showMenu = false })
         }
     }
@@ -746,11 +760,23 @@ private fun PropertyHeaderCell(
     }
 }
 
+/** The optional roles [type] could fill on [database] that nothing fills yet. */
+private fun unfilledRolesFor(type: PropertyType, database: com.tendril.app.data.pagedatabase.PageDatabase): List<BindingRole> =
+    BindingRole.entries.filter { it != BindingRole.DONE && bindingTypeFor(it) == type && database.propertyIdFor(it) == null }
+
+private fun com.tendril.app.data.pagedatabase.PageDatabase.propertyIdFor(role: BindingRole): Long? = when (role) {
+    BindingRole.DONE -> donePropertyId
+    BindingRole.DEADLINE -> deadlinePropertyId
+    BindingRole.DUE_DATE -> dueDatePropertyId
+    BindingRole.RECURRENCE -> recurrencePropertyId
+}
+
 /** Which [BindingRole], if any, [propertyId] currently fills on [database] — null for an
  * ordinary, unbound property. */
 private fun bindingRoleOf(database: com.tendril.app.data.pagedatabase.PageDatabase?, propertyId: Long): BindingRole? = when (propertyId) {
     database?.donePropertyId -> BindingRole.DONE
     database?.deadlinePropertyId -> BindingRole.DEADLINE
+    database?.dueDatePropertyId -> BindingRole.DUE_DATE
     database?.recurrencePropertyId -> BindingRole.RECURRENCE
     else -> null
 }
@@ -758,6 +784,7 @@ private fun bindingRoleOf(database: com.tendril.app.data.pagedatabase.PageDataba
 private fun bindingTypeFor(role: BindingRole): PropertyType = when (role) {
     BindingRole.DONE -> PropertyType.CHECKBOX
     BindingRole.DEADLINE -> PropertyType.DATE
+    BindingRole.DUE_DATE -> PropertyType.DATE
     BindingRole.RECURRENCE -> PropertyType.INTERVAL
 }
 
@@ -767,6 +794,7 @@ private fun bindingRoleLabel(role: BindingRole): String = when (role) {
     // "Deadline" was the word the spec used for it, corrected 2026-09-11. The deadline proper is
     // `Entry.dueDate`, which no binding fills yet (its own row in §0.8).
     BindingRole.DEADLINE -> "Date (when)"
+    BindingRole.DUE_DATE -> "Deadline"
     BindingRole.RECURRENCE -> "Recurrence"
 }
 
@@ -859,7 +887,7 @@ private fun DeletePropertyConfirm(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val bound = database != null && property.id in listOfNotNull(database.donePropertyId, database.deadlinePropertyId, database.recurrencePropertyId)
+    val bound = database != null && property.id in listOfNotNull(database.donePropertyId, database.deadlinePropertyId, database.dueDatePropertyId, database.recurrencePropertyId)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delete \"${property.name}\"?") },
@@ -976,31 +1004,36 @@ private fun PropertyCell(
                 enabled = !LocalViewOnly.current,
             )
         }
-        database?.deadlinePropertyId -> DeadlineCell(row.linkedEntry, viewModel)
+        database?.deadlinePropertyId -> BoundDateCell(row.linkedEntry, viewModel, BindingRole.DEADLINE)
+        database?.dueDatePropertyId -> BoundDateCell(row.linkedEntry, viewModel, BindingRole.DUE_DATE)
         database?.recurrencePropertyId -> RecurrenceCell(row.linkedEntry, viewModel)
         else -> UnboundCell(property, row, viewModel)
     }
 }
 
 @Composable
-private fun DeadlineCell(entry: Entry?, viewModel: PageDatabaseViewModel) {
+/** One cell for both date roles: [BindingRole.DEADLINE] reads and writes the When, [BindingRole.DUE_DATE]
+ * the deadline proper (§0.6.4). Anything else is a caller error and says so. */
+private fun BoundDateCell(entry: Entry?, viewModel: PageDatabaseViewModel, role: BindingRole) {
+    require(role == BindingRole.DEADLINE || role == BindingRole.DUE_DATE) { "not a date role: $role" }
     var showPicker by remember { mutableStateOf(false) }
     val viewOnly = LocalViewOnly.current
+    val current = if (role == BindingRole.DUE_DATE) entry?.dueDate else entry?.startDate
     Text(
-        entry?.startDate?.toString() ?: "—",
+        current?.toString() ?: "—",
         style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.clickableRow { if (entry != null && !viewOnly) showPicker = true },
     )
     if (showPicker && entry != null) {
         val state = rememberDatePickerState(
-            initialSelectedDateMillis = (entry.startDate ?: LocalDate.now()).toDatePickerMillis()
+            initialSelectedDateMillis = (current ?: LocalDate.now()).toDatePickerMillis()
         )
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     state.selectedDateMillis?.let { millis ->
-                        viewModel.setDeadline(entry, datePickerMillisToLocalDate(millis))
+                        viewModel.setBoundDate(entry, role, datePickerMillisToLocalDate(millis))
                     }
                     showPicker = false
                 }) { Text("OK") }
@@ -1464,7 +1497,9 @@ fun EnableSyncSheet(
     properties: List<Property>,
     rows: List<Page>,
     onDismiss: () -> Unit,
-    onConfirm: (Long, Long?, Long?, List<Long>) -> Unit,
+    /** done, date (When), recurrence, rows, deadline — the deadline last so every caller that
+     * predates §0.8 step 2b reads the same as before. */
+    onConfirm: (Long, Long?, Long?, List<Long>, Long?) -> Unit,
 ) {
     val checkboxProps = properties.filter { it.type == PropertyType.CHECKBOX }
     val dateProps = properties.filter { it.type == PropertyType.DATE }
@@ -1472,6 +1507,7 @@ fun EnableSyncSheet(
 
     var donePropertyId by remember { mutableStateOf(checkboxProps.firstOrNull()?.id) }
     var deadlinePropertyId by remember { mutableStateOf<Long?>(null) }
+    var dueDatePropertyId by remember { mutableStateOf<Long?>(null) }
     var recurrencePropertyId by remember { mutableStateOf<Long?>(null) }
     var selectedRowIds by remember { mutableStateOf(rows.map { it.id }.toSet()) }
 
@@ -1479,7 +1515,7 @@ fun EnableSyncSheet(
         Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.8f)) {
             Text("Sync to Tasks", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Every row becomes its own linked Task. Pick which property means Done — required — and optionally Deadline and Recurrence.",
+                "Every row becomes its own linked Task. Pick which property means Done — required — and optionally the date it is planned for, a deadline, and a recurrence.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
@@ -1489,6 +1525,8 @@ fun EnableSyncSheet(
             } else {
                 BindingPicker("Done (required)", checkboxProps, donePropertyId) { donePropertyId = it }
                 BindingPicker("Date (optional) — when it is planned for", dateProps, deadlinePropertyId, allowNone = true) { deadlinePropertyId = it }
+                // §0.6.4 — a second date, rare and real. The same property cannot fill both roles.
+                BindingPicker("Deadline (optional)", dateProps.filter { it.id != deadlinePropertyId }, dueDatePropertyId, allowNone = true) { dueDatePropertyId = it }
                 BindingPicker("Recurrence (optional)", intervalProps, recurrencePropertyId, allowNone = true) { recurrencePropertyId = it }
             }
             Spacer(Modifier.height(8.dp))
@@ -1515,7 +1553,7 @@ fun EnableSyncSheet(
             }
             TextButton(
                 enabled = donePropertyId != null,
-                onClick = { donePropertyId?.let { onConfirm(it, deadlinePropertyId, recurrencePropertyId, selectedRowIds.toList()) } },
+                onClick = { donePropertyId?.let { onConfirm(it, deadlinePropertyId, recurrencePropertyId, selectedRowIds.toList(), dueDatePropertyId?.takeIf { d -> d != deadlinePropertyId }) } },
             ) { Text("Turn on") }
         }
     }

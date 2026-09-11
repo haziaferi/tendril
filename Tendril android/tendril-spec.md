@@ -81,6 +81,7 @@ second copy of the reasoning.
 | 2026-09-11 (§0 added) | **New §0 Objectives, upstream of every later section**: the eight hard constraints, purpose and goals, the bar per surface (`docs/benchmarks.md`), eight principles, ten decisions with acceptance criteria, out-of-scope, the order of work, risks, open items. Drafted as `OBJECTIVES.md` and folded in the same day so that one file needs no precedence rule. Three later sections are **Corrected** in place by §0.6 rows and owe their own amendment in the pass that builds them: §3.1.1 (nesting depth), §3.3 (streak-based habits), §3.1.6 (Tags → Label). | §0 (new), §1 (pointer) |
 | 2026-09-11 (Canvas UI to `shared/`) | §0.8 step 1 done: `CanvasScreen` and `CanvasViewModel` moved from the Android app into `shared/src/commonMain` (renames, history kept); the screen takes `WorkbenchCore` in place of `AppContainer`, matching `PageDetailScreen`; the shared scaffold routes `PageKind.CANVAS` itself and its `canvasContent` slot is removed from both platform callers. Desktop opens, edits and links cards on a canvas for the first time. Nothing inside the board changed; 550 tests pass. | §0.6.10, §0.8, §3.7 |
 | 2026-09-11 (step 2: Entry fields, habit log) | §0.8 step 2 done. **Schema v10** (`MIGRATION_9_10`): `entries` gains `dueDate`, `parentEntryId`, `estimate`, `important`; new `habit_completions`, backfilled from `lastCompletedDate`/`previousCompletedDate`. Both travel in the snapshot and the `.tendril` archive; the habit log merges by the Reminder rule (tombstoned, deleted wins). Tasks UI: deadline, steps, Postpone (moves the When), Someday, the opt-in important flag; Habits: streak off the row by default, a presence sheet. §5.2's binding label corrected to "Date (when)"; the second binding is step 2b. 570 tests. | §0.6.4, §0.6.6, §0.8, §0.10, §3.3, §5.2 |
+| 2026-09-11 (step 2b: deadline binding) | §0.8 step 2b done. **Schema v11** (`MIGRATION_10_11`): `page_databases.dueDatePropertyId`. `BindingRole.DUE_DATE` binds a `DATE` property to `Entry.dueDate`; the two date cells and two row editors become one each, taking the role. The enable-sync sheet gains a Deadline picker. **§5.2.1 corrected**: post-hoc bind had no UI path; the header menu now offers "Bind as <role>". Migration verified on desktop and phone; the binding verified end to end on the phone. 573 tests. | §0.6.4, §0.8, §5.2, §5.2.1 |
 
 ---
 
@@ -235,6 +236,14 @@ peer's snapshot mean the wrong thing; its UI label is corrected to "Date (when)"
 binding, for `dueDate`, is **not built here** — it touches the database views on eleven sites and
 is its own row in §0.8. `estimate` is stored and read by nothing yet, by this row's own design;
 `tools/audit.py` carries it in its baseline with that citation.
+**The narrowed item closed the same day (step 2b, schema v11).** `BindingRole.DUE_DATE` binds a
+`DATE` property to `Entry.dueDate` beside the one that binds the When: `PageDatabase.dueDatePropertyId`,
+`dueDatePropertyUid` in the snapshot with a default so a v10 peer's record reads unchanged, a fourth
+branch in every `when` — seeding on enable, editing through the cell, freezing on unbind — and a
+second picker on the enable-sync sheet (one property cannot fill both date roles). Verified on the
+phone: a to-do database's new `Deadline` column bound, a row's bound cell set, the linked task
+showing "due 2026-09-11" under Someday. That run also found and closed a gap older than this
+row — see §5.2.1's correction of the same date.
 
 **0.6.5 Time is a first-class concern.** Decision in principle: estimate → plan → track →
 compare, in that order (§0.8). Shape: Tiimo's visible day and Llama Life's "now", not a workload
@@ -321,7 +330,7 @@ of this file it touches is amended in the same pass (§0.11).
 |---|---|---|
 | 1 | **0.6.10** Canvas UI → `shared/` — *done 2026-09-11* | every spatial row on desktop |
 | 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view — *done 2026-09-11; the second §5.2 binding is its own row below* | 3, 6, 7 |
-| 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` | — |
+| 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` — *done 2026-09-11* | — |
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block, **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
@@ -1503,7 +1512,8 @@ assessment (e.g. seeing every appointment's date and location at a glance to jud
 `PageDatabase.deadlinePropertyId` — fills `Entry.startDate`, which is the day the task is
 *planned for* and where Calendar draws it, not a deadline. The storage and snapshot names are
 kept so a v9 peer's record keeps its meaning; the UI now says "Date (when)". A second, optional
-binding to `Entry.dueDate` — the deadline proper — is §0.8 step 2b and does not exist yet.)*
+binding to `Entry.dueDate` — the deadline proper — is `BindingRole.DUE_DATE`, labelled
+"Deadline", since §0.8 step 2b landed the same day.)*
 
 Explicitly **not** inferred from schema shape (a "Cooked?" checkbox on a Recipes database should
 never silently become a Task). The mechanism is:
@@ -1534,6 +1544,14 @@ never silently become a Task). The mechanism is:
    function, one place both concerns are handled at once.
 
 #### 5.2.1 Binding, retroactive seeding, and rebinding (Decided 2026-07-16, case-scenario round; UI implemented 2026-08-30)
+
+*(**Corrected 2026-09-11:** "UI implemented" was true of rebind and unbind and not of the
+post-hoc *bind* this section specifies. `DatabaseSyncManager.bindProperty` existed from the
+start and no menu reached it — only the enable-sync sheet bound anything, so a to-do database,
+whose sync is on from creation with Done alone, could never gain a date or recurrence binding
+afterwards. Found on the phone while binding §0.6.4's deadline. A property's header menu now
+offers "Bind as <role>" for each unfilled role its type can fill while sync is on; no confirm
+dialog, since nothing bound is frozen or replaced.)*
 
 Two real gaps, found by walking a populated (not empty) database through the binding mechanism: what
 happens to values already sitting in a property at the moment it gets bound, and what happens when a

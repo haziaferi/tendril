@@ -23,7 +23,7 @@ import java.time.LocalDate
  * built. Kept as the storage and snapshot name (`deadlinePropertyId`/`deadlinePropertyUid`) so a
  * v9 peer's record keeps its meaning; the UI says "Date". §0.6.4's second binding, for
  * `Entry.dueDate`, is not this and does not exist yet. */
-enum class BindingRole { DONE, DEADLINE, RECURRENCE }
+enum class BindingRole { DONE, DEADLINE, RECURRENCE, /** §0.8 step 2b — `Entry.dueDate`, the deadline proper. */ DUE_DATE }
 
 /**
  * §5.2/§5.2.1 — the database-level Sync-to-Tasks toggle plus the `bindProperty`/
@@ -57,6 +57,7 @@ class DatabaseSyncManager(
         recurrencePropertyId: Long?,
         rowIds: List<Long>,
         now: Instant = Instant.now(),
+        dueDatePropertyId: Long? = null,
     ): PageDatabase {
         for (rowId in rowIds) {
             if (entryDao.getBySourceRowId(rowId) != null) continue
@@ -64,6 +65,9 @@ class DatabaseSyncManager(
 
             val checked = propertyValueDao.getForPropertyAndRow(donePropertyId, rowId)?.value == "true"
             val startDate = deadlinePropertyId
+                ?.let { propertyValueDao.getForPropertyAndRow(it, rowId)?.value }
+                ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            val dueDate = dueDatePropertyId
                 ?.let { propertyValueDao.getForPropertyAndRow(it, rowId)?.value }
                 ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             val recurrenceRule = recurrencePropertyId
@@ -80,6 +84,7 @@ class DatabaseSyncManager(
                     endDate = null,
                     endTime = null,
                     recurrenceRule = recurrenceRule,
+                    dueDate = dueDate,
                     status = if (checked) EntryStatus.DONE else EntryStatus.PENDING,
                     sourceRowId = rowId,
                     source = EntrySource.DATABASE_SYNC,
@@ -96,7 +101,7 @@ class DatabaseSyncManager(
                 )
             }
         }
-        for (propertyId in listOfNotNull(donePropertyId, deadlinePropertyId, recurrencePropertyId)) {
+        for (propertyId in listOfNotNull(donePropertyId, deadlinePropertyId, recurrencePropertyId, dueDatePropertyId)) {
             propertyValueDao.deleteAllForProperty(propertyId)
         }
 
@@ -104,6 +109,7 @@ class DatabaseSyncManager(
             syncToTasks = true,
             donePropertyId = donePropertyId,
             deadlinePropertyId = deadlinePropertyId,
+            dueDatePropertyId = dueDatePropertyId,
             recurrencePropertyId = recurrencePropertyId,
             updatedAt = now,
         )
@@ -117,7 +123,7 @@ class DatabaseSyncManager(
         for (row in pageDao.getRowsOf(database.id)) {
             entryDao.getBySourceRowId(row.id)?.let { resolveEntryUseCase.trash(it.id, now) }
         }
-        val updated = database.copy(syncToTasks = false, donePropertyId = null, deadlinePropertyId = null, recurrencePropertyId = null, updatedAt = now)
+        val updated = database.copy(syncToTasks = false, donePropertyId = null, deadlinePropertyId = null, dueDatePropertyId = null, recurrencePropertyId = null, updatedAt = now)
         // The database page alone: this clears bindings and trashes Entries (their own snapshot
         // records, with their own timestamps) without rewriting any row's stored cell values.
         return commit(updated, now, touchRows = false)
@@ -141,6 +147,7 @@ class DatabaseSyncManager(
             val updatedEntry = when (role) {
                 BindingRole.DONE -> entry.copy(status = if (newValue == "true") EntryStatus.DONE else EntryStatus.PENDING, updatedAt = now)
                 BindingRole.DEADLINE -> entry.copy(startDate = newValue?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, updatedAt = now)
+                BindingRole.DUE_DATE -> entry.copy(dueDate = newValue?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, updatedAt = now)
                 BindingRole.RECURRENCE -> entry.copy(
                     recurrenceRule = newValue?.let(::parseIntervalValue)?.let { (count, unit) -> RecurrenceRule.Elastic(intervalToPeriod(count, unit)) },
                     updatedAt = now,
@@ -196,6 +203,7 @@ class DatabaseSyncManager(
             val frozen = when (role) {
                 BindingRole.DONE -> (entry.status == EntryStatus.DONE).toString()
                 BindingRole.DEADLINE -> entry.startDate?.toString()
+                BindingRole.DUE_DATE -> entry.dueDate?.toString()
                 BindingRole.RECURRENCE -> (entry.recurrenceRule as? RecurrenceRule.Elastic)
                     ?.period?.let(::formatPeriodAsInterval)
             }
@@ -206,12 +214,14 @@ class DatabaseSyncManager(
     private fun PageDatabase.propertyIdFor(role: BindingRole): Long? = when (role) {
         BindingRole.DONE -> donePropertyId
         BindingRole.DEADLINE -> deadlinePropertyId
+        BindingRole.DUE_DATE -> dueDatePropertyId
         BindingRole.RECURRENCE -> recurrencePropertyId
     }
 
     private fun PageDatabase.withPropertyIdFor(role: BindingRole, propertyId: Long?): PageDatabase = when (role) {
         BindingRole.DONE -> copy(donePropertyId = propertyId)
         BindingRole.DEADLINE -> copy(deadlinePropertyId = propertyId)
+        BindingRole.DUE_DATE -> copy(dueDatePropertyId = propertyId)
         BindingRole.RECURRENCE -> copy(recurrencePropertyId = propertyId)
     }
 }
