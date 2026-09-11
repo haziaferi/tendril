@@ -27,7 +27,11 @@ data class PageDatabase(
     /** Off by default — deliberate opt-in (§5.2), never inferred from schema shape. */
     val syncToTasks: Boolean = false,
     val donePropertyId: Long? = null,
+    /** Binds `Entry.startDate` — the *When*. Named for what §5.2 called it when built and kept
+     * so a v9 peer's `deadlinePropertyUid` keeps its meaning (§0.6.4). */
     val deadlinePropertyId: Long? = null,
+    /** §0.8 step 2b — binds `Entry.dueDate`, the deadline proper. Optional, `DATE`-typed. */
+    val dueDatePropertyId: Long? = null,
     /** §5.2.2 — optional; only ever binds an `Interval`-type Property. */
     val recurrencePropertyId: Long? = null,
     val createdAt: Instant,

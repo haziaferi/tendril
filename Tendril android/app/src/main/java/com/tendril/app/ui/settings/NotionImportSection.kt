@@ -134,9 +134,9 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
             importer = importer,
             database = db,
             onDismiss = { pendingBind = null },
-            onConfirm = { pageDatabase, donePropertyId, deadlinePropertyId, recurrencePropertyId, rowIds ->
+            onConfirm = { pageDatabase, donePropertyId, deadlinePropertyId, recurrencePropertyId, rowIds, dueDatePropertyId ->
                 scope.launch {
-                    databaseSyncManager.enableSync(pageDatabase, donePropertyId, deadlinePropertyId, recurrencePropertyId, rowIds)
+                    databaseSyncManager.enableSync(pageDatabase, donePropertyId, deadlinePropertyId, recurrencePropertyId, rowIds, dueDatePropertyId = dueDatePropertyId)
                     boundDatabaseIds = boundDatabaseIds + db.databaseId
                     pendingBind = null
                 }
@@ -153,7 +153,7 @@ private fun NotionDatabaseBindSheet(
     importer: NotionImporter,
     database: ImportedDatabase,
     onDismiss: () -> Unit,
-    onConfirm: (PageDatabase, Long, Long?, Long?, List<Long>) -> Unit,
+    onConfirm: (PageDatabase, Long, Long?, Long?, List<Long>, Long?) -> Unit,
 ) {
     var properties by remember(database.databaseId) { mutableStateOf<List<Property>?>(null) }
     var rows by remember(database.databaseId) { mutableStateOf<List<Page>?>(null) }
@@ -173,7 +173,7 @@ private fun NotionDatabaseBindSheet(
             properties = currentProperties,
             rows = currentRows,
             onDismiss = onDismiss,
-            onConfirm = { done, deadline, recurrence, rowIds -> onConfirm(currentDatabase, done, deadline, recurrence, rowIds) },
+            onConfirm = { done, deadline, recurrence, rowIds, dueDate -> onConfirm(currentDatabase, done, deadline, recurrence, rowIds, dueDate) },
         )
     }
 }

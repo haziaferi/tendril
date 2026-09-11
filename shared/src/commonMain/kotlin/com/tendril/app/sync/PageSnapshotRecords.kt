@@ -107,6 +107,8 @@ data class PageDatabaseSnapshotRecord(
     val syncToTasks: Boolean = false,
     val donePropertyUid: String? = null,
     val deadlinePropertyUid: String? = null,
+    /** §0.8 step 2b (v11). Defaults so a v10 peer's record reads as "no deadline binding". */
+    val dueDatePropertyUid: String? = null,
     val recurrencePropertyUid: String? = null,
     val properties: List<PropertySnapshotRecord> = emptyList(),
     val views: List<ViewSnapshotRecord> = emptyList(),

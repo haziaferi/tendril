@@ -226,6 +226,7 @@ class PageDatabaseViewModel(
         return when (propertyId) {
             db?.donePropertyId -> (row.linkedEntry?.status == EntryStatus.DONE).toString()
             db?.deadlinePropertyId -> row.linkedEntry?.startDate?.toString()
+            db?.dueDatePropertyId -> row.linkedEntry?.dueDate?.toString()
             // §5.2.2 — the same form DatabaseSyncManager.crystallize writes ("1:WEEK"), not
             // Period.toString()'s "P7D". Two forms for one column meant a view filter matched the
             // live proxy or the crystallised value but never both, and the displayed text changed
@@ -333,11 +334,11 @@ class PageDatabaseViewModel(
     fun requestDisableSync() { _pendingSyncDisable.value = true }
     fun dismissDisableSync() { _pendingSyncDisable.value = false }
 
-    fun confirmEnableSync(donePropertyId: Long, deadlinePropertyId: Long?, recurrencePropertyId: Long?, rowIds: List<Long>) {
+    fun confirmEnableSync(donePropertyId: Long, deadlinePropertyId: Long?, recurrencePropertyId: Long?, rowIds: List<Long>, dueDatePropertyId: Long? = null) {
         if (locked()) return
         val db = database.value ?: return
         viewModelScope.launch {
-            databaseSyncManager.enableSync(db, donePropertyId, deadlinePropertyId, recurrencePropertyId, rowIds)
+            databaseSyncManager.enableSync(db, donePropertyId, deadlinePropertyId, recurrencePropertyId, rowIds, dueDatePropertyId = dueDatePropertyId)
             _pendingSyncEnable.value = false
         }
     }
@@ -560,6 +561,7 @@ class PageDatabaseViewModel(
                 when (property.id) {
                     db.donePropertyId -> databaseSyncManager.disableSync(db)
                     db.deadlinePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DEADLINE)
+                    db.dueDatePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DUE_DATE)
                     db.recurrencePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.RECURRENCE)
                 }
             }
@@ -662,7 +664,7 @@ class PageDatabaseViewModel(
             // different module (`:shared`, §12.5) can't be smart-cast across the module boundary.
             val donePropertyId = db.donePropertyId
             if (db.syncToTasks && donePropertyId != null) {
-                databaseSyncManager.enableSync(db, donePropertyId, db.deadlinePropertyId, db.recurrencePropertyId, listOf(id))
+                databaseSyncManager.enableSync(db, donePropertyId, db.deadlinePropertyId, db.recurrencePropertyId, listOf(id), dueDatePropertyId = db.dueDatePropertyId)
             }
             onCreated(id)
         }
@@ -936,9 +938,16 @@ class PageDatabaseViewModel(
         viewModelScope.launch { resolveEntryUseCase.setDone(entry.id, checked) }
     }
 
-    fun setDeadline(entry: Entry, date: LocalDate?) {
+    /** Writes the date a bound cell edits: the When for [BindingRole.DEADLINE], the deadline
+     * for [BindingRole.DUE_DATE] (§0.6.4). Only the When re-arms alarms — a deadline fires
+     * nothing by itself. */
+    fun setBoundDate(entry: Entry, role: BindingRole, date: LocalDate?) {
         if (locked()) return
         viewModelScope.launch {
+            if (role == BindingRole.DUE_DATE) {
+                entryDao.update(entry.copy(dueDate = date, updatedAt = Instant.now()))
+                return@launch
+            }
             val updated = entry.copy(startDate = date, updatedAt = Instant.now())
             entryDao.update(updated)
             entryScheduleCoordinator.onEntryChanged(updated)

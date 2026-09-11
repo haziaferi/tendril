@@ -117,3 +117,14 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         }
     }
 }
+
+/**
+ * §9.10 / §0.8 step 2b — v10 → v11. One nullable column: the fourth binding role, a `DATE`
+ * property bound to `Entry.dueDate`. Nullable, so no backfill: no database had a deadline
+ * binding before, and none gains one by upgrading.
+ */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `dueDatePropertyId` INTEGER")
+    }
+}

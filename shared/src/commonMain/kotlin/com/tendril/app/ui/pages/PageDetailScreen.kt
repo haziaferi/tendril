@@ -97,6 +97,7 @@ import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
+import com.tendril.app.domain.BindingRole
 
 @Composable
 fun PageDetailScreen(
@@ -947,7 +948,8 @@ private fun RowPropertyEditor(
                     onCheckedChange = { viewModel.toggleRowDone(it) },
                     enabled = !locked,
                 )
-                database?.deadlinePropertyId -> RowDeadlineEditor(linkedEntry, viewModel)
+                database?.deadlinePropertyId -> RowBoundDateEditor(linkedEntry, viewModel, BindingRole.DEADLINE)
+                database?.dueDatePropertyId -> RowBoundDateEditor(linkedEntry, viewModel, BindingRole.DUE_DATE)
                 database?.recurrencePropertyId -> RowRecurrenceEditor(linkedEntry, viewModel)
                 else -> RowUnboundEditor(property, storedValue, viewModel)
             }
@@ -956,17 +958,18 @@ private fun RowPropertyEditor(
 }
 
 @Composable
-private fun RowDeadlineEditor(entry: Entry?, viewModel: PageDetailViewModel) {
+private fun RowBoundDateEditor(entry: Entry?, viewModel: PageDetailViewModel, role: BindingRole) {
     var showPicker by remember { mutableStateOf(false) }
     val locked = LocalContentLocked.current
-    Text(entry?.startDate?.toString() ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }))
+    val current = if (role == BindingRole.DUE_DATE) entry?.dueDate else entry?.startDate
+    Text(current?.toString() ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }))
     if (showPicker && entry != null) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = (entry.startDate ?: LocalDate.now()).toDatePickerMillis())
+        val state = rememberDatePickerState(initialSelectedDateMillis = (current ?: LocalDate.now()).toDatePickerMillis())
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    state.selectedDateMillis?.let { viewModel.setRowDeadline(datePickerMillisToLocalDate(it)) }
+                    state.selectedDateMillis?.let { viewModel.setRowBoundDate(role, datePickerMillisToLocalDate(it)) }
                     showPicker = false
                 }) { Text("OK") }
             },
