@@ -229,3 +229,159 @@ Three list entries were not identifiable from prior knowledge and were checked:
 [Storyflow](https://storyflow.so/novel-planner). Every other score is from product knowledge
 current to spring 2026 and should be treated as *asserted* in the sense `docs/scope-decisions.md`
 uses the word: nothing was measured against a running copy of any of these apps.
+
+---
+
+## 8. A single page — structure and features
+
+**Added 2026-09-11, second pass.** §1 scored Pages as a *surface* — the hub, the tree, search,
+templates. This scores what happens inside *one open page*: its header, its editing model, what a
+block can be, how deep they nest, what can be transcluded, and whether anything spatial can live in
+the body. The frame is a **Notion Plus page**: icon, cover, a properties header when the page is a
+row, blocks with columns, sub-pages as blocks, embeds, a table of contents, and history.
+
+Tendril's page today, for the `Gap` column: icon and title; a properties header only when the page
+is a database row (§5.1); tags (§3.1.6); the §3.1.1 block inventory rendered in one column; one
+level of list nesting, enforced by `indentTargetFor` rather than by the schema — `Block.parentBlockId`
+is unbounded and `BlockOutline` already computes a `depth`; page mentions inline; backlinks at the
+foot; no columns, no sub-page block, no transclusion, no table block, no TOC, no history; nothing
+spatial in the body by decision (§3.7).
+
+| App | Editing model | Reach | Fit | Gap | Value | Take, for the page |
+|---|---|---|---|---|---|---|
+| **Notion** (frame) | Block WYSIWYG | 5 | 4 | 3 | 2.4 | Columns; **sub-page as a block** (the page tree grown from inside a page — the `···` blocker again); toggle headings; a simple table block; a TOC block; synced blocks; equation; bookmark card; page cover; full-width toggle. |
+| **Obsidian** | Markdown source, live preview | 5 | 5 | 3 | 3.0 | **A properties header on *any* page**, not only rows (frontmatter — proposal #4's other half); an outline pane built from headings; **section transclusion** (`![[page#heading]]`); footnotes; math. Fully local. |
+| **Logseq** | Outliner | 4 | 5 | 3 | 2.4 | **Every block nests to any depth** — Tendril's schema already allows it, one function forbids it; block references; properties *on a block*; collapse any bullet. |
+| **Tana** | Outliner + supertags | 5 | 3 | 4 | 2.4 | Fields on any node; **a node's children viewed as list / table / cards / calendar** — the same block tree read as a database, which is §5.6's views turned inward. |
+| **Anytype** | Block WYSIWYG + objects | 4 | 5 | 3 | 2.4 | A type decides the page's **layout** (note / task / profile / collection) and which relations sit in its header; relations rendered in-page. |
+| **Coda** | Doc-as-app | 5 | 3 | 3 | 1.8 | Inline formula chips in prose (`=Tasks.Count()`); buttons; a page hierarchy in the sidebar. Packs excluded. |
+| **Capacities** | Block + objects | 4 | 3 | 3 | 1.4 | An object header with its properties; media (image, PDF, link) as first-class objects rather than blocks. |
+| **Heptabase** | Cards on whiteboards | 4 | 3 | 3 | 1.4 | A card *is* a page and may sit on many whiteboards (`PAGE_EMBED` already does this); a mind-map layout of cards — see §9. |
+| **Miro** | Whiteboard | 5 | 2 | 3 | 1.2 | Frames; a real **mind-map object with auto-layout** — the reference for §9's M1; shapes; sticky colours. |
+| **xTiles** | Tiles | 3 | 3 | 3 | 1.1 | **A page as a grid of tiles** — a two-dimensional layout of blocks *without* an infinite canvas: columns generalised, bounded, and scrollable. The least gesture-hostile spatial page on the list. |
+| **OpenKnowledge** | Markdown IDE | 3 | 4 | 2 | 1.0 | Split source/preview; agent co-authoring over local files (C4). |
+| **BookStack** | WYSIWYG / Markdown | 3 | 3 | 2 | 0.7 | Revisions (#12); a TOC sidebar from headings. |
+| **Scrintal** | Cards on a board | 3 | 3 | 2 | 0.7 | A card's body previewed on the board — the `PAGE_EMBED` card showing a few lines of the page, not only its title. Small, and worth it. |
+| **AppFlowy** | Block WYSIWYG | 3 | 5 | 1 | 0.6 | Nothing Tendril lacks. Its editor is Flutter; not an implementation reference for Compose. |
+| **Reflect** | Outliner | 3 | 2 | 2 | 0.5 | Daily-note calendar strip (#15). |
+| **Storyflow** | Docs on a canvas | 3 | 2 | 2 | 0.5 | A document that opens *from* a canvas card, at depth — Canvas's page-embed already; templates per canvas. |
+| **Lexical** | Editor *framework* | 4 | 2 | 1 | 0.3 | Scored here, and only here, because it is a page-structure reference even though it is not an app: an immutable node tree with **decorator nodes** — opaque non-text nodes (image, embed, preview) in the text sequence. Tendril's `IMAGE` block already is one; §9's canvas-preview block would be another. Nothing else transfers from JavaScript to Compose. |
+| **Agent-Native Content** | MDX | 2 | 3 | 1 | 0.2 | Interactive components inside a document — not for this app. |
+| **XWiki / ClickUp / Upbase / Superlist** | Various | 2–3 | 2 | 1 | 0.2 | Nothing beyond the rows above; Superlist's tasks-inside-notes is the `TO_DO` block. |
+| **Mem** | Prose + AI | 3 | 1 | 1 | 0.1 | Skip. |
+
+**One unlisted candidate worth naming: Craft.** Not on the brief's list, but it is the best-regarded
+*mobile* page editor in this category — sub-pages as cards, a block model close to Notion's with far
+better touch ergonomics, local files with optional sync. If one more app were added for this
+section it would be that one.
+
+**What this table says.** Three things score high and cohere:
+
+1. **Depth**: arbitrary nesting (Logseq), block references (Logseq/Obsidian), section transclusion
+   (Obsidian). Proposal #13 already carries these; the schema needs nothing.
+2. **A header on every page**: typed properties on a plain page, decided by a type or a tag
+   (Obsidian, Anytype, Capacities, Tana) — proposal #4 seen from inside the page.
+3. **Children as views** (Tana): a page's block tree read as a table or a board. It is the one
+   idea here that is *not* on the §6 list yet, and it is where #4 and #5 meet — if a tag can be a
+   schema, and a linked view can be a block, then "show this page's sub-pages as a board" is the same
+   block with `pageId = this page`.
+
+---
+
+## 9. In-page mind map and infinite canvas — viability
+
+### 9.1 What already exists
+
+An infinite canvas is **shipped** — as a page kind, not a block (§3.7). Measured on the tree:
+node positions and sizes are floats in an unbounded content space; one `graphicsLayer` applies
+`scale` and `pan`, zoom clamped 0.3×–2.5×; `TEXT` and `PAGE_EMBED` nodes; edges with `NONE /
+ONE_WAY / TWO_WAY` direction and an optional label; View-Only gated at the write funnel; every
+node and edge rides in its page's snapshot, so sync and encryption are already paid for. The UI
+is 821 lines in `Tendril android/app/.../ui/canvas/` — **Android only**; desktop has no canvas.
+
+§3.7 also recorded *why* not a block: a pannable, zoomable, gesture-hungry surface inside a
+vertically scrolling list of editable text fields is a gesture conflict with no good resolution
+on a phone, and it would make "nestable one level" apply to a two-dimensional thing. That
+reasoning is sound and this section does not reopen it; it asks what "in-page" can mean *without*
+that conflict.
+
+### 9.2 Infinite canvas — what the benchmarks have that Canvas lacks
+
+| Capability | Obsidian Canvas | Heptabase | Miro | Cost here |
+|---|---|---|---|---|
+| Group / frame node that contains others | yes | sections | frames | one node type + a parent field |
+| Card colour | yes | yes | yes | one nullable column, same as `calloutColor` |
+| Image and link nodes | yes | yes | yes | `IMAGE` node reusing the §9.4 image channel |
+| Resize handles | yes | yes | yes | UI only — `width`/`height` are already stored |
+| Edge anchors on a card's side | yes | — | yes | UI only |
+| Multi-select and group move | — | yes | yes | UI only |
+| Nested canvas | — | **yes** | — | a `PAGE_EMBED` whose target is a Canvas page: **no new entity** |
+| Mind-map layout | plugin | **yes** | **yes** | §9.4, M1 |
+| Body preview on a page card | — | yes | — | read the first blocks; small |
+| Minimap / viewport culling | — | — | yes | needed before hundreds of nodes; not before |
+| **Open interchange format** | **JSON Canvas** (`.canvas`) | — | — | an exporter beside `MarkdownExporter`; Obsidian opens the result |
+
+Everything in that column is additive to the existing tables. Nothing requires a second canvas
+model. The last row is worth singling out: JSON Canvas is an open spec Obsidian published for
+exactly this data shape (nodes with `x, y, width, height, color`, edges with `fromNode / toNode /
+fromSide / toSide / label`), and Tendril's `CanvasNode`/`CanvasEdge` map onto it field for field.
+A `.canvas` file in the Markdown export zip (#37) would make a Tendril board open in Obsidian
+unchanged — the same "readable without this app" argument that justified the export.
+
+### 9.3 Canvas *in* a page — three options
+
+| | O1 — preview block | O2 — live inline canvas | O3 — leave as a kind |
+|---|---|---|---|
+| What the reader sees | A card in the block list: title, node count, a static thumbnail; tap opens the canvas full-screen | The board itself, pannable, inside the page | Nothing in the page; the canvas is a sibling page |
+| New data | a `CANVAS_EMBED` block (`Block.mentionedPageId` already points at pages; a kind check suffices) | the same block, plus a height | none |
+| Gesture conflict | none — the thumbnail does not scroll or zoom | **the conflict §3.7 describes**, on every phone; tolerable on desktop with a mouse | none |
+| Precedent | X2 (embeds as static preview cards); Lexical's decorator node; Obsidian's `![[board.canvas]]` renders exactly this | Miro-in-Notion iframes, which nobody enjoys on a phone | Obsidian, Logseq, Heptabase all keep boards as files |
+| Effort | small: one block type, one composable that draws nodes at thumbnail scale from data already loaded for Road Map | large, and then a second gesture-arbitration layer to maintain | zero |
+
+**Verdict: O1.** It is the in-page canvas every local-first benchmark actually ships, it costs a
+block type, and it is the same decision X2 already made for embeds. O2 is the thing §3.7 rejected,
+and the rejection holds. O3 is what exists; O1 is what "in-page" adds to it.
+
+### 9.4 A user-created mind map — three options
+
+| | M1 — Canvas layout mode | M2 — the outline *is* the map | M3 — a mind-map entity |
+|---|---|---|---|
+| What it is | A `layout = MIND_MAP` on `PageCanvas` with a `rootNodeId`; positions are computed from the edge tree instead of stored; "add child" creates a node and a `ONE_WAY` edge | A nested-list block subtree rendered as a tree: each list item is a node, its children are its branches; opened full-screen from the list's `···`, edited in either place | New tables for nodes and branches, a new screen, a new snapshot record |
+| Precedent | Heptabase, Miro's mind-map object, Obsidian canvas mind-map plugins | **Xmind's outline mode, markmap, Logseq's and Obsidian's markmap plugins**, Workflowy — every one of them proves an outline and a mind map are the same data | Standalone mind-map apps |
+| New data | two columns on `page_canvases` | **none** — `parentBlockId` is the tree; only `indentTargetFor`'s one-level cap (proposal #13) stands in the way | three tables |
+| Searchable, exportable, synced | nodes are canvas text: not in FTS; exported as JSON Canvas (§9.2) | **already**: the text is block content, in FTS, in the Markdown export as a nested list, in the snapshot | all three from scratch |
+| In-page | no — it is a canvas | **yes** — it is a rendering of the page's own blocks; a page can hold several | as a block, with O2's gesture conflict |
+| Editing | on the board | in the outline *or* on the map — a node tap edits that block with the editor that already exists | a third editor |
+| Layout algorithm | tidy tree (Reingold–Tilford) or radial, pure Kotlin, ~150 lines, unit-testable with no UI | the same code | the same code |
+| Rendering | reuse `CanvasScreen`'s pan/zoom layer | reuse it too: the map is a read of `BlockOutline` drawn on the canvas layer | new |
+| Effort | small on top of Canvas | small on top of #13; the layout code is shared with M1 | large |
+
+**Verdict: M2 is the in-page mind map, and M1 is a Canvas feature.** They are not competitors:
+M2 answers "I want to think in a tree inside this page", M1 answers "I want this board to lay
+itself out". They share the layout code and the pan/zoom layer, and neither needs a new entity.
+M3 is what §3.7 argued against — a third content model — and nothing in the benchmark set does it
+that way.
+
+M2 fits this codebase unusually well, for a reason worth stating: §3.1.1 chose plain text + spans
+so that *what is indexed is what is stored*. A mind map that is a view of blocks keeps that
+promise — the map is never a second copy of anything — where a mind-map entity would break it.
+
+### 9.5 What is viable, and what it depends on
+
+| Proposal | Viable | Depends on | Decision needed |
+|---|---|---|---|
+| 19 · **Canvas preview block** (O1) | yes, small | — | Whether the thumbnail is drawn live from nodes or cached as an image |
+| 20 · **Outline mind map** (M2) | yes, small once #13 lands | **#13** — lift the one-level cap (`indentTargetFor`), choose a depth cap | Depth cap (6 is Workflowy's practical floor; unlimited is Logseq's); full-screen only, or also an inline read-only rendering |
+| 21 · **Canvas mind-map layout** (M1) | yes, small | Canvas; shares #20's layout code | Whether the root is chosen per board or inferred (the node with no incoming edge) |
+| 22 · **JSON Canvas export** | yes, small | #37 | Whether `.canvas` files go in the Markdown zip or beside `.tendril` |
+| 23 · **Canvas depth** — colours, groups, image nodes, nested boards, body preview | yes, additive | — | Order; nested boards are free (a `PAGE_EMBED` of a Canvas page) and could go first |
+| 24 · **Canvas UI to `shared/`** | yes, a move | — | Precondition for every row above reaching desktop (C7); Compose gestures are common code, so the move is mechanical |
+| — · Live inline canvas (O2) | **not recommended** | — | §3.7's reasoning stands; revisit only for desktop, with a mouse, and only if #19 proves insufficient |
+| — · Mind-map entity (M3) | **not recommended** | — | Duplicates content outside FTS, export and the span model for no capability M1 + M2 lack |
+
+**Risks, named.** Compose draws every canvas node today; past a few hundred nodes both Canvas and
+the mind map need viewport culling, which is a `filter` on the node list before drawing and not
+an architecture change. Text measurement for node sizing on the map is the one cost that grows
+with content; Xmind and markmap both cap the visible text per node and show the rest on tap, which
+`TEXT` cards already do. The Android-only Canvas UI is the real debt: every row above lands on one
+platform until #24.
