@@ -370,8 +370,8 @@ promise — the map is never a second copy of anything — where a mind-map enti
 
 | Proposal | Viable | Depends on | Decision needed |
 |---|---|---|---|
-| 19 · **Canvas preview block** (O1) | yes, small | — | Whether the thumbnail is drawn live from nodes or cached as an image |
-| 20 · **Outline mind map** (M2) | yes, small once #13 lands | **#13** — lift the one-level cap (`indentTargetFor`) | *Decided 2026-09-11:* depth unlimited; inline (read) and full-screen (edit) are the two options a person picks between per map |
+| 19 · **Canvas block** (O1, then §9.6) | yes, small | #24 | *Decided 2026-09-11:* the inline card is the live board, inert until tapped, then armed and grown in place — no separate screen. Thumbnail-vs-live drawing while inert is the one open detail |
+| 20 · **Outline mind map** (M2) | yes, small once #13 lands | **#13** — lift the one-level cap (`indentTargetFor`) | *Decided 2026-09-11:* depth unlimited; inline, inert until tapped, then armed and grown in place to edit (§9.6) |
 | 21 · **Canvas mind-map layout** (M1) | yes, small | Canvas; shares #20's layout code | Whether the root is chosen per board or inferred (the node with no incoming edge) |
 | 22 · **JSON Canvas export** | yes, small | #37 | Whether `.canvas` files go in the Markdown zip or beside `.tendril` |
 | 23 · **Canvas depth** — colours, groups, image nodes, nested boards, body preview | yes, additive | — | Order; nested boards are free (a `PAGE_EMBED` of a Canvas page) and could go first |
@@ -386,8 +386,47 @@ with content; Xmind and markmap both cap the visible text per node and show the 
 `TEXT` cards already do. The Android-only Canvas UI is the real debt: every row above lands on one
 platform until #24.
 
+### 9.6 The gesture conflict, resolved — arm and grow (Decided 2026-09-11)
+
+§9.3 and §9.4 accepted §3.7's premise that a pannable surface cannot live inside a scrolling
+block list on a phone, and routed around it: a static preview, a read-only inline map. The premise
+is true only for a surface that is *always* live. The conflict is ambiguity — a one-finger drag
+over the map could mean "scroll the page" or "pan the map" — and it is removed by removing the
+ambiguity. Three ways exist:
+
+| | Arm-to-interact | Finger-count split | Boundary handoff |
+|---|---|---|---|
+| How | Inline, the surface is inert and scrolls with the page; a tap *arms* it (visible border, an "Editing" chip) and only then do pan, zoom and node-drag consume touches; tap outside, Done or Back disarms | One finger scrolls the page, two fingers pan and zoom the surface; node drag is long-press-then-drag | The surface consumes drags until its content reaches an edge, then the page scrolls |
+| Precedent | Notion's embedded Miro/Figma; Obsidian's canvas embed (hover-capture); Apple Notes' inline sketches | Google Maps embedded in scrolling pages ("use two fingers to move the map") | Nested-scroll lists |
+| Modeless | no — and that is its virtue: an explicit, visible mode is the neurodiverse-friendly property (§10); a heuristic that has to be guessed is not | yes, but needs a hint overlay, and long-press-to-drag inside an editable list is the very thing §3.7 worried about | yes, and feels unpredictable: the same swipe does different things depending on where the content was |
+| Applies to | mind map and canvas | mind map and canvas | **mind map only** — an infinite canvas has no edge |
+| In Compose | a child `pointerInput` that consumes a drag wins over the parent `LazyColumn`, so arming is attaching the consuming detectors conditionally — not a custom arbiter | a pointer-count check in one detector | a `NestedScrollConnection` |
+| Desktop | the same rule resolves the mouse-wheel ambiguity (page scroll vs pan): wheel pans only when armed | n/a | n/a |
+
+**Decided: arm-to-interact, with one refinement — the full-screen surface *is* the armed inline
+one, grown in place.** Tap to arm; it expands to fill the viewport (a shared-element transition,
+the way Notes opens a sketch); edit; Back shrinks it and disarms. One component at two sizes, in
+place of two renderers and a per-map option. The map composable takes `interactive: Boolean`:
+inert, it carries only `detectTapGestures { arm() }`; armed, it gains `detectTransformGestures`
+and the node-drag detectors `CanvasScreen` already layers ("one gesture detector on the outer box;
+card drags, the link drag and the arrow hit-test on the layers beneath", §3.7), plus a
+`BackHandler` that disarms.
+
+**Consequences, both decided the same day:**
+
+- **The mind map (#20) is editable inline.** The "inline read-only" and "two options per map"
+  wordings recorded earlier today are superseded; there is one map, inert until tapped.
+- **The canvas block (#19) is the live board, not a preview.** This is the infinite canvas *in a
+  page* that §9.3 said could not be had — O2 without O2's cost, because the board is inert until
+  armed. O1's static thumbnail survives only as what the inert card may draw for speed; whether it
+  draws nodes live or a cached image is the one detail left open. §3.7's decision that a Canvas is a
+  page kind stands — the block *embeds* a canvas page (`Block.mentionedPageId` → a `kind = CANVAS`
+  page), it does not nest a second canvas model inside the body.
+- **Depends on #24.** Both land on desktop only once the Canvas UI is in `shared/`, which is why
+  #24 was ordered first.
+
 **Decided 2026-09-11, after §9 was read:** nesting depth is **unlimited** (Logseq's answer);
-the outline mind map offers **two options, chosen per map**: an inline rendering in the page (a read view; tap to open) or a full-screen map (where editing happens) — not both at once; and
+the outline mind map is one component at two sizes — inline and inert until tapped, then **armed and grown in place** to fill the viewport for editing (§9.6, superseding the earlier "inline read-only" and "two options per map" wordings the same day); and
 **#24 goes first** — the Canvas UI moves to `shared/` before any canvas or mind-map row is built,
 so nothing above lands on one platform.
 
