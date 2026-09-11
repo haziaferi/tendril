@@ -192,7 +192,7 @@ this document.
 | # | Proposal | From | New data | New surface | Depends on | Decision needed |
 |---|---|---|---|---|---|---|
 | 1 | **Task model depth** — `priority`, `parentEntryId` (sub-tasks), `deferDate` (Things' *When*; OmniFocus' defer), `estimate: Duration`, `tags` (reuse the `Tag`/`PageTag` shape) | OmniFocus, Things, TickTick | `Entry` columns; one migration | Task row and add sheet grow; a **Someday** section beside the undated toggle | — | Which of the five fields; whether *defer* replaces or joins `startDate`'s semantics |
-| 2 | **Habit history** — `HabitCompletion(habitId, date, value?)`; streak becomes derived | Loop | one table; `streak` kept as a cache or dropped | **Habit detail screen**: heat-map, score curve, best streak; optional numeric target | — | Whether habits become measurable (a value column) now or later |
+| 2 | **Habit presence** — a completion log, shown as presence and never as absence; the streak retired from the row. *Rewritten 2026-09-11 — see §10.3; the original "history with heat-map and score" is withdrawn.* | Daylio, Finch, Tiimo | one table; `streak` becomes derivable | A quiet **Habit detail**: "four times this month", "usually mornings", "last: Tuesday" | — | Whether a one-tap mood/energy check-in joins the layer, and when |
 | 3 | **Natural-language Quick Add** — one line → Task *or* Event with date, time, span, recurrence, and (#1) priority | Fantastical, Todoist | none | Quick Add on Calendar *and* Tasks; a parse preview under the field | #1 for priority | Grammar scope: English-only first; which recurrence phrases |
 | 4 | **Schema on a tag** — a `Tag` may own `Property` rows; a page carrying it is a row of that tag's database; a tag's own page *is* that database | Tana, Anytype, Capacities, Obsidian Bases | `Tag.schemaPageId` or a `TagSchema` table; reuse `Property`/`PropertyValue` | The tag chip opens a database view of everything tagged | — | The one genuinely reopened data-model question; decide *before* #5 or #8 |
 | 5 | **Linked database views in a page** + **sub-page create/move** | Notion | a `DATABASE_VIEW` block type carrying `pageId + viewId` | The block; the `···` menu (already the blocker for two scope rows) | #4 if tags are databases | Whether a linked view is a block or an embed card (X2 chose static previews) |
@@ -385,3 +385,170 @@ an architecture change. Text measurement for node sizing on the map is the one c
 with content; Xmind and markmap both cap the visible text per node and show the rest on tap, which
 `TEXT` cards already do. The Android-only Canvas UI is the real debt: every row above lands on one
 platform until #24.
+
+**Decided 2026-09-11, after §9 was read:** nesting depth is **unlimited** (Logseq's answer);
+the outline mind map ships **both** full-screen and as an inline read-only rendering; and
+**#24 goes first** — the Canvas UI moves to `shared/` before any canvas or mind-map row is built,
+so nothing above lands on one platform.
+
+---
+
+## 10. The human layer — Habits are not a tracker
+
+**Stated by the author, 2026-09-11, and now a design constraint** on the same footing as
+offline-first: Habits exist to put a *human* layer into a productivity-shaped app — to keep
+meditation, self-care, rest, the things that are not work, obligations or projects, visible as
+things that *are and should be* part of a life. The app is to be **neurodiverse-friendly** —
+autism, ADHD, depression named explicitly. Any "did I do it?" and "when, and how many times?"
+risks turning those practices into one more thing that needs strict upkeep, which is the
+opposite of why the layer exists.
+
+That reframes §3's Habits rows and proposal #2, and it changes what the benchmark for Habits is.
+
+### 10.1 What this means for what already exists
+
+`Habit` carries `streak`, `previousStreak`, `lastCompletedDate`. **A streak is the most
+pressure-shaped number a habit can carry** — it is a chain that *breaks*, and every "don't break
+the chain" app is built on that anxiety. §6.1's rule that a missed instance creates no backlog was
+already pointing the right way; the streak counter on the row is the half that still points the
+other way. The §8.1.1 quick-check widget is right: it asks nothing, it offers a tap.
+
+A completion *log*, by contrast, is neutral data. Nothing about a row that says "meditated,
+Tuesday" is a demand; the pressure lives entirely in the **framing** of what is shown. Proposal #2
+as written — heat-map, score curve, best streak — was Loop's framing, and Loop is a tracker. It is
+withdrawn in that form. What replaces it is in §10.3.
+
+### 10.2 Benchmarks for a human layer
+
+None of the forty-eight were chosen for this. These were, and one of them is a paid,
+full-featured option and so becomes the frame:
+
+| App | Reach | Fit | Gap | Value | Take |
+|---|---|---|---|---|---|
+| **Tiimo** (frame; paid) | 5 | 4 | 4 | 3.2 | Built *for* ADHD and autism: a **visual day** as a timeline of coloured blocks rather than a list; visual timers; a **focus mode** that shows one thing; routines as sequences of small steps; gentle notifications ("it's time for", never "you missed"); a widget that shows *now and next*. AI task breakdown is its one cloud feature and is opt-in. |
+| **Finch** | 4 | 3 | 4 | 1.9 | Self-care framed as caring for something else (a bird); every check-in is a *gift*, missing one is *nothing*; energy level and mood as one tap; "small steps" as the unit of a goal. The framing, not the pet, is what transfers. |
+| **Amazing Marvin** | 5 | 4 | 3 | 2.4 | ADHD-oriented by design: every feature is a **strategy you switch on**, the app ships nearly empty — the purest example of E12's progressive disclosure on the list. Its "Do it anyway" and "Day Planner" strategies are gentle by construction. |
+| **Routinery** | 3 | 4 | 3 | 1.4 | Routines as timed step sequences with a running visual timer; morning/evening framing. |
+| **Llama Life** | 3 | 4 | 3 | 1.4 | One list, each item with a time, a running timer for the current one; "a day you can actually see". A shape Merged (§3.3) could take. |
+| **Daylio / Bearable** | 3 | 5 | 3 | 1.8 | A **one-tap mood or energy check-in** with no scoring; a month shown as colours, never as a percentage. Local, private. The right shape for any habit "history" here. |
+| **Goblin.tools** | 3 | 2 | 3 | 0.7 | Breaking a task into steps, and a "how spicy is this" estimate — both AI, so C4-gated; the *questions* are worth keeping even without the model. |
+| **Loop Habit Tracker** (rescored) | 3 | 5 | 2 | 1.2 | Its **score** — a decaying average that recovers quickly — is *gentler* than a streak and is the one number worth keeping if any number is shown. Its heat-map is not. |
+| **Fabulous / Habitica / Streaks** | — | — | — | — | Not scored: gamified upkeep is the pattern this layer exists to avoid. |
+
+### 10.3 Proposal #2, rewritten — and a principle for the rest
+
+**#2 · Habit presence (replaces "Habit history").** Keep a completion log, because without one
+no gentle view can exist either — "you last sat down to meditate on Tuesday" needs the Tuesday.
+Then:
+
+- **Show presence, never absence.** "Four times this month." "Usually mornings." "Last: Tuesday."
+  No misses, no gaps, no red, no percentages, no chain. A month view, if any, is Daylio's:
+  a colour where something happened and *nothing* — not an empty cell — where it did not.
+- **Retire the streak from the row.** It stays as a computed number behind a disclosure for the
+  person who wants it (E12), defaulting off. The `streak` columns become derivable and can go in
+  a later migration; nothing needs to break now.
+- **Drop the score, the heat-map and the best-streak** from the proposal. If a single number is
+  ever shown, it is Loop's decaying score, opt-in, because it forgives.
+- **Language.** A habit is *offered* ("Meditation is here if you want it"), not *due*. The
+  quick-check widget already speaks this way; the Habits tab and any notification follow it.
+- **A one-tap check-in** — mood or energy, Daylio-shaped — is the natural extension of the layer
+  and is *not* a habit; it is a note about the person. Deferred, named here so it is not designed
+  as a tracker later.
+
+**The principle, generalised to Tasks.** The same author's reasoning applies, less absolutely,
+to §6's task-model proposals: priority flags, overdue badges and deadline countdowns are pressure
+mechanisms too. Things 3 is the frame for restraint — a task has a *When* (a plan, movable without
+guilt), an optional *Deadline* (rare, real), and a *Someday* (kept without being scheduled). That
+is the model §11 recommends for `Entry`, and it is why "priority" there is a single opt-in flag and
+not a scale.
+
+Tiimo's *visual day* and Llama Life's *one thing with a timer* are the shapes proposals #8 (Plan)
+and #9 (time tracking) should take when they are designed — a timeline you can see, and a "now",
+not a workload chart.
+
+---
+
+## 11. The five `Entry` fields, and what each one actually is
+
+Proposal #1 named five fields. Measured against the tree, one of them is not what it looked like.
+
+| Field | What it means | What exists today | Frame | Pressure? |
+|---|---|---|---|---|
+| **A second date** | Things separates *When* (the day you plan to do it; moving it is fine) from *Deadline* (the day it is late; rare). OmniFocus calls them defer and due. | `Entry.startDate` is the **only** date on a task. It is where Calendar draws it *and* what §5.2 binds as `deadlinePropertyId`. So today it is *both*. | Things | The deadline is; the When is not. |
+| **`parentEntryId`** — sub-tasks | A task made of smaller tasks; the parent completes when its children do, or independently (Things: checklist inside a task; TickTick: real sub-tasks with their own dates). | Nothing. A to-do database row can hold `TO_DO` blocks, which are checklist items, not entries. | Things (checklist) is the lighter shape; TickTick the heavier. | No — breaking a thing into steps is the ADHD-friendly move (Goblin.tools exists for exactly this). |
+| **`estimate`** | How long it is expected to take. | Nothing on `Entry`; `Habit.duration` exists. | Sunsama, Super Productivity | Mild, and only if compared against actuals. It is what #8 needs to place a task at all. |
+| **`priority`** | An importance rank. TickTick/Todoist: four levels. Things: none — only a "This Evening" bucket and a star. | Nothing. | Things (none) | **Yes** — a scale invites triage guilt. |
+| **tags** | Free labels on an entry, reusing `Tag`/`PageTag`'s shape. | `Tag` exists for pages only. | TickTick, Todoist | No. |
+
+**Recommendation, given §10.**
+
+1. **Keep `startDate` as *When*** — that is what it already does — **and add an optional
+   `dueDate`.** The §5.2 binding's name is then wrong (it binds the When) and gets a second,
+   optional binding for the deadline; the spec's word "deadline" is corrected to "date". Adding
+   `deferDate` instead would keep `startDate` as the deadline and make every existing task a
+   deadline retroactively, which is the pressure-shaped reading.
+2. **`parentEntryId`** — yes, Things' checklist shape first: children have no dates of their own
+   until someone asks for that.
+3. **`estimate`** — yes, optional, shown nowhere until #8 or #9 uses it.
+4. **`priority`** — **a single opt-in flag** ("important"), not a scale. Progressive disclosure:
+   the field is hidden until enabled in Settings.
+5. **tags on entries** — yes, but *after* §12 settles what a tag is, since it may become a schema.
+6. **`Someday`** — not a field: it is the existing undated task, given a name and a section.
+
+---
+
+## 12. Schema on a tag — the discussion
+
+### 12.1 What it is
+
+Tana's supertag, Anytype's type, Capacities' object, Obsidian's Bases: *attach a schema to a
+label, and everything carrying the label is a row*. The page stays where it is in the tree and
+keeps its body; it gains a properties header and appears in the schema's views. A page may carry
+more than one such label and so be a row in more than one place.
+
+### 12.2 What Tendril has, measured
+
+- `Tag(id, name, color)` and `PageTag` — a many-to-many label, flat, on pages only.
+- A database is a `kind = DATABASE` page plus a `PageDatabase` companion; its `Property` rows
+  carry `databaseId`; a **row is a `Page` with `databaseId` set** — single-valued, so a page is a
+  row of at most one database.
+- `PropertyValue(propertyId, rowPageId)` is keyed by *page*, not by membership. **This is the
+  hinge**: a value already lives on the page, so "row of two databases" needs nothing new here.
+
+### 12.3 Three shapes
+
+| | **A — a database can own a tag** | **B — Types** (Anytype) | **C — Bases** (Obsidian) |
+|---|---|---|---|
+| The idea | A database may be bound to one `Tag`. A page carrying that tag is a row of that database. Native rows (created inside the database) get the tag automatically. | A new `PageType` entity with properties; every page has exactly one type; a "Set" is a query by type. | Properties on any page with no owner; a "database" becomes a saved query (by tag, kind, property) plus a schema it *suggests*. |
+| New data | `PageDatabase.tagId: Long?` — one nullable column. `PageTag` becomes the membership relation; `Page.databaseId` stays as the *home* (where the row was created and is listed by default). | `PageType`, `Page.typeId`, properties re-parented to types. | `Property.databaseId` becomes nullable (a global property pool); `PageDatabaseView` gains a query; migration of every database into "view + suggestion". |
+| Multiple schemas on one page | yes — one tag per database, any number of tags per page | no — one type | yes |
+| Reuse of what exists | everything: properties, values, views, bindings, the tag chip, the tag editor | properties and values; views need a second source | values; views and properties are restructured |
+| Where it shows | the page's header gains one property group per schema-tag; the tag chip in the Pages hub opens that database's views; the database lists native rows *and* tagged pages | a type picker on every page; type pages | a query builder on every view |
+| §5.2 Sync-to-Tasks | tagging a page into a to-do database makes it a task — Tana's `#task` behaviour; needs a one-time confirmation the first time a schema-tag with a binding is applied | same | same, but the binding has no owner to hang on |
+| Untagging | the page stops being a row; its `PropertyValue`s stay (absence never implies deletion, §9.4) and are hidden, purged with the tag's own trash | type change: values for the old type orphaned | values stay; nothing owns them anyway |
+| Effort | small: one column, the membership query, a header renderer, the confirmation | medium; a parallel concept beside databases | large; a reframe of §5 |
+| Matches | Tana exactly; Capacities closely | Anytype | Obsidian |
+
+### 12.4 Recommendation, and what needs deciding
+
+**Shape A.** It is one nullable column plus a query, it reuses every existing surface, and it is
+the Tana semantics — the one the objectives survey named as "exceed" material. B duplicates
+databases under another name. C is the most flexible and the most expensive, and Obsidian only
+gets it cheaply because its properties are freeform frontmatter with no owner to begin with.
+
+**Progressive disclosure (E12):** a database does not get a tag by default. Its `···` menu offers
+*"Bind a tag — pages tagged #name become rows here"*, and only then does anything change. A
+person who never touches it has exactly today's app.
+
+Decisions the author owns:
+
+1. **A, B or C?** (Recommendation: A.)
+2. **Opt-in per database** (recommended) **or automatic** — every database owns `#its-name` from
+   creation?
+3. **Untag = hide values, or delete values?** (Recommendation: hide; purge with the tag's trash —
+   consistent with §5.5.1.)
+4. **Where does a tagged, non-native row appear?** In the database's views (yes, that is the
+   point); in the database's Pages-hub listing as a child (recommendation: no — it lives where it
+   lives; the database *shows* it, does not *contain* it).
+5. **One confirmation the first time a binding-carrying schema-tag is applied**, or a per-page
+   prompt every time? (Recommendation: once per tag.)
