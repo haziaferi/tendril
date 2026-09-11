@@ -82,6 +82,7 @@ second copy of the reasoning.
 | 2026-09-11 (Canvas UI to `shared/`) | §0.8 step 1 done: `CanvasScreen` and `CanvasViewModel` moved from the Android app into `shared/src/commonMain` (renames, history kept); the screen takes `WorkbenchCore` in place of `AppContainer`, matching `PageDetailScreen`; the shared scaffold routes `PageKind.CANVAS` itself and its `canvasContent` slot is removed from both platform callers. Desktop opens, edits and links cards on a canvas for the first time. Nothing inside the board changed; 550 tests pass. | §0.6.10, §0.8, §3.7 |
 | 2026-09-11 (step 2: Entry fields, habit log) | §0.8 step 2 done. **Schema v10** (`MIGRATION_9_10`): `entries` gains `dueDate`, `parentEntryId`, `estimate`, `important`; new `habit_completions`, backfilled from `lastCompletedDate`/`previousCompletedDate`. Both travel in the snapshot and the `.tendril` archive; the habit log merges by the Reminder rule (tombstoned, deleted wins). Tasks UI: deadline, steps, Postpone (moves the When), Someday, the opt-in important flag; Habits: streak off the row by default, a presence sheet. §5.2's binding label corrected to "Date (when)"; the second binding is step 2b. 570 tests. | §0.6.4, §0.6.6, §0.8, §0.10, §3.3, §5.2 |
 | 2026-09-11 (step 2b: deadline binding) | §0.8 step 2b done. **Schema v11** (`MIGRATION_10_11`): `page_databases.dueDatePropertyId`. `BindingRole.DUE_DATE` binds a `DATE` property to `Entry.dueDate`; the two date cells and two row editors become one each, taking the role. The enable-sync sheet gains a Deadline picker. **§5.2.1 corrected**: post-hoc bind had no UI path; the header menu now offers "Bind as <role>". Migration verified on desktop and phone; the binding verified end to end on the phone. 573 tests. | §0.6.4, §0.8, §5.2, §5.2.1 |
+| 2026-09-11 (step 3: depth, mind map, canvas block) | §0.8 step 3 done. **§0.6.1** unlimited nesting — `outlineOf` walks the tree, `indentTargetFor`/`outdentPlanFor` are the outliner pair, the writer and the Notion parser follow. **§0.6.2** the outline mind map, `Block.mindMap` (**schema v12**), inert card and armed full screen, CMP `BackHandler` added. **§0.6.3** `BlockType.CANVAS`, the live board in a page. §3.1.1's one-level rule and §3.7's "never nested" corrected in place; §0.10 items 2 and 8 resolved, item 10 (desktop Escape) opened. Verified on desktop and phone. 585 tests. | §0.6.1–3, §0.8, §0.10, §3.1.1, §3.7 |
 
 ---
 
@@ -203,6 +204,13 @@ Reasoning lives at the pointer.
 `indentTargetFor` alone enforces one level. Decision: lift it; §3.1.1's "nestable one level" is
 **Corrected** by this row. Acceptance: a list nests to any depth; export renders the depth; FTS
 content unchanged. (B§9.5)
+**Done 2026-09-11.** `outlineOf` is a depth-first walk; `indentTargetFor` is the outliner rule
+(under the previous sibling, at any depth) and `outdentPlanFor` its inverse (one level up, later
+siblings adopted, so the page keeps its reading order). The Markdown writer follows the outline —
+a collapsed toggle's subtree is written too — and the Notion parser stops clamping at one level.
+Rendering past six levels steps by 8dp instead of 24dp, which resolves §0.10 item 8. Verified on
+desktop and phone: Packing › Clothes › Jackets at three depths, "Indent" offered on an already
+indented block.
 
 **0.6.2 The in-page mind map is a rendering of a nested list.** Finding: an outline and a mind
 map are the same data (Xmind, markmap). Decision: no mind-map entity; a subtree drawn as a tree,
@@ -210,12 +218,29 @@ inert inline until tapped, then armed and grown in place to edit; a page may hol
 deferred "in-page mind-map block" is resolved by this row. Acceptance: creating, editing and
 deleting a node is creating, editing and deleting a block; the map has no table of its own; the
 Markdown export shows the list. (B§9.4, B§9.6)
+**Done 2026-09-11.** `layoutMindMap` (a left-to-right tidy tree over the outline) plus one stored
+bit, `Block.mindMap` (v12), a view preference like `toggleExpanded`. Inert: a card in the block
+list where the rows would have been. Armed: the same drawing filling the viewport with pan and
+zoom on one `graphicsLayer`; a node tap selects; edit, add child and delete are the ordinary
+block edits; Back closes it through Compose Multiplatform's own `BackHandler` (a new dependency).
+Verified on desktop (card → armed → "Passport" added under Documents → rows show it at depth 2)
+and on the phone, where the **system back gesture closed the armed map and stayed on the page**.
+One gap, §0.10: Escape does not close it on desktop; the X does.
 
 **0.6.3 The canvas block is the live board.** Finding: Canvas is a shipped page kind with an
 unbounded content space (§3.7). Decision: a block that embeds a Canvas page, inert until armed,
 grown in place; no second canvas model — §3.7's "a page kind, not a block type" stands, because
 the block *embeds* a page. Acceptance: the block points at a `CANVAS` page by id; arming captures
 pan/zoom/drag; Back disarms; the page list still scrolls when inert. (B§9.3, B§9.6)
+**Done 2026-09-11.** `BlockType.CANVAS`, pointing at a Canvas page through `mentionedPageId`.
+Inert: a card drawing the board's nodes and edges at thumbnail scale from the rows the board
+reads. Armed: the whole screen's `CanvasScreen`, over the page, until its back arrow or the
+system back gesture disarms it. Inserted from the slash menu through a picker — an existing
+canvas, or a new one created as a child of the page. Exported as a labelled link to the canvas
+page's file. Verified on the phone end to end: created "Route ideas" from the picker, armed it,
+added a text card, backed out, the inert card drew the node. §0.10 item 2 is resolved: the inert
+card draws live from the rows, not from a cached image — at thumbnail scale that is cheaper than
+keeping a bitmap current.
 
 **0.6.4 A task has a When and an optional Deadline.** Finding **[Verified]**: `Entry.startDate`
 is a task's only date and is both where Calendar draws it and what §5.2 binds as "deadline".
@@ -331,7 +356,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 1 | **0.6.10** Canvas UI → `shared/` — *done 2026-09-11* | every spatial row on desktop |
 | 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view — *done 2026-09-11; the second §5.2 binding is its own row below* | 3, 6, 7 |
 | 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` — *done 2026-09-11* | — |
-| 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block, **0.6.7** as time allows | — |
+| 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
 | 6 | Calendar: edit path, drag-to-move, agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
@@ -362,7 +387,7 @@ never becomes "later".
 Genuinely undecided — distinct from §0.7.
 
 1. ~~Which date **Postpone** moves by default — the When (recommended) or the Deadline (B§11).~~ *Resolved 2026-09-11: the When, always; the deadline is changed only by editing the deadline. The sheet says so.*
-2. Whether the inert canvas block draws nodes live or a cached thumbnail (B§9.6).
+2. ~~Whether the inert canvas block draws nodes live or a cached thumbnail (B§9.6).~~ *Resolved 2026-09-11: live, from the rows.*
 3. Whether habits become **measurable** (a value on the log entry) now or later (B§10.3).
 4. Whether a one-tap **mood/energy check-in** joins the human layer, and when — it is not a
    habit.
@@ -371,7 +396,8 @@ Genuinely undecided — distinct from §0.7.
 6. Where **JSON Canvas** files go — in the Markdown zip or beside `.tendril`.
 7. Whether the Canvas page kind and the block share one composable at two sizes exactly as the
    mind map does (recommended) or the page kind keeps its own screen.
-8. Nesting **rendering** past a few levels on a phone width — an indentation budget, or a fold.
+8. ~~Nesting **rendering** past a few levels on a phone width — an indentation budget, or a fold.~~ *Resolved 2026-09-11: a 24dp step for six levels, 8dp after.*
+10. **Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
 
@@ -606,8 +632,10 @@ canvases), which would be a multi-month subsystem on its own and isn't needed fo
 **Block type inventory (v1):**
 - Paragraph
 - Heading 1 / 2 / 3
-- Bulleted list item, numbered list item (nestable one level via indent — matches typical
-  personal-notes depth, not arbitrary nesting)
+- Bulleted list item, numbered list item ~~(nestable one level via indent — matches typical
+  personal-notes depth, not arbitrary nesting)~~ *(**Corrected 2026-09-11 (§0.6.1):** nestable to
+  any depth. Every block type nests, not only list items; the outliner rule applies — indent puts
+  a block under its previous sibling, outdent lifts it one level and adopts the siblings after it.)*
 - To-do (checkbox) — a **block-level checkbox for freeform checklist text inside a page**,
   structurally distinct from the Property-level Done checkbox that drives Sync-to-Tasks (§5.2).
   Checking one here never creates a Task.
@@ -1196,7 +1224,11 @@ relationships between existing pages, Canvas is the one you draw yourself — an
 distinct in naming and in code for that reason.
 
 **Decided: a page kind, not a block type.** `PageKind.CANVAS` sits beside `PAGE` and `DATABASE`, and
-a canvas is never nested inside another page's body. Two arguments, one external and one internal.
+a canvas is never nested inside another page's body. *(**Amended 2026-09-11 (§0.6.3):** the
+page kind stands, and a canvas can now *appear* in another page's body — as a `CANVAS` block that
+points at the canvas page and draws it inert until tapped, whereupon this screen fills the
+viewport. The gesture-conflict argument below is answered by arming rather than by nesting a
+live board: see B§9.6.)* Two arguments, one external and one internal.
 Obsidian's own model is a file, never embedded content in a note. And this app already had the shape:
 a Database is a Page with a 1:1 companion row plus child rows (§5.1), so Canvas reuses a structure
 the merge, the router and the Pages list already understood — `WorkbenchScaffold` branches on

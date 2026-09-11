@@ -104,6 +104,26 @@ class MarkdownWriterTest {
         assertEquals("- outer\n\n    - inner", out)
     }
 
+    @Test
+    fun `a grandchild is indented twice, and a collapsed toggle's subtree is still written`() {
+        // §0.6.1 — depth is unlimited, and export takes the outline's depth rather than a flag.
+        val toggle = block(BlockType.TOGGLE, "closed").copy(toggleExpanded = false)
+        val child = block(BlockType.BULLETED_LIST_ITEM, "one", parentBlockId = toggle.id)
+        val grandchild = block(BlockType.BULLETED_LIST_ITEM, "two", parentBlockId = child.id)
+        // Handed over out of tree order on purpose: the writer must follow the outline, not the list.
+        val out = render(grandchild, toggle, child)
+        assertEquals("closed\n\n    - one\n\n        - two", out)
+    }
+
+    @Test
+    fun `a canvas block is a labelled link to the canvas page, or its label alone`() {
+        // §0.6.3 — the board itself is not Markdown; the link is the most the format can carry.
+        val linked = MarkdownWriter.render(listOf(block(BlockType.CANVAS, "Trip board", mentionedPageId = 7)), { null }, { if (it == 7L) "Trip board.md" else null })
+        assertEquals("[Canvas: Trip board](Trip%20board.md)\n", linked)
+        val unlinked = MarkdownWriter.render(listOf(block(BlockType.CANVAS, "Gone", mentionedPageId = 99)), { null }, { null })
+        assertEquals("Canvas: Gone\n", unlinked)
+    }
+
     // ------------------------------------------------------------------ inline spans
 
     @Test

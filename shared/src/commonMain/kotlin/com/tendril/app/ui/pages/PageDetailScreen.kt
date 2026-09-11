@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.FormatIndentDecrease
 import androidx.compose.material.icons.filled.FormatIndentIncrease
 import androidx.compose.material.icons.filled.ExpandMore
@@ -92,6 +93,7 @@ import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.formatPeriodAsHumanInterval
 import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.OutlineBlock
 import com.tendril.app.domain.outlineOf
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
@@ -151,6 +153,12 @@ fun PageDetailScreen(
     val backlinks by viewModel.backlinks.collectAsState()
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var blockActionSheetFor by remember { mutableStateOf<Block?>(null) }
+    // §0.6.2 / B§9.6 — the armed map: the block whose subtree fills the viewport, or null.
+    var armedMapRoot by remember { mutableStateOf<Long?>(null) }
+    // §0.6.3 — the armed canvas: the Canvas page filling the viewport, or null.
+    var armedCanvasPage by remember { mutableStateOf<Long?>(null) }
+    // The slash menu's "Canvas" needs a second choice — which canvas — before it can insert.
+    var canvasPickerAfterOrder by remember { mutableStateOf<Int?>(null) }
     // The block plus the definitively-current base content to insert the mention onto — never
     // `block.content` at insert time, which can be one async Room round-trip stale (typing '@'
     // strips it via a launched coroutine, not synchronously) and would duplicate/corrupt text.
@@ -265,7 +273,11 @@ fun PageDetailScreen(
                 }
                 // Children used to be filtered out here (`if (block.parentBlockId == null)`),
                 // which is why nesting existed in the schema but never on screen.
-                items(outline, key = { it.block.id }) { entry ->
+                // §0.6.2 — a block shown as a mind map keeps its own row and replaces its subtree
+                // with the inert card; the descendants are still in `outline`, just not drawn as
+                // rows. `mappedAway` is that set, computed once per outline.
+                val mappedAway = mappedDescendants(outline)
+                items(outline.filter { it.block.id !in mappedAway }, key = { it.block.id }) { entry ->
                     BlockRow(
                         block = entry.block,
                         depth = entry.depth,
@@ -274,7 +286,13 @@ fun PageDetailScreen(
                         onLongPress = { blockActionSheetFor = entry.block },
                         onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
                         onOpenPage = onOpenPage,
+                        core = core,
+                        onArmCanvas = { armedCanvasPage = it },
+                        onInsertCanvas = { afterOrder -> canvasPickerAfterOrder = afterOrder },
                     )
+                    if (entry.block.mindMap) {
+                        MindMapCard(subtree = subtreeOf(outline, entry.block.id), onArm = { armedMapRoot = entry.block.id })
+                    }
                 }
                 if (!contentLocked) {
                     item {
@@ -310,7 +328,52 @@ fun PageDetailScreen(
             onSetCalloutColor = { color -> viewModel.setCalloutColor(block, color); blockActionSheetFor = null },
             onTurnInto = { type -> viewModel.changeType(block, type); blockActionSheetFor = null },
             onDelete = { viewModel.deleteBlock(block); blockActionSheetFor = null },
+            mindMap = block.mindMap,
+            onToggleMindMap = { viewModel.setMindMap(block, !block.mindMap); blockActionSheetFor = null },
         )
+    }
+
+    canvasPickerAfterOrder?.let { afterOrder ->
+        CanvasPickerSheet(
+            core = core,
+            onPickExisting = { id -> viewModel.insertCanvasBlock(afterOrder, id); canvasPickerAfterOrder = null },
+            onCreate = { title -> viewModel.createCanvasAndInsert(afterOrder, title); canvasPickerAfterOrder = null },
+            onDismiss = { canvasPickerAfterOrder = null },
+        )
+    }
+
+    // §0.6.3 / B§9.6 — armed: the real board, the whole screen's `CanvasScreen`, over the page.
+    // Its own back arrow disarms; so does the system back gesture.
+    armedCanvasPage?.let { canvasPageId ->
+        MapBackHandler { armedCanvasPage = null }
+        com.tendril.app.ui.canvas.CanvasScreen(
+            core = core,
+            pageId = canvasPageId,
+            onBack = { armedCanvasPage = null },
+            onOpenPage = onOpenPage,
+        )
+    }
+
+    // §0.6.2 / B§9.6 — armed: the same map grown to fill the viewport, over the page. Drawn last
+    // so it sits above everything, including the sheets; closing it is the only way out, and the
+    // block list beneath is untouched by anything that happened inside it except through the
+    // ordinary block edits the map performs.
+    armedMapRoot?.let { rootId ->
+        val subtree = subtreeOf(outline, rootId)
+        if (subtree.isEmpty()) {
+            armedMapRoot = null
+        } else {
+            MapBackHandler { armedMapRoot = null }
+            MindMapFullScreen(
+                title = subtree.first().block.content.ifBlank { "Mind map" },
+                subtree = subtree,
+                locked = contentLocked,
+                onClose = { armedMapRoot = null },
+                onEditText = { b, text -> viewModel.updateBlockContent(b, text) },
+                onAddChild = { parent, text -> viewModel.addBlockUnder(parent, text) },
+                onDelete = { b -> viewModel.deleteBlock(b) },
+            )
+        }
     }
 
     if (showAddTagDialog) {
@@ -409,6 +472,9 @@ private fun BlockRow(
     listPosition: Int,
     viewModel: PageDetailViewModel,
     onLongPress: () -> Unit,
+    core: WorkbenchCore? = null,
+    onArmCanvas: (Long) -> Unit = {},
+    onInsertCanvas: (Int) -> Unit = {},
     onRequestMention: (baseContent: String) -> Unit,
     onOpenPage: (Long) -> Unit,
 ) {
@@ -434,7 +500,11 @@ private fun BlockRow(
     var showSlashMenu by remember { mutableStateOf(false) }
     // Driven by the outline's computed depth rather than by `parentBlockId != null`, so a
     // grandchild re-attached to its top-level ancestor indents once, not twice.
-    val indent = (24 * depth).dp
+    // §0.10 item 8, resolved with §0.6.1: a full step for the first six levels and a small one
+    // after, so a deep branch stays readable on a phone instead of walking off the right edge.
+    // Six is where a 24dp step has spent a third of a narrow screen; past it the eye has the
+    // shape already and needs only to see that the line is deeper still.
+    val indent = (24 * minOf(depth, 6) + 8 * maxOf(depth - 6, 0)).dp
     val locked = LocalContentLocked.current
 
     Column {
@@ -461,6 +531,10 @@ private fun BlockRow(
             Column(modifier = Modifier.weight(1f)) {
                 if (block.type == BlockType.DIVIDER) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                } else if (block.type == BlockType.CANVAS) {
+                    if (core != null) {
+                        CanvasBlockCard(core, block.mentionedPageId, fallbackTitle = block.content, onArm = { block.mentionedPageId?.let(onArmCanvas) })
+                    }
                 } else if (block.type != BlockType.PAGE_MENTION) {
                     // §P1 — free-form, matching `Block.codeLanguage`'s own shape (the Notion
                     // importer stores a fence tag verbatim); "Plain text" is `null`, not "".
@@ -546,9 +620,9 @@ private fun BlockRow(
                     )
                 }
 
-                // Children (one level, §3.1.1) are emitted by `outlineOf` into the same
-                // LazyColumn, immediately after this block and at depth 1 — a collapsed toggle
-                // simply has none emitted. Nothing to render here.
+                // Children, at any depth (§0.6.1), are emitted by `outlineOf` into the same
+                // LazyColumn, immediately after this block — a collapsed toggle simply has none
+                // emitted. Nothing to render here.
 
             }
         }
@@ -559,7 +633,7 @@ private fun BlockRow(
             onDismiss = { showSlashMenu = false },
             onPick = { type ->
                 showSlashMenu = false
-                viewModel.addBlock(type, block.order)
+                if (type == BlockType.CANVAS) onInsertCanvas(block.order) else viewModel.addBlock(type, block.order)
             },
         )
     }
@@ -584,7 +658,7 @@ private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit
                 BlockType.HEADING_3 to "Heading 3", BlockType.BULLETED_LIST_ITEM to "Bulleted list",
                 BlockType.NUMBERED_LIST_ITEM to "Numbered list", BlockType.TODO to "To-do", BlockType.QUOTE to "Quote",
                 BlockType.CODE to "Code", BlockType.TOGGLE to "Toggle", BlockType.CALLOUT to "Callout", BlockType.DIVIDER to "Divider",
-                BlockType.IMAGE to "Image",
+                BlockType.IMAGE to "Image", BlockType.CANVAS to "Canvas",
             ).forEach { (type, label) ->
                 TextButton(onClick = { onPick(type) }) { Text(label) }
             }
@@ -745,6 +819,8 @@ private fun BlockActionSheet(
     onSetCalloutColor: (String) -> Unit,
     onTurnInto: (BlockType) -> Unit,
     onDelete: () -> Unit,
+    mindMap: Boolean = false,
+    onToggleMindMap: () -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
@@ -754,7 +830,9 @@ private fun BlockActionSheet(
             // nothing to tuck under, or already tucked under, and the row is simply absent.
             if (canIndent) SheetActionRow(Icons.Filled.FormatIndentIncrease, "Indent", onIndent)
             if (canOutdent) SheetActionRow(Icons.Filled.FormatIndentDecrease, "Outdent", onOutdent)
-
+            // §0.6.2 — the subtree as a map, or back to rows. Offered on every block: a block
+            // with no children yet becomes a one-node map whose first act is "add child".
+            SheetActionRow(Icons.Filled.AccountTree, if (mindMap) "Show as list" else "Show as mind map", onToggleMindMap)
             // §P1 — free-form language, same shape the Notion importer already stores.
             if (block.type == BlockType.CODE) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1098,4 +1176,38 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             )
         }
     }
+}
+
+/** §0.6.2 — the ids of every block hidden behind a mind-map card: the descendants of any block
+ * whose `mindMap` is on. A mapped block inside a mapped subtree is simply part of the outer map. */
+private fun mappedDescendants(outline: List<OutlineBlock>): Set<Long> {
+    val hidden = mutableSetOf<Long>()
+    var i = 0
+    while (i < outline.size) {
+        val entry = outline[i]
+        if (entry.block.mindMap && entry.block.id !in hidden) {
+            var j = i + 1
+            while (j < outline.size && outline[j].depth > entry.depth) { hidden += outline[j].block.id; j++ }
+        }
+        i++
+    }
+    return hidden
+}
+
+/** The root and its descendants, in outline order — what the map draws. */
+private fun subtreeOf(outline: List<OutlineBlock>, rootId: Long): List<OutlineBlock> {
+    val start = outline.indexOfFirst { it.block.id == rootId }
+    if (start < 0) return emptyList()
+    val depth = outline[start].depth
+    var end = start
+    while (end + 1 < outline.size && outline[end + 1].depth > depth) end++
+    return outline.subList(start, end + 1)
+}
+
+/** Back closes the armed map before it does anything else. Compose Multiplatform's own
+ * `BackHandler`; the Android scaffold's system-back handler is further out and never sees it. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun MapBackHandler(onBack: () -> Unit) {
+    androidx.compose.ui.backhandler.BackHandler(enabled = true, onBack = onBack)
 }

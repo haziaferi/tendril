@@ -59,6 +59,8 @@ data class BlockSnapshotRecord(
     val calloutColor: String? = null,
     val mentionedPageUid: String? = null,
     val toggleExpanded: Boolean = true,
+    /** §0.6.2 (v12). Defaults so a v11 peer's block reads as a list. */
+    val mindMap: Boolean = false,
     /**
      * §9.4 / S4 — the image's file name in the folder's `images/` directory, or null for a block
      * that has none. `<block uid>.<extension>`.

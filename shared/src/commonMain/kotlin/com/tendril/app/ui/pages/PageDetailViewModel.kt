@@ -8,6 +8,7 @@ import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.entry.intervalToPeriod
 import com.tendril.app.data.page.Block
+import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
@@ -31,6 +32,8 @@ import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
 import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.outdentPlanFor
+import com.tendril.app.domain.outlineOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -234,6 +237,71 @@ class PageDetailViewModel(
         }
     }
 
+    /** §0.6.3 — a block showing [canvasPageId], inserted after [afterOrder] like any other. */
+    fun insertCanvasBlock(afterOrder: Int, canvasPageId: Long) = launchAndReindex {
+        val existing = blockDao.getForPage(pageId).sortedBy { it.order }
+        val insertAt = (afterOrder + 1).coerceIn(0, existing.size)
+        val now = Instant.now()
+        val title = pageDao.getById(canvasPageId)?.title.orEmpty()
+        existing.drop(insertAt).forEach { b -> blockDao.update(b.copy(order = b.order + 1)) }
+        blockDao.insert(
+            Block(
+                pageId = pageId, type = BlockType.CANVAS, order = insertAt,
+                // The title as content, so the export and a device without the canvas still
+                // have a word for what stood here — the same reason a mention block keeps its text.
+                content = title, mentionedPageId = canvasPageId,
+                createdAt = now, updatedAt = now,
+            )
+        )
+    }
+
+    /** §0.6.3 — a new Canvas page under this one, then the block that shows it. */
+    fun createCanvasAndInsert(afterOrder: Int, title: String) = launchAndReindex {
+        val now = Instant.now()
+        val canvasPageId = pageDao.insert(
+            Page(title = title.ifBlank { "Untitled canvas" }, kind = PageKind.CANVAS, parentId = pageId, createdAt = now, updatedAt = now),
+        )
+        insertCanvasBlock(afterOrder, canvasPageId)
+    }
+
+    /** §0.6.2 — show or hide this block's subtree as a mind map. */
+    fun setMindMap(block: Block, mindMap: Boolean) = launchAndReindex {
+        blockDao.update(block.copy(mindMap = mindMap, updatedAt = Instant.now()))
+    }
+
+    /**
+     * §0.6.2 — a new child at the end of [parent]'s subtree: the map's "add child" is an
+     * ordinary block insert. Placed after the last block of the parent's subtree in outline
+     * order (so it reads last among its siblings in the list too), then parented, with the same
+     * dense renumbering [addBlock] does.
+     */
+    fun addBlockUnder(parent: Block, content: String) = launchAndReindex {
+        val existing = blockDao.getForPage(pageId)
+        val outline = outlineOf(existing, expandAll = true)
+        val parentIndex = outline.indexOfFirst { it.block.id == parent.id }
+        if (parentIndex < 0) return@launchAndReindex
+        val parentDepth = outline[parentIndex].depth
+        // The subtree ends where the next entry is no deeper than the parent.
+        var end = parentIndex
+        while (end + 1 < outline.size && outline[end + 1].depth > parentDepth) end++
+        val afterOrder = outline[end].block.order
+        val sorted = existing.sortedBy { it.order }
+        val insertAt = (afterOrder + 1).coerceIn(0, sorted.size)
+        val now = Instant.now()
+        sorted.drop(insertAt).forEach { b -> blockDao.update(b.copy(order = b.order + 1)) }
+        blockDao.insert(
+            Block(
+                pageId = pageId,
+                type = BlockType.BULLETED_LIST_ITEM,
+                order = insertAt,
+                content = content,
+                parentBlockId = parent.id,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
+    }
+
     fun setToggleExpanded(block: Block, expanded: Boolean) = launchAndReindex {
         blockDao.update(block.copy(toggleExpanded = expanded, updatedAt = Instant.now()))
     }
@@ -285,9 +353,8 @@ class PageDetailViewModel(
     }
 
     /**
-     * §3.1.1 — tuck [block] under the nearest preceding top-level sibling. A no-op when there
-     * is none (nothing to tuck under) or when it is already indented, since one level is the
-     * whole of the nesting this spec has.
+     * §3.1.1 / §0.6.1 — tuck [block] under its nearest preceding sibling. A no-op when there is
+     * none. Any depth: the cap that used to live here and in [indentTargetFor] is gone.
      *
      * `order` is left alone: [outlineOf] draws a child immediately after its parent whatever
      * its own order says, so re-numbering here would be churn with nothing depending on it.
@@ -298,11 +365,24 @@ class PageDetailViewModel(
         blockDao.update(block.copy(parentBlockId = target.id, updatedAt = Instant.now()))
     }
 
-    /** The inverse, and the escape hatch for a child whose parent went away on another device:
-     * anything indented can always be flattened again. */
+    /** The inverse — one level up, taking the siblings that followed along as children so the
+     * page keeps its reading order (see [outdentPlanFor]). Still the escape hatch for a child
+     * whose parent went away on another device: the outline already draws such a block as a
+     * root, and this makes that permanent. */
     fun outdentBlock(block: Block) = launchAndReindex {
-        if (block.parentBlockId == null) return@launchAndReindex
-        blockDao.update(block.copy(parentBlockId = null, updatedAt = Instant.now()))
+        val blocks = blockDao.getForPage(pageId)
+        val plan = outdentPlanFor(block, blocks)
+        val now = Instant.now()
+        if (plan == null) {
+            // Parent missing on this page: flatten, which is what the outline was showing anyway.
+            if (block.parentBlockId != null) blockDao.update(block.copy(parentBlockId = null, updatedAt = now))
+            return@launchAndReindex
+        }
+        blockDao.update(block.copy(parentBlockId = plan.newParentId, updatedAt = now))
+        for (id in plan.adoptedIds) {
+            val sibling = blocks.first { it.id == id }
+            blockDao.update(sibling.copy(parentBlockId = block.id, updatedAt = now))
+        }
     }
 
     fun searchTagCandidates(query: String) {

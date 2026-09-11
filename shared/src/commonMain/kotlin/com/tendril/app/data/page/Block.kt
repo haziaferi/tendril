@@ -16,6 +16,9 @@ enum class BlockType {
     /** Standalone `@Page Title` block — inline mentions within any text block are a
      * [SpanStyle.PageMention] span instead, not this block type. */
     PAGE_MENTION,
+    /** §0.6.3 — a Canvas page shown in this page, inert until armed; [Block.mentionedPageId]
+     * names the page. Not a second canvas model: §3.7's page kind, embedded. */
+    CANVAS,
 }
 
 /** §3.1.1 — "inline formatting... is stored as (start, end, style) spans over a block's
@@ -74,6 +77,10 @@ data class Block(
     val mentionedPageId: Long? = null,
     /** TOGGLE only — "actually collapses" (§3.1.1), state persisted so it survives navigation. */
     val toggleExpanded: Boolean = true,
+    /** §0.6.2 — this block's subtree is shown as a mind map instead of as indented rows. A view
+     * preference on the content it applies to, persisted for the same reason [toggleExpanded] is;
+     * the map itself is a drawing of the subtree and stores nothing (v12). */
+    val mindMap: Boolean = false,
     /** IMAGE only — where *this device* keeps its copy: an app-private absolute path, written on
      * insert (§3.1.1) and never synced, because it is meaningless on any other device.
      *

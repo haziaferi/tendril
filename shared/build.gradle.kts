@@ -58,6 +58,7 @@ kotlin {
             api(compose.foundation)
             api(compose.material3)
             api(compose.materialIconsExtended)
+            api(libs.compose.ui.backhandler)
             implementation(compose.components.resources)
             // api, not implementation: consumers need ViewModelStoreOwner/LocalViewModelStoreOwner
             // at their own app-entry call sites too (see Tendril windows' DesktopViewModelStoreOwner).

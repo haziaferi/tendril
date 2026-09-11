@@ -1,7 +1,6 @@
 package com.tendril.app.notionimport
 
 import com.tendril.app.data.page.BlockType
-import com.tendril.app.domain.MAX_BLOCK_DEPTH
 
 /**
  * §7.4 — intermediate inline-formatting kinds, resolved into a real
@@ -39,6 +38,10 @@ data class ParsedBlock(
  * and toggle content by four; two is the common Markdown alternative and costs nothing to accept. */
 private const val INDENT_COLUMNS = 2
 
+/** Columns per level once a line is nested at all. Notion's own step, and a tab's width above.
+ * Two columns still count as nested (one level); four is one level; eight is two. */
+private const val COLUMNS_PER_LEVEL = 4
+
 /** Source indentation, in columns, with tabs widened to four. Measured on the raw line before
  * it is trimmed — which is where this information used to be thrown away. */
 private fun indentDepthOf(rawLine: String): Int {
@@ -47,7 +50,8 @@ private fun indentDepthOf(rawLine: String): Int {
         when (ch) {
             ' ' -> columns += 1
             '	' -> columns += 4
-            else -> return if (columns >= INDENT_COLUMNS) MAX_BLOCK_DEPTH else 0
+            // §0.6.1 — every four columns is a level; nothing clamps it any more.
+            else -> return if (columns < INDENT_COLUMNS) 0 else maxOf(1, columns / COLUMNS_PER_LEVEL)
         }
     }
     return 0 // whitespace-only line: no block comes from it anyway

@@ -2,6 +2,7 @@ package com.tendril.app.markdown
 
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockType
+import com.tendril.app.domain.outlineOf
 import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.SpanStyle
 
@@ -53,12 +54,16 @@ object MarkdownWriter {
         var ordinal = 0
         var previousWasNumbered = false
 
-        for (block in blocks) {
+        // In outline order and at outline depth (§0.6.1): a child is written straight after its
+        // parent, indented once per level, and a collapsed toggle's subtree is written too —
+        // hiding a branch on screen is not a choice to lose it from the file.
+        for (entry in outlineOf(blocks, expandAll = true)) {
+            val block = entry.block
             val numbered = block.type == BlockType.NUMBERED_LIST_ITEM
             ordinal = if (numbered && previousWasNumbered) ordinal + 1 else 1
             previousWasNumbered = numbered
 
-            val indent = if (block.parentBlockId != null) CHILD_INDENT else ""
+            val indent = CHILD_INDENT.repeat(entry.depth)
             for (line in linesFor(block, ordinal, assetPathFor, pageLinkFor)) {
                 out.append(indent).append(line).append('\n')
             }
@@ -117,6 +122,16 @@ object MarkdownWriter {
             BlockType.PAGE_MENTION -> {
                 val target = block.mentionedPageId?.let(pageLinkFor)
                 val label = text.ifBlank { "page" }
+                if (target == null) listOf(escapeLeadingMarkup(label))
+                else listOf("[$label](${encodePath(target)})")
+            }
+
+            // §0.6.3 — a canvas is a page, so the block is a link to that page's file, labelled so
+            // a reader knows what stood here. Its board is not in Markdown at all (JSON Canvas is
+            // §0.6.7); the link is the honest most this format can carry.
+            BlockType.CANVAS -> {
+                val target = block.mentionedPageId?.let(pageLinkFor)
+                val label = "Canvas: " + text.ifBlank { "untitled" }
                 if (target == null) listOf(escapeLeadingMarkup(label))
                 else listOf("[$label](${encodePath(target)})")
             }
