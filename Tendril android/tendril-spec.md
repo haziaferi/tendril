@@ -252,7 +252,13 @@ backfilled from the two dates a habit used to keep, tombstoned on undo so that "
 device wins" merges it. The habit row no longer shows a streak unless Settings says so; tapping a
 habit opens a presence sheet — "four times this month", "usually mornings", "last: Tuesday" — and
 a month of dots where a day without a check-in is empty space. Whether habits become measurable
-stays §0.10 item 3.
+stays §0.10 item 3. **The migration was verified on a real database, on desktop** — no phone was
+attached: a v9 `tendril.db` holding this morning's canvas was seeded with two habits (one with
+both dates, one with none) and a task, and the v10 build opened it through `MIGRATION_9_10`:
+`user_version` 10, the four columns present, the old task with no deadline and `important = 0`,
+two backfilled `habit_completions` rows for the dated habit and none for the other, all three
+indexes, the canvas's two nodes and one edge untouched, `integrity_check` ok, no foreign-key
+violations, no exception in the log. The same code path runs on the phone; its run is owed.
 
 **0.6.7 Canvas grows additively.** Colours, groups, image nodes, nested boards as a
 `PAGE_EMBED` of a Canvas page, a mind-map layout mode sharing 0.6.2's layout code, JSON Canvas
