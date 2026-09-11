@@ -258,7 +258,19 @@ both dates, one with none) and a task, and the v10 build opened it through `MIGR
 `user_version` 10, the four columns present, the old task with no deadline and `important = 0`,
 two backfilled `habit_completions` rows for the dated habit and none for the other, all three
 indexes, the canvas's two nodes and one edge untouched, `integrity_check` ok, no foreign-key
-violations, no exception in the log. The same code path runs on the phone; its run is owed.
+violations, no exception in the log. **And then on the phone, the same afternoon.** The app had
+been uninstalled after #33, so there was no v9 database to migrate; one was made: the v9 build
+(`main` at `a7d69e6`) installed, a task added and a habit created and checked in through the
+UI, the database pulled (`user_version` 9, no `habit_completions`), then the v10 build installed
+over it. After: `user_version` 10, the four columns, the task with no deadline and `important =
+0`, the habit kept, **one backfilled check-in dated today**, all three indexes, `integrity_check`
+ok, no foreign-key violations, no Room exception in logcat. The UI on top of it: the row's `···`
+shows Postpone / Add a step / Set deadline / Delete and *no* Important while the switch is off;
++1 day moved the task from the 11th to the 12th and out of "Today"; a deadline set to the 11th
+stayed there; a step appeared under its parent as "0/1 steps"; the habit row read "Every 1
+day(s)" with no streak, and tapping it opened "Once this month · Last: venerdì, 11 set" over a
+month of dots; flipping both Settings switches put "streak 1" back on the row and "Important"
+into the menu, and marking the task drew the star.
 
 **0.6.7 Canvas grows additively.** Colours, groups, image nodes, nested boards as a
 `PAGE_EMBED` of a Canvas page, a mind-map layout mode sharing 0.6.2's layout code, JSON Canvas
