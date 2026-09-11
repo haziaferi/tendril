@@ -1,5 +1,6 @@
 package com.tendril.app.sync
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -9,7 +10,7 @@ import kotlinx.serialization.Serializable
  * local Room id, same rule [EntrySnapshotRecord] already follows.
  *
  * Merge is whole-record LWW, not per-child: when a record wins (new, or `updatedAt` newer
- * than local), its [blocks]/[tags]/[propertyValues]/[database]/[canvas] fully replace
+ * than local), its [blocks]/[labels]/[propertyValues]/[database]/[canvas] fully replace
  * whatever's stored locally rather than being diffed in — the same "concurrent edits to the
  * same page before either syncs means one edit is lost" limitation §9.4 already accepts for
  * Page content in general, just made explicit here for every child collection at once.
@@ -30,10 +31,10 @@ data class PageSnapshotRecord(
     val deletedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long,
-    /** Tag *names*, not uids — a name deterministically derives its own color
-     * ([com.tendril.app.data.page.TagColors]), so re-creating a same-named tag on another
+    /** Label *names*, not uids — a name deterministically derives its own color
+     * ([com.tendril.app.data.page.LabelColors]), so re-creating a same-named label on another
      * device needs no separate color sync, matching that mechanism's existing design intent. */
-    val tags: List<String> = emptyList(),
+    @SerialName("tags") val labels: List<String> = emptyList(),
     val blocks: List<BlockSnapshotRecord> = emptyList(),
     /** Row-only — this page's own database's property values, since a value's identity
      * (`propertyId` + `rowPageId`) is really a property of the *row*, not the database. */

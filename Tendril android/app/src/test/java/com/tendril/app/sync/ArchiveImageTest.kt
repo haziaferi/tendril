@@ -53,7 +53,7 @@ class ArchiveImageTest {
         val engine = PagesSyncEngine(
             pageDao = pageDao,
             blockDao = blockDao,
-            tagDao = FakeTagDao(store),
+            labelDao = FakeLabelDao(store),
             pageDatabaseDao = FakePageDatabaseDao(store),
             propertyDao = propertyDao,
             propertyValueDao = FakePropertyValueDao(store),

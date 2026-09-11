@@ -176,7 +176,7 @@ FIELD_READ_OFF_LANGUAGE = {
 FIELD_WRITE_ONLY_BASELINE = {
     "Entry.estimate",                       # spec 0.6.4: stored now, read by 0.8 step 7 (Plan mode, tracking)
     "Block.imagePath",                      # P2 - the importer writes it; nothing draws it
-    "Tag.color",                            # a palette tuned for dichromacy that renders nowhere
+    "Label.color",                            # a palette tuned for dichromacy that renders nowhere
     "EntryCompletion.occurrenceDate",       # written at both resolve sites, never read back
 }
 

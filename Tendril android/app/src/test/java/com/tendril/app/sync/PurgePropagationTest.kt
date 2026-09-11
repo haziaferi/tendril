@@ -51,7 +51,7 @@ class PurgePropagationTest {
         val engine = PagesSyncEngine(
             pageDao = pageDao,
             blockDao = blockDao,
-            tagDao = FakeTagDao(store),
+            labelDao = FakeLabelDao(store),
             pageDatabaseDao = FakePageDatabaseDao(store),
             propertyDao = FakePropertyDao(store),
             propertyValueDao = FakePropertyValueDao(store),

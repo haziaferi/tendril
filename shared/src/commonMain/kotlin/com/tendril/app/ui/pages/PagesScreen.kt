@@ -108,7 +108,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                     core.database.pageDatabaseDao(),
                     core.database.propertyDao(),
                     core.database.pageFtsDao(),
-                    core.database.tagDao(),
+                    core.database.labelDao(),
                     core.purgeRegistry,
                     core.databaseSyncManager,
                     core.templateManager,
@@ -118,8 +118,8 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
         }
     )
     val pages by viewModel.filteredPages.collectAsState()
-    val allTags by viewModel.allTags.collectAsState()
-    val selectedTagIds by viewModel.selectedTagIds.collectAsState()
+    val allLabels by viewModel.allLabels.collectAsState()
+    val selectedLabelIds by viewModel.selectedLabelIds.collectAsState()
     val viewOnly by viewModel.viewOnly.collectAsState()
     var showSearch by remember { mutableStateOf(false) }
     var showNewSheet by remember { mutableStateOf(false) }
@@ -203,16 +203,16 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (allTags.isNotEmpty()) {
+            if (allLabels.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    allTags.forEach { tag ->
+                    allLabels.forEach { label ->
                         FilterChip(
-                            selected = tag.id in selectedTagIds,
-                            onClick = { viewModel.toggleTagFilter(tag.id) },
-                            label = { Text(tag.name, maxLines = 1) },
+                            selected = label.id in selectedLabelIds,
+                            onClick = { viewModel.toggleLabelFilter(label.id) },
+                            label = { Text(label.name, maxLines = 1) },
                         )
                     }
                 }

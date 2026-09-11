@@ -117,7 +117,7 @@ fun PageDetailScreen(
                     pageId,
                     core.database.pageDao(),
                     core.database.blockDao(),
-                    core.database.tagDao(),
+                    core.database.labelDao(),
                     core.database.propertyDao(),
                     core.database.propertyValueDao(),
                     core.database.pageDatabaseDao(),
@@ -145,7 +145,7 @@ fun PageDetailScreen(
     // §3.1.1 — the drawn order, with children under their parents. Recomputed only when the
     // block list itself changes, not on every recomposition.
     val outline = remember(blocks) { outlineOf(blocks) }
-    val tags by viewModel.tags.collectAsState()
+    val labels by viewModel.labels.collectAsState()
     val rowDatabase by viewModel.rowDatabase.collectAsState()
     val rowProperties by viewModel.rowProperties.collectAsState()
     val rowValues by viewModel.rowValues.collectAsState()
@@ -163,7 +163,7 @@ fun PageDetailScreen(
     // `block.content` at insert time, which can be one async Room round-trip stale (typing '@'
     // strips it via a launched coroutine, not synchronously) and would duplicate/corrupt text.
     var mentionTarget by remember { mutableStateOf<Pair<Block, String>?>(null) }
-    var showAddTagDialog by remember { mutableStateOf(false) }
+    var showAddLabelDialog by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCheckboxOnlyConfirm by remember { mutableStateOf(false) }
@@ -238,19 +238,19 @@ fun PageDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                tags.forEach { tag ->
+                labels.forEach { label ->
                     InputChip(
                         selected = false,
-                        onClick = { viewModel.removeTag(tag) },
+                        onClick = { viewModel.removeLabel(label) },
                         enabled = !contentLocked,
-                        label = { Text(tag.name) },
-                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove tag", modifier = Modifier.size(16.dp)) },
+                        label = { Text(label.name) },
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove label", modifier = Modifier.size(16.dp)) },
                     )
                 }
                 if (!contentLocked) {
                     AssistChip(
-                        onClick = { showAddTagDialog = true },
-                        label = { Text("Add tag") },
+                        onClick = { showAddLabelDialog = true },
+                        label = { Text("Add label") },
                         leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     )
                 }
@@ -376,11 +376,11 @@ fun PageDetailScreen(
         }
     }
 
-    if (showAddTagDialog) {
-        AddTagDialog(
+    if (showAddLabelDialog) {
+        AddLabelDialog(
             viewModel = viewModel,
-            onDismiss = { showAddTagDialog = false },
-            onPick = { name -> viewModel.addTag(name); showAddTagDialog = false },
+            onDismiss = { showAddLabelDialog = false },
+            onPick = { name -> viewModel.addLabel(name); showAddLabelDialog = false },
         )
     }
 
@@ -787,9 +787,9 @@ private val CODE_LANGUAGES = listOf(
     "bash", "sql", "json", "yaml", "html", "css", "c", "cpp", "csharp", "go", "rust", "ruby", "php", "markdown",
 )
 
-/** §P3 — a small fixed palette, the same shape as [com.tendril.app.data.page.TagColors]'s,
+/** §P3 — a small fixed palette, the same shape as [com.tendril.app.data.page.LabelColors]'s,
  * rather than a full color picker; picked for card-style backgrounds (readable text over
- * them at full opacity), unlike the tag palette's mid-tone hues meant to be their own swatch. */
+ * them at full opacity), unlike the label palette's mid-tone hues meant to be their own swatch. */
 private val CALLOUT_COLORS = listOf(
     "#FDE68A", "#BFDBFE", "#BBF7D0", "#FBCFE8", "#DDD6FE", "#FED7AA", "#E5E7EB",
 )
@@ -846,8 +846,8 @@ private fun BlockActionSheet(
                 }
             }
 
-            // §P3 — a fixed swatch row rather than a full color picker; matches Tag's own
-            // small-fixed-palette choice (`TagColors`) rather than introducing a second,
+            // §P3 — a fixed swatch row rather than a full color picker; matches Label's own
+            // small-fixed-palette choice (`LabelColors`) rather than introducing a second,
             // heavier color-picking pattern for one field.
             if (block.type == BlockType.CALLOUT) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -903,19 +903,19 @@ private fun SheetActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector
 }
 
 @Composable
-private fun AddTagDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
-    val candidates by viewModel.tagCandidates.collectAsState()
+    val candidates by viewModel.labelCandidates.collectAsState()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.5f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Add tag", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("Add label", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
             BasicTextField(
                 value = query,
-                onValueChange = { query = it; viewModel.searchTagCandidates(it) },
+                onValueChange = { query = it; viewModel.searchLabelCandidates(it) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
             )
