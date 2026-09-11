@@ -58,7 +58,7 @@ class PageMergeTest {
     private val store = FakePageStore()
     private val pageDao = FakePageDao(store)
     private val blockDao = FakeBlockDao(store)
-    private val tagDao = FakeTagDao(store)
+    private val labelDao = FakeLabelDao(store)
     private val pageDatabaseDao = FakePageDatabaseDao(store)
     private val propertyDao = FakePropertyDao(store)
     private val propertyValueDao = FakePropertyValueDao(store)
@@ -79,7 +79,7 @@ class PageMergeTest {
     private val engine = PagesSyncEngine(
         pageDao = pageDao,
         blockDao = blockDao,
-        tagDao = tagDao,
+        labelDao = labelDao,
         pageDatabaseDao = pageDatabaseDao,
         propertyDao = propertyDao,
         propertyValueDao = propertyValueDao,
@@ -101,14 +101,14 @@ class PageMergeTest {
         kind: String = PageKind.PAGE.name,
         parentUid: String? = null,
         databaseUid: String? = null,
-        tags: List<String> = emptyList(),
+        labels: List<String> = emptyList(),
         blocks: List<BlockSnapshotRecord> = emptyList(),
         propertyValues: List<PropertyValueSnapshotRecord> = emptyList(),
         database: PageDatabaseSnapshotRecord? = null,
         canvas: CanvasSnapshotRecord? = null,
     ) = PageSnapshotRecord(
         uid = uid, title = title, kind = kind, parentUid = parentUid, databaseUid = databaseUid,
-        createdAt = updatedAt, updatedAt = updatedAt, tags = tags, blocks = blocks,
+        createdAt = updatedAt, updatedAt = updatedAt, labels = labels, blocks = blocks,
         propertyValues = propertyValues, database = database, canvas = canvas,
     )
 
@@ -293,12 +293,12 @@ class PageMergeTest {
     // ------------------------------------------------------------------ last-write-wins
 
     @Test
-    fun `a new page is inserted with its blocks and tags`() = runBlocking {
+    fun `a new page is inserted with its blocks and labels`() = runBlocking {
         engine.mergePages(
             listOf(
                 pageRecord(
                     UID_A, "Arrived", updatedAt = 1_000L,
-                    tags = listOf("work", "urgent"),
+                    labels = listOf("work", "urgent"),
                     blocks = listOf(blockRecord(UID_BLOCK, "hello world")),
                 )
             )
@@ -306,7 +306,7 @@ class PageMergeTest {
 
         val page = requireNotNull(pageDao.getByUid(UID_A)) { "the page should have been inserted" }
         assertEquals(listOf("hello world"), blockDao.getForPage(page.id).map { it.content })
-        assertEquals(setOf("work", "urgent"), tagDao.getForPage(page.id).map { it.name }.toSet())
+        assertEquals(setOf("work", "urgent"), labelDao.getForPage(page.id).map { it.name }.toSet())
         assertEquals("the FTS index is rebuilt as part of the same write", "hello world", store.fts[page.id])
     }
 

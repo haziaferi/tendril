@@ -109,7 +109,7 @@ class UnknownEnumQuarantineTest {
 
         val pageDao = FakePageDao(db)
         val blockDao = FakeBlockDao(db)
-        val tagDao = FakeTagDao(db)
+        val labelDao = FakeLabelDao(db)
         val pageDatabaseDao = FakePageDatabaseDao(db)
         val propertyDao = FakePropertyDao(db)
         val propertyValueDao = FakePropertyValueDao(db)
@@ -131,7 +131,7 @@ class UnknownEnumQuarantineTest {
         val engine = PagesSyncEngine(
             pageDao = pageDao,
             blockDao = blockDao,
-            tagDao = tagDao,
+            labelDao = labelDao,
             pageDatabaseDao = pageDatabaseDao,
             propertyDao = propertyDao,
             propertyValueDao = propertyValueDao,

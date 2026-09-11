@@ -73,7 +73,7 @@ fun main() {
     val core = container.workbenchCore
 
     val pagesSyncEngine = PagesSyncEngine(
-        database.pageDao(), database.blockDao(), database.tagDao(), database.pageDatabaseDao(),
+        database.pageDao(), database.blockDao(), database.labelDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
         database.pageRelationDao(), container.purgeRegistry, core.pageContentRepository,

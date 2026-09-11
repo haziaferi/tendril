@@ -10,8 +10,8 @@ import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.searchPrefix
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageSearchHit
-import com.tendril.app.data.page.Tag
-import com.tendril.app.data.page.TagDao
+import com.tendril.app.data.page.Label
+import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.Property
@@ -37,7 +37,7 @@ class PagesViewModel(
     private val pageDatabaseDao: PageDatabaseDao,
     private val propertyDao: PropertyDao,
     private val pageFtsDao: PageFtsDao,
-    private val tagDao: TagDao,
+    private val labelDao: LabelDao,
     private val purgeRegistry: PurgeRegistry,
     private val databaseSyncManager: DatabaseSyncManager,
     private val templateManager: TemplateManager,
@@ -61,19 +61,19 @@ class PagesViewModel(
         }
     }
 
-    val allTags: StateFlow<List<Tag>> =
-        tagDao.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val allLabels: StateFlow<List<Label>> =
+        labelDao.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _selectedTagIds = MutableStateFlow<Set<Long>>(emptySet())
-    val selectedTagIds: StateFlow<Set<Long>> = _selectedTagIds.asStateFlow()
-    fun toggleTagFilter(tagId: Long) {
+    val selectedLabelIds: StateFlow<Set<Long>> = _selectedTagIds.asStateFlow()
+    fun toggleLabelFilter(tagId: Long) {
         _selectedTagIds.value = _selectedTagIds.value.let { if (tagId in it) it - tagId else it + tagId }
     }
 
-    /** §3.1.6 — filters the page list by the selected tags (OR semantics, see [TagDao.observePageIdsForTags]). */
+    /** §3.1.6 — filters the page list by the selected labels (OR semantics, see [LabelDao.observePageIdsForTags]). */
     val filteredPages: StateFlow<List<Page>> = combine(
         rootPages,
-        _selectedTagIds.flatMapLatest { ids -> if (ids.isEmpty()) flowOf(null) else tagDao.observePageIdsForTags(ids.toList()) },
+        _selectedTagIds.flatMapLatest { ids -> if (ids.isEmpty()) flowOf(null) else labelDao.observePageIdsForTags(ids.toList()) },
     ) { pages, taggedIds ->
         if (taggedIds == null) pages else pages.filter { it.id in taggedIds }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

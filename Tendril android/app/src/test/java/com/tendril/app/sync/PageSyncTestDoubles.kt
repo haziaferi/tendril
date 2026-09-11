@@ -17,9 +17,9 @@ import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
 import com.tendril.app.data.page.PageRelationDao
 import com.tendril.app.data.page.PageSearchHit
-import com.tendril.app.data.page.PageTag
-import com.tendril.app.data.page.Tag
-import com.tendril.app.data.page.TagDao
+import com.tendril.app.data.page.PageLabel
+import com.tendril.app.data.page.Label
+import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.PageDatabaseView
@@ -43,7 +43,7 @@ import java.time.Instant
  * collaborators' behaviour should be readable rather than assembled out of stubs.
  *
  * The twelve DAOs share one [FakePageStore] instead of each holding its own map. That is the
- * whole point of the design: Room's schema hangs blocks, tags, property values, views and
+ * whole point of the design: Room's schema hangs blocks, labels, property values, views and
  * canvas content off a Page by `ON DELETE CASCADE`, so a fake where deleting a Page leaves its
  * blocks behind would let a merge test pass against behaviour the real database does not have.
  * Since the change under test *deletes rows during a merge*, that difference is exactly the one
@@ -52,8 +52,8 @@ import java.time.Instant
 class FakePageStore {
     val pages = linkedMapOf<Long, Page>()
     val blocks = linkedMapOf<Long, Block>()
-    val tags = linkedMapOf<Long, Tag>()
-    val pageTags = mutableListOf<PageTag>()
+    val labels = linkedMapOf<Long, Label>()
+    val pageTags = mutableListOf<PageLabel>()
     val databases = linkedMapOf<Long, PageDatabase>()
     val properties = linkedMapOf<Long, Property>()
     val propertyValues = linkedMapOf<Long, PropertyValue>()
@@ -216,20 +216,20 @@ class FakeBlockDao(private val store: FakePageStore) : BlockDao {
     override fun observeImagesForPages(pageIds: List<Long>): Flow<List<Block>> = flowOf(emptyList())
 }
 
-class FakeTagDao(private val store: FakePageStore) : TagDao {
-    override suspend fun insert(tag: Tag): Long {
+class FakeLabelDao(private val store: FakePageStore) : LabelDao {
+    override suspend fun insert(label: Label): Long {
         val id = store.nextId()
-        store.tags[id] = tag.copy(id = id)
+        store.labels[id] = label.copy(id = id)
         return id
     }
 
-    override suspend fun findByName(name: String): Tag? = store.tags.values.firstOrNull { it.name == name }
-    override suspend fun search(query: String): List<Tag> = store.tags.values.filter { it.name.contains(query) }
+    override suspend fun findByName(name: String): Label? = store.labels.values.firstOrNull { it.name == name }
+    override suspend fun search(query: String): List<Label> = store.labels.values.filter { it.name.contains(query) }
 
-    override suspend fun getForPage(pageId: Long): List<Tag> =
-        store.pageTags.filter { it.pageId == pageId }.mapNotNull { store.tags[it.tagId] }
+    override suspend fun getForPage(pageId: Long): List<Label> =
+        store.pageTags.filter { it.pageId == pageId }.mapNotNull { store.labels[it.tagId] }
 
-    override suspend fun addToPage(pageTag: PageTag) {
+    override suspend fun addToPage(pageTag: PageLabel) {
         if (store.pageTags.none { it.pageId == pageTag.pageId && it.tagId == pageTag.tagId }) store.pageTags += pageTag
     }
 
@@ -239,9 +239,9 @@ class FakeTagDao(private val store: FakePageStore) : TagDao {
 
     override suspend fun clearForPage(pageId: Long) { store.pageTags.removeAll { it.pageId == pageId } }
 
-    override fun observeAll(): Flow<List<Tag>> = flowOf(store.tags.values.sortedBy { it.name })
-    override fun observeForPage(pageId: Long): Flow<List<Tag>> =
-        flowOf(store.pageTags.filter { it.pageId == pageId }.mapNotNull { store.tags[it.tagId] })
+    override fun observeAll(): Flow<List<Label>> = flowOf(store.labels.values.sortedBy { it.name })
+    override fun observeForPage(pageId: Long): Flow<List<Label>> =
+        flowOf(store.pageTags.filter { it.pageId == pageId }.mapNotNull { store.labels[it.tagId] })
     override fun observePageIdsForTags(tagIds: List<Long>): Flow<List<Long>> =
         flowOf(store.pageTags.filter { it.tagId in tagIds }.map { it.pageId }.distinct())
 }

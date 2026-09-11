@@ -99,7 +99,7 @@ class WritePathSyncTest {
         val store = FakePageStore()
         val pageDao = FakePageDao(store)
         val blockDao = FakeBlockDao(store)
-        val tagDao = FakeTagDao(store)
+        val labelDao = FakeLabelDao(store)
         val pageDatabaseDao = FakePageDatabaseDao(store)
         val propertyDao = FakePropertyDao(store)
         val propertyValueDao = FakePropertyValueDao(store)
@@ -128,7 +128,7 @@ class WritePathSyncTest {
         val engine = PagesSyncEngine(
             pageDao = pageDao,
             blockDao = blockDao,
-            tagDao = tagDao,
+            labelDao = labelDao,
             pageDatabaseDao = pageDatabaseDao,
             propertyDao = propertyDao,
             propertyValueDao = propertyValueDao,
@@ -142,7 +142,7 @@ class WritePathSyncTest {
         )
 
         fun detail(pageId: Long) = PageDetailViewModel(
-            pageId, pageDao, blockDao, tagDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
+            pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
             resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore()
         )
 
@@ -163,7 +163,7 @@ class WritePathSyncTest {
          * one write in the app that leaves a tombstone rather than a record.
          */
         fun pages() = PagesViewModel(
-            pageDao, pageDatabaseDao, propertyDao, ftsDao, tagDao, purgeRegistry, databaseSyncManager,
+            pageDao, pageDatabaseDao, propertyDao, ftsDao, labelDao, purgeRegistry, databaseSyncManager,
             templateManager, viewLockState,
         )
 
@@ -292,14 +292,14 @@ class WritePathSyncTest {
     /** Tags are not blocks and travel in their own field of the snapshot, but they are gated by
      * the same one timestamp as everything else hanging off the page. */
     @Test
-    fun `a tag added on one device reaches the other`() = runTest(mainDispatcher) {
+    fun `a label added on one device reaches the other`() = runTest(mainDispatcher) {
         val page = seedPageOnA("Notes")
         syncAtoB()
 
-        a.detail(page.id).addTag("urgent")
+        a.detail(page.id).addLabel("urgent")
         syncAtoB()
 
-        assertEquals(listOf("urgent"), b.tagDao.getForPage(b.pageIdOf(page.uid)).map { it.name })
+        assertEquals(listOf("urgent"), b.labelDao.getForPage(b.pageIdOf(page.uid)).map { it.name })
     }
 
     // --------------------------------------------------------------- database cells and schema

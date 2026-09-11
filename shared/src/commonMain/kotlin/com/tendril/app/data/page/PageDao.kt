@@ -63,7 +63,7 @@ interface PageDao {
     suspend fun updateParentAndDatabase(id: Long, parentId: Long?, databaseId: Long?)
 
     /** §9.4 snapshot merge — a page's synced payload is far larger than its own row (its
-     * blocks, tags, cell values, database schema, canvas content), but the merge's
+     * blocks, labels, cell values, database schema, canvas content), but the merge's
      * last-write-wins gate reads `pages.updatedAt` and nothing else. So any write that changes
      * that payload without rewriting the row has to move this column as well, or the record
      * arrives at a peer no newer than the copy already there, loses, and every pass that would

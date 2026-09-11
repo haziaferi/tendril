@@ -84,6 +84,7 @@ second copy of the reasoning.
 | 2026-09-11 (step 2b: deadline binding) | §0.8 step 2b done. **Schema v11** (`MIGRATION_10_11`): `page_databases.dueDatePropertyId`. `BindingRole.DUE_DATE` binds a `DATE` property to `Entry.dueDate`; the two date cells and two row editors become one each, taking the role. The enable-sync sheet gains a Deadline picker. **§5.2.1 corrected**: post-hoc bind had no UI path; the header menu now offers "Bind as <role>". Migration verified on desktop and phone; the binding verified end to end on the phone. 573 tests. | §0.6.4, §0.8, §5.2, §5.2.1 |
 | 2026-09-11 (step 3: depth, mind map, canvas block) | §0.8 step 3 done. **§0.6.1** unlimited nesting — `outlineOf` walks the tree, `indentTargetFor`/`outdentPlanFor` are the outliner pair, the writer and the Notion parser follow. **§0.6.2** the outline mind map, `Block.mindMap` (**schema v12**), inert card and armed full screen, CMP `BackHandler` added. **§0.6.3** `BlockType.CANVAS`, the live board in a page. §3.1.1's one-level rule and §3.7's "never nested" corrected in place; §0.10 items 2 and 8 resolved, item 10 (desktop Escape) opened. Verified on desktop and phone. 585 tests. | §0.6.1–3, §0.8, §0.10, §3.1.1, §3.7 |
 | 2026-09-12 (desktop Escape) | §0.10 item 10 resolved — desktop-only change in `Tendril windows/`, no `shared/` code touched; the substantive entry is `tendril-windows-spec.md`'s row of the same date. | §0.10 |
+| 2026-09-12 (Label rename) | §0.6.9 done: `Tag`/`PageTag`/`TagDao`/`TagColors` → `Label`/`PageLabel`/`LabelDao`/`LabelColors` across `shared/`, the Android app and the desktop app; UI strings say "label". Tables, columns and the snapshot key unchanged, so no schema version and no folder-format change. §3.1.6 and §4's entity table corrected in place. 585 tests. | §0.6.9, §0.8, §3.1.6, §4 |
 
 ---
 
@@ -323,6 +324,10 @@ leaves the page where it was. (B§12)
 **0.6.9 The §3.1.6 feature is called *Label*.** So that *tag* keeps its Notion meaning — a Select
 property inside one database, which this app also has (§4). §3.1.6 is **Corrected** by this row
 in name only; the code's `Tag`/`PageTag` rename is separate and mechanical. (B§12.5)
+**Done 2026-09-12.** `Label`, `PageLabel`, `LabelDao`, `LabelColors`; the view-model and screen
+names follow (`addLabel`, `allLabels`, …); the three UI strings read "label". On disk nothing moved:
+`tags`, `page_tags.tagId`, and the snapshot key `tags` (now `@SerialName`) are the same bytes a v12
+peer writes, so the rename is invisible to the folder. §3.1.6 corrected in place.
 
 **0.6.10 The Canvas UI moves to `shared/` first.** Finding **[Verified]**: 821 lines in
 `Tendril android/…/ui/canvas/`, none in `shared/`. Decision: the move precedes every spatial
@@ -358,7 +363,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view — *done 2026-09-11; the second §5.2 binding is its own row below* | 3, 6, 7 |
 | 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` — *done 2026-09-11* | — |
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
-| 4 | **0.6.8** schema on a label; **0.6.9** rename | labels on entries; linked views in a page |
+| 4 | **0.6.8** schema on a label; **0.6.9** rename — *0.6.9 done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
 | 6 | Calendar: edit path, drag-to-move, agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
 | 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
@@ -884,7 +889,13 @@ No "unlinked mentions" (plain-text title occurrences that were never turned into
 for v1 — surfacing those requires scanning all page content for substring matches, a real
 FTS-adjacent feature of its own scope, not needed to satisfy "what links here."
 
-### 3.1.6 Tags (Decided 2026-08-08 — resolves the previously-undefined `category` field)
+### 3.1.6 Labels (Decided 2026-08-08 — resolves the previously-undefined `category` field)
+
+*(**Corrected 2026-09-12 (§0.6.9):** the feature is called **Label** — in the UI ("Add label") and
+in the code (`Label`, `PageLabel`, `LabelDao`). The text below still says *tag*, the word it was
+built under; read it as *label*. The table `tags`, the join `page_tags` with its `tagId`, and the
+snapshot key `tags` keep their names — the key must for every peer on the folder, and the tables
+are not worth a migration. *Tag* from here on means Notion's: a Select property inside a database.)*
 
 §4's Page entity carried a `category` field from an early draft with no behavior ever specified
 behind it — flagged during this pass as a genuine spec gap rather than a deliberate decision.
@@ -1360,8 +1371,8 @@ but the omission is on the record instead of being inferred.
 | Entity | Key fields | Notes |
 |---|---|---|
 | **Page** | id, uid, title, icon, kind, parent_id, database_id (nullable), is_template, deleted_at (nullable, added 2026-08-08 — Trash, §5.5.1), created/updated | `kind` distinguishes a plain page from a database. `parent_id` builds the page tree (also what Notion import needs to reconstruct, §7). Body content is a structured `Block` list (§3.1.1), not a blob field. **`category` removed 2026-08-08** — carried from an early draft with no behavior ever specified behind it; replaced by the `Tag`/`PageTag` entities below (§3.1.6). **Corrected 2026-09-06:** `kind` is three-valued — `PAGE` \| `DATABASE` \| `CANVAS` — the third having arrived with the Canvas feature §3.4 records, while this cell still described the two-valued version; and three key fields were missing from it. `uid` is the cross-device identity every merge in §9.4 is keyed on. `database_id` is listed here rather than only under **Row** because a row *is* a page (§5.1): the link physically lives on this table, and reading it as a Row-table column is exactly the mistake §5.1's row=page model exists to prevent. `is_template` (§3.1.3) is what keeps saved templates out of the Pages list and out of Road Map's edge set. |
-| **Tag** | id, name, color | Global, freeform, reusable across all Pages (§3.1.6, added 2026-08-08) — resolves the removed `category` field. Flat, no nesting. |
-| **PageTag** | page_id, tag_id | Many-to-many join table between Page and Tag (§3.1.6, added 2026-08-08). |
+| **Tag** *(code: `Label`, §0.6.9)* | id, name, color | Global, freeform, reusable across all Pages (§3.1.6, added 2026-08-08) — resolves the removed `category` field. Flat, no nesting. |
+| **PageTag** *(code: `PageLabel`, §0.6.9)* | page_id, tag_id | Many-to-many join table between Page and Tag (§3.1.6, added 2026-08-08). |
 | **Block** | id, page_id, type, order, parent_block_id (nullable), content, formatting spans, created/updated | One row per content block inside a Page's (or Row's) body (§3.1.1) — paragraph, heading, list item, code, image, toggle, callout, page-mention, etc. Feeds the FTS index (§3.1.1). |
 | **PageCanvas** *(added to this table 2026-09-07 — the entity has existed since the Canvas feature shipped, §3.7)* | id, uid, page_id (unique, FK → Page, cascade delete), created/updated | The 1:1 companion row that makes a `kind = CANVAS` Page a board — structurally the same move as **Database** below, which is why Canvas cost the router one branch. Created **lazily on first open**, not at page creation, and that write is deliberately exempt from both the View-Only gate and the `updated_at` bump (§3.7): it is repair-on-open, not an edit, and bumping it would let merely opening a board outrank a real edit made on another device (§9.4). Carries no content of its own; the board is its child rows. |
 | **CanvasNode** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), type (`TEXT` \| `PAGE_EMBED`), x, y, width, height, text (nullable — TEXT only), embedded_page_id (nullable, FK → Page, cascade — PAGE_EMBED only), created/updated | One card on the board. Position and size are content-space floats, not pixels — the screen transform is applied once at render (§3.7), so the same board is the same board at any zoom or on any screen size. `text` is plain, with no `Block` model of its own: a card is a sticky note, not a second page editor (§3.1.1's "obvious 80% subset" reasoning). `embedded_page_id` cascades from Page, so deleting the embedded page removes the card — the one place a canvas is changed by an action taken outside it. In the snapshot the target travels as the page's `uid` and resolves on arrival; unresolvable means an empty card, never a rejected record. |
