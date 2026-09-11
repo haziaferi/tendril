@@ -763,7 +763,10 @@ private fun bindingTypeFor(role: BindingRole): PropertyType = when (role) {
 
 private fun bindingRoleLabel(role: BindingRole): String = when (role) {
     BindingRole.DONE -> "Done"
-    BindingRole.DEADLINE -> "Deadline"
+    // §0.6.4 — this binding fills `Entry.startDate`, the *When*, and has since §5.2 was built;
+    // "Deadline" was the word the spec used for it, corrected 2026-09-11. The deadline proper is
+    // `Entry.dueDate`, which no binding fills yet (its own row in §0.8).
+    BindingRole.DEADLINE -> "Date (when)"
     BindingRole.RECURRENCE -> "Recurrence"
 }
 
@@ -1485,7 +1488,7 @@ fun EnableSyncSheet(
                 Text("Add a checkbox property first — Sync to Tasks needs one to bind as Done.", style = MaterialTheme.typography.bodyMedium)
             } else {
                 BindingPicker("Done (required)", checkboxProps, donePropertyId) { donePropertyId = it }
-                BindingPicker("Deadline (optional)", dateProps, deadlinePropertyId, allowNone = true) { deadlinePropertyId = it }
+                BindingPicker("Date (optional) — when it is planned for", dateProps, deadlinePropertyId, allowNone = true) { deadlinePropertyId = it }
                 BindingPicker("Recurrence (optional)", intervalProps, recurrencePropertyId, allowNone = true) { recurrencePropertyId = it }
             }
             Spacer(Modifier.height(8.dp))

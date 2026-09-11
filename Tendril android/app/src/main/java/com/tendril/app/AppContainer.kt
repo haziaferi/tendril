@@ -21,6 +21,7 @@ import com.tendril.app.notifications.AlarmScheduler
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.CalendarProviderPreferences
+import com.tendril.app.storage.TaskPreferences
 import com.tendril.app.storage.GoogleCalendarPreferences
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
@@ -54,6 +55,8 @@ class AppContainer(context: Context) {
     val syncStatusPreferences = SyncStatusPreferences(context)
     val alarmScheduler = AlarmScheduler(context, database.reminderDao())
     val calendarProviderPreferences = CalendarProviderPreferences(context)
+    /** §0.5.1 — the two disclosure switches for Tasks & Habits; off by default. */
+    val taskPreferences = TaskPreferences(context)
     val calendarProviderSync = CalendarProviderSync(context, database.entryDao(), calendarProviderPreferences)
     val entryScheduleCoordinator =
         AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())

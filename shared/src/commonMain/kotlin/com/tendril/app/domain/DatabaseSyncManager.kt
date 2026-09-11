@@ -19,6 +19,10 @@ import com.tendril.app.data.pagedatabase.parseIntervalValue
 import java.time.Instant
 import java.time.LocalDate
 
+/** [DEADLINE] fills `Entry.startDate` — the *When* — and is named for what §5.2 called it when
+ * built. Kept as the storage and snapshot name (`deadlinePropertyId`/`deadlinePropertyUid`) so a
+ * v9 peer's record keeps its meaning; the UI says "Date". §0.6.4's second binding, for
+ * `Entry.dueDate`, is not this and does not exist yet. */
 enum class BindingRole { DONE, DEADLINE, RECURRENCE }
 
 /**

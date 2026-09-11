@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.tendril.app.markdown.MarkdownExporter
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
+import com.tendril.app.storage.TaskPreferences
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
@@ -86,6 +87,7 @@ fun SettingsScreen(
     syncFolderManager: SyncFolderManager,
     secretStore: SecretStore,
     appLockPreferences: AppLockPreferences,
+    taskPreferences: TaskPreferences,
     syncStatusPreferences: SyncStatusPreferences,
     syncCoordinator: SyncCoordinator,
     portableArchive: PortableArchive,
@@ -123,6 +125,8 @@ fun SettingsScreen(
             AnthropicKeySection(secretStore)
             HorizontalDivider()
             AppLockSection(appLockPreferences)
+            HorizontalDivider()
+            TasksHabitsSection(taskPreferences)
             HorizontalDivider()
         }
     }
@@ -748,6 +752,31 @@ private fun AppLockSection(prefs: AppLockPreferences) {
                 )
             }
         }
+    }
+}
+
+/**
+ * §0.5.1 / §0.5.2 — the two disclosures for Tasks & Habits, both off by default. Worded as what
+ * appears, not as what is "enabled": the flag and the streak are things a person may want to
+ * see, not features the app is withholding.
+ */
+@Composable
+private fun TasksHabitsSection(prefs: TaskPreferences) {
+    val showImportance by prefs.showImportance.collectAsState()
+    val showStreaks by prefs.showHabitStreaks.collectAsState()
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Text("Tasks & Habits", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(8.dp))
+        AppLockToggleRow(
+            label = "Show an “important” flag on tasks",
+            checked = showImportance,
+            onCheckedChange = { prefs.setShowImportance(it) },
+        )
+        AppLockToggleRow(
+            label = "Show habit streaks",
+            checked = showStreaks,
+            onCheckedChange = { prefs.setShowHabitStreaks(it) },
+        )
     }
 }
 

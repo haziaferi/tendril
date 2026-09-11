@@ -8,12 +8,19 @@ import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitCompletionDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.domain.CheckInHabitUseCase
+import com.tendril.app.domain.HabitPresence
+import com.tendril.app.domain.PostponeAmount
+import com.tendril.app.domain.habitPresenceOf
+import com.tendril.app.domain.postponed
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.ResolveEntryUseCase
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -26,6 +33,7 @@ import java.time.LocalTime
 class TasksHabitsViewModel(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
+    private val habitCompletionDao: HabitCompletionDao,
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val checkInHabitUseCase: CheckInHabitUseCase,
@@ -36,7 +44,14 @@ class TasksHabitsViewModel(
     val habits: StateFlow<List<Habit>> =
         habitDao.observeActive().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun addTask(title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?) {
+    fun addTask(
+        title: String,
+        date: LocalDate?,
+        time: LocalTime?,
+        repeat: RecurrenceRule.Elastic?,
+        deadline: LocalDate? = null,
+        parentEntryId: Long? = null,
+    ) {
         if (title.isBlank()) return
         viewModelScope.launch {
             val now = Instant.now()
@@ -50,6 +65,8 @@ class TasksHabitsViewModel(
                     endTime = null,
                     recurrenceRule = repeat,
                     status = EntryStatus.PENDING,
+                    dueDate = deadline,
+                    parentEntryId = parentEntryId,
                     createdAt = now,
                     updatedAt = now,
                 )
@@ -57,6 +74,40 @@ class TasksHabitsViewModel(
             entryDao.getById(id)?.let { entryScheduleCoordinator.onEntryChanged(it) }
         }
     }
+
+    /** §0.6.4 — a checklist-style sub-task: no date of its own, so it lives under its parent
+     * wherever the parent is filtered to, and never appears on Calendar by itself. */
+    fun addSubtask(parentEntryId: Long, title: String) =
+        addTask(title, date = null, time = null, repeat = null, parentEntryId = parentEntryId)
+
+    /** §0.6.4's Postpone — moves the *When*; see [postponed] for why never the Deadline. Re-arms
+     * alarms from the row as it now stands, as every write that moves a date does. */
+    fun postpone(entryId: Long, by: PostponeAmount) {
+        viewModelScope.launch {
+            val entry = entryDao.getById(entryId) ?: return@launch
+            val moved = entry.postponed(by, LocalDate.now(), LocalTime.now())
+            entryDao.update(moved)
+            entryScheduleCoordinator.onEntryChanged(moved)
+        }
+    }
+
+    fun setDeadline(entryId: Long, deadline: LocalDate?) {
+        viewModelScope.launch {
+            val entry = entryDao.getById(entryId) ?: return@launch
+            entryDao.update(entry.copy(dueDate = deadline, updatedAt = Instant.now()))
+        }
+    }
+
+    fun setImportant(entryId: Long, important: Boolean) {
+        viewModelScope.launch {
+            val entry = entryDao.getById(entryId) ?: return@launch
+            entryDao.update(entry.copy(important = important, updatedAt = Instant.now()))
+        }
+    }
+
+    /** §0.6.6 — what the habit detail is allowed to say. Computed, never stored. */
+    fun habitPresence(habitId: Long): Flow<HabitPresence> =
+        habitCompletionDao.observeForHabit(habitId).map { habitPresenceOf(it, LocalDate.now()) }
 
     fun addHabit(title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration? = null) {
         if (title.isBlank()) return

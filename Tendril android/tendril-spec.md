@@ -80,6 +80,7 @@ second copy of the reasoning.
 | 2026-09-07 (deferred issue put on the record) | **New Open item in §9.4: a record this build reads *well enough* is republished with the fields it did not understand stripped out.** Verified against the tree rather than assumed: `SnapshotSyncOrchestrator`'s `Json` is configured `ignoreUnknownKeys = true`, and all 24 `@Serializable` declarations in `SnapshotRecords.kt` and `PageSnapshotRecords.kt` are plain data classes with no catch-all — no `JsonObject`, no leftover-property map, in either file. A record from a newer build carrying one additional field therefore decodes with it silently discarded, is adopted into Room, and is re-encoded on the next write pass **from Room rows** (`exportPages()`, and the `SnapshotMappers` path off `entryDao.getAll()`) rather than from the bytes that arrived — so it goes back to the folder without the field, and every other device adopts that. The asymmetry is why it earns a written record: a record this build *cannot* read is now the safe case, because quarantine holds it as a raw `JsonElement` and republishes it byte-faithfully, so it is precisely the records understood *well enough to adopt* that lose data — the failure gets quieter as two builds grow closer, and no unreadable value exists anywhere for a guard to trip on. **Deferred, not fixed**: the fix is a format change (every record carrying its raw `JsonObject` alongside its typed fields, merged on re-encode), not a guard, and it rewrites `SnapshotRecords.kt` and `SnapshotMappers.kt` end to end — the same two files the backlog's SYNC lane (S2/S3/S4) already rewrites and marks strictly serial for that reason, so doing it separately would rewrite both twice. Stated in the section as plainly as it is here: it is not fixed today, and it bites the first time two builds of different versions share a folder. **(Fixed 2026-09-09.** Not as this row predicted: the fix is not a format change and does not touch `SnapshotRecords.kt` or `SnapshotMappers.kt` at all. Those records are re-encoded *from Room rows*, so carrying a raw `JsonObject` on the record class would preserve nothing unless the unknown JSON were also persisted — a column on every snapshot-bearing entity. The seam that works is the write path, which already republishes raw `JsonElement`s for quarantine: `publishArrayFile` and `publishPageFile` now read the folder's existing copy and carry across every key the record's serializer descriptor does not declare. "Not declared" rather than "not present" is load-bearing — an omitted default is indistinguishable from an unknown field otherwise, and copying those back would resurrect values this build had deliberately cleared. Recursive, matched by `uid`; the three record types without one are left alone rather than matched positionally. Preservation is best-effort and can never fail a write. **Detection remains open**: this stops the loss, not the silence.)* | §9.4 |
 | 2026-09-11 (§0 added) | **New §0 Objectives, upstream of every later section**: the eight hard constraints, purpose and goals, the bar per surface (`docs/benchmarks.md`), eight principles, ten decisions with acceptance criteria, out-of-scope, the order of work, risks, open items. Drafted as `OBJECTIVES.md` and folded in the same day so that one file needs no precedence rule. Three later sections are **Corrected** in place by §0.6 rows and owe their own amendment in the pass that builds them: §3.1.1 (nesting depth), §3.3 (streak-based habits), §3.1.6 (Tags → Label). | §0 (new), §1 (pointer) |
 | 2026-09-11 (Canvas UI to `shared/`) | §0.8 step 1 done: `CanvasScreen` and `CanvasViewModel` moved from the Android app into `shared/src/commonMain` (renames, history kept); the screen takes `WorkbenchCore` in place of `AppContainer`, matching `PageDetailScreen`; the shared scaffold routes `PageKind.CANVAS` itself and its `canvasContent` slot is removed from both platform callers. Desktop opens, edits and links cards on a canvas for the first time. Nothing inside the board changed; 550 tests pass. | §0.6.10, §0.8, §3.7 |
+| 2026-09-11 (step 2: Entry fields, habit log) | §0.8 step 2 done. **Schema v10** (`MIGRATION_9_10`): `entries` gains `dueDate`, `parentEntryId`, `estimate`, `important`; new `habit_completions`, backfilled from `lastCompletedDate`/`previousCompletedDate`. Both travel in the snapshot and the `.tendril` archive; the habit log merges by the Reminder rule (tombstoned, deleted wins). Tasks UI: deadline, steps, Postpone (moves the When), Someday, the opt-in important flag; Habits: streak off the row by default, a presence sheet. §5.2's binding label corrected to "Date (when)"; the second binding is step 2b. 570 tests. | §0.6.4, §0.6.6, §0.8, §0.10, §3.3, §5.2 |
 
 ---
 
@@ -223,6 +224,17 @@ Decision: `startDate` stays the *When*; add optional `dueDate`; add `parentEntry
 the undated task, named. Labels on entries after §0.6.8. Acceptance: an existing task gains no
 deadline by migration; §5.2's `deadlinePropertyId` is renamed to a *date* binding and a second,
 optional deadline binding exists. Open: which date Postpone moves by default (§0.10). (B§11)
+**Done 2026-09-11, same day, with one item narrowed and stated.** All five fields are stored
+(v10), travel, and read: the Tasks list shows the deadline as "due <date>" in the same colour as
+everything else, steps under their parent with a "done/total" count, and the *important* star
+only while Settings says so; the row's `···` offers Postpone, Add a step, Set/Change deadline,
+Important (when shown) and Delete; the add dialog takes an optional deadline. "Someday" is the
+undated section's name. Postpone moves the *When* — §0.10 item 1 is resolved that way. **Narrowed:**
+the §5.2 binding keeps its storage name `deadlinePropertyId`, because a rename would make a v9
+peer's snapshot mean the wrong thing; its UI label is corrected to "Date (when)". The *second*
+binding, for `dueDate`, is **not built here** — it touches the database views on eleven sites and
+is its own row in §0.8. `estimate` is stored and read by nothing yet, by this row's own design;
+`tools/audit.py` carries it in its baseline with that citation.
 
 **0.6.5 Time is a first-class concern.** Decision in principle: estimate → plan → track →
 compare, in that order (§0.8). Shape: Tiimo's visible day and Llama Life's "now", not a workload
@@ -235,6 +247,12 @@ leaves the row and becomes an opt-in derived number; the habit detail shows "fou
 month", "usually mornings", "last: Tuesday" and never a miss. §3.3's "streak-based" is
 **Corrected** by this row to "log-based, presence shown". Acceptance: no screen shows a gap, a
 percentage or a broken chain by default. (B§10.3)
+**Done 2026-09-11, same day.** `habit_completions` (v10), written by the one check-in funnel,
+backfilled from the two dates a habit used to keep, tombstoned on undo so that "deleted on any
+device wins" merges it. The habit row no longer shows a streak unless Settings says so; tapping a
+habit opens a presence sheet — "four times this month", "usually mornings", "last: Tuesday" — and
+a month of dots where a day without a check-in is empty space. Whether habits become measurable
+stays §0.10 item 3.
 
 **0.6.7 Canvas grows additively.** Colours, groups, image nodes, nested boards as a
 `PAGE_EMBED` of a Canvas page, a mind-map layout mode sharing 0.6.2's layout code, JSON Canvas
@@ -284,7 +302,8 @@ of this file it touches is amended in the same pass (§0.11).
 | Step | Work | Unblocks |
 |---|---|---|
 | 1 | **0.6.10** Canvas UI → `shared/` — *done 2026-09-11* | every spatial row on desktop |
-| 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view | 3, 6, 7 |
+| 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view — *done 2026-09-11; the second §5.2 binding is its own row below* | 3, 6, 7 |
+| 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` | — |
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block, **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
@@ -315,7 +334,7 @@ never becomes "later".
 
 Genuinely undecided — distinct from §0.7.
 
-1. Which date **Postpone** moves by default — the When (recommended) or the Deadline (B§11).
+1. ~~Which date **Postpone** moves by default — the When (recommended) or the Deadline (B§11).~~ *Resolved 2026-09-11: the When, always; the deadline is changed only by editing the deadline. The sheet says so.*
 2. Whether the inert canvas block draws nodes live or a cached thumbnail (B§9.6).
 3. Whether habits become **measurable** (a value on the log entry) now or later (B§10.3).
 4. Whether a one-tap **mood/energy check-in** joins the human layer, and when — it is not a
@@ -934,7 +953,12 @@ two different concerns.
   from the original spec, reinforced by §5/§6's database and recurrence design)
 - Today / This week / This month filter bar (§2.2), default **Today**
 - Undated tasks collapse into a toggle at the top, filtered consistently with whichever time-filter
-  is active
+  is active — **named "Someday" since 2026-09-11 (§0.6.4)**
+- **Since 2026-09-11 (§0.6.4):** a task has a *When* (`startDate`, where Calendar draws it) and an
+  optional *Deadline* (`dueDate`, shown as "due <date>"); checklist-style steps under a task, one
+  level, undated, filtered with their parent; a **Postpone** sheet on the row's `···` that moves the
+  When by minutes, hours, days, weeks or months and never the Deadline; a single *important* flag,
+  hidden until enabled in Settings (§0.5.1)
 - Recurring tasks supported (§6.2) — calendar-native recurrence, distinct from Habit streaks
 
 **Habits** (adjacent but distinct — daily/periodic personal practices, not work):
@@ -949,8 +973,11 @@ two different concerns.
   cites this bullet as one of its two precedents and only Calendar's Google connect control actually
   is one — and because §2.2's icon rule, corrected the same day, presupposes the same missing
   screen.)*
-- Streak-based; missing an instance does **not** create backlog (§6.1 — this is the defining test
-  that separates a Habit from a recurring Task)
+- ~~Streak-based~~ **Corrected 2026-09-11 (§0.6.6): log-based, presence shown.** A check-in is a
+  `HabitCompletion` row; the streak is a derived number shown only when asked for in Settings, and
+  the habit's own sheet says what was done and never what was not. Missing an instance still does
+  **not** create backlog (§6.1 — this is the defining test that separates a Habit from a recurring
+  Task), and now nothing on screen counts the miss either.
 - **Decided (2026-07-13)**: Habits stay a simple, structurally separate top-level entity — not the
   database-driven Sync-to-Tasks pattern. §5.2's own reasoning against inferring Task-sync from
   schema shape ("a 'Cooked?' checkbox... should never silently become a Task") applies at least as
@@ -1453,6 +1480,12 @@ A database with several properties genuinely needs them visible to be useful for
 assessment (e.g. seeing every appointment's date and location at a glance to judge timing).
 
 ### 5.2 Sync mechanism
+
+*(**Corrected 2026-09-11 (§0.6.4):** the binding this section calls "deadline" —
+`PageDatabase.deadlinePropertyId` — fills `Entry.startDate`, which is the day the task is
+*planned for* and where Calendar draws it, not a deadline. The storage and snapshot names are
+kept so a v9 peer's record keeps its meaning; the UI now says "Date (when)". A second, optional
+binding to `Entry.dueDate` — the deadline proper — is §0.8 step 2b and does not exist yet.)*
 
 Explicitly **not** inferred from schema shape (a "Cooked?" checkbox on a Recipes database should
 never silently become a Task). The mechanism is:

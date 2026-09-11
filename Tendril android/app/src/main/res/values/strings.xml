@@ -58,7 +58,7 @@
     <string name="taskshabits_filter_today">Today</string>
     <string name="taskshabits_filter_week">This week</string>
     <string name="taskshabits_filter_month">This month</string>
-    <string name="taskshabits_undated_toggle">Undated</string>
+    <string name="taskshabits_undated_toggle">Someday</string>
     <string name="taskshabits_add_task">Add task</string>
     <string name="taskshabits_add_habit">Add habit</string>
 

@@ -49,9 +49,13 @@ private enum class RepeatOption(val label: String) {
 @Composable
 fun AddTaskDialog(
     onDismiss: () -> Unit,
-    onAdd: (title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?) -> Unit,
+    onAdd: (title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?, deadline: LocalDate?) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
+    // §0.6.4 — the Deadline is a second, optional date, off by default: most tasks have none.
+    var hasDeadline by remember { mutableStateOf(false) }
+    var deadline by remember { mutableStateOf(LocalDate.now()) }
+    var showDeadlinePicker by remember { mutableStateOf(false) }
     var hasDate by remember { mutableStateOf(true) }
     var date by remember { mutableStateOf(LocalDate.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -98,6 +102,15 @@ fun AddTaskDialog(
                         }
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                // Outside the `hasDate` block on purpose: a Someday task may carry a deadline.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Has deadline", modifier = Modifier.fillMaxWidth().weight(1f))
+                    Switch(checked = hasDeadline, onCheckedChange = { hasDeadline = it })
+                }
+                if (hasDeadline) {
+                    TextButton(onClick = { showDeadlinePicker = true }) { Text("Deadline: $deadline") }
+                }
             }
         },
         confirmButton = {
@@ -108,7 +121,7 @@ fun AddTaskDialog(
                     RepeatOption.WEEKLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.WEEK))
                     RepeatOption.MONTHLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.MONTH))
                 }
-                onAdd(title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence)
+                onAdd(title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence, if (hasDeadline) deadline else null)
                 onDismiss()
             }) { Text("Add") }
         },
@@ -135,6 +148,20 @@ fun AddTaskDialog(
             onDismiss = { showTimePicker = false },
             onConfirm = { time = it; showTimePicker = false },
         )
+    }
+
+    if (showDeadlinePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = deadline.toDatePickerMillis())
+        DatePickerDialog(
+            onDismissRequest = { showDeadlinePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { deadline = datePickerMillisToLocalDate(it) }
+                    showDeadlinePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDeadlinePicker = false }) { Text("Cancel") } },
+        ) { DatePicker(state = state) }
     }
 }
 
