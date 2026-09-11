@@ -434,7 +434,11 @@ private fun BlockRow(
     var showSlashMenu by remember { mutableStateOf(false) }
     // Driven by the outline's computed depth rather than by `parentBlockId != null`, so a
     // grandchild re-attached to its top-level ancestor indents once, not twice.
-    val indent = (24 * depth).dp
+    // §0.10 item 8, resolved with §0.6.1: a full step for the first six levels and a small one
+    // after, so a deep branch stays readable on a phone instead of walking off the right edge.
+    // Six is where a 24dp step has spent a third of a narrow screen; past it the eye has the
+    // shape already and needs only to see that the line is deeper still.
+    val indent = (24 * minOf(depth, 6) + 8 * maxOf(depth - 6, 0)).dp
     val locked = LocalContentLocked.current
 
     Column {
@@ -546,9 +550,9 @@ private fun BlockRow(
                     )
                 }
 
-                // Children (one level, §3.1.1) are emitted by `outlineOf` into the same
-                // LazyColumn, immediately after this block and at depth 1 — a collapsed toggle
-                // simply has none emitted. Nothing to render here.
+                // Children, at any depth (§0.6.1), are emitted by `outlineOf` into the same
+                // LazyColumn, immediately after this block — a collapsed toggle simply has none
+                // emitted. Nothing to render here.
 
             }
         }

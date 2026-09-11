@@ -58,7 +58,7 @@ class BlockOutlineTest {
         val out = outlineOf(listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2)))
 
         assertEquals(listOf(1L, 2L, 3L), ids(out))
-        assertEquals(listOf(0, MAX_BLOCK_DEPTH, 0), depths(out))
+        assertEquals(listOf(0, 1, 0), depths(out))
     }
 
     @Test
@@ -91,13 +91,23 @@ class BlockOutlineTest {
     }
 
     @Test
-    fun `a grandchild is re-attached to its top-level ancestor`() {
-        // §3.1.1 has no depth 2, so 3 is drawn under 1 rather than hidden or indented twice.
+    fun `a grandchild is drawn at depth 2, under its own parent`() {
+        // §0.6.1 — depth is unlimited; this is the case §3.1.1 used to flatten to depth 1.
         val out = outlineOf(listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2, parent = 2)))
 
         assertEquals(listOf(1L, 2L, 3L), ids(out))
-        assertEquals("nothing may exceed one level", listOf(0, 1, 1), depths(out))
-        assertTrue(depths(out).all { it <= MAX_BLOCK_DEPTH })
+        assertEquals(listOf(0, 1, 2), depths(out))
+    }
+
+    @Test
+    fun `a subtree is drawn in full before the next sibling, however deep`() {
+        // 1 > 2 > 3 > 4, then 5 as 1's second child, then 6 at the top: reading order is the tree.
+        val out = outlineOf(
+            listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2, parent = 2), block(4, 3, parent = 3), block(5, 4, parent = 1), block(6, 5)),
+        )
+
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L), ids(out))
+        assertEquals(listOf(0, 1, 2, 3, 1, 0), depths(out))
     }
 
     @Test
@@ -133,7 +143,9 @@ class BlockOutlineTest {
 
         assertEquals("no block may be dropped or duplicated", blocks.size, out.size)
         assertEquals(blocks.map { it.id }.toSet(), ids(out).toSet())
-        assertTrue(depths(out).all { it in 0..MAX_BLOCK_DEPTH })
+        // The grandchild is at 2 now; the orphan and both halves of the cycle are roots.
+        assertEquals(2, out.first { it.block.id == 3L }.depth)
+        assertEquals(0, out.first { it.block.id == 4L }.depth)
     }
 
     // ------------------------------------------------------------ the one legitimate hide
@@ -185,15 +197,15 @@ class BlockOutlineTest {
     // ------------------------------------------------------------ the indent target
 
     @Test
-    fun `indent targets the nearest preceding top-level sibling`() {
+    fun `indent targets the nearest preceding sibling`() {
         val blocks = listOf(block(1, 0), block(2, 1), block(3, 2))
 
         assertEquals(2L, indentTargetFor(blocks[2], blocks)?.id)
     }
 
     @Test
-    fun `indent skips over children when picking the target`() {
-        // 2 is already a child of 1, so the nearest *top-level* predecessor of 3 is 1.
+    fun `indent skips over another parent's children when picking the target`() {
+        // 2 is a child of 1, so the nearest *sibling* predecessor of 3 (a root) is 1.
         val blocks = listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2))
 
         assertEquals(1L, indentTargetFor(blocks[2], blocks)?.id)
@@ -207,11 +219,44 @@ class BlockOutlineTest {
     }
 
     @Test
-    fun `an already-indented block cannot indent further`() {
-        // §3.1.1 stops at one level, so this is where indenting ends.
+    fun `an indented block indents again, under its previous sibling`() {
+        // §0.6.1 — where §3.1.1 used to stop. 3 goes under 2, becoming a grandchild of 1.
         val blocks = listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2, parent = 1))
 
-        assertNull(indentTargetFor(blocks[2], blocks))
+        assertEquals(2L, indentTargetFor(blocks[2], blocks)?.id)
+    }
+
+    @Test
+    fun `the first child under a parent has nothing to indent under`() {
+        val blocks = listOf(block(1, 0), block(2, 1, parent = 1))
+
+        assertNull(indentTargetFor(blocks[1], blocks))
+    }
+
+    // ------------------------------------------------------------------------- outdent
+
+    @Test
+    fun `outdent moves a block under its grandparent and adopts the siblings after it`() {
+        // 1 > [2, 3, 4]; outdenting 3 gives 1 > [2], then 3 > [4] at the top: reading order kept.
+        val blocks = listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2, parent = 1), block(4, 3, parent = 1))
+
+        val plan = outdentPlanFor(blocks[2], blocks)!!
+        assertNull(plan.newParentId)
+        assertEquals(listOf(4L), plan.adoptedIds)
+    }
+
+    @Test
+    fun `outdent from depth 2 lands at depth 1`() {
+        val blocks = listOf(block(1, 0), block(2, 1, parent = 1), block(3, 2, parent = 2))
+
+        assertEquals(1L, outdentPlanFor(blocks[2], blocks)!!.newParentId)
+    }
+
+    @Test
+    fun `a top-level block has no outdent`() {
+        val blocks = listOf(block(1, 0))
+
+        assertNull(outdentPlanFor(blocks[0], blocks))
     }
 
     // ------------------------------------------------------------------------------- §B7

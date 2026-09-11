@@ -104,6 +104,17 @@ class MarkdownWriterTest {
         assertEquals("- outer\n\n    - inner", out)
     }
 
+    @Test
+    fun `a grandchild is indented twice, and a collapsed toggle's subtree is still written`() {
+        // §0.6.1 — depth is unlimited, and export takes the outline's depth rather than a flag.
+        val toggle = block(BlockType.TOGGLE, "closed").copy(toggleExpanded = false)
+        val child = block(BlockType.BULLETED_LIST_ITEM, "one", parentBlockId = toggle.id)
+        val grandchild = block(BlockType.BULLETED_LIST_ITEM, "two", parentBlockId = child.id)
+        // Handed over out of tree order on purpose: the writer must follow the outline, not the list.
+        val out = render(grandchild, toggle, child)
+        assertEquals("closed\n\n    - one\n\n        - two", out)
+    }
+
     // ------------------------------------------------------------------ inline spans
 
     @Test

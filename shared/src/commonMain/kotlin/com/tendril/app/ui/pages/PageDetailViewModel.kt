@@ -31,6 +31,7 @@ import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
 import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.outdentPlanFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -285,9 +286,8 @@ class PageDetailViewModel(
     }
 
     /**
-     * §3.1.1 — tuck [block] under the nearest preceding top-level sibling. A no-op when there
-     * is none (nothing to tuck under) or when it is already indented, since one level is the
-     * whole of the nesting this spec has.
+     * §3.1.1 / §0.6.1 — tuck [block] under its nearest preceding sibling. A no-op when there is
+     * none. Any depth: the cap that used to live here and in [indentTargetFor] is gone.
      *
      * `order` is left alone: [outlineOf] draws a child immediately after its parent whatever
      * its own order says, so re-numbering here would be churn with nothing depending on it.
@@ -298,11 +298,24 @@ class PageDetailViewModel(
         blockDao.update(block.copy(parentBlockId = target.id, updatedAt = Instant.now()))
     }
 
-    /** The inverse, and the escape hatch for a child whose parent went away on another device:
-     * anything indented can always be flattened again. */
+    /** The inverse — one level up, taking the siblings that followed along as children so the
+     * page keeps its reading order (see [outdentPlanFor]). Still the escape hatch for a child
+     * whose parent went away on another device: the outline already draws such a block as a
+     * root, and this makes that permanent. */
     fun outdentBlock(block: Block) = launchAndReindex {
-        if (block.parentBlockId == null) return@launchAndReindex
-        blockDao.update(block.copy(parentBlockId = null, updatedAt = Instant.now()))
+        val blocks = blockDao.getForPage(pageId)
+        val plan = outdentPlanFor(block, blocks)
+        val now = Instant.now()
+        if (plan == null) {
+            // Parent missing on this page: flatten, which is what the outline was showing anyway.
+            if (block.parentBlockId != null) blockDao.update(block.copy(parentBlockId = null, updatedAt = now))
+            return@launchAndReindex
+        }
+        blockDao.update(block.copy(parentBlockId = plan.newParentId, updatedAt = now))
+        for (id in plan.adoptedIds) {
+            val sibling = blocks.first { it.id == id }
+            blockDao.update(sibling.copy(parentBlockId = block.id, updatedAt = now))
+        }
     }
 
     fun searchTagCandidates(query: String) {

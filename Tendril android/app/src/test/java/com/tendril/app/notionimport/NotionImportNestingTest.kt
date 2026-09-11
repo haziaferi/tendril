@@ -1,7 +1,6 @@
 package com.tendril.app.notionimport
 
 import com.tendril.app.data.page.BlockType
-import com.tendril.app.domain.MAX_BLOCK_DEPTH
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -78,15 +77,13 @@ class NotionImportNestingTest {
     // ------------------------------------------------- content survives what hierarchy cannot
 
     @Test
-    fun `deeper indentation is clamped, never dropped`() {
+    fun `deeper indentation is kept level for level`() {
+        // §0.6.1 — this used to clamp to one level; every four columns is a level now.
         val blocks = NotionMarkdownParser.parse("- One\n    - Two\n        - Three\n            - Four")
 
         assertEquals("every level must still produce a block", 4, blocks.size)
         assertEquals(listOf("One", "Two", "Three", "Four"), blocks.map { it.content })
-        assertTrue(
-            "§3.1.1 has one level, so nothing may exceed it",
-            blocks.all { it.depth <= MAX_BLOCK_DEPTH },
-        )
+        assertEquals(listOf(0, 1, 2, 3), blocks.map { it.depth })
     }
 
     @Test
