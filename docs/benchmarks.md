@@ -534,9 +534,65 @@ Proposal #1 named five fields. Measured against the tree, one of them is not wha
 5. **tags on entries** — yes, but *after* §12 settles what a tag is, since it may become a schema.
 6. **`Someday`** — not a field: it is the existing undated task, given a name and a section.
 
+**Decided 2026-09-11 — all six as recommended**, plus one addition from the author: a
+**Postpone** control on a task that moves its date forward by a chosen amount — minutes, hours,
+days, months. Recorded as stated, with one question flagged rather than answered: the author named
+`dueDate`, and under the When/Deadline split it is the *When* that a person postpones without
+guilt (Things' "move to tomorrow"), while moving a deadline is a rarer, deliberate act. The
+control should probably move the When by default and the deadline only when that is the date
+being looked at; to be settled when #1 is built.
+
 ---
 
 ## 12. Schema on a tag — the discussion
+
+### 12.0 Plainly, first
+
+**Tags keep meaning what they mean.** A tag is a label; things with the same tag are related;
+tapping the chip shows them together. Nothing here changes that, and most tags stay exactly that.
+
+**The addition is one sentence:** *a tag may also bring fields with it.* Not every tag — only a
+tag that a database has chosen to bind to. Tag a page with one of those, and the page gains that
+database's fields in its header and appears in that database's views. Remove the tag, and it
+loses them. The page never moves.
+
+**Why that matters, with the app as it is.** Say there is a *Books* database with the fields
+Author, Status and Rating, and elsewhere in the tree — under *Reading*, say — a plain page called
+*Notes on Dune*. Today, for that page to have an Author or a Status it must **become a row**: be
+created inside Books, or moved into it, because a row is a page whose `databaseId` says which one
+database it belongs to. The page's place in the tree and its place in a database are the same
+fact. Schema-on-a-tag separates them: *Notes on Dune* stays under *Reading*, is tagged `#book`,
+and is now also a row of Books — in its table, on its board, with its three fields filled in at
+the top of the page. Tag it `#2026-goals` as well, if that tag is bound to a Goals database, and it
+carries both headers. Untag it and it is a plain page again, in the same place, with its body
+untouched.
+
+**What changes day to day, and what does not:**
+
+- Creating a database, adding rows inside it, its views, Sync-to-Tasks — unchanged.
+- The tag chip row, the tag editor on a page, the filter — unchanged. A bound tag looks like any
+  other tag, with a small mark that it brings fields.
+- A database's `···` menu gains one item: *Bind a tag*. Until someone uses it, the app is today's
+  app (E12).
+- A page's header can show fields without the page living inside a database. That is the new
+  sight.
+- Tagging a page into a to-do database (one with §5.2's binding) makes it a task, because that is
+  what being a row of that database means. The first time a person applies such a tag, the app
+  says so and asks once.
+
+**Are the three shapes different mechanisms?** They are three answers to one question — *who
+owns the fields?* — with the same outcome for the person: a page anywhere can carry structured
+fields and be seen alongside its kind.
+
+| | Who owns the fields | What the tag does | What is new |
+|---|---|---|---|
+| **A** | The database, as today | Is the doorway: carrying it makes a page a row of that database | One column on the database saying which tag is its doorway |
+| **B** | A new thing called a *type*; every page has exactly one | Nothing — a type replaces the tag's role for this purpose | The type entity, a type picker on every page, and a second thing beside databases that also owns fields |
+| **C** | Nobody: any page can have any field | Is one of the things a view can filter by | Fields without an owner, and views that are queries rather than a database's own |
+
+A is the smallest change because the owner already exists and the doorway already exists; only
+the link between them is added. B builds a second owner. C removes the owner. Same outcome,
+different amount of the current app kept.
 
 ### 12.1 What it is
 
