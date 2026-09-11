@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.tendril.app.AppContainer
+import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.data.canvas.CanvasArrowDirection
 import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
@@ -93,12 +93,12 @@ private const val MAX_SCALE = 2.5f
  * and edges always stay aligned to each other regardless of zoom level.
  */
 @Composable
-fun CanvasScreen(container: AppContainer, pageId: Long, onBack: () -> Unit, onOpenPage: (Long) -> Unit) {
+fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, onOpenPage: (Long) -> Unit) {
     val viewModel: CanvasViewModel = viewModel(
         key = "canvas_$pageId",
         factory = viewModelFactory {
             initializer {
-                CanvasViewModel(pageId, container.database.pageDao(), container.database.pageCanvasDao(), container.database.canvasNodeDao(), container.database.canvasEdgeDao(), container.workbenchCore.viewLockState)
+                CanvasViewModel(pageId, core.database.pageDao(), core.database.pageCanvasDao(), core.database.canvasNodeDao(), core.database.canvasEdgeDao(), core.viewLockState)
             }
         }
     )

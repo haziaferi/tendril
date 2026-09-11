@@ -8,7 +8,6 @@ import androidx.fragment.app.FragmentActivity
 import com.tendril.app.AppContainer
 import com.tendril.app.applock.showAppUnlockPrompt
 import com.tendril.app.ui.calendar.CalendarScreen
-import com.tendril.app.ui.canvas.CanvasScreen
 import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.settings.SettingsScreen
 import com.tendril.app.ui.taskshabits.TasksHabitsScreen
@@ -24,8 +23,9 @@ import com.tendril.app.ui.taskshabits.TasksHabitsScreen
  *  - a `BackHandler` for the system back gesture/button, replacing what Navigation Compose used
  *    to provide for free — the hand-rolled `WorkbenchNavState` (see its own doc comment for why
  *    it isn't Navigation Compose) needs this wired explicitly;
- *  - the four screens this pass doesn't port (Calendar/Tasks&Habits/Road Map/Settings) and the
- *    Canvas page kind, supplied as real composables through the shared scaffold's slot params.
+ *  - the four screens this pass doesn't port (Calendar/Tasks&Habits/Road Map/Settings), supplied
+ *    as real composables through the shared scaffold's slot params. Canvas used to be a fifth slot;
+ *    since 2026-09-11 it is shared code and the scaffold routes to it itself (§0.6.10).
  */
 @Composable
 fun AndroidWorkbenchScaffold(container: AppContainer) {
@@ -60,9 +60,6 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 notionImporter = container.notionImporter,
                 databaseSyncManager = container.databaseSyncManager,
             )
-        },
-        canvasContent = { pageId, onBack, onOpenPage ->
-            CanvasScreen(container = container, pageId = pageId, onBack = onBack, onOpenPage = onOpenPage)
         },
     )
 }
