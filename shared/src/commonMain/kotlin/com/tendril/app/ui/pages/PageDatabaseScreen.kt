@@ -729,6 +729,20 @@ private fun PropertyHeaderCell(
             } else if (role != null) {
                 DropdownMenuItem(text = { Text("Change binding…") }, onClick = { showMenu = false; showRebindPicker = true })
             }
+            // §5.2.1's "post-hoc bind of a previously-unbound optional role", which
+            // `DatabaseSyncManager.bindProperty` has offered since it was written and no menu
+            // ever reached (found 2026-09-11 while binding a deadline on a to-do database, whose
+            // sync is on from creation with Done alone). One item per unfilled role this
+            // property's type can fill: a DATE offers the When and the Deadline, an INTERVAL
+            // the recurrence. Done is never offered here — it is required, so it is never unfilled.
+            if (role == null && database?.syncToTasks == true) {
+                unfilledRolesFor(property.type, database).forEach { candidate ->
+                    DropdownMenuItem(
+                        text = { Text("Bind as ${bindingRoleLabel(candidate)}") },
+                        onClick = { showMenu = false; viewModel.bindProperty(candidate, property.id) },
+                    )
+                }
+            }
             DropdownMenuItem(text = { Text("Delete property") }, onClick = { viewModel.requestDeleteProperty(property); showMenu = false })
         }
     }
@@ -744,6 +758,17 @@ private fun PropertyHeaderCell(
             },
         )
     }
+}
+
+/** The optional roles [type] could fill on [database] that nothing fills yet. */
+private fun unfilledRolesFor(type: PropertyType, database: com.tendril.app.data.pagedatabase.PageDatabase): List<BindingRole> =
+    BindingRole.entries.filter { it != BindingRole.DONE && bindingTypeFor(it) == type && database.propertyIdFor(it) == null }
+
+private fun com.tendril.app.data.pagedatabase.PageDatabase.propertyIdFor(role: BindingRole): Long? = when (role) {
+    BindingRole.DONE -> donePropertyId
+    BindingRole.DEADLINE -> deadlinePropertyId
+    BindingRole.DUE_DATE -> dueDatePropertyId
+    BindingRole.RECURRENCE -> recurrencePropertyId
 }
 
 /** Which [BindingRole], if any, [propertyId] currently fills on [database] — null for an

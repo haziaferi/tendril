@@ -360,6 +360,15 @@ class PageDatabaseViewModel(
 
     private val _pendingRebind = MutableStateFlow<PendingRebind?>(null)
     val pendingRebind: StateFlow<PendingRebind?> = _pendingRebind.asStateFlow()
+    /** §5.2.1 — bind an unbound property to an unfilled optional role on a database whose sync
+     * is already on. No confirm dialog, unlike a rebind: nothing currently bound is frozen or
+     * replaced, the property's stored values simply become the seed and then the live proxy. */
+    fun bindProperty(role: BindingRole, propertyId: Long) {
+        if (locked()) return
+        val db = database.value ?: return
+        launchAndTouch(pageId) { databaseSyncManager.bindProperty(db, role, propertyId) }
+    }
+
     fun requestRebind(role: BindingRole, currentPropertyId: Long, newPropertyId: Long?) {
         _pendingRebind.value = PendingRebind(role, currentPropertyId, newPropertyId)
     }
