@@ -9,6 +9,7 @@ import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.enumOrNull
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderOffset
@@ -41,6 +42,10 @@ fun Entry.toSnapshot(idToUid: Map<Long, String>, rowIdToUid: Map<Long, String>):
     originalOccurrenceDate = originalOccurrenceDate?.toString(),
     isExceptionSkip = isExceptionSkip,
     status = status?.name,
+    dueDate = dueDate?.toString(),
+    parentEntryUid = parentEntryId?.let { idToUid[it] },
+    estimateSeconds = estimate?.seconds,
+    important = important,
     sourceRowUid = sourceRowId?.let { rowIdToUid[it] },
     deletedAt = deletedAt?.toEpochMilli(),
     source = source.name,
@@ -121,6 +126,12 @@ fun EntrySnapshotRecord.toEntity(uidToId: Map<String, Long>, rowUidToId: Map<Str
     // Absent status is legal (every EVENT has one); a *present* status this build cannot read is
     // not, and quarantines the record rather than quietly flattening a task to "no status".
     status = status?.let { enumOrNull<EntryStatus>(it) ?: undecodable("entry status", it) },
+    dueDate = dueDate?.let(LocalDate::parse),
+    // Resolved like `originalEntryUid`, and with its known gap: a parent that has not merged
+    // here yet reads as no parent, and the link is not guaranteed to heal on a later pass.
+    parentEntryId = parentEntryUid?.let { uidToId[it] },
+    estimate = estimateSeconds?.let(Duration::ofSeconds),
+    important = important,
     sourceRowId = sourceRowUid?.let { rowUidToId[it] },
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
     // The exception, and the precedent the rest of this sweep was measured against: `source`
@@ -272,6 +283,26 @@ fun EntryCompletionSnapshotRecord.toEntity(entryId: Long): EntryCompletion = Ent
  * [EntrySnapshotRecord.toEntityOrNull]. */
 fun EntryCompletionSnapshotRecord.toEntityOrNull(entryId: Long): EntryCompletion? =
     runCatching { toEntity(entryId) }.getOrNull()
+
+/** [habitUid] is the owner's cross-device identity, resolved by the caller from the full Habit
+ * set for the same reason [Entry.toSnapshot] takes a map. */
+fun HabitCompletion.toSnapshot(habitUid: String): HabitCompletionSnapshotRecord =
+    HabitCompletionSnapshotRecord(
+        uid = uid,
+        habitUid = habitUid,
+        date = date.toString(),
+        checkedAt = checkedAt.toEpochMilli(),
+        deletedAt = deletedAt?.toEpochMilli(),
+    )
+
+/** Throws [SnapshotDecodeException] on a date this build cannot parse. */
+fun HabitCompletionSnapshotRecord.toEntity(habitId: Long): HabitCompletion = HabitCompletion(
+    uid = uid,
+    habitId = habitId,
+    date = runCatching { LocalDate.parse(date) }.getOrElse { undecodable("habit completion date", date) },
+    checkedAt = Instant.ofEpochMilli(checkedAt),
+    deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+)
 
 /** §4 / §9.4 — the Active/Archived split resolved 2026-08-08: Active is the small,
  * frequently-edited set (`PENDING` TASK, or any live EVENT); Archived is everything else

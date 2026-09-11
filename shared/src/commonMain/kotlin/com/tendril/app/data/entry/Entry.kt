@@ -3,6 +3,7 @@ package com.tendril.app.data.entry
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -50,6 +51,28 @@ data class Entry(
 
     /** TASK-only tri-state; always null for EVENT (§4). */
     val status: EntryStatus? = null,
+
+    /**
+     * §0.6.4 — the *Deadline*, optional and TASK-only. [startDate] is the *When*: the day the
+     * person plans to do it, where Calendar draws it and what §5.2 binds. Those were one field
+     * until v10, which meant every dated task was implicitly due that day; this is the second
+     * date, rare and real, that Things and OmniFocus keep apart from the plan. Nothing sets it
+     * by migration — an existing task gains no deadline it never had.
+     */
+    val dueDate: LocalDate? = null,
+
+    /** §0.6.4 — a checklist-style sub-task's parent. Children carry no dates of their own until
+     * someone asks for that. Travels as `parentEntryUid`, resolved the way `originalEntryId` is,
+     * with the same known gap (see [com.tendril.app.sync.EntrySnapshotRecord]). */
+    val parentEntryId: Long? = null,
+
+    /** §0.6.4 / §0.6.5 — how long this is expected to take. Stored now so the field is not
+     * designed without its consumers; shown nowhere until Plan mode or tracking reads it. */
+    val estimate: Duration? = null,
+
+    /** §0.6.4 — the single opt-in *important* flag: a flag and not a scale, by §0.5.2. Hidden
+     * in the UI until enabled in Settings. */
+    val important: Boolean = false,
 
     /** FK to a Database Row (§5.2), populated by [com.tendril.app.domain.DatabaseSyncManager]'s
      * Sync-to-Tasks. Travels across devices via `sourceRowUid` — see

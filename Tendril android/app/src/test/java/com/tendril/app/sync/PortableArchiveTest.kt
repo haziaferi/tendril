@@ -42,6 +42,7 @@ class PortableArchiveTest {
         passphrase: String? = null,
         reminderDao: FakeReminderDao = FakeReminderDao(),
         entryCompletionDao: FakeEntryCompletionDao = FakeEntryCompletionDao(),
+        habitCompletionDao: FakeHabitCompletionDao = FakeHabitCompletionDao(),
     ) = PortableArchive(
         context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
         entryDao = entryDao,
@@ -49,6 +50,7 @@ class PortableArchiveTest {
         pageDao = mockk<PageDao>(relaxed = true),
         reminderDao = reminderDao,
         entryCompletionDao = entryCompletionDao,
+        habitCompletionDao = habitCompletionDao,
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         localImages = InMemoryLocalImageStore(),
@@ -270,6 +272,7 @@ class PortableArchiveTest {
         archive(
             FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
             entryCompletionDao = FakeEntryCompletionDao(listOf(archivedCompletion(1, "c1", entry.id))),
+            habitCompletionDao = FakeHabitCompletionDao(),
         ).export(destination)
 
         val exported = backing.bytesWrittenTo(destination)
@@ -278,6 +281,7 @@ class PortableArchiveTest {
             archive(
                 FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
                 entryCompletionDao = restoredCompletions,
+                habitCompletionDao = FakeHabitCompletionDao(),
             ).importAdditive(backing.givenFile(exported))
         }
 

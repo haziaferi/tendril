@@ -66,3 +66,54 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         connection.execSQL("ALTER TABLE `reminders` ADD COLUMN `deletedAt` INTEGER")
     }
 }
+
+/**
+ * §9.10 / §0.8 step 2 — v9 → v10, two decisions in one bump because a migration is the
+ * hardware-verified step and both were ready.
+ *
+ * **§0.6.4 — four columns on `entries`.** All nullable or defaulted, so no backfill and no
+ * decision made on the person's behalf: a task that predates v10 has no deadline, no parent, no
+ * estimate and is not flagged, which is exactly the state it was in. `dueDate` is a second date,
+ * not a reinterpretation of `startDate` — see [com.tendril.app.data.entry.Entry.dueDate].
+ *
+ * **§0.6.6 — `habit_completions`.** The table is created as Room would (the `CREATE` matches the
+ * exported v10 schema, which Room validates on open), and then **backfilled from the only history
+ * a habit ever kept**: `lastCompletedDate` and `previousCompletedDate`. Two rows at most per
+ * habit, stamped with the habit's `updatedAt` because the tap's own instant was never stored. It
+ * is a thin memory, but it is the person's, and a presence view that opened on "nothing yet" for
+ * a habit checked in yesterday would be wrong in the way §0.5.2 forbids. Uids are generated the
+ * way [MIGRATION_8_9] generates them, and for the same reason.
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `entries` ADD COLUMN `dueDate` INTEGER")
+        connection.execSQL("ALTER TABLE `entries` ADD COLUMN `parentEntryId` INTEGER")
+        connection.execSQL("ALTER TABLE `entries` ADD COLUMN `estimate` INTEGER")
+        connection.execSQL("ALTER TABLE `entries` ADD COLUMN `important` INTEGER NOT NULL DEFAULT 0")
+
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `habit_completions` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`uid` TEXT NOT NULL, " +
+                "`habitId` INTEGER NOT NULL, " +
+                "`date` INTEGER NOT NULL, " +
+                "`checkedAt` INTEGER NOT NULL, " +
+                "`deletedAt` INTEGER, " +
+                "FOREIGN KEY(`habitId`) REFERENCES `habits`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_habit_completions_uid` ON `habit_completions` (`uid`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_habit_completions_habitId` ON `habit_completions` (`habitId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_habit_completions_habitId_date` ON `habit_completions` (`habitId`, `date`)")
+
+        // The backfill. Both dates are epoch days already (see `Converters`), and `updatedAt` is
+        // epoch millis, so the columns copy across without conversion. The uid expression is
+        // referenced outside the literal for the reason [MIGRATION_8_9] gives.
+        for (column in listOf("lastCompletedDate", "previousCompletedDate")) {
+            connection.execSQL(
+                "INSERT INTO `habit_completions` (`uid`, `habitId`, `date`, `checkedAt`) " +
+                    "SELECT " + UUID_V4_SQL + ", `id`, `" + column + "`, `updatedAt` FROM `habits` " +
+                    "WHERE `" + column + "` IS NOT NULL",
+            )
+        }
+    }
+}

@@ -63,6 +63,7 @@ class LostPagePreservationTest {
             purgeRegistry = registry,
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
+            habitCompletionDao = FakeHabitCompletionDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

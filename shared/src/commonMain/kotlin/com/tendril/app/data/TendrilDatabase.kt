@@ -17,6 +17,8 @@ import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitCompletion
+import com.tendril.app.data.habit.HabitCompletionDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
@@ -65,7 +67,7 @@ import kotlinx.coroutines.Dispatchers
  */
 @Database(
     entities = [
-        Entry::class, Habit::class, Reminder::class, EntryCompletion::class,
+        Entry::class, Habit::class, Reminder::class, EntryCompletion::class, HabitCompletion::class,
         Page::class, Tag::class, PageTag::class, Block::class, PageFtsEntry::class,
         PageDatabase::class, Property::class, PropertyValue::class, PageDatabaseView::class,
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
@@ -84,7 +86,7 @@ import kotlinx.coroutines.Dispatchers
     //
     // v9 adds `uid` to `reminders` and `entry_completions` (S2). Unlike every bump
     // before it, it is migrated rather than destructive — see [MIGRATION_8_9].
-    version = 9, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid
+    version = 10, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log
     exportSchema = true, // §9.10 — see `shared/schemas/`; a version with no JSON cannot be migrated from
 )
 @TypeConverters(Converters::class)
@@ -94,6 +96,7 @@ abstract class TendrilDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun reminderDao(): ReminderDao
     abstract fun entryCompletionDao(): EntryCompletionDao
+    abstract fun habitCompletionDao(): HabitCompletionDao
 
     abstract fun pageDao(): PageDao
     abstract fun tagDao(): TagDao
@@ -161,7 +164,7 @@ internal fun finishBuilding(
     builder
         .setDriver(driver)
         .setQueryCoroutineContext(Dispatchers.IO)
-        .addMigrations(MIGRATION_8_9) // §9.10 — the declared v8 → v9 path, tried before any fallback
+        .addMigrations(MIGRATION_8_9, MIGRATION_9_10) // §9.10 — the declared paths, tried before any fallback
         // §9.10 / S1b — destructive **only** from a pre-v9 schema. See [PRE_RELEASE_VERSIONS].
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, *PRE_RELEASE_VERSIONS)
         .build()
