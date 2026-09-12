@@ -10,6 +10,8 @@ sealed interface WorkbenchRoute {
 
     data class TabRoot(override val tab: WorkbenchDestination) : WorkbenchRoute
     data class PageDetail(val pageId: Long, override val tab: WorkbenchDestination) : WorkbenchRoute
+    /** §0.6.10 — the weekly walk, pushed from Tasks; Back returns there. */
+    data class Review(override val tab: WorkbenchDestination = WorkbenchDestination.TASKS_HABITS) : WorkbenchRoute
 }
 
 /**
@@ -39,6 +41,10 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
 
     fun openPage(pageId: Long) {
         backStack.add(WorkbenchRoute.PageDetail(pageId, currentTab))
+    }
+
+    fun openReview() {
+        backStack.add(WorkbenchRoute.Review(currentTab))
     }
 
     /** Returns whether it actually popped something — callers (e.g. an Android `BackHandler`)

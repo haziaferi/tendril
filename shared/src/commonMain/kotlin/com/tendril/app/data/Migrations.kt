@@ -174,3 +174,11 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_time_logs_habitId` ON `time_logs` (`habitId`)")
     }
 }
+
+/** §9.10 / §0.6.10 — v14 → v15. `page_databases.lastReviewedAt`, nullable: no database has been
+ * reviewed before this version, and null is exactly "never", which Review treats as due now. */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `lastReviewedAt` INTEGER")
+    }
+}

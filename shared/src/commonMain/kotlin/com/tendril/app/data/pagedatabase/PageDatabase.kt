@@ -47,6 +47,10 @@ data class PageDatabase(
      * asked the first time the label is applied while [syncToTasks] is on. A column rather than
      * a device preference so the answer travels with the database. */
     val labelConfirmed: Boolean = false,
+    /** §0.6.10 (v15) — when the person last walked this database in Review. Null means never,
+     * which is "due now". A column rather than a device preference so a review done on one
+     * device is done on both; the cadence it is measured against is global for now. */
+    val lastReviewedAt: Instant? = null,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

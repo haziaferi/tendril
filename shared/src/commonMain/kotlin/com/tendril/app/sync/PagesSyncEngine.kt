@@ -254,6 +254,7 @@ class PagesSyncEngine(
             recurrencePropertyUid = db.recurrencePropertyId?.let { propertyIdToUid[it] },
             labelName = db.labelId?.let { labelDao.getById(it)?.name },
             labelConfirmed = db.labelConfirmed,
+            lastReviewedAt = db.lastReviewedAt?.toEpochMilli(),
             properties = properties.map { PropertySnapshotRecord(it.uid, it.name, it.type.name, it.config, it.order) },
             views = pageDatabaseViewDao.getForDatabase(db.id).map { v ->
                 ViewSnapshotRecord(
@@ -626,6 +627,7 @@ class PagesSyncEngine(
                     // created the same way when this device has never seen it.
                     labelId = db.labelName?.let { name -> labelDao.findByName(name)?.id ?: labelDao.insert(Label(name = name)) },
                     labelConfirmed = db.labelConfirmed,
+                    lastReviewedAt = db.lastReviewedAt?.let(Instant::ofEpochMilli),
                     updatedAt = Instant.ofEpochMilli(page.updatedAt),
                 )
             )

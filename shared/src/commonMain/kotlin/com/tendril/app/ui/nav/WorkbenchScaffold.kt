@@ -25,6 +25,7 @@ import com.tendril.app.ui.pages.PageDatabaseScreen
 import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.track.RunningTimerBar
+import com.tendril.app.ui.review.ReviewScreen
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -46,7 +47,7 @@ fun WorkbenchScaffold(
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
-    tasksHabitsContent: @Composable () -> Unit,
+    tasksHabitsContent: @Composable (onOpenReview: () -> Unit) -> Unit,
     roadMapContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
 ) {
@@ -98,10 +99,11 @@ fun WorkbenchScaffold(
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage)
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
-                        WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent()
+                        WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview)
                         WorkbenchDestination.ROAD_MAP -> roadMapContent(navState::openPage)
                         WorkbenchDestination.SETTINGS -> settingsContent()
                     }
+                    is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
                     is WorkbenchRoute.PageDetail -> {
                         // A Database page (§5.1) gets the Table view; every other page (including a
                         // Database's own Row, which is `kind = PAGE` with `databaseId` set) gets the

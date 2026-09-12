@@ -96,6 +96,29 @@ class LabelSchemaSyncTest {
         assertNotNull("and still under Reading", notesOnB.parentId)
     }
 
+    /** §0.6.10 — a review done on one device is done on the other; the later review wins, which
+     * is the page record's own LWW, since [com.tendril.app.domain.review.Review.markReviewed]
+     * touches the page. */
+    @Test
+    fun `the last review travels with the database and the later one wins`() = runBlocking {
+        val a = Device(); val (booksOnA, _, _) = seedA(a)
+        val reviewedAt = at.plusSeconds(3_600)
+        a.pageDatabaseDao.update(a.pageDatabaseDao.getById(booksOnA.id)!!.copy(lastReviewedAt = reviewedAt, updatedAt = reviewedAt))
+        a.pageDao.touch(booksOnA.pageId, reviewedAt)
+
+        val b = Device()
+        b.engine.mergePages(a.engine.exportPages())
+        val booksOnB = b.pageDatabaseDao.getByPageId(b.pageDao.getByUid(UID_DB)!!.id)!!
+        assertEquals(reviewedAt, booksOnB.lastReviewedAt)
+
+        // B reviews later; A merges B's record and takes the newer time.
+        val later = reviewedAt.plusSeconds(86_400)
+        b.pageDatabaseDao.update(booksOnB.copy(lastReviewedAt = later, updatedAt = later))
+        b.pageDao.touch(booksOnB.pageId, later)
+        a.engine.mergePages(b.engine.exportPages())
+        assertEquals(later, a.pageDatabaseDao.getById(booksOnA.id)!!.lastReviewedAt)
+    }
+
     @Test
     fun `a v12 peer's database record reads as unbound`() = runBlocking {
         val b = Device()

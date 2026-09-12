@@ -119,6 +119,8 @@ data class PageDatabaseSnapshotRecord(
      * so a v12 peer's record reads as "no label bound". */
     val labelName: String? = null,
     val labelConfirmed: Boolean = false,
+    /** §0.6.10 (v15) — epoch millis of the last review; defaults so a v14 peer reads as never. */
+    val lastReviewedAt: Long? = null,
     val properties: List<PropertySnapshotRecord> = emptyList(),
     val views: List<ViewSnapshotRecord> = emptyList(),
 )

@@ -159,9 +159,10 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                 },
                 // §0.8 step 7a — shared. No alarms and no Settings here yet, so no bell, the
                 // switches off, and no Trash button until those sheets move too.
-                tasksHabitsContent = {
+                tasksHabitsContent = { onOpenReview ->
                     TasksHabitsScreen(
                         core = core,
+                        onOpenReview = onOpenReview,
                         showImportance = false,
                         showStreaks = false,
                         reminderSheet = null,
