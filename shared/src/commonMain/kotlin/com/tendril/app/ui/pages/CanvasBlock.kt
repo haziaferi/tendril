@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.page.Page
@@ -147,9 +147,8 @@ internal fun CanvasPickerSheet(
         value = core.database.pageDao().getAll().filter { it.kind == PageKind.CANVAS && it.deletedAt == null && !it.isTemplate }
     }
     var newTitle by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Text("Canvas in this page", style = MaterialTheme.typography.titleMedium)
+    TendrilSheet(title = "Canvas in this page", onDismiss = onDismiss) {
+        Column {
             Text(
                 "Shows a canvas here, inert until tapped. It stays a page of its own, so it can be opened from the Pages hub and shown in more than one place.",
                 style = MaterialTheme.typography.bodySmall,

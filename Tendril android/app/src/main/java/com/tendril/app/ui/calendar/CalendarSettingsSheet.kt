@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.googlecalendar.GoogleCalendarAuthManager
 import com.tendril.app.googlecalendar.GoogleCalendarSyncEngine
 import com.tendril.app.googlecalendar.SyncOutcome
@@ -81,10 +81,8 @@ fun CalendarSettingsSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Calendar settings", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(16.dp))
+    TendrilSheet(title = "Calendar settings", onDismiss = onDismiss) {
+        Column {
             Text("Google Calendar sync", style = MaterialTheme.typography.bodyMedium)
             Text(
                 if (isConnected) "Connected" else "Not connected",

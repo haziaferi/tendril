@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.AppContainer
 import com.tendril.app.R
 import com.tendril.app.data.entry.Entry
@@ -60,9 +60,9 @@ fun EntryTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
         scope.launch { ids.forEach { container.resolveEntryUseCase.restore(it) } }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
         // Same proportional height as the Page/Row Trash rather than a flat dp figure.
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.6f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     stringResource(R.string.trash_entries_title),

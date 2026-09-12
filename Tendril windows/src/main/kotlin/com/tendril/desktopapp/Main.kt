@@ -37,6 +37,7 @@ import androidx.compose.ui.window.application
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigationevent.NavigationEventInput
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
 import com.tendril.app.sync.PagesSyncEngine
@@ -183,9 +184,8 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
 private fun DesktopCalendarSettingsSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-            Text("Calendar settings", style = MaterialTheme.typography.titleMedium)
+    TendrilSheet(title = "Calendar settings", onDismiss = onDismiss) {
+        Column {
             Text(
                 "Google Calendar sync and reminders are Android-only for now — they need Play Services and the alarm manager (tendril-windows-spec.md §1).",
                 style = MaterialTheme.typography.bodyMedium,

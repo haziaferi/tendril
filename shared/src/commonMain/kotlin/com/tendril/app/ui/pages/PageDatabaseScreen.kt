@@ -37,7 +37,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.page.Page
@@ -579,9 +579,8 @@ private fun AddViewSheet(onDismiss: () -> Unit, onAdd: (String, ViewType) -> Uni
     var type by remember { mutableStateOf(ViewType.TABLE) }
     var showTypeMenu by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("New view", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "New view", onDismiss = onDismiss) {
+        Column {
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -610,9 +609,8 @@ private fun ViewConfigSheet(
     onUpdate: (PageDatabaseView) -> Unit,
     onDelete: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Configure \"${view.name}\"", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "Configure \"${view.name}\"", onDismiss = onDismiss) {
+        Column {
 
             when (view.viewType) {
                 // §5.4/DB5 — a formula-authored COMPUTED property groups too (parseFormulaConfig
@@ -1227,9 +1225,8 @@ private fun RelationPickerSheet(
 ) {
     var candidates by remember { mutableStateOf<List<Page>>(emptyList()) }
     LaunchedEffect(property.id) { candidates = viewModel.relationCandidateRows(property) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Relate to", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "Relate to", onDismiss = onDismiss) {
+        Column {
             if (candidates.isEmpty()) {
                 Text("No rows in the related database yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
@@ -1284,9 +1281,8 @@ private fun ExplainValueSheet(
 ) {
     var explanation by remember { mutableStateOf<PageDatabaseViewModel.ComputedExplanation?>(null) }
     LaunchedEffect(property.id, row.page.id) { explanation = viewModel.explainComputedValue(property, row) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Explain \"${property.name}\"", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "Explain \"${property.name}\"", onDismiss = onDismiss) {
+        Column {
             when (val e = explanation) {
                 null -> Text("Loading…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 is PageDatabaseViewModel.ComputedExplanation.Formula -> {
@@ -1328,9 +1324,8 @@ private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUn
     var unit by remember { mutableStateOf(IntervalUnit.WEEK) }
     var showUnitMenu by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Repeat every", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "Repeat every", onDismiss = onDismiss) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BasicTextField(
                     value = countText,
@@ -1396,9 +1391,8 @@ private fun AddPropertySheet(
     // recurrence-binding flow, to avoid a second, uglier way to represent a plain number.
     val offeredTypes = PropertyType.entries.filter { it != PropertyType.INTERVAL }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("New property", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "New property", onDismiss = onDismiss) {
+        Column {
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -1542,9 +1536,8 @@ fun EnableSyncSheet(
     var selectedRowIds by remember { mutableStateOf(rows.map { it.id }.toSet()) }
 
     // §0.10 item 11 — fully expanded, so "Turn on" is reachable on desktop.
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.8f)) {
-            Text("Sync to Tasks", style = MaterialTheme.typography.titleMedium)
+    TendrilSheet(title = "Sync to Tasks", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.8f)) {
+        Column {
             Text(
                 "Every row becomes its own linked Task. Pick which property means Done — required — and optionally the date it is planned for, a deadline, and a recurrence.",
                 style = MaterialTheme.typography.bodySmall,

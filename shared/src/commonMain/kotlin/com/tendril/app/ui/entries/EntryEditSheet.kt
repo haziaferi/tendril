@@ -18,7 +18,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -38,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.IntervalUnit
@@ -82,8 +82,8 @@ fun EntryEditSheet(
 
     // Fully expanded from the start: on desktop a half-open sheet's buttons sit below the
     // window with no gesture to reach them (tendril-spec.md §0.10 item 11).
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Column {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
 
@@ -193,7 +193,6 @@ fun EntryEditSheet(
                     ) { Text("Save") }
                 }
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 

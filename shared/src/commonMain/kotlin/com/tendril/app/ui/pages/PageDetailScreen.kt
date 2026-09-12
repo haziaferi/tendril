@@ -56,7 +56,6 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -81,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.IntervalUnit
@@ -693,18 +693,12 @@ private fun BlockRow(
 
 @Composable
 private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        // Scrollable, because the list is taller than the sheet. Without this the `Column`
-        // simply clipped whatever did not fit, and what did not fit was the last entry --
-        // "Image". The type was in this list all along and could not be picked, which is how
-        // §3.1.1's Image block came to be "offered" and yet impossible to insert.
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Text("Insert block", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+    // Scrollable, because the list is taller than the sheet. Without this the `Column`
+    // simply clipped whatever did not fit, and what did not fit was the last entry --
+    // "Image". The type was in this list all along and could not be picked, which is how
+    // §3.1.1's Image block came to be "offered" and yet impossible to insert.
+    TendrilSheet(title = "Insert block", onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Column {
             listOf(
                 BlockType.PARAGRAPH to "Paragraph", BlockType.HEADING_1 to "Heading 1", BlockType.HEADING_2 to "Heading 2",
                 BlockType.HEADING_3 to "Heading 3", BlockType.BULLETED_LIST_ITEM to "Bulleted list",
@@ -874,8 +868,8 @@ private fun BlockActionSheet(
     mindMap: Boolean = false,
     onToggleMindMap: () -> Unit = {},
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
+    TendrilSheet(onDismiss = onDismiss) {
+        Column {
             SheetActionRow(Icons.Filled.ArrowUpward, "Move up", onMoveUp)
             SheetActionRow(Icons.Filled.ArrowDownward, "Move down", onMoveDown)
             // §3.1.1 — one level, so each is offered only where it would actually do something:
@@ -959,8 +953,8 @@ private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit
     var query by remember { mutableStateOf("") }
     val candidates by viewModel.labelCandidates.collectAsState()
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.5f)) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Add label", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
@@ -999,10 +993,10 @@ private fun MentionPickerDialog(viewModel: PageDetailViewModel, onDismiss: () ->
     var query by remember { mutableStateOf("") }
     val candidates by viewModel.mentionCandidates.collectAsState()
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         // A fraction of the current screen's height, not a flat dp figure — stays
         // proportionate from small phones to tablets rather than over/under-filling.
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.5f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Mention a page", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
@@ -1139,9 +1133,8 @@ private fun RowRecurrenceEditor(entry: Entry?, viewModel: PageDetailViewModel) {
         var countText by remember { mutableStateOf("1") }
         var unit by remember { mutableStateOf(IntervalUnit.WEEK) }
         var showUnitMenu by remember { mutableStateOf(false) }
-        ModalBottomSheet(onDismissRequest = { showPicker = false }) {
-            Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-                Text("Repeat every", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+        TendrilSheet(title = "Repeat every", onDismiss = { showPicker = false }) {
+            Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicTextField(
                         value = countText,
