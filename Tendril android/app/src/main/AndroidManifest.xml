@@ -67,6 +67,8 @@
         <receiver android:name=".notifications.ReminderAlarmReceiver" android:exported="false" />
         <receiver android:name=".notifications.HabitReminderAlarmReceiver" android:exported="false" />
         <receiver android:name=".notifications.EntryActionReceiver" android:exported="false" />
+        <!-- §0.6.5 — the running timer's Stop action; a receiver, not a service, see TimerNotification. -->
+        <receiver android:name=".notifications.TimerStopReceiver" android:exported="false" />
         <receiver android:name=".notifications.BootCompletedReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -21,6 +21,8 @@
     <string name="calendar_view_agenda">Agenda</string>
     <string name="calendar_quick_add_hint">Quick add…</string>
     <string name="reminders_open">Reminders</string>
+    <string name="track_start">Start timer</string>
+    <string name="track_stop">Stop timer</string>
 
     <!-- Tasks & Habits (§0.8 step 7a) — the screen moved to shared/. -->
     <string name="empty_habits_cta">Add a habit</string>

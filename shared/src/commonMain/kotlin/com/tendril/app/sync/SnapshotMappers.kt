@@ -10,6 +10,7 @@ import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.enumOrNull
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
+import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderOffset
@@ -302,6 +303,29 @@ fun HabitCompletionSnapshotRecord.toEntity(habitId: Long): HabitCompletion = Hab
     date = runCatching { LocalDate.parse(date) }.getOrElse { undecodable("habit completion date", date) },
     checkedAt = Instant.ofEpochMilli(checkedAt),
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+)
+
+/** The owner's cross-device identity, one of the two, resolved by the caller from the full
+ * Entry or Habit set for the same reason [Entry.toSnapshot] takes a map. */
+fun TimeLog.toSnapshot(entryUid: String?, habitUid: String?): TimeLogSnapshotRecord =
+    TimeLogSnapshotRecord(
+        uid = uid,
+        entryUid = entryUid,
+        habitUid = habitUid,
+        startedAt = startedAt.toEpochMilli(),
+        endedAt = endedAt?.toEpochMilli(),
+        deletedAt = deletedAt?.toEpochMilli(),
+        updatedAt = updatedAt.toEpochMilli(),
+    )
+
+fun TimeLogSnapshotRecord.toEntity(entryId: Long?, habitId: Long?): TimeLog = TimeLog(
+    uid = uid,
+    entryId = entryId,
+    habitId = habitId,
+    startedAt = Instant.ofEpochMilli(startedAt),
+    endedAt = endedAt?.let(Instant::ofEpochMilli),
+    deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+    updatedAt = Instant.ofEpochMilli(updatedAt),
 )
 
 /** §4 / §9.4 — the Active/Archived split resolved 2026-08-08: Active is the small,

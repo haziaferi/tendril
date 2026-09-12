@@ -37,6 +37,7 @@ class EntryFieldsSyncTest {
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
             habitCompletionDao = FakeHabitCompletionDao(),
+            timeLogDao = FakeTimeLogDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

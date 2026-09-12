@@ -93,6 +93,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 6e: ICS) | `domain/ics/` — `IcsWriter` (RFC 5545 by hand: VEVENT/VTODO, TZID times, exclusive all-day DTEND, RECURRENCE-ID + RELATED-TO for moved occurrences, EXDATE for skips, 75-octet folding), `IcsReader` (unfolding, `Z`/`TZID`/floating/`VALUE=DATE`, nested VALARM skipped) and `IcsImporter` (by UID, updates not duplicates, overrides and skips into §4.1's rows, every write through the coordinator). Android: Settings › Calendar (.ics); desktop: the Calendar's `···`. §3.2 gains the bullet; §0.10 item 6 annotated. Verified: desktop export → a valid file → re-import "0 new, 4 updated", still 4 rows; phone export ("1 event(s) and 6 task(s)") → re-import "0 new, 7 updated", still 7. 624 tests. **Step 6 complete.** | §0.8, §0.10, §3.2 |
 | 2026-09-12 (step 7a: Tasks & Habits → shared) | The four `ui/taskshabits/` files moved to `shared/`, the move step 6a made for the Calendar: the screen takes `WorkbenchCore`, the two Settings switches, and three slots — the Reminders sheet and the two Trash sheets — null on desktop. `EntryScheduleCoordinator.onHabitChanged` (defaulted) replaces the view-model's `AlarmScheduler`; `WorkbenchCore` gains a derived `checkInHabitUseCase`. 14 strings join `shared/`'s resources. Desktop gains Tasks & Habits; §0.10 item 13 opened for its two missing sheets. Rows show the bell only when a Reminders sheet was supplied (a composition local), so desktop has none. Verified on the phone (Habits tab, a check-in writes its row) and on desktop (Add task with `Read chapter 3 tmr 9pm for 45m` pre-fills the dialog; Merged › This week lists it, no bell); 624 tests. | §0.8, §0.10, §3.3 |
 | 2026-09-12 (step 7b: Plan mode) | `domain/plan/DayTimeline` (blocks by span/estimate/default, greedy lanes, quarter-hour snap, the unplanned rail's rule), `ui/calendar/PlanView` (hour grid, dashed estimated blocks, the now line, all-day chips, the rail, both long-press drags through `EntryEditor.move`, which now places a time on an untimed entry). A *Plan* chip on the Day view. §0.6.5's plan half done; §3.2's deferred hour-drag delivered. Verified on desktop (rail → 10:00, block → 14:15) and the phone (*Trip* → 08:00, the Provider mirror at 08:00). 630 tests. | §0.6.5, §0.8, §3.2 |
+| 2026-09-12 (step 7c: tracking) | Schema **v14**: `time_logs` (`MIGRATION_13_14`, verified in place on both real databases). `domain/track/TimeTracker` (one running timer; start closes the rest, stop, toggle) and `TimeLogTotals` (window-clipped minutes, an open log counts to now). `time_logs.json` in the sync folder and the archive: deleted-wins, else LWW; an unresolvable owner is held and republished (negative control). UI: ▶/■ on task and habit rows and Day rows, the running strip above the tabs (`ui/track/`), the habit sheet's logged minutes. Phone: `NotificationChannels.TIMER`, a chronometer notification with a *Stop* broadcast (`TimerStopReceiver`), no service. 642 tests. | §0.6.5, §0.8 |
 
 ---
 
@@ -294,6 +295,21 @@ quarter hour; a block dragged up or down moves the same way, a series asking *th
 **No automatic placement** (B§6 #8, drag-only first): the day is arranged by hand, not by an
 algorithm the person then argues with (§0.5.2). `domain/plan/DayTimeline` is the layout, pure and
 tested; `EntryEditor.move` gained "a time places an untimed entry". Track and compare follow.
+**Track — done 2026-09-12 (step 7c).** A ▶ on every task and habit row (Tasks & Habits, the
+Calendar's Day view); Llama Life's rule, **one thing runs at a time** — starting another stops
+the first, so there is no "already running" state to explain. What runs shows as one line above
+the tabs on every route, on both platforms: the title, the elapsed time, a ■. The habit detail
+gains "N min logged this month", silent at zero like the rest of its sentences. **The row is the
+timer**: `TimeLog` (v14; `entryId`/`habitId`, one of the two, `startedAt`, `endedAt` null while
+it runs, a tombstone, `updatedAt`) is inserted open and closed on stop; nothing in memory
+remembers a timer, so process death cannot lose one. That answers B§6 #9's open question with
+less than it asked for — on the phone a plain ongoing notification with a chronometer, which
+SystemUI ticks with no process of ours alive, and a *Stop* action that is a broadcast writing the
+missing `endedAt`. No foreground service, no `FOREGROUND_SERVICE_*` permission. Verified: the
+process killed, the shade still counting at 02:21, *Stop* from the shade closed the row (162 s)
+and cleared it. `time_logs.json` travels with the one merge rule this table needs and no other
+has — both edited and tombstoned, so "deleted on any device wins", else the later `updatedAt`.
+Compare (7d) follows on `loggedMinutes`.
 
 **0.6.6 Habits keep a completion log and show presence.** Finding **[Verified]**: `Habit` holds
 only `streak`, `previousStreak`, `lastCompletedDate`. Decision: add a completion log; the streak
@@ -407,7 +423,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
 | 6 | Calendar: **6a** the screen → `shared/`; **6b** edit path + drag-to-move; **6c+6d** Agenda, layers incl. "Show Habits" and database dates; **6e** ICS — *all done 2026-09-12* | 7 |
-| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; then tracking, planned-vs-actual (B§6 #9) | Review (B§6 #10) |
+| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; **7c** tracking — *done 2026-09-12*; then **7d** planned-vs-actual (B§6 #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
 

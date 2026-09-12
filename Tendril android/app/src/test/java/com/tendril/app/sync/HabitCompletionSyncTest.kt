@@ -46,6 +46,7 @@ class HabitCompletionSyncTest {
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
             habitCompletionDao = completionDao,
+            timeLogDao = FakeTimeLogDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

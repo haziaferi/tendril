@@ -5,6 +5,7 @@ import android.net.Uri
 import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
@@ -30,6 +31,7 @@ private const val FILE_HABITS = "habits.json"
 private const val FILE_REMINDERS = "reminders.json"
 private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_HABIT_COMPLETIONS = "habit_completions.json"
+private const val FILE_TIME_LOGS = "time_logs.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
 private const val PAGES_DIR_PREFIX = "pages/"
@@ -76,6 +78,7 @@ class PortableArchive(
     private val reminderDao: ReminderDao,
     private val entryCompletionDao: EntryCompletionDao,
     private val habitCompletionDao: HabitCompletionDao,
+    private val timeLogDao: TimeLogDao,
     private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
     /**
@@ -133,6 +136,7 @@ class PortableArchive(
         val allReminders = reminderDao.getAll()
         val allCompletions = entryCompletionDao.getAll()
         val allHabitCompletions = habitCompletionDao.getAll()
+        val allTimeLogs = timeLogDao.getAll()
         val habitIdToUid = allHabits.associate { it.id to it.uid }
         val (active, archived) = allEntries.partition { it.isActive() }
         val pageRecords = pagesSyncEngine.exportPages()
@@ -158,7 +162,7 @@ class PortableArchive(
             kind = "full",
             includedFiles = listOf(
                 FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS,
-                FILE_REMINDERS, FILE_ENTRY_COMPLETIONS, FILE_HABIT_COMPLETIONS, FILE_RELATIONS, FILE_PURGED,
+                FILE_REMINDERS, FILE_ENTRY_COMPLETIONS, FILE_HABIT_COMPLETIONS, FILE_TIME_LOGS, FILE_RELATIONS, FILE_PURGED,
             ) +
                 pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" } +
                 imagesToPublish.map { (name, _) -> "$IMAGES_DIR_PREFIX$name" },
@@ -194,6 +198,18 @@ class PortableArchive(
                 zip.writeEntry(
                     FILE_HABIT_COMPLETIONS,
                     json.encodeToString(allHabitCompletions.mapNotNull { c -> habitIdToUid[c.habitId]?.let { c.toSnapshot(it) } }),
+                    key,
+                )
+                // §0.6.5 — every log, closed or deleted or not, on the sync folder's terms.
+                zip.writeEntry(
+                    FILE_TIME_LOGS,
+                    json.encodeToString(
+                        allTimeLogs.mapNotNull { log ->
+                            val entryUid = log.entryId?.let(idToUid::get)
+                            val habitUid = log.habitId?.let(habitIdToUid::get)
+                            if (entryUid == null && habitUid == null) null else log.toSnapshot(entryUid, habitUid)
+                        },
+                    ),
                     key,
                 )
                 zip.writeEntry(FILE_RELATIONS, json.encodeToString(relations), key)
@@ -264,6 +280,7 @@ class PortableArchive(
         quarantined += applyReminders(decodeReminders(contents[FILE_REMINDERS]))
         quarantined += applyCompletions(decodeCompletions(contents[FILE_ENTRY_COMPLETIONS]))
         quarantined += applyHabitCompletions(decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS]))
+        quarantined += applyTimeLogs(decodeTimeLogs(contents[FILE_TIME_LOGS]))
         ImportResult(
             hadManifest = contents.containsKey(MANIFEST_NAME),
             imagesRestored = imagesRestored,
@@ -311,6 +328,7 @@ class PortableArchive(
         val reminders = decodeReminders(contents[FILE_REMINDERS])
         val completions = decodeCompletions(contents[FILE_ENTRY_COMPLETIONS])
         val habitCompletions = decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS])
+        val timeLogs = decodeTimeLogs(contents[FILE_TIME_LOGS])
         val purged = decodePurged(contents)
 
         require(
@@ -335,6 +353,7 @@ class PortableArchive(
         reminderDao.deleteAll()
         entryCompletionDao.deleteAll()
         habitCompletionDao.deleteAll()
+        timeLogDao.deleteAll()
         // §5.5.1.1 — Restore is "become exactly what this archive says", so this device's own
         // purge history is discarded and the archive's adopted in its place. Keeping the local
         // tombstones would silently drop records the archive still holds.
@@ -354,6 +373,7 @@ class PortableArchive(
         applyReminders(reminders)
         applyCompletions(completions)
         applyHabitCompletions(habitCompletions)
+        applyTimeLogs(timeLogs)
     }
 
     // Decode and apply are split so [restoreFromBackup] can prove an archive is readable
@@ -393,6 +413,11 @@ class PortableArchive(
         if (content.isNullOrBlank()) return emptyList()
         return runCatching { json.decodeFromString<List<EntryCompletionSnapshotRecord>>(content) }.getOrNull()
             ?: emptyList()
+    }
+
+    private fun decodeTimeLogs(content: String?): List<TimeLogSnapshotRecord> {
+        if (content.isNullOrBlank()) return emptyList()
+        return runCatching { json.decodeFromString<List<TimeLogSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
     }
 
     private fun decodeHabitCompletions(content: String?): List<HabitCompletionSnapshotRecord> {
@@ -626,6 +651,31 @@ class PortableArchive(
             }
         }
         return quarantined
+    }
+
+    /** §0.6.5 — the sync folder's rule (`SnapshotSyncOrchestrator.mergeTimeLogContent`): a
+     * tombstone from either side wins, else the later write. After both [applyEntries] and
+     * [applyHabits], since the owner is either. */
+    private suspend fun applyTimeLogs(records: List<TimeLogSnapshotRecord>): Int {
+        if (records.isEmpty()) return 0
+        val entryUidToId = entryDao.getAll().associate { it.uid to it.id }
+        val habitUidToId = habitDao.getAll().associate { it.uid to it.id }
+        for (record in records) {
+            val entryId = record.entryUid?.let(entryUidToId::get)
+            val habitId = record.habitUid?.let(habitUidToId::get)
+            if (entryId == null && habitId == null) continue
+            val decoded = record.toEntity(entryId, habitId)
+            val local = timeLogDao.getByUid(record.uid)
+            val remoteDeletedAt = decoded.deletedAt
+            when {
+                local == null -> timeLogDao.insert(decoded)
+                local.deletedAt == null && remoteDeletedAt != null -> timeLogDao.softDelete(local.id, remoteDeletedAt)
+                local.deletedAt != null -> Unit
+                decoded.updatedAt.isAfter(local.updatedAt) -> timeLogDao.update(decoded.copy(id = local.id))
+                else -> Unit
+            }
+        }
+        return 0
     }
 
     private suspend fun applyHabits(records: List<HabitSnapshotRecord>): Int {

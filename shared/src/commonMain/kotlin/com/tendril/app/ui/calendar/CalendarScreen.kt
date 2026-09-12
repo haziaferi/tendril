@@ -51,6 +51,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.ui.track.TrackButton
+import com.tendril.app.ui.track.runningTargetState
 import com.tendril.app.domain.plan.unplannedTasks
 import com.tendril.app.domain.plan.timelineBlocks
 import com.tendril.app.domain.plan.TimelineExtra
@@ -170,7 +173,7 @@ fun CalendarScreen(
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao()) }
+            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao(), core.timeTracker) }
         }
     )
     // Defaults to Day, not Month (§2.2).
@@ -193,6 +196,7 @@ fun CalendarScreen(
     var planMode by remember { mutableStateOf(false) }
     var pendingTimeMove by remember { mutableStateOf<PendingTimeMove?>(null) }
     val allTasks by viewModel.tasks.collectAsState()
+    val runningTarget by core.timeTracker.runningTargetState()
 
     editTarget?.let { entry ->
         EntryEditSheet(
@@ -316,6 +320,8 @@ fun CalendarScreen(
                         if (entry.recurrenceRule != null && entry.originalEntryId == null) pendingTimeMove = PendingTimeMove(occurrence, time)
                         else viewModel.moveTo(entry, occurrence.startDate, time, MoveScope.ALL)
                     },
+                    runningTarget = runningTarget,
+                    onToggleTracking = viewModel::toggleTracking,
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
@@ -365,6 +371,8 @@ private fun DayView(
     unplanned: List<Entry>,
     onPlace: (Entry, LocalTime) -> Unit,
     onMoveBlock: (EntryOccurrence, LocalTime) -> Unit,
+    runningTarget: TrackTarget?,
+    onToggleTracking: (TrackTarget) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (ParsedEntry) -> Unit,
@@ -454,6 +462,8 @@ private fun DayView(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        // §0.6.5 — start/stop here too: the Day view is where the day is worked from.
+                        TrackButton(TrackTarget.Entry(entry.id), runningTarget, onToggleTracking)
                         if (onOpenReminders != null) IconButton(onClick = { onOpenReminders(entry) }) {
                             Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open))
                         }

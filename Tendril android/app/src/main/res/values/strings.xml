@@ -49,6 +49,8 @@
     <string name="notification_habit_reminder_text">Due today</string>
     <string name="notification_habit_check_off">Check off</string>
     <string name="action_done">Done</string>
+    <string name="notification_timer_text">Timer running</string>
+    <string name="action_stop_timer">Stop</string>
     <string name="action_skip">Skip</string>
 
     <!-- Tasks & Habits (spec §3.3) -->
