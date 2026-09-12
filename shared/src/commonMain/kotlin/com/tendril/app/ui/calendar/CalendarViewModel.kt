@@ -4,6 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
+import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.data.pagedatabase.PropertyValueDao
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import com.tendril.app.domain.EntryEditor
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.MoveScope
@@ -17,12 +23,41 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 
+/**
+ * §0.8 step 6d — what the Calendar draws. Tasks and events are the Entries; *habits* are §3.2's
+ * "Show Habits", the ones with a time, drawn on every day; *database dates* are every stored
+ * DATE cell in every database, drawn on its day and opening its page. Session state: persisting
+ * it needs a cross-platform preference store the app does not have (§0.10).
+ */
+data class CalendarLayers(
+    val tasks: Boolean = true,
+    val events: Boolean = true,
+    val habits: Boolean = false,
+    val databaseDates: Boolean = false,
+)
+
 class CalendarViewModel(
     private val entryDao: EntryDao,
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val entryEditor: EntryEditor,
+    habitDao: HabitDao,
+    propertyValueDao: PropertyValueDao,
 ) : ViewModel() {
+    private val _layers = MutableStateFlow(CalendarLayers())
+    val layers: StateFlow<CalendarLayers> = _layers.asStateFlow()
+    fun setLayers(layers: CalendarLayers) { _layers.value = layers }
+
+    /** Habits with a time — the only ones a calendar can place. */
+    val timedHabits: StateFlow<List<Habit>> = habitDao.observeActive()
+        .map { habits -> habits.filter { it.time != null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Every stored DATE cell, parsed; a cell that does not parse as a date is not a day. */
+    val dateCells: StateFlow<List<DatedCell>> = propertyValueDao.observeDateCells()
+        .map { cells -> cells.mapNotNull { c -> runCatching { LocalDate.parse(c.value) }.getOrNull()?.let { DatedCell(c.pageId, c.title, c.propertyName, it) } } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** §0.8 step 6b — the edit sheet's save; kind invariants are the editor's. */
     fun save(entry: Entry) {
         viewModelScope.launch { entryEditor.save(entry) }
@@ -67,3 +102,6 @@ class CalendarViewModel(
         viewModelScope.launch { resolveEntryUseCase.unresolve(entryId) }
     }
 }
+
+/** A database row's DATE cell, on the Calendar (§0.8 step 6d). */
+data class DatedCell(val pageId: Long, val title: String, val propertyName: String, val date: LocalDate)

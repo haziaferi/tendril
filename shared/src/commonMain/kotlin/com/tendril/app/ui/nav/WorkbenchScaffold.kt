@@ -43,7 +43,7 @@ fun WorkbenchScaffold(
     navState: WorkbenchNavState = remember { WorkbenchNavState() },
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
-    calendarContent: @Composable () -> Unit,
+    calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     tasksHabitsContent: @Composable () -> Unit,
     roadMapContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
@@ -93,7 +93,7 @@ fun WorkbenchScaffold(
                 when (val current = route) {
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage)
-                        WorkbenchDestination.CALENDAR -> calendarContent()
+                        WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
                         WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent()
                         WorkbenchDestination.ROAD_MAP -> roadMapContent(navState::openPage)
                         WorkbenchDestination.SETTINGS -> settingsContent()

@@ -51,6 +51,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.tendril.app.generated.resources.calendar_view_agenda
+import java.time.LocalTime
+import com.tendril.app.data.habit.Habit
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import kotlin.math.roundToInt
 import com.tendril.app.ui.entries.EntryEditSheet
 import com.tendril.app.domain.MoveScope
@@ -100,7 +109,43 @@ import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-private enum class CalendarView { DAY, WEEK, MONTH }
+private enum class CalendarView { DAY, WEEK, MONTH, AGENDA }
+
+/**
+ * §0.8 step 6d — a row on the Calendar that is not an Entry: a habit at its time (§3.2's "Show
+ * Habits"), or a database row's DATE cell. Drawn beside the occurrences, never edited or dragged
+ * here — a habit is Tasks & Habits' to change, a cell is its database's.
+ */
+private sealed class CalendarExtra {
+    abstract val date: LocalDate
+    abstract val title: String
+    abstract val subtitle: String
+
+    data class HabitAt(val habit: Habit, override val date: LocalDate) : CalendarExtra() {
+        override val title get() = habit.title
+        override val subtitle get() = habit.time?.toString().orEmpty() + (habit.duration?.let { " · ${it.toMinutes()} min" } ?: "")
+    }
+
+    data class RowDate(val cell: DatedCell) : CalendarExtra() {
+        override val date get() = cell.date
+        override val title get() = cell.title
+        override val subtitle get() = cell.propertyName
+    }
+}
+
+/** Habits on every day of the range, and the date cells that fall inside it. */
+private fun extrasIn(from: LocalDate, to: LocalDate, layers: CalendarLayers, habits: List<Habit>, cells: List<DatedCell>): List<CalendarExtra> {
+    val out = mutableListOf<CalendarExtra>()
+    if (layers.habits) {
+        var day = from
+        while (!day.isAfter(to)) {
+            habits.forEach { out += CalendarExtra.HabitAt(it, day) }
+            day = day.plusDays(1)
+        }
+    }
+    if (layers.databaseDates) cells.filter { !it.date.isBefore(from) && !it.date.isAfter(to) }.forEach { out += CalendarExtra.RowDate(it) }
+    return out.sortedWith(compareBy({ it.date }, { (it as? CalendarExtra.HabitAt)?.habit?.time ?: LocalTime.MAX }, { it.title }))
+}
 
 /**
  * §3.2, in `shared/` since §0.8 step 6a (the same move step 1 made for the Canvas). The two
@@ -113,19 +158,26 @@ fun CalendarScreen(
     core: WorkbenchCore,
     settingsSheet: @Composable (onDismiss: () -> Unit) -> Unit,
     reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
+    /** §0.8 step 6d — a database row's date opens its page. */
+    onOpenPage: (Long) -> Unit,
     modifier: Modifier = Modifier,
     /** §0.6.4 — the Settings switch that shows the importance flag; desktop has no Settings yet. */
     showImportant: Boolean = false,
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor) }
+            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao()) }
         }
     )
     // Defaults to Day, not Month (§2.2).
     var view by remember { mutableStateOf(CalendarView.DAY) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    val entries by viewModel.entries.collectAsState()
+    val allEntries by viewModel.entries.collectAsState()
+    val layers by viewModel.layers.collectAsState()
+    val timedHabits by viewModel.timedHabits.collectAsState()
+    val dateCells by viewModel.dateCells.collectAsState()
+    // §0.8 step 6d — the Tasks and Events layers filter the rows before expansion.
+    val entries = remember(allEntries, layers) { allEntries.filter { if (it.kind == EntryKind.TASK) layers.tasks else layers.events } }
     var showSettings by remember { mutableStateOf(false) }
     // §5.4 — reminders open over the tapped Entry; null means closed.
     var reminderTarget by remember { mutableStateOf<Entry?>(null) }
@@ -188,11 +240,23 @@ fun CalendarScreen(
                                     CalendarView.DAY -> Res.string.calendar_view_day
                                     CalendarView.WEEK -> Res.string.calendar_view_week
                                     CalendarView.MONTH -> Res.string.calendar_view_month
+                                    CalendarView.AGENDA -> Res.string.calendar_view_agenda
                                 }
                             )
                         )
                     }
                 }
+            }
+            // §0.8 step 6d — layers. Tasks and Events on by default; Habits and Database dates
+            // opt-in, so the Calendar is today's until someone asks for more on it (E12).
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(selected = layers.tasks, onClick = { viewModel.setLayers(layers.copy(tasks = !layers.tasks)) }, label = { Text("Tasks") })
+                FilterChip(selected = layers.events, onClick = { viewModel.setLayers(layers.copy(events = !layers.events)) }, label = { Text("Events") })
+                FilterChip(selected = layers.habits, onClick = { viewModel.setLayers(layers.copy(habits = !layers.habits)) }, label = { Text("Habits") })
+                FilterChip(selected = layers.databaseDates, onClick = { viewModel.setLayers(layers.copy(databaseDates = !layers.databaseDates)) }, label = { Text("Database dates") })
             }
 
             // §4.1 — the stored rows are expanded into occurrences before anything is drawn:
@@ -203,19 +267,26 @@ fun CalendarScreen(
             // doesn't re-expand on every recomposition.
             val weekStart = selectedDate.minusDays((selectedDate.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong())
             val gridMonth = YearMonth.from(selectedDate)
-            val occurrences = remember(entries, view, selectedDate) {
-                when (view) {
-                    CalendarView.DAY -> EntryOccurrences.onDay(entries, selectedDate)
-                    CalendarView.WEEK -> EntryOccurrences.expand(entries, weekStart, weekStart.plusDays(6))
-                    CalendarView.MONTH ->
-                        EntryOccurrences.expand(entries, gridMonth.atDay(1), gridMonth.atEndOfMonth())
-                }
+            val agendaFrom = LocalDate.now()
+            val agendaTo = agendaFrom.plusDays(AGENDA_DAYS - 1L)
+            val range = when (view) {
+                CalendarView.DAY -> selectedDate to selectedDate
+                CalendarView.WEEK -> weekStart to weekStart.plusDays(6)
+                CalendarView.MONTH -> gridMonth.atDay(1) to gridMonth.atEndOfMonth()
+                CalendarView.AGENDA -> agendaFrom to agendaTo
             }
+            val occurrences = remember(entries, view, selectedDate) {
+                if (view == CalendarView.DAY) EntryOccurrences.onDay(entries, selectedDate)
+                else EntryOccurrences.expand(entries, range.first, range.second)
+            }
+            val extras = remember(layers, timedHabits, dateCells, range) { extrasIn(range.first, range.second, layers, timedHabits, dateCells) }
 
             when (view) {
                 CalendarView.DAY -> DayView(
                     date = selectedDate,
                     occurrences = occurrences,
+                    extras = extras,
+                    onOpenPage = onOpenPage,
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
@@ -226,6 +297,7 @@ fun CalendarScreen(
                 CalendarView.WEEK -> WeekStripView(
                     selectedDate = selectedDate,
                     occurrences = occurrences,
+                    extras = extras,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
                     onMove = { occurrence, toDate ->
                         val entry = occurrence.entry
@@ -236,8 +308,18 @@ fun CalendarScreen(
                 CalendarView.MONTH -> MonthGridView(
                     month = gridMonth,
                     occurrences = occurrences,
+                    extras = extras,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
                     onMonthShift = { selectedDate = selectedDate.plusMonths(it.toLong()) },
+                )
+                CalendarView.AGENDA -> AgendaView(
+                    from = agendaFrom,
+                    to = agendaTo,
+                    occurrences = occurrences,
+                    extras = extras,
+                    onSetDone = viewModel::setDone,
+                    onEdit = { editTarget = it },
+                    onOpenPage = onOpenPage,
                 )
             }
         }
@@ -248,6 +330,8 @@ fun CalendarScreen(
 private fun DayView(
     date: LocalDate,
     occurrences: List<EntryOccurrence>,
+    extras: List<CalendarExtra>,
+    onOpenPage: (Long) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (ParsedEntry) -> Unit,
@@ -296,7 +380,7 @@ private fun DayView(
         }
         HorizontalDivider()
 
-        if (occurrences.isEmpty()) {
+        if (occurrences.isEmpty() && extras.isEmpty()) {
             EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing scheduled", modifier = Modifier.fillMaxSize())
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -330,7 +414,82 @@ private fun DayView(
                         }
                     }
                 }
+                items(extras, key = { extraKey(it) }) { ExtraRow(it, onOpenPage) }
             }
+        }
+    }
+}
+
+private fun extraKey(extra: CalendarExtra): String = when (extra) {
+    is CalendarExtra.HabitAt -> "habit_${extra.habit.id}:${extra.date}"
+    is CalendarExtra.RowDate -> "cell_${extra.cell.pageId}:${extra.cell.propertyName}:${extra.date}"
+}
+
+/** A habit at its time, or a row's date — the same row shape as an occurrence, tinted. A row
+ * date opens its page; a habit is read here and changed on Tasks & Habits. */
+@Composable
+private fun ExtraRow(extra: CalendarExtra, onOpenPage: (Long) -> Unit) {
+    val open: (() -> Unit)? = (extra as? CalendarExtra.RowDate)?.let { { onOpenPage(it.cell.pageId) } }
+    Row(
+        modifier = Modifier.fillMaxWidth().then(if (open != null) Modifier.clickable { open() } else Modifier).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (extra is CalendarExtra.HabitAt) Icons.Filled.LocalFireDepartment else Icons.Filled.TableChart,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(extra.title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            Text(extra.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private const val AGENDA_DAYS = 30
+
+/** §0.8 step 6c — the next [AGENDA_DAYS] days as one list, grouped by day, empty days skipped. */
+@Composable
+private fun AgendaView(
+    from: LocalDate,
+    to: LocalDate,
+    occurrences: List<EntryOccurrence>,
+    extras: List<CalendarExtra>,
+    onSetDone: (Long, Boolean) -> Unit,
+    onEdit: (Entry) -> Unit,
+    onOpenPage: (Long) -> Unit,
+) {
+    val days = generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }
+        .map { day -> day to (occurrences.filter { it.date == day } to extras.filter { it.date == day }) }
+        .filter { (_, lists) -> lists.first.isNotEmpty() || lists.second.isNotEmpty() }
+        .toList()
+    if (days.isEmpty()) {
+        EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing in the next $AGENDA_DAYS days", modifier = Modifier.fillMaxSize())
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+        days.forEach { (day, lists) ->
+            item(key = "day_$day") {
+                Text(
+                    if (day == LocalDate.now()) "Today · " + day.format(DateTimeFormatter.ofPattern("EEE d MMM")) else day.format(DateTimeFormatter.ofPattern("EEEE d MMM")),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+            items(lists.first, key = { "occ_${it.entry.id}:${it.startDate}:$day" }) { occurrence ->
+                val entry = occurrence.entry
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (entry.status != null) Checkbox(checked = entry.status == EntryStatus.DONE, onCheckedChange = { onSetDone(entry.id, it) })
+                    Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
+                        Text(entry.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(occurrenceSubtitle(occurrence, day), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            items(lists.second, key = { extraKey(it) }) { ExtraRow(it, onOpenPage) }
+            item(key = "div_$day") { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
         }
     }
 }
@@ -361,6 +520,7 @@ private data class PendingMove(val occurrence: EntryOccurrence, val toDate: Loca
 private fun WeekStripView(
     selectedDate: LocalDate,
     occurrences: List<EntryOccurrence>,
+    extras: List<CalendarExtra>,
     onSelectDate: (LocalDate) -> Unit,
     onMove: (EntryOccurrence, LocalDate) -> Unit,
 ) {
@@ -378,6 +538,7 @@ private fun WeekStripView(
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
             items(days) { day ->
                 val dayEntries = occurrences.filter { it.date == day }
+                val dayExtras = extras.filter { it.date == day }
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         .onGloballyPositioned { cardBounds[day] = it.boundsInRoot() },
@@ -391,7 +552,7 @@ private fun WeekStripView(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
                         )
-                        if (dayEntries.isEmpty()) {
+                        if (dayEntries.isEmpty() && dayExtras.isEmpty()) {
                             Text("—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             dayEntries.take(3).forEach { occurrence ->
@@ -418,6 +579,8 @@ private fun WeekStripView(
                                 )
                             }
                             if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.bodySmall)
+                            dayExtras.take(3).forEach { Text("◦ ${it.title}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+                            if (dayExtras.size > 3) Text("+${dayExtras.size - 3} more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -437,7 +600,7 @@ private fun WeekStripView(
 }
 
 @Composable
-private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, onSelectDate: (LocalDate) -> Unit, onMonthShift: (Int) -> Unit) {
+private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, extras: List<CalendarExtra>, onSelectDate: (LocalDate) -> Unit, onMonthShift: (Int) -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -459,7 +622,7 @@ private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, 
                 if (day == null) {
                     Box(modifier = Modifier.size(40.dp))
                 } else {
-                    val count = occurrences.count { it.date == day }
+                    val count = occurrences.count { it.date == day } + extras.count { it.date == day }
                     Column(
                         modifier = Modifier
                             .size(40.dp)

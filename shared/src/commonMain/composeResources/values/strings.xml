@@ -18,6 +18,7 @@
     <string name="calendar_view_day">Day</string>
     <string name="calendar_view_week">Week</string>
     <string name="calendar_view_month">Month</string>
+    <string name="calendar_view_agenda">Agenda</string>
     <string name="calendar_quick_add_hint">Quick add…</string>
     <string name="reminders_open">Reminders</string>
 </resources>
