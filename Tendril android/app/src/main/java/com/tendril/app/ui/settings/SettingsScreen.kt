@@ -65,6 +65,8 @@ import com.tendril.app.R
 import com.tendril.app.domain.DatabaseSyncManager
 import androidx.compose.ui.platform.LocalContext
 import com.tendril.app.markdown.MarkdownExporter
+import com.tendril.app.domain.ics.IcsImporter
+import com.tendril.app.domain.ics.IcsWriter
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.TaskPreferences
@@ -92,6 +94,9 @@ fun SettingsScreen(
     syncCoordinator: SyncCoordinator,
     portableArchive: PortableArchive,
     markdownExporter: MarkdownExporter,
+    /** §0.8 step 6e — `.ics` out and in. */
+    entryDao: com.tendril.app.data.entry.EntryDao,
+    icsImporter: IcsImporter,
     notionImporter: NotionImporter,
     databaseSyncManager: DatabaseSyncManager,
     modifier: Modifier = Modifier,
@@ -114,7 +119,7 @@ fun SettingsScreen(
             HorizontalDivider()
             AtRestEncryptionSection(secretStore, syncCoordinator)
             HorizontalDivider()
-            PortableBackupSection(portableArchive, markdownExporter, viewOnly)
+            PortableBackupSection(portableArchive, markdownExporter, entryDao, icsImporter, viewOnly)
             HorizontalDivider()
             // The whole section is swapped out rather than merely disabled: its file picker is
             // launched from inside it, and the honest thing to show someone is why the button
@@ -466,6 +471,8 @@ private fun DialogTextButton(onClick: () -> Unit, label: String = "Confirm") {
 private fun PortableBackupSection(
     archive: PortableArchive,
     markdownExporter: MarkdownExporter,
+    entryDao: com.tendril.app.data.entry.EntryDao,
+    icsImporter: IcsImporter,
     viewOnly: Boolean,
 ) {
     val context = LocalContext.current
@@ -511,6 +518,42 @@ private fun PortableBackupSection(
                 }.fold(
                     { "Exported ${it.pages} page(s) and ${it.images} picture(s) as Markdown" },
                     { it.message ?: "Markdown export failed." },
+                )
+            }
+        },
+    )
+    // §0.8 step 6e — the calendar as a file other calendars read: every task and event, with
+    // UIDs, so the same file imported back updates rather than duplicates.
+    val icsExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/calendar"),
+        onResult = { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                statusMessage = runCatching {
+                    val text = IcsWriter.write(entryDao.getAll())
+                    val stream = context.contentResolver.openOutputStream(uri)
+                        ?: error("Couldn't open the chosen file for writing — nothing was exported.")
+                    stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                    text.split("BEGIN:VEVENT").size - 1 to text.split("BEGIN:VTODO").size - 1
+                }.fold(
+                    { (events, tasks) -> "Exported $events event(s) and $tasks task(s) as .ics" },
+                    { it.message ?: "Calendar export failed." },
+                )
+            }
+        },
+    )
+    val icsImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                statusMessage = runCatching {
+                    val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                        ?: error("Couldn't read the chosen file.")
+                    icsImporter.import(text)
+                }.fold(
+                    { "Imported ${it.created} new, ${it.updated} updated" + if (it.skipped > 0) ", ${it.skipped} skipped" else "" },
+                    { it.message ?: "Calendar import failed." },
                 )
             }
         },
@@ -581,6 +624,19 @@ private fun PortableBackupSection(
         // someone taking a readable copy of their own notes would work against the data it exists
         // to protect.
         Button(onClick = { markdownLauncher.launch("tendril-markdown.zip") }) { Text("Export Markdown") }
+        Spacer(Modifier.height(12.dp))
+        Text("Calendar (.ics)", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Every task and event as an iCalendar file any calendar app opens; importing one brings " +
+                "its events and to-dos in, updating what came from Tendril before.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { icsExportLauncher.launch("tendril.ics") }) { Text("Export .ics") }
+            Button(enabled = !viewOnly, onClick = { icsImportLauncher.launch(arrayOf("text/calendar", "*/*")) }) { Text("Import .ics") }
+        }
         if (viewOnly) {
             Spacer(Modifier.height(8.dp))
             ViewOnlyReason("Importing and restoring are")

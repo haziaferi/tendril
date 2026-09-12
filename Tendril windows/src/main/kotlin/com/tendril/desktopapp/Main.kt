@@ -44,6 +44,7 @@ import com.tendril.app.sync.SnapshotSyncOrchestrator
 import com.tendril.app.sync.quarantineMessage
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.calendar.CalendarScreen
+import com.tendril.app.domain.ics.IcsWriter
 import com.tendril.app.ui.nav.WorkbenchScaffold
 import com.tendril.app.ui.theme.TendrilColorTheme
 import com.tendril.app.ui.theme.TendrilMode
@@ -150,7 +151,7 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                     CalendarScreen(
                         core = core,
                         onOpenPage = onOpenPage,
-                        settingsSheet = { onDismiss -> DesktopCalendarSettingsSheet(onDismiss) },
+                        settingsSheet = { onDismiss -> DesktopCalendarSettingsSheet(core, onDismiss) },
                         reminderSheet = null,
                     )
                 },
@@ -162,9 +163,14 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     }
 }
 
-/** The Calendar's `···` on desktop: nothing to configure here yet, said plainly. */
+/**
+ * The Calendar's `···` on desktop: what is Android-only, said plainly, and §0.8 step 6e's
+ * `.ics` export and import — here rather than in Settings, which desktop does not have yet.
+ */
 @Composable
-private fun DesktopCalendarSettingsSheet(onDismiss: () -> Unit) {
+private fun DesktopCalendarSettingsSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
             Text("Calendar settings", style = MaterialTheme.typography.titleMedium)
@@ -173,8 +179,47 @@ private fun DesktopCalendarSettingsSheet(onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
+            Text("Calendar (.ics)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+            Text(
+                "Every task and event as an iCalendar file any calendar app opens; importing one brings its events and to-dos in, updating what came from Tendril before.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            Row {
+                TextButton(onClick = {
+                    scope.launch {
+                        status = runCatching {
+                            val text = IcsWriter.write(core.database.entryDao().getAll())
+                            val file = withContext(Dispatchers.IO) { pickFile(save = true) } ?: return@launch
+                            withContext(Dispatchers.IO) { file.writeText(text, Charsets.UTF_8) }
+                            "Exported to ${file.name}"
+                        }.getOrElse { it.message ?: "Export failed." }
+                    }
+                }) { Text("Export .ics") }
+                TextButton(onClick = {
+                    scope.launch {
+                        status = runCatching {
+                            val file = withContext(Dispatchers.IO) { pickFile(save = false) } ?: return@launch
+                            val result = core.icsImporter.import(withContext(Dispatchers.IO) { file.readText(Charsets.UTF_8) })
+                            "Imported ${result.created} new, ${result.updated} updated" + if (result.skipped > 0) ", ${result.skipped} skipped" else ""
+                        }.getOrElse { it.message ?: "Import failed." }
+                    }
+                }) { Text("Import .ics") }
+            }
+            status?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
         }
     }
+}
+
+/** A save or open dialog for one `.ics` file — off the UI thread, as [pickDirectory]. */
+private fun pickFile(save: Boolean): File? {
+    val chooser = JFileChooser().apply {
+        fileSelectionMode = JFileChooser.FILES_ONLY
+        dialogTitle = if (save) "Export calendar as .ics" else "Import an .ics file"
+        if (save) selectedFile = File("tendril.ics")
+    }
+    val result = if (save) chooser.showSaveDialog(null) else chooser.showOpenDialog(null)
+    return if (result == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
 }
 
 /** Allocated once rather than per recomposition of the passphrase field it decorates. */
