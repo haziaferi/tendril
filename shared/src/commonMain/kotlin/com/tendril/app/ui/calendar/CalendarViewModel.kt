@@ -18,6 +18,10 @@ import com.tendril.app.domain.toEntry
 import com.tendril.app.domain.ResolveEntryUseCase
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import com.tendril.app.data.track.TimeLog
+import com.tendril.app.domain.track.minuteTicker
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -70,6 +74,10 @@ class CalendarViewModel(
     fun toggleTracking(target: TrackTarget) {
         viewModelScope.launch { timeTracker.toggle(target) }
     }
+
+    /** §0.8 step 7d — the day's logs, re-emitted every minute so an open log's minutes move. */
+    fun logsOn(day: LocalDate): Flow<Pair<List<TimeLog>, Instant>> =
+        combine(timeTracker.logsOn(day), minuteTicker()) { logs, now -> logs to now }
 
     /** Habits with a time — the only ones a calendar can place. */
     val timedHabits: StateFlow<List<Habit>> = habitDao.observeActive()

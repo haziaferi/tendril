@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.domain.plan.BlockKind
+import com.tendril.app.domain.plan.LoggedSpan
 import com.tendril.app.domain.plan.TimelineBlock
 import com.tendril.app.domain.plan.snapMinute
 import com.tendril.app.domain.plan.timeOfMinute
@@ -72,6 +73,7 @@ private const val DAY_MINUTES = 24 * 60
 internal fun PlanView(
     day: LocalDate,
     blocks: List<TimelineBlock>,
+    logged: List<LoggedSpan>,
     allDay: List<EntryOccurrence>,
     unplanned: List<Entry>,
     onEdit: (Entry) -> Unit,
@@ -134,6 +136,18 @@ internal fun PlanView(
                             style = MaterialTheme.typography.labelSmall,
                             color = labelColor,
                             modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) },
+                        )
+                    }
+                    // §0.6.5 — where the time actually went, as a wash *under* the plan: no border,
+                    // no text, nothing to tap. The open log's span ends at now, so it grows.
+                    val washColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                    logged.forEach { span ->
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset(gutterPx.roundToInt(), (span.startMinute / 60f * hourPx).roundToInt()) }
+                                .width(with(density) { laneAreaPx.toDp() })
+                                .height(with(density) { ((span.endMinute - span.startMinute) / 60f * hourPx).coerceAtLeast(2f).toDp() })
+                                .background(washColor, RoundedCornerShape(4.dp)),
                         )
                     }
                     blocks.forEach { block ->

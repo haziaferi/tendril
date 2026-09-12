@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Checkbox
 import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.domain.track.formatMinutes
+import com.tendril.app.domain.plan.loggedSegment
 import com.tendril.app.ui.track.TrackButton
 import com.tendril.app.ui.track.runningTargetState
 import androidx.compose.material3.FloatingActionButton
@@ -159,13 +161,15 @@ private fun TasksHabitsBody(
     var deadlineTarget by remember { mutableStateOf<Entry?>(null) }
     var habitDetail by remember { mutableStateOf<Habit?>(null) }
     val runningTarget by core.timeTracker.runningTargetState()
-    val rowActions = remember(showImportance, runningTarget) {
+    val loggedToday by viewModel.loggedToday.collectAsState()
+    val rowActions = remember(showImportance, runningTarget, loggedToday) {
         TaskRowActions(
             onPostpone = { postponeTarget = it },
             onAddSubtask = { subtaskParent = it },
             onSetDeadline = { deadlineTarget = it },
             showImportance = showImportance,
             runningTarget = runningTarget,
+            loggedToday = loggedToday.first,
         )
     }
 
@@ -242,7 +246,7 @@ private fun TasksHabitsBody(
                     tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
                     onAdd = { showAddDialog = true },
                 ) { reminderTarget = it }
-                TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, onOpen = { habitDetail = it }, onAdd = { showAddDialog = true })
+                TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = { habitDetail = it }, onAdd = { showAddDialog = true })
                 TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions) { reminderTarget = it }
             }
         }
@@ -360,6 +364,8 @@ internal class TaskRowActions(
     val showImportance: Boolean,
     /** §0.6.5 — what runs now, so each row knows whether it draws ▶ or ■. */
     val runningTarget: TrackTarget?,
+    /** §0.8 step 7d — minutes logged today by entry id; absent means nothing to say. */
+    val loggedToday: Map<Long, Int>,
 )
 
 @Composable
@@ -408,6 +414,7 @@ private fun TaskRow(
                 entry.startTime?.toString(),
                 entry.dueDate?.let { "due $it" },
                 if (stepsTotal > 0) "$stepsDone/$stepsTotal steps" else null,
+                loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate),
             ).joinToString(" · ")
             if (subtitle.isNotEmpty()) {
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -452,7 +459,7 @@ private fun TaskRow(
 }
 
 @Composable
-private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, showStreaks: Boolean, runningTarget: TrackTarget?, onOpen: (Habit) -> Unit, onAdd: () -> Unit) {
+private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, showStreaks: Boolean, runningTarget: TrackTarget?, loggedToday: Map<Long, Int>, onOpen: (Habit) -> Unit, onAdd: () -> Unit) {
     if (habits.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.LocalFireDepartment,
@@ -489,6 +496,7 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, sho
                             habit.duration?.let(::formatHabitDuration),
                             // §0.6.6 — retired from the row by default; a plain number when asked for.
                             if (showStreaks && habit.streak > 0) "streak ${habit.streak}" else null,
+                            loggedToday[habit.id]?.let { formatMinutes(it) + " today" },
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

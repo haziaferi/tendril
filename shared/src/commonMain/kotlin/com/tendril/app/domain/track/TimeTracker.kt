@@ -2,9 +2,22 @@ package com.tendril.app.domain.track
 
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.track.TimeLogDao
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+
+/** A `now` every minute (and once at once) — what a total with an open log combines with, so
+ * the number on screen moves without anything in the database changing. */
+fun minuteTicker(): Flow<Instant> = flow {
+    while (true) {
+        emit(Instant.now())
+        delay(60_000)
+    }
+}
 
 /** What a timer runs on. The only way a [TimeLog] gets its owner, which is what keeps
  * "exactly one of entryId/habitId" true without a CHECK Room cannot write. */
@@ -35,6 +48,13 @@ class TimeTracker(
 
     /** A habit's live logs, newest first — what the presence sheet totals. */
     fun logsForHabit(habitId: Long): Flow<List<TimeLog>> = timeLogDao.observeForHabit(habitId)
+
+    /** The live logs that started in `[from, to)` — a day's, for planned-vs-actual (step 7d). */
+    fun logsBetween(from: Instant, to: Instant): Flow<List<TimeLog>> = timeLogDao.observeBetween(from, to)
+
+    /** [logsBetween] for one calendar day in [zone]. */
+    fun logsOn(day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Flow<List<TimeLog>> =
+        logsBetween(day.atStartOfDay(zone).toInstant(), day.plusDays(1).atStartOfDay(zone).toInstant())
 
     /** Starts a timer on [target], closing whatever ran before. Returns the new log. */
     suspend fun start(target: TrackTarget): TimeLog {

@@ -29,6 +29,12 @@ interface TimeLogDao {
     @Query("SELECT * FROM time_logs WHERE habitId = :habitId AND deletedAt IS NULL ORDER BY startedAt DESC")
     fun observeForHabit(habitId: Long): Flow<List<TimeLog>>
 
+    /** §0.8 step 7d — the live logs that *started* in `[from, to)`: a day's, for planned-vs-actual.
+     * By start rather than by overlap: a log that crosses midnight counts for the day it began,
+     * which is the day the person was working. */
+    @Query("SELECT * FROM time_logs WHERE deletedAt IS NULL AND startedAt >= :from AND startedAt < :to ORDER BY startedAt")
+    fun observeBetween(from: Instant, to: Instant): Flow<List<TimeLog>>
+
     /** Every row, tombstoned ones included — unfiltered for the reason
      * [com.tendril.app.data.habit.HabitCompletionDao.getAll] gives. */
     @Query("SELECT * FROM time_logs")
