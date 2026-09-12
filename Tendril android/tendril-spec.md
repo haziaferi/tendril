@@ -86,6 +86,7 @@ second copy of the reasoning.
 | 2026-09-12 (desktop Escape) | §0.10 item 10 resolved — desktop-only change in `Tendril windows/`, no `shared/` code touched; the substantive entry is `tendril-windows-spec.md`'s row of the same date. | §0.10 |
 | 2026-09-12 (Label rename) | §0.6.9 done: `Tag`/`PageTag`/`TagDao`/`TagColors` → `Label`/`PageLabel`/`LabelDao`/`LabelColors` across `shared/`, the Android app and the desktop app; UI strings say "label". Tables, columns and the snapshot key unchanged, so no schema version and no folder-format change. §3.1.6 and §4's entity table corrected in place. 585 tests. | §0.6.9, §0.8, §3.1.6, §4 |
 | 2026-09-12 (step 4: schema on a label) | §0.8 step 4 done. **§0.6.8** — `PageDatabase.labelId`/`labelConfirmed` (**schema v13**), `PageDao.getMembersOf` (native ∪ labelled), `domain/LabelMembership`, `DatabaseSyncManager` over members, the snapshot's `labelName`/`labelConfirmed`, cell values on any page, the generalised unknown-column hold, `BindLabelSheet`, membership strips in the page header, the chip mark, the once-only dialog. §5.1 and §5.5 corrected in place. Verified on desktop and on the phone's v12 → v13 upgrade. 596 tests. | §0.6.8, §0.8, §5.1, §5.5 |
+| 2026-09-12 (step 5: natural-language Quick Add) | §0.8 step 5 done. `domain/QuickAddParser` (pure, English first, ISO/24h in any language) + `ParsedEntry.toEntry`; `ui/entries/QuickAddPreview` chip row in `shared/`; Calendar's Quick Add creates a Task or an Event from the line, Tasks' add dialog pre-fills from its title. B§6 #3's open decisions answered: English only first; recurrence phrases `daily/weekly/monthly`, `every N days/weeks/months`, `every <weekday>`, `every weekday`. §3.2 and §3.3 amended in place. Verified on the phone (`Dentist tmr 3pm` → event 15:00 tomorrow; `todo Call bank by friday !` → flagged task due Friday; `Gym every monday 7am` → weekly task from Monday 07:00). 612 tests. | §0.8, §3.2, §3.3 |
 
 ---
 
@@ -388,7 +389,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` — *done 2026-09-11* | — |
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
-| 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
+| 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
 | 6 | Calendar: edit path, drag-to-move, agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
 | 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
@@ -975,7 +976,9 @@ composable ("No pages match '…'").
   §4.1 asked for — three consecutive identical titles with nothing to tell them apart — is delivered
   in one view out of three.
 - ~~Create and edit events and tasks directly~~ — **corrected 2026-09-06: create events, through
-  Quick Add, and nothing else.** Neither half held on this screen. Quick Add is Calendar's only write
+  Quick Add, and nothing else.** *(**Amended 2026-09-12 (§0.8 step 5):** create events **or tasks**,
+  through Quick Add, which now reads the line — see the Quick Add bullet below. The edit half is
+  still true: nothing on this screen edits; that is step 6.)* Neither half held on this screen. Quick Add is Calendar's only write
   path and it hard-codes `kind = EVENT` with a title and a date, so a Task cannot be created here at
   all — that is Tasks & Habits' own add dialog (§3.3). And nothing on this screen edits: a Day row
   offers a Done checkbox and a reminders bell and no tap target on the row itself, while Week and
@@ -1015,7 +1018,17 @@ composable ("No pages match '…'").
   **corrected 2026-08-29**: no client ID field, see §9.5 for why and for the OAuth setup details
   (production vs. testing mode, 7-day token expiry trap), and §9.5.1 for the sync engine's own scope
   (EVENT-only, `primary` calendar, incremental via `updatedMin`)
-- **Quick Add**: fast, minimal single-line capture. Deliberately does **not** include the Reminders
+- **Quick Add**: fast, minimal single-line capture. *(**Amended 2026-09-12 (§0.8 step 5, B§6
+  #3):** the line is read by `QuickAddParser` — English first: `today`/`tmr`/weekdays/`next
+  monday`/`in 3 days`/`sep 20`/`20/9`/ISO for the date; `3pm`/`15:30`/`noon` for the time; a span
+  `3-4pm` or `at 3pm for 1h30` for an event's end; `daily`/`every 2 weeks`/`every monday`/`every
+  weekday` for recurrence, emitted as an RRULE on an event and a period on a task; `by friday`/`due
+  sep 30` for a task's deadline, never its When; a trailing `!` for the flag. The surface picks the
+  kind — Calendar makes an Event, Tasks a Task — a span forces Event, a leading `todo`/`task`/`event`
+  forces either way, and a chip row under the field previews the reading before Enter: the kind chip
+  flips it, a chip's × says "that was a word". Italian words are a later row; ISO dates and 24-hour
+  times read in any language. Tasks' add dialog reads its title the same way and pre-fills its
+  controls.)* Deliberately does **not** include the Reminders
   list (see §5.4) — that lives behind its own bell icon on a row, keeping Quick Add fast
   *(**corrected 2026-09-06**: "the fuller edit sheet" named a surface that was never built — see the
   Reminders bullet below)*
@@ -1041,6 +1054,9 @@ Three views: **Tasks**, **Habits**, **Merged** — one page, kept from losing cl
 two different concerns.
 
 **Tasks** (GTD-style todo list):
+- *(**Added 2026-09-12 (§0.8 step 5):** the add dialog's title is read as a Quick Add line — `Gym
+  every monday 7am by friday` fills date, time, repeat and deadline, previewed as chips, all still
+  editable; the title that is saved is the line with the tokens removed. Same parser as Calendar's.)*
 - Entries are the same entries the Calendar uses. Deadlines sync both ways on add/edit (already true
   from the original spec, reinforced by §5/§6's database and recurrence design)
 - Today / This week / This month filter bar (§2.2), default **Today**

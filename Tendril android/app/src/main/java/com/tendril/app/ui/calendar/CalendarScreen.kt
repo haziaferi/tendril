@@ -74,6 +74,11 @@ import com.tendril.app.googlecalendar.SyncOutcome
 import com.tendril.app.storage.GoogleCalendarPreferences
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.reminders.ReminderSheet
+import com.tendril.app.data.entry.EntryKind
+import com.tendril.app.domain.ParsedEntry
+import com.tendril.app.domain.QuickAddParser
+import com.tendril.app.domain.TokenKind
+import com.tendril.app.ui.entries.QuickAddPreview
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -198,7 +203,7 @@ private fun DayView(
     occurrences: List<EntryOccurrence>,
     onPrev: () -> Unit,
     onNext: () -> Unit,
-    onQuickAdd: (String) -> Unit,
+    onQuickAdd: (ParsedEntry) -> Unit,
     onSetDone: (Long, Boolean) -> Unit,
     onOpenReminders: (Entry) -> Unit,
 ) {
@@ -213,19 +218,34 @@ private fun DayView(
             IconButton(onClick = onNext) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next day") }
         }
 
+        // §0.8 step 5 — the line is read as it is typed and previewed as chips; a chip's × says
+        // "that was a word", the kind chip flips Task ↔ Event. Enter writes what the preview shows.
         var quickAddText by remember { mutableStateOf("") }
+        var ignored by remember { mutableStateOf(emptySet<TokenKind>()) }
+        var kindOverride by remember { mutableStateOf<EntryKind?>(null) }
+        val parsed = remember(quickAddText, ignored, kindOverride) {
+            QuickAddParser.parse(quickAddText, LocalDate.now(), EntryKind.EVENT, ignored, kindOverride)
+        }
         OutlinedTextField(
             value = quickAddText,
-            onValueChange = { quickAddText = it },
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            onValueChange = { quickAddText = it; ignored = emptySet(); kindOverride = null },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             placeholder = { Text(stringResource(R.string.calendar_quick_add_hint)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
-                onQuickAdd(quickAddText)
-                quickAddText = ""
+                onQuickAdd(parsed)
+                quickAddText = ""; ignored = emptySet(); kindOverride = null
             }),
         )
+        if (quickAddText.isNotBlank()) {
+            QuickAddPreview(
+                parsed = parsed,
+                onFlipKind = { kindOverride = if (parsed.kind == EntryKind.TASK) EntryKind.EVENT else EntryKind.TASK },
+                onDrop = { ignored = ignored + it },
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         HorizontalDivider()
 
         if (occurrences.isEmpty()) {
