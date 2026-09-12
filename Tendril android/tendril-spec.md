@@ -88,6 +88,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 4: schema on a label) | §0.8 step 4 done. **§0.6.8** — `PageDatabase.labelId`/`labelConfirmed` (**schema v13**), `PageDao.getMembersOf` (native ∪ labelled), `domain/LabelMembership`, `DatabaseSyncManager` over members, the snapshot's `labelName`/`labelConfirmed`, cell values on any page, the generalised unknown-column hold, `BindLabelSheet`, membership strips in the page header, the chip mark, the once-only dialog. §5.1 and §5.5 corrected in place. Verified on desktop and on the phone's v12 → v13 upgrade. 596 tests. | §0.6.8, §0.8, §5.1, §5.5 |
 | 2026-09-12 (step 5: natural-language Quick Add) | §0.8 step 5 done. `domain/QuickAddParser` (pure, English first, ISO/24h in any language) + `ParsedEntry.toEntry`; `ui/entries/QuickAddPreview` chip row in `shared/`; Calendar's Quick Add creates a Task or an Event from the line, Tasks' add dialog pre-fills from its title. B§6 #3's open decisions answered: English only first; recurrence phrases `daily/weekly/monthly`, `every N days/weeks/months`, `every <weekday>`, `every weekday`. §3.2 and §3.3 amended in place. Verified on the phone (`Dentist tmr 3pm` → event 15:00 tomorrow; `todo Call bank by friday !` → flagged task due Friday; `Gym every monday 7am` → weekly task from Monday 07:00). 612 tests. | §0.8, §3.2, §3.3 |
 | 2026-09-12 (step 6a: Calendar → shared) | `CalendarScreen`/`CalendarViewModel` moved to `shared/src/commonMain/.../ui/calendar/`, the same move step 1 made for the Canvas: the screen takes `WorkbenchCore` and two slots — the Google Calendar settings sheet (now `CalendarSettingsSheet.kt` in the Android app, Play Services) and the Reminders sheet (alarms; null on desktop hides the bell). Six strings join `shared/`'s resources. No behaviour change on Android; desktop gains the Calendar. Verified on the desktop preview: Day/Week/Month, Quick Add of `Standup 9-9:30am every weekday` drawn on Monday and not Sunday, the `···` sheet. 612 tests. | §0.8, §3.2 |
+| 2026-09-12 (step 6b: edit path, drag-to-move) | `domain/EntryEditor` (`save` normalises for the kind, `move` keeps a span's length and makes an override row for *this one* of a series), `ui/entries/EntryEditSheet`, a tap target on the Day row, long-press-drag between Week's day cards with a ghost and a *this one / all* question. Sheets that are taller than a desktop window now open fully expanded — §0.10 item 11 resolved. §3.2 amended in place; the Day view's hour-drag deferred to step 7's timeline, said there. Verified on desktop: a series edited (title, time; its `BYDAY` rule kept), a Saturday occurrence dragged to Monday as *this one* → an override row, the series untouched. 620 tests. | §0.8, §0.10, §3.2 |
 
 ---
 
@@ -391,7 +392,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
-| 6 | Calendar: **6a** the screen → `shared/` — *done 2026-09-12*; then edit path, drag-to-move, agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
+| 6 | Calendar: **6a** the screen → `shared/` — *done 2026-09-12*; **6b** edit path + drag-to-move — *done 2026-09-12*; then agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
 | 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
@@ -432,7 +433,7 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
-11. **Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.
+11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet.*
 
 ### 0.11 Relationship to the rest of this file and to the companion documents
 
@@ -979,7 +980,17 @@ composable ("No pages match '…'").
 - ~~Create and edit events and tasks directly~~ — **corrected 2026-09-06: create events, through
   Quick Add, and nothing else.** *(**Amended 2026-09-12 (§0.8 step 5):** create events **or tasks**,
   through Quick Add, which now reads the line — see the Quick Add bullet below. The edit half is
-  still true: nothing on this screen edits; that is step 6.)* Neither half held on this screen. Quick Add is Calendar's only write
+  still true: nothing on this screen edits; that is step 6.)* *(**Amended again 2026-09-12 (§0.8 step
+  6b):** the edit half is no longer true. A Day row opens `EntryEditSheet` — title, kind (Task ↔
+  Event, the other kind's fields hidden and dropped), When with optional time, an Event's end, the
+  repeat presets (a richer stored rule is kept unless a preset is picked), a Task's deadline,
+  estimate and — behind the Settings switch — the flag; Delete → Trash. Edits to a series apply to
+  every occurrence. On Week, an occurrence long-pressed and dragged onto another day's card moves —
+  a series asks *this one / all*, "this one" through §4.1's override row. Every write goes through
+  one use case, `EntryEditor` (`save`, `move`), which enforces the §4 kind invariants and calls
+  `EntryScheduleCoordinator.onEntryChanged` — §4.1's "every write path" is now literally one path.
+  The Day view is a list, not an hour grid, so dragging to another *hour* waits for the timeline
+  step 7's Plan mode builds; the sheet changes the time meanwhile.)* Neither half held on this screen. Quick Add is Calendar's only write
   path and it hard-codes `kind = EVENT` with a title and a date, so a Task cannot be created here at
   all — that is Tasks & Habits' own add dialog (§3.3). And nothing on this screen edits: a Day row
   offers a Done checkbox and a reminders bell and no tap target on the row itself, while Week and

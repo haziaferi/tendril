@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
+import com.tendril.app.domain.EntryEditor
 import com.tendril.app.domain.EntryScheduleCoordinator
+import com.tendril.app.domain.MoveScope
 import com.tendril.app.domain.ParsedEntry
 import com.tendril.app.domain.toEntry
 import com.tendril.app.domain.ResolveEntryUseCase
@@ -19,7 +21,22 @@ class CalendarViewModel(
     private val entryDao: EntryDao,
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
+    private val entryEditor: EntryEditor,
 ) : ViewModel() {
+    /** §0.8 step 6b — the edit sheet's save; kind invariants are the editor's. */
+    fun save(entry: Entry) {
+        viewModelScope.launch { entryEditor.save(entry) }
+    }
+
+    /** §0.8 step 6b — a drag's end: this occurrence, or the whole series, to [toDate]. */
+    fun move(entry: Entry, occurrenceDate: LocalDate, toDate: LocalDate, scope: MoveScope) {
+        viewModelScope.launch { entryEditor.move(entry, occurrenceDate, toDate, scope = scope) }
+    }
+
+    fun trash(entryId: Long) {
+        viewModelScope.launch { resolveEntryUseCase.trash(entryId) }
+    }
+
     val entries: StateFlow<List<Entry>> =
         entryDao.observeDated().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

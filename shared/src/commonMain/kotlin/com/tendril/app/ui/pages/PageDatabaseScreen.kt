@@ -1541,7 +1541,8 @@ fun EnableSyncSheet(
     var recurrencePropertyId by remember { mutableStateOf<Long?>(null) }
     var selectedRowIds by remember { mutableStateOf(rows.map { it.id }.toSet()) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // §0.10 item 11 — fully expanded, so "Turn on" is reachable on desktop.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.8f)) {
             Text("Sync to Tasks", style = MaterialTheme.typography.titleMedium)
             Text(
