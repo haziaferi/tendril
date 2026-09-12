@@ -95,6 +95,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7b: Plan mode) | `domain/plan/DayTimeline` (blocks by span/estimate/default, greedy lanes, quarter-hour snap, the unplanned rail's rule), `ui/calendar/PlanView` (hour grid, dashed estimated blocks, the now line, all-day chips, the rail, both long-press drags through `EntryEditor.move`, which now places a time on an untimed entry). A *Plan* chip on the Day view. §0.6.5's plan half done; §3.2's deferred hour-drag delivered. Verified on desktop (rail → 10:00, block → 14:15) and the phone (*Trip* → 08:00, the Provider mirror at 08:00). 630 tests. | §0.6.5, §0.8, §3.2 |
 | 2026-09-12 (step 7c: tracking) | Schema **v14**: `time_logs` (`MIGRATION_13_14`, verified in place on both real databases). `domain/track/TimeTracker` (one running timer; start closes the rest, stop, toggle) and `TimeLogTotals` (window-clipped minutes, an open log counts to now). `time_logs.json` in the sync folder and the archive: deleted-wins, else LWW; an unresolvable owner is held and republished (negative control). UI: ▶/■ on task and habit rows and Day rows, the running strip above the tabs (`ui/track/`), the habit sheet's logged minutes. Phone: `NotificationChannels.TIMER`, a chronometer notification with a *Stop* broadcast (`TimerStopReceiver`), no service. 642 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (sheet frame) | `ui/components/TendrilSheet` replaces all 29 `ModalBottomSheet` sites: one frame (sides, title slot, proportional bottom room), always fully expanded; the two refused alternatives recorded. §0.10 item 11 applied everywhere, phone included; item 14 opened (desktop layout revision). 642 tests. | §3, §0.10 |
+| 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 
 ---
 
@@ -284,8 +285,9 @@ row — see §5.2.1's correction of the same date.
 
 **0.6.5 Time is a first-class concern.** Decision in principle: estimate → plan → track →
 compare, in that order (§0.8). Shape: Tiimo's visible day and Llama Life's "now", not a workload
-chart. Nothing built yet; recorded so the estimate field (0.6.4) is not designed without its
-consumers. (B§5, B§10.3)
+chart. *(Written before step 7: nothing was built yet, and this was recorded so the estimate field
+(0.6.4) would not be designed without its consumers. All four halves are now done — see below.)*
+(B§5, B§10.3)
 **Plan — done 2026-09-12 (step 7b).** The estimate has its first consumer. A *Plan* chip on the
 Day view turns the list into a timeline: hours down the side, a block per timed thing sized by
 its span (events) or its estimate (tasks; thirty minutes when there is none, drawn dashed so the
@@ -311,6 +313,16 @@ process killed, the shade still counting at 02:21, *Stop* from the shade closed 
 and cleared it. `time_logs.json` travels with the one merge rule this table needs and no other
 has — both edited and tombstoned, so "deleted on any device wins", else the later `updatedAt`.
 Compare (7d) follows on `loggedMinutes`.
+**Compare — done 2026-09-12 (step 7d). §0.6.5 complete.** The Day view's header gains one
+line, *Planned 2h 15m · Logged 45m* — planned is every timeline block plus the estimates of the
+day's untimed tasks; logged is the day's logs, an open one counted to now, ticking by the minute.
+A row with time on it says *20m of ~45m* beside an estimate and *20m logged* without; a habit
+row says *12m today*. Plan mode draws the logged stretches as a strip along the hour gutter — no border, no
+text, nothing to tap — so the person sees where the time went against where it was meant to go.
+(A wash *under* the blocks was tried first and was invisible: a block's container is opaque.) The habit detail adds *About 12m each*, the mean of its closed
+sessions once there are two. **No score, no over/under colour, no percentage**: the two numbers
+sit next to each other and the person draws the conclusion (§0.5.2). `domain/plan/DayTotals`
+is pure and tested; every surface reads the same functions.
 
 **0.6.6 Habits keep a completion log and show presence.** Finding **[Verified]**: `Habit` holds
 only `streak`, `previousStreak`, `lastCompletedDate`. Decision: add a completion log; the streak
@@ -424,7 +436,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
 | 6 | Calendar: **6a** the screen → `shared/`; **6b** edit path + drag-to-move; **6c+6d** Agenda, layers incl. "Show Habits" and database dates; **6e** ICS — *all done 2026-09-12* | 7 |
-| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; **7c** tracking — *done 2026-09-12*; then **7d** planned-vs-actual (B§6 #9) | Review (B§6 #10) |
+| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; **7c** tracking — *done 2026-09-12*; **7d** planned-vs-actual — *done 2026-09-12*. §0.6.5 complete (B§6 #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
 

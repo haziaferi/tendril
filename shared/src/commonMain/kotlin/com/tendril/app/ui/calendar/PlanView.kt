@@ -138,18 +138,6 @@ internal fun PlanView(
                             modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) },
                         )
                     }
-                    // §0.6.5 — where the time actually went, as a wash *under* the plan: no border,
-                    // no text, nothing to tap. The open log's span ends at now, so it grows.
-                    val washColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                    logged.forEach { span ->
-                        Box(
-                            modifier = Modifier
-                                .offset { IntOffset(gutterPx.roundToInt(), (span.startMinute / 60f * hourPx).roundToInt()) }
-                                .width(with(density) { laneAreaPx.toDp() })
-                                .height(with(density) { ((span.endMinute - span.startMinute) / 60f * hourPx).coerceAtLeast(2f).toDp() })
-                                .background(washColor, RoundedCornerShape(4.dp)),
-                        )
-                    }
                     blocks.forEach { block ->
                         val laneWidth = laneAreaPx / block.lanes
                         val x = gutterPx + block.lane * laneWidth
@@ -195,6 +183,20 @@ internal fun PlanView(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
+                    }
+                    // §0.6.5 — where the time actually went: a strip along the hour gutter, drawn
+                    // after the blocks so an opaque block cannot hide it; no border, no text,
+                    // nothing to tap (a Box with no pointer input lets taps through to the block
+                    // beneath). The open log's strip ends at now, so it grows with the now line.
+                    val stripColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                    logged.forEach { span ->
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset((gutterPx - 14).roundToInt(), (span.startMinute / 60f * hourPx).roundToInt()) }
+                                .width(8.dp)
+                                .height(with(density) { ((span.endMinute - span.startMinute) / 60f * hourPx).coerceAtLeast(3f).toDp() })
+                                .background(stripColor, RoundedCornerShape(4.dp)),
+                        )
                     }
                 }
             }
