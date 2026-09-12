@@ -74,7 +74,7 @@ class PageMergeTest {
     private val coordinator = RecordingEntryScheduleCoordinator()
 
     private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
-    private val contentRepository = PageContentRepository(blockDao, ftsDao)
+    private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
 
     private val engine = PagesSyncEngine(
         pageDao = pageDao,
@@ -307,7 +307,7 @@ class PageMergeTest {
         val page = requireNotNull(pageDao.getByUid(UID_A)) { "the page should have been inserted" }
         assertEquals(listOf("hello world"), blockDao.getForPage(page.id).map { it.content })
         assertEquals(setOf("work", "urgent"), labelDao.getForPage(page.id).map { it.name }.toSet())
-        assertEquals("the FTS index is rebuilt as part of the same write", "hello world", store.fts[page.id])
+        assertEquals("the FTS index is rebuilt as part of the same write, title first (§3.1.1)", "Arrived hello world", store.fts[page.id])
     }
 
     @Test

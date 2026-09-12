@@ -29,6 +29,18 @@ import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.track.RunningTimerBar
 import com.tendril.app.ui.review.ReviewScreen
+import com.tendril.app.ui.switcher.QuickSwitcher
+import com.tendril.app.ui.switcher.SwitcherState
+import com.tendril.app.domain.SwitcherCommand
+import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.data.entry.EntryStatus
+import com.tendril.app.ui.pages.PagesViewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.launch
+import java.time.LocalDate
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -47,6 +59,8 @@ import org.jetbrains.compose.resources.stringResource
 fun WorkbenchScaffold(
     core: WorkbenchCore,
     navState: WorkbenchNavState = remember { WorkbenchNavState() },
+    /** §3.1.7 — the quick switcher's open flag; the desktop's Ctrl+K toggles it from `Main.kt`. */
+    switcher: SwitcherState = remember { SwitcherState() },
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
@@ -104,7 +118,7 @@ fun WorkbenchScaffold(
             Box(modifier = Modifier.padding(innerPadding)) {
                 when (val current = route) {
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
-                        WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage)
+                        WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true })
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
                         WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview)
                         WorkbenchDestination.ROAD_MAP -> roadMapContent(navState::openPage)
@@ -139,6 +153,54 @@ fun WorkbenchScaffold(
                         }
                     }
                 }
+                if (switcher.open) {
+                    // Over everything, on every route — the switcher is how you get anywhere.
+                    QuickSwitcher(
+                        core = core,
+                        commands = switcherCommands(core, navState),
+                        onOpenPage = navState::openPage,
+                        onDismiss = { switcher.open = false },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The command palette's verbs (B§6 #11): navigation and creation, nothing that needs a form.
+ * Built here because they are the scaffold's own moves — a tab, a route, the New sheet's
+ * three kinds — with the page creation going through the same [PagesViewModel] paths the
+ * Pages screen uses (View-Only refuses them the same way).
+ */
+@Composable
+private fun switcherCommands(core: WorkbenchCore, navState: WorkbenchNavState): List<SwitcherCommand> {
+    val pagesViewModel: PagesViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                PagesViewModel(
+                    core.database.pageDao(), core.database.pageDatabaseDao(), core.database.propertyDao(), core.database.pageFtsDao(),
+                    core.database.labelDao(), core.purgeRegistry, core.databaseSyncManager, core.templateManager, core.viewLockState,
+                    core.pageContentRepository,
+                )
+            }
+        }
+    )
+    val tasks by core.database.entryDao().observeTasks().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    return remember(tasks) {
+        buildList {
+            add(SwitcherCommand("New page", "create blank") { pagesViewModel.createBlankPage("") { navState.openPage(it) } })
+            add(SwitcherCommand("New database", "create table") { pagesViewModel.createDatabase("", asToDoDatabase = false) { navState.openPage(it) } })
+            add(SwitcherCommand("New to-do database", "create tasks") { pagesViewModel.createDatabase("", asToDoDatabase = true) { navState.openPage(it) } })
+            add(SwitcherCommand("New canvas", "create board") { pagesViewModel.createCanvas("") { navState.openPage(it) } })
+            add(SwitcherCommand("Journal today", "daily note") { pagesViewModel.openJournal(LocalDate.now()) { navState.openPage(it) } })
+            add(SwitcherCommand("Review", "weekly walk") { navState.openReview() })
+            for (destination in WorkbenchDestination.entries) {
+                add(SwitcherCommand("Go to " + destination.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, "tab") { navState.switchTab(destination) })
+            }
+            for (task in tasks.filter { it.status == EntryStatus.PENDING && it.deletedAt == null }) {
+                add(SwitcherCommand("Start timer: " + task.title, "track time") { scope.launch { core.timeTracker.start(TrackTarget.Entry(task.id)) } })
             }
         }
     }

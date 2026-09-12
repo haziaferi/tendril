@@ -98,7 +98,7 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, onOpenPa
         key = "canvas_$pageId",
         factory = viewModelFactory {
             initializer {
-                CanvasViewModel(pageId, core.database.pageDao(), core.database.pageCanvasDao(), core.database.canvasNodeDao(), core.database.canvasEdgeDao(), core.viewLockState)
+                CanvasViewModel(pageId, core.database.pageDao(), core.database.pageCanvasDao(), core.database.canvasNodeDao(), core.database.canvasEdgeDao(), core.viewLockState, core.pageContentRepository)
             }
         }
     )

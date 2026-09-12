@@ -114,7 +114,7 @@ class ViewOnlySurfacesGuardTest {
     private val completionDao = RecordingEntryCompletionDao()
     private val coordinator = RecordingEntryScheduleCoordinator()
 
-    private val contentRepository = PageContentRepository(blockDao, ftsDao)
+    private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
     private val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
     private val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao)
     private val databaseSyncManager =
@@ -147,6 +147,7 @@ class ViewOnlySurfacesGuardTest {
             canvasNodeDao = nodeDao,
             canvasEdgeDao = edgeDao,
             viewLockState = viewLockState,
+            pageContentRepository = contentRepository,
         )
         backgroundScope.launch { viewModel.canvas.collect { } }
         testScheduler.advanceUntilIdle()
@@ -167,7 +168,7 @@ class ViewOnlySurfacesGuardTest {
         val viewModel = PageDatabaseViewModel(
             pageId, pageDao, pageDatabaseDao, propertyDao, propertyValueDao, entryDao, viewDao, blockDao,
             databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState,
-            labelDao, LabelMembership(pageDao, pageDatabaseDao, labelDao, entryDao, databaseSyncManager, resolveEntryUseCase),
+            labelDao, LabelMembership(pageDao, pageDatabaseDao, labelDao, entryDao, databaseSyncManager, resolveEntryUseCase), contentRepository,
         )
         backgroundScope.launch { viewModel.database.collect { } }
         testScheduler.advanceUntilIdle()

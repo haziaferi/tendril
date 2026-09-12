@@ -62,7 +62,7 @@ class ImageSyncTest {
             canvasEdgeDao = FakeCanvasEdgeDao(store),
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = purgeRegistry,
-            pageContentRepository = PageContentRepository(blockDao, FakePageFtsDao(store)),
+            pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store)),
         )
 
         val orchestrator = SnapshotSyncOrchestrator(

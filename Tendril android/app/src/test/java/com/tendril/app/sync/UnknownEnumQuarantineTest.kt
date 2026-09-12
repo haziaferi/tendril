@@ -141,7 +141,7 @@ class UnknownEnumQuarantineTest {
             canvasEdgeDao = edgeDao,
             pageRelationDao = relationDao,
             purgeRegistry = registry,
-            pageContentRepository = PageContentRepository(blockDao, ftsDao),
+            pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
         )
 
         val orchestrator = SnapshotSyncOrchestrator(

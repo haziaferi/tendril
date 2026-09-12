@@ -18,6 +18,7 @@ import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.domain.DatabaseSyncManager
+import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -43,6 +44,7 @@ class PagesViewModel(
     private val databaseSyncManager: DatabaseSyncManager,
     private val templateManager: TemplateManager,
     private val viewLockState: ViewLockState,
+    private val pageContentRepository: PageContentRepository,
 ) : ViewModel() {
     val rootPages: StateFlow<List<Page>> =
         pageDao.observeRootPages().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -103,15 +105,6 @@ class PagesViewModel(
      * everywhere too. None of them is a local-only mistake. */
     private fun locked() = viewLockState.viewOnly.value
 
-    /** §3.1.7 — the Pages-scoped search overlay, live at ~300ms debounce (debounced by the
-     * caller via a `LaunchedEffect`/`snapshotFlow`, not here). */
-    private val _searchResults = MutableStateFlow<List<PageSearchHit>>(emptyList())
-    val searchResults: StateFlow<List<PageSearchHit>> = _searchResults.asStateFlow()
-
-    fun onSearchQueryChange(query: String) {
-        viewModelScope.launch { _searchResults.value = pageFtsDao.searchPrefix(query) }
-    }
-
     /** §5.5.1.1 "Delete forever", from the Trash — through [PurgeRegistry], which records the
      * tombstone and drops the row as one operation so a purge both sticks here and propagates. */
     fun deleteForever(pageIds: List<Long>) {
@@ -141,6 +134,7 @@ class PagesViewModel(
         viewModelScope.launch {
             val now = Instant.now()
             val id = pageDao.insert(Page(title = title.ifBlank { "Untitled" }, kind = PageKind.PAGE, createdAt = now, updatedAt = now))
+            pageContentRepository.rebuildFtsForPage(id) // §3.1.1 — findable by its title from the first second
             onCreated(id)
         }
     }
@@ -156,6 +150,7 @@ class PagesViewModel(
         viewModelScope.launch {
             val now = Instant.now()
             val id = pageDao.insert(Page(title = title.ifBlank { "Untitled" }, kind = PageKind.CANVAS, createdAt = now, updatedAt = now))
+            pageContentRepository.rebuildFtsForPage(id)
             onCreated(id)
         }
     }
@@ -168,6 +163,7 @@ class PagesViewModel(
         viewModelScope.launch {
             val now = Instant.now()
             val pageId = pageDao.insert(Page(title = title.ifBlank { "Untitled" }, kind = PageKind.DATABASE, createdAt = now, updatedAt = now))
+            pageContentRepository.rebuildFtsForPage(pageId)
             val databaseId = pageDatabaseDao.insert(PageDatabase(pageId = pageId, createdAt = now, updatedAt = now))
             if (asToDoDatabase) {
                 val donePropertyId = propertyDao.insert(Property(databaseId = databaseId, name = "Done", type = PropertyType.CHECKBOX, order = 0))
@@ -217,7 +213,9 @@ class PagesViewModel(
             val now = Instant.now()
             val journalRoot = root
                 ?: pageDao.getById(pageDao.insert(Page(title = "Journal", kind = PageKind.PAGE, createdAt = now, updatedAt = now)))!!
-            onOpen(pageDao.insert(Page(title = title, parentId = journalRoot.id, createdAt = now, updatedAt = now)))
+            val dayId = pageDao.insert(Page(title = title, parentId = journalRoot.id, createdAt = now, updatedAt = now))
+            pageContentRepository.rebuildFtsForPage(dayId)
+            onOpen(dayId)
         }
     }
 }

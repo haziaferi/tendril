@@ -222,6 +222,8 @@ class PageDetailViewModel(
         viewModelScope.launch {
             val current = page.value ?: pageDao.getById(pageId) ?: return@launch
             pageDao.update(current.copy(title = title, updatedAt = Instant.now()))
+            // The title is in the index (§3.1.1), so a rename re-indexes like a block edit does.
+            contentRepository.rebuildFtsForPage(pageId)
         }
     }
 

@@ -44,6 +44,7 @@ import com.tendril.app.domain.BindingRole
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.LabelMembership
+import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
@@ -101,6 +102,7 @@ class PageDatabaseViewModel(
     private val viewLockState: ViewLockState,
     private val labelDao: LabelDao,
     private val labelMembership: LabelMembership,
+    private val pageContentRepository: PageContentRepository,
 ) : ViewModel() {
     /** §3.1.2 — see [PageDetailViewModel.viewOnlyLocked]'s note; the same single enforcement point,
      * duplicated per ViewModel rather than shared, since a Database Row's edits and a plain
@@ -706,6 +708,8 @@ class PageDatabaseViewModel(
         viewModelScope.launch {
             val current = page.value ?: pageDao.getById(pageId) ?: return@launch
             pageDao.update(current.copy(title = title, updatedAt = Instant.now()))
+            // The title is in the index (§3.1.1), so a rename re-indexes like a block edit does.
+            pageContentRepository.rebuildFtsForPage(pageId)
         }
     }
 

@@ -38,6 +38,8 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigationevent.NavigationEventInput
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.tendril.app.ui.components.TendrilSheet
+import com.tendril.app.ui.switcher.SwitcherState
+import androidx.compose.ui.input.key.isCtrlPressed
 import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
 import com.tendril.app.sync.PagesSyncEngine
@@ -77,6 +79,8 @@ fun main() {
     val database = buildTendrilDatabase(dbFile)
     val container = DesktopAppContainer(database)
     val core = container.workbenchCore
+    // §3.1.1 — index any page without an FTS row (all of them, once, after v16 emptied the table).
+    kotlinx.coroutines.runBlocking(Dispatchers.IO) { core.pageContentRepository.healIndex() }
 
     val pagesSyncEngine = PagesSyncEngine(
         database.pageDao(), database.blockDao(), database.labelDao(), database.pageDatabaseDao(),
@@ -91,6 +95,7 @@ fun main() {
     )
     val folderManager = DesktopSyncFolderManager()
     val escapeBack = EscapeBackInput()
+    val switcher = SwitcherState()
 
     application {
         Window(
@@ -104,11 +109,13 @@ fun main() {
             // as down and up, Esc as up alone). A release also cannot auto-repeat.
             onPreviewKeyEvent = { event ->
                 if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) escapeBack.back()
+                // §3.1.7 — Ctrl+K opens the quick switcher (step 8a); the second desktop shortcut.
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.K) { switcher.open = true; return@Window true }
                 false
             },
         ) {
             TendrilTheme(colorTheme = TendrilColorTheme.INK, mode = TendrilMode.LIGHT, typeface = TendrilTypeface.SANS) {
-                App(core, orchestrator, folderManager, escapeBack)
+                App(core, orchestrator, folderManager, escapeBack, switcher)
             }
         }
     }
@@ -127,7 +134,7 @@ private class EscapeBackInput : NavigationEventInput() {
 }
 
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState) {
     // The dispatcher is a composition local of the window's content, so the key input can only be
     // attached from inside it; the key event itself arrives at the window, outside. Hence the
     // input is built in `main` and joined here.
@@ -147,6 +154,7 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
             HorizontalDivider()
             WorkbenchScaffold(
                 core = core,
+                switcher = switcher,
                 // §0.8 step 6a — the shared Calendar. Google Calendar sync is Play Services and
                 // reminders are AlarmManager, so the settings slot says so and the bell is absent.
                 calendarContent = { onOpenPage ->

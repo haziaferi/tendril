@@ -425,6 +425,7 @@ class FakePageRelationDao(private val store: FakePageStore) : PageRelationDao {
 class FakePageFtsDao(private val store: FakePageStore) : PageFtsDao {
     override suspend fun insert(entry: PageFtsEntry) { store.fts[entry.pageId] = entry.plainText }
     override suspend fun deleteForPage(pageId: Long) { store.fts.remove(pageId) }
+    override suspend fun indexedPageIds(): List<Long> = store.fts.keys.toList()
     override suspend fun search(query: String): List<PageSearchHit> =
         store.fts.filter { it.value.contains(query.removeSuffix("*"), ignoreCase = true) }
             // The real query joins `pages` for title and icon (§3.1.5's search overlay shows

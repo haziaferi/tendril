@@ -61,7 +61,7 @@ class PurgePropagationTest {
             canvasEdgeDao = FakeCanvasEdgeDao(store),
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = registry,
-            pageContentRepository = PageContentRepository(blockDao, ftsDao),
+            pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
         )
 
         val orchestrator = SnapshotSyncOrchestrator(
