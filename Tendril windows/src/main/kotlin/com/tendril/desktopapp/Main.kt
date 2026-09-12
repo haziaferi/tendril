@@ -37,7 +37,6 @@ import androidx.compose.ui.window.application
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigationevent.NavigationEventInput
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
-import com.tendril.app.ui.components.LocalSheetsOpenExpanded
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
@@ -142,9 +141,7 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     // application-lifetime owner, provided once here, is what the ported screens' viewModel()
     // calls resolve against.
     val viewModelStoreOwner = remember { DesktopViewModelStoreOwner() }
-    // §0.10 item 11, for every sheet: a half-expanded sheet in a window this short hides its
-    // buttons, so the desktop opens them all fully expanded (see `TendrilSheet`).
-    CompositionLocalProvider(LocalViewModelStoreOwner provides viewModelStoreOwner, LocalSheetsOpenExpanded provides true) {
+    CompositionLocalProvider(LocalViewModelStoreOwner provides viewModelStoreOwner) {
         Column(modifier = Modifier.fillMaxSize()) {
             SyncBar(orchestrator, folderManager)
             HorizontalDivider()

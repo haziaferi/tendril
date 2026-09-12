@@ -82,7 +82,7 @@ fun EntryEditSheet(
 
     // Fully expanded from the start: on desktop a half-open sheet's buttons sit below the
     // window with no gesture to reach them (tendril-spec.md §0.10 item 11).
-    TendrilSheet(onDismiss = onDismiss, fullHeight = true, modifier = Modifier.verticalScroll(rememberScrollState())) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
         Column {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))

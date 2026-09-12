@@ -11,20 +11,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-
-/**
- * True where a sheet should open fully expanded whatever its height — the desktop, whose window
- * is short enough that Material's half-expanded state hides a sheet's buttons below the frame
- * (§0.10 item 11). The phone keeps the half-expanded default: there a short sheet over a tall
- * screen is the right shape. Set once in `Tendril windows`' `Main.kt`.
- */
-val LocalSheetsOpenExpanded = compositionLocalOf { false }
 
 /**
  * The one frame every bottom sheet in the app uses (2026-09-12). Before this, each of the 29
@@ -37,8 +28,10 @@ val LocalSheetsOpenExpanded = compositionLocalOf { false }
  * What it settles, once: 20 dp at the sides; [title] in `titleMedium` with 12 dp under it; a
  * bottom room of [sheetBottomRoom] — proportional to the window, 24 dp on a phone — on top of
  * the system navigation-bar inset Material already applies through `contentWindowInsets`; and
- * whether the sheet opens fully expanded ([fullHeight], or everywhere on the desktop through
- * [LocalSheetsOpenExpanded]). A sheet that needs a header with a control in it (the Trash
+ * always opening **fully expanded**. Material's half-expanded state was §0.10 item 11 on the
+ * desktop and, it turned out, the same thing on the phone: a sheet taller than half the screen
+ * opened with its buttons under the navigation bar until dragged up. Every sheet here is
+ * content-sized, so the partial state buys nothing and is skipped everywhere. A sheet that needs a header with a control in it (the Trash
  * sheets, the reminder list) passes no [title] and draws its own first row.
  *
  * `ModalBottomSheet` is deliberately called nowhere else — `grep` is the check.
@@ -47,14 +40,12 @@ val LocalSheetsOpenExpanded = compositionLocalOf { false }
 fun TendrilSheet(
     onDismiss: () -> Unit,
     title: String? = null,
-    fullHeight: Boolean = false,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val expanded = fullHeight || LocalSheetsOpenExpanded.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = expanded),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
             modifier = modifier

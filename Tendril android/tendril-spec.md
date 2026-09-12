@@ -94,6 +94,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7a: Tasks & Habits → shared) | The four `ui/taskshabits/` files moved to `shared/`, the move step 6a made for the Calendar: the screen takes `WorkbenchCore`, the two Settings switches, and three slots — the Reminders sheet and the two Trash sheets — null on desktop. `EntryScheduleCoordinator.onHabitChanged` (defaulted) replaces the view-model's `AlarmScheduler`; `WorkbenchCore` gains a derived `checkInHabitUseCase`. 14 strings join `shared/`'s resources. Desktop gains Tasks & Habits; §0.10 item 13 opened for its two missing sheets. Rows show the bell only when a Reminders sheet was supplied (a composition local), so desktop has none. Verified on the phone (Habits tab, a check-in writes its row) and on desktop (Add task with `Read chapter 3 tmr 9pm for 45m` pre-fills the dialog; Merged › This week lists it, no bell); 624 tests. | §0.8, §0.10, §3.3 |
 | 2026-09-12 (step 7b: Plan mode) | `domain/plan/DayTimeline` (blocks by span/estimate/default, greedy lanes, quarter-hour snap, the unplanned rail's rule), `ui/calendar/PlanView` (hour grid, dashed estimated blocks, the now line, all-day chips, the rail, both long-press drags through `EntryEditor.move`, which now places a time on an untimed entry). A *Plan* chip on the Day view. §0.6.5's plan half done; §3.2's deferred hour-drag delivered. Verified on desktop (rail → 10:00, block → 14:15) and the phone (*Trip* → 08:00, the Provider mirror at 08:00). 630 tests. | §0.6.5, §0.8, §3.2 |
 | 2026-09-12 (step 7c: tracking) | Schema **v14**: `time_logs` (`MIGRATION_13_14`, verified in place on both real databases). `domain/track/TimeTracker` (one running timer; start closes the rest, stop, toggle) and `TimeLogTotals` (window-clipped minutes, an open log counts to now). `time_logs.json` in the sync folder and the archive: deleted-wins, else LWW; an unresolvable owner is held and republished (negative control). UI: ▶/■ on task and habit rows and Day rows, the running strip above the tabs (`ui/track/`), the habit sheet's logged minutes. Phone: `NotificationChannels.TIMER`, a chronometer notification with a *Stop* broadcast (`TimerStopReceiver`), no service. 642 tests. | §0.6.5, §0.8 |
+| 2026-09-12 (sheet frame) | `ui/components/TendrilSheet` replaces all 29 `ModalBottomSheet` sites: one frame (sides, title slot, proportional bottom room), always fully expanded; the two refused alternatives recorded. §0.10 item 11 applied everywhere, phone included; item 14 opened (desktop layout revision). 642 tests. | §3, §0.10 |
 
 ---
 
@@ -463,9 +464,15 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+14. **The desktop layout mirrors the phone's.** The desktop app draws the phone's touch layout — a
+    bottom tab bar, sheets, finger-sized rows — in a window driven by a keyboard and mouse. To be
+    revised against real desktop apps of similar purpose (which ones, and what changes: a side
+    rail or menu instead of bottom tabs, dialogs or panes where the phone uses sheets, denser
+    rows, keyboard shortcuts); a benchmark section to gather first. Raised 2026-09-12 while
+    settling the sheet frame (§3); the frame is the phone's answer and a placeholder for this.
 13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec).
 12. **Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting. B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
-11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet.*
+11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
 
 ### 0.11 Relationship to the rest of this file and to the companion documents
 
@@ -672,6 +679,18 @@ hoc mid-build.
 ---
 
 ## 3. Page-by-Page Functional Spec
+
+**Bottom sheets (Decided 2026-09-12).** Every sheet is `ui/components/TendrilSheet` — one frame:
+20 dp sides, the title in one style, a bottom room proportional to the window (3 %, 24–48 dp,
+so 24 dp on a phone) above the system inset, and **always fully expanded** — Material's
+half-expanded state was §0.10 item 11 on the desktop and, found on the phone the same day, the
+Postpone and Reminders sheets opening with their buttons under the navigation bar until dragged
+up; every sheet here is content-sized, so the partial state buys nothing. No site calls `ModalBottomSheet`; `grep` is the check. Two things
+were considered and refused: sheets rising from *above* the tab bar (a modal sheet takes the
+screen — Material 3 and every benchmarked app; a visible tab bar under a scrim is a question
+with no good answer), and a decorative line along the bottom (chrome for its own sake, §0.5;
+the drag handle is the sheet's affordance). What read as "stark" was content touching the edge,
+and no two sheets alike — the frame is the fix.
 
 ### 3.1 Pages (Notion-like)
 
