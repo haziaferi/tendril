@@ -1,6 +1,7 @@
 package com.tendril.app.ui
 
 import com.tendril.app.data.TendrilDatabase
+import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
@@ -42,6 +43,9 @@ class WorkbenchCore(
      * fetched images into, so an image inserted here and one that arrived from a peer end up
      * indistinguishable, which is what makes a round trip work. */
     val localImages: com.tendril.app.sync.LocalImageStore,
+    /** §0.10 item 12 — device preferences. Required, not defaulted: a platform that forgot it
+     * would silently forget every setting on restart, which is the bug this closes. */
+    val keyValueStore: KeyValueStore,
 ) {
     /** §0.6.8 — built from what is already here rather than passed in, so the two containers
      * need no change; [LabelMembership] holds no state of its own. */
@@ -63,7 +67,7 @@ class WorkbenchCore(
     val review: Review by lazy {
         Review(
             database.pageDao(), database.pageDatabaseDao(), database.entryDao(), database.entryCompletionDao(),
-            database.habitCompletionDao(), database.timeLogDao(), entryEditor, resolveEntryUseCase,
+            database.habitCompletionDao(), database.timeLogDao(), entryEditor, resolveEntryUseCase, keyValueStore,
         )
     }
 

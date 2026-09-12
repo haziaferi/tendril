@@ -181,7 +181,7 @@ fun CalendarScreen(
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao(), core.timeTracker) }
+            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao(), core.timeTracker, core.keyValueStore) }
         }
     )
     // Defaults to Day, not Month (§2.2).

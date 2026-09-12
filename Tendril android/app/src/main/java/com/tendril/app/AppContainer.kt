@@ -7,6 +7,7 @@ import com.tendril.app.data.TendrilDatabase
 import com.tendril.app.data.openTendrilDatabase
 import com.tendril.app.domain.AndroidEntryScheduleCoordinator
 import com.tendril.app.domain.CheckInHabitUseCase
+import com.tendril.app.data.prefs.AndroidKeyValueStore
 import com.tendril.app.domain.track.TimeTracker
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
@@ -143,7 +144,7 @@ class AppContainer(context: Context) {
     val workbenchCore = WorkbenchCore(
         database, databaseSyncManager, templateManager, viewLockState, checkboxOnlyState,
         resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository, purgeRegistry,
-        localImages,
+        localImages, AndroidKeyValueStore(context),
     )
 
     companion object {

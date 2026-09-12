@@ -13,7 +13,9 @@ import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.domain.EntryEditor
 import com.tendril.app.domain.MoveScope
 import com.tendril.app.domain.ResolveEntryUseCase
+import com.tendril.app.data.prefs.KeyValueStore
 import kotlinx.coroutines.flow.first
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -32,11 +34,15 @@ class Review(
     private val timeLogDao: TimeLogDao,
     private val entryEditor: EntryEditor,
     private val resolveEntryUseCase: ResolveEntryUseCase,
+    private val keyValueStore: KeyValueStore,
 ) {
+    /** §0.6.11 — the global week, unless the store says otherwise (the setting's UI is later). */
+    val cadence: Duration get() = Duration.ofDays(keyValueStore.getInt(CADENCE_DAYS_KEY, REVIEW_CADENCE.toDays().toInt()).coerceAtLeast(1).toLong())
+
     suspend fun items(now: Instant = Instant.now(), today: LocalDate = LocalDate.now()): List<ReviewItem> {
         val databases = pageDao.getByKind(PageKind.DATABASE).mapNotNull { page -> pageDatabaseDao.getByPageId(page.id)?.let { it to page } }
         val rows = databases.associate { (db, _) -> db.id to pageDao.getMembersOf(db.id, db.labelId) }
-        return reviewItems(databases, { rows[it.id].orEmpty() }, entryDao.observeTasks().first(), now, today)
+        return reviewItems(databases, { rows[it.id].orEmpty() }, entryDao.observeTasks().first(), now, today, cadence)
     }
 
     /** True when [items] would be non-empty — the dot on Tasks, and nothing more (§0.5.2). */
@@ -73,4 +79,8 @@ class Review(
     suspend fun done(entry: Entry) = resolveEntryUseCase.resolve(entry.id, EntryStatus.DONE)
 
     suspend fun trash(entry: Entry) = resolveEntryUseCase.trash(entry.id)
+
+    companion object {
+        const val CADENCE_DAYS_KEY = "review_cadence_days"
+    }
 }

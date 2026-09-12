@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import com.tendril.app.domain.track.TimeTracker
+import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.domain.track.TrackTarget
 import java.time.LocalDate
 import java.time.LocalTime
@@ -33,15 +34,23 @@ import java.time.LocalTime
 /**
  * §0.8 step 6d — what the Calendar draws. Tasks and events are the Entries; *habits* are §3.2's
  * "Show Habits", the ones with a time, drawn on every day; *database dates* are every stored
- * DATE cell in every database, drawn on its day and opening its page. Session state: persisting
- * it needs a cross-platform preference store the app does not have (§0.10).
+ * DATE cell in every database, drawn on its day and opening its page. Persisted through
+ * [KeyValueStore] since §0.10 item 12 (2026-09-12) as four letters — the same on both platforms.
  */
 data class CalendarLayers(
     val tasks: Boolean = true,
     val events: Boolean = true,
     val habits: Boolean = false,
     val databaseDates: Boolean = false,
-)
+) {
+    fun encode(): String = listOfNotNull("t".takeIf { tasks }, "e".takeIf { events }, "h".takeIf { habits }, "d".takeIf { databaseDates }).joinToString("")
+
+    companion object {
+        const val KEY = "calendar_layers"
+        fun decode(value: String?): CalendarLayers =
+            if (value == null) CalendarLayers() else CalendarLayers(tasks = 't' in value, events = 'e' in value, habits = 'h' in value, databaseDates = 'd' in value)
+    }
+}
 
 class CalendarViewModel(
     private val entryDao: EntryDao,
@@ -51,10 +60,14 @@ class CalendarViewModel(
     habitDao: HabitDao,
     propertyValueDao: PropertyValueDao,
     private val timeTracker: TimeTracker,
+    private val keyValueStore: KeyValueStore,
 ) : ViewModel() {
-    private val _layers = MutableStateFlow(CalendarLayers())
+    private val _layers = MutableStateFlow(CalendarLayers.decode(keyValueStore.get(CalendarLayers.KEY)))
     val layers: StateFlow<CalendarLayers> = _layers.asStateFlow()
-    fun setLayers(layers: CalendarLayers) { _layers.value = layers }
+    fun setLayers(layers: CalendarLayers) {
+        _layers.value = layers
+        keyValueStore.put(CalendarLayers.KEY, layers.encode())
+    }
 
     /** §0.8 step 7b — every live task, for Plan mode's rail (`unplannedTasks` picks the day's). */
     val tasks: StateFlow<List<Entry>> = entryDao.observeTasks()
