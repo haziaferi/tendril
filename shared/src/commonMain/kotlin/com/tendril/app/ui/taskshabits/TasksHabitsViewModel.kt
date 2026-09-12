@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import com.tendril.app.notifications.AlarmScheduler
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -37,7 +36,6 @@ class TasksHabitsViewModel(
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val checkInHabitUseCase: CheckInHabitUseCase,
-    private val alarmScheduler: AlarmScheduler,
 ) : ViewModel() {
     val tasks: StateFlow<List<Entry>> =
         entryDao.observeTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -126,7 +124,7 @@ class TasksHabitsViewModel(
                     createdAt = now,
                     updatedAt = now,
                 )
-            ).let { id -> habitDao.getById(id)?.let(alarmScheduler::rescheduleHabit) }
+            ).let { id -> habitDao.getById(id)?.let { entryScheduleCoordinator.onHabitChanged(it) } }
         }
     }
 
@@ -170,6 +168,6 @@ class TasksHabitsViewModel(
     /** §9.7 — every write that moves when a habit is next due re-arms from the row as it now
      * stands, rather than each call site working out the new trigger for itself. */
     private suspend fun rearm(habitId: Long) {
-        habitDao.getById(habitId)?.let(alarmScheduler::rescheduleHabit)
+        habitDao.getById(habitId)?.let { entryScheduleCoordinator.onHabitChanged(it) }
     }
 }

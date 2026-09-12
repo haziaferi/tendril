@@ -45,13 +45,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import com.tendril.app.ui.WorkbenchCore
+import org.jetbrains.compose.resources.stringResource
+import com.tendril.app.generated.resources.Res
+import com.tendril.app.generated.resources.empty_habits_cta
+import com.tendril.app.generated.resources.empty_habits_message
+import com.tendril.app.generated.resources.empty_tasks_cta
+import com.tendril.app.generated.resources.empty_tasks_message
+import com.tendril.app.generated.resources.nav_tasks_habits
+import com.tendril.app.generated.resources.reminders_open
+import com.tendril.app.generated.resources.taskshabits_add_habit
+import com.tendril.app.generated.resources.taskshabits_add_task
+import com.tendril.app.generated.resources.taskshabits_filter_month
+import com.tendril.app.generated.resources.taskshabits_filter_today
+import com.tendril.app.generated.resources.taskshabits_filter_week
+import com.tendril.app.generated.resources.taskshabits_tab_habits
+import com.tendril.app.generated.resources.taskshabits_tab_merged
+import com.tendril.app.generated.resources.taskshabits_tab_tasks
+import com.tendril.app.generated.resources.taskshabits_undated_toggle
+import com.tendril.app.generated.resources.trash_entries_open
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.tendril.app.AppContainer
-import com.tendril.app.R
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.habit.Habit
@@ -59,9 +75,6 @@ import com.tendril.app.data.habit.formatHabitDuration
 import com.tendril.app.domain.TaskWithSubtasks
 import com.tendril.app.domain.withSubtasks
 import com.tendril.app.ui.components.EmptyState
-import com.tendril.app.ui.reminders.ReminderSheet
-import com.tendril.app.ui.trash.EntryTrashSheet
-import com.tendril.app.ui.trash.HabitTrashSheet
 import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
@@ -71,19 +84,32 @@ import androidx.compose.material3.DropdownMenuItem
 private enum class TabSelection { TASKS, HABITS, MERGED }
 private enum class TimeFilter { TODAY, WEEK, MONTH }
 
+/**
+ * §3.3, in `shared/` since §0.8 step 7a (as the Calendar since 6a). The Android-only surfaces
+ * arrive as slots: [reminderSheet] (§5.4, alarms; null hides the bell), and the two Trash sheets
+ * (§5.5.1; null hides the Trash button — desktop's case until they move too). [showImportance]
+ * and [showStreaks] are the Settings switches (§0.6.4, §0.6.6); desktop has no Settings yet.
+ */
 @Composable
-fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
+fun TasksHabitsScreen(
+    core: WorkbenchCore,
+    showImportance: Boolean,
+    showStreaks: Boolean,
+    reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
+    entryTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
+    habitTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     val viewModel: TasksHabitsViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
                 TasksHabitsViewModel(
-                    container.database.entryDao(),
-                    container.database.habitDao(),
-                    container.database.habitCompletionDao(),
-                    container.resolveEntryUseCase,
-                    container.entryScheduleCoordinator,
-                    container.checkInHabitUseCase,
-                    container.alarmScheduler,
+                    core.database.entryDao(),
+                    core.database.habitDao(),
+                    core.database.habitCompletionDao(),
+                    core.resolveEntryUseCase,
+                    core.entryScheduleCoordinator,
+                    core.checkInHabitUseCase,
                 )
             }
         }
@@ -102,8 +128,6 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
     var subtaskParent by remember { mutableStateOf<Entry?>(null) }
     var deadlineTarget by remember { mutableStateOf<Entry?>(null) }
     var habitDetail by remember { mutableStateOf<Habit?>(null) }
-    val showImportance by container.taskPreferences.showImportance.collectAsState()
-    val showStreaks by container.taskPreferences.showHabitStreaks.collectAsState()
     val rowActions = remember(showImportance) {
         TaskRowActions(
             onPostpone = { postponeTarget = it },
@@ -120,10 +144,10 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.nav_tasks_habits)) },
+                title = { Text(stringResource(Res.string.nav_tasks_habits)) },
                 actions = {
-                    IconButton(onClick = { showTrash = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.trash_entries_open))
+                    if (entryTrashSheet != null || habitTrashSheet != null) IconButton(onClick = { showTrash = true }) {
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.trash_entries_open))
                     }
                 },
             )
@@ -131,7 +155,7 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = stringResource(
-                    if (tab == TabSelection.HABITS) R.string.taskshabits_add_habit else R.string.taskshabits_add_task
+                    if (tab == TabSelection.HABITS) Res.string.taskshabits_add_habit else Res.string.taskshabits_add_task
                 ))
             }
         },
@@ -147,9 +171,9 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
                         Text(
                             stringResource(
                                 when (t) {
-                                    TabSelection.TASKS -> R.string.taskshabits_tab_tasks
-                                    TabSelection.HABITS -> R.string.taskshabits_tab_habits
-                                    TabSelection.MERGED -> R.string.taskshabits_tab_merged
+                                    TabSelection.TASKS -> Res.string.taskshabits_tab_tasks
+                                    TabSelection.HABITS -> Res.string.taskshabits_tab_habits
+                                    TabSelection.MERGED -> Res.string.taskshabits_tab_merged
                                 }
                             )
                         )
@@ -168,9 +192,9 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
                             Text(
                                 stringResource(
                                     when (f) {
-                                        TimeFilter.TODAY -> R.string.taskshabits_filter_today
-                                        TimeFilter.WEEK -> R.string.taskshabits_filter_week
-                                        TimeFilter.MONTH -> R.string.taskshabits_filter_month
+                                        TimeFilter.TODAY -> Res.string.taskshabits_filter_today
+                                        TimeFilter.WEEK -> Res.string.taskshabits_filter_week
+                                        TimeFilter.MONTH -> Res.string.taskshabits_filter_month
                                     }
                                 ),
                                 style = MaterialTheme.typography.labelMedium,
@@ -204,7 +228,7 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
     }
 
     reminderTarget?.let { entry ->
-        ReminderSheet(container = container, entry = entry, onDismiss = { reminderTarget = null })
+        reminderSheet?.invoke(entry) { reminderTarget = null }
     }
     postponeTarget?.let { entry ->
         PostponeSheet(entry, onPostpone = { viewModel.postpone(entry.id, it) }, onDismiss = { postponeTarget = null })
@@ -223,9 +247,9 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
         // Which Trash the button opens follows the tab, exactly as the add button's label does
         // above: on Habits it has to be the Habit sheet, or trashed Habits stay unreachable.
         if (tab == TabSelection.HABITS) {
-            HabitTrashSheet(container = container, onDismiss = { showTrash = false })
+            habitTrashSheet?.invoke { showTrash = false }
         } else {
-            EntryTrashSheet(container = container, onDismiss = { showTrash = false })
+            entryTrashSheet?.invoke { showTrash = false }
         }
     }
 }
@@ -264,12 +288,12 @@ private fun TasksList(
     if (tasks.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.Check,
-            message = stringResource(R.string.empty_tasks_message),
+            message = stringResource(Res.string.empty_tasks_message),
             modifier = Modifier.fillMaxSize(),
             // §2.5 fixes the CTA here as part of the copy ("Nothing due — Add a task"), not
             // just the message. Both `empty_tasks_cta` and `empty_habits_cta` existed in
             // strings.xml with no Kotlin reference at all until this was wired up.
-            ctaLabel = stringResource(R.string.empty_tasks_cta),
+            ctaLabel = stringResource(Res.string.empty_tasks_cta),
             onCta = onAdd,
         )
         return
@@ -283,7 +307,7 @@ private fun TasksList(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("${stringResource(R.string.taskshabits_undated_toggle)} (${undated.size})", style = MaterialTheme.typography.labelLarge)
+                    Text("${stringResource(Res.string.taskshabits_undated_toggle)} (${undated.size})", style = MaterialTheme.typography.labelLarge)
                     Switch(checked = showUndated, onCheckedChange = onShowUndatedChange)
                 }
             }
@@ -357,7 +381,7 @@ private fun TaskRow(
         }
         if (!isStep) {
             IconButton(onClick = { onOpenReminders(entry) }) {
-                Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.reminders_open))
+                Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open))
             }
         }
         Box {
@@ -395,9 +419,9 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, sho
     if (habits.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.LocalFireDepartment,
-            message = stringResource(R.string.empty_habits_message),
+            message = stringResource(Res.string.empty_habits_message),
             modifier = Modifier.fillMaxSize(),
-            ctaLabel = stringResource(R.string.empty_habits_cta),
+            ctaLabel = stringResource(Res.string.empty_habits_cta),
             onCta = onAdd,
         )
         return
@@ -454,7 +478,7 @@ private fun MergedList(
     // than listed: the steps are undated and would only lengthen a list meant to be read as a day.
     val dated = tasks.withSubtasks().filter { it.task.startDate != null && inFilterRange(it.task.startDate, filter) }
     if (dated.isEmpty() && habits.isEmpty()) {
-        EmptyState(icon = Icons.Filled.Check, message = stringResource(R.string.empty_tasks_message), modifier = Modifier.fillMaxSize())
+        EmptyState(icon = Icons.Filled.Check, message = stringResource(Res.string.empty_tasks_message), modifier = Modifier.fillMaxSize())
         return
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {

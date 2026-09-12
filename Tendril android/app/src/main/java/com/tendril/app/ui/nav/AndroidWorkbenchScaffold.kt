@@ -10,6 +10,8 @@ import com.tendril.app.AppContainer
 import com.tendril.app.applock.showAppUnlockPrompt
 import com.tendril.app.ui.calendar.CalendarScreen
 import com.tendril.app.ui.reminders.ReminderSheet
+import com.tendril.app.ui.trash.HabitTrashSheet
+import com.tendril.app.ui.trash.EntryTrashSheet
 import com.tendril.app.ui.calendar.CalendarSettingsSheet
 import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.settings.SettingsScreen
@@ -64,7 +66,17 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 showImportant = container.taskPreferences.showImportance.collectAsState().value,
             )
         },
-        tasksHabitsContent = { TasksHabitsScreen(container = container) },
+        // §0.8 step 7a — Tasks & Habits is shared; Android supplies the switches and its sheets.
+        tasksHabitsContent = {
+            TasksHabitsScreen(
+                core = container.workbenchCore,
+                showImportance = container.taskPreferences.showImportance.collectAsState().value,
+                showStreaks = container.taskPreferences.showHabitStreaks.collectAsState().value,
+                reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },
+                entryTrashSheet = { onDismiss -> EntryTrashSheet(container = container, onDismiss = onDismiss) },
+                habitTrashSheet = { onDismiss -> HabitTrashSheet(container = container, onDismiss = onDismiss) },
+            )
+        },
         roadMapContent = { onOpenPage -> RoadMapScreen(container = container, onOpenPage = onOpenPage) },
         settingsContent = {
             SettingsScreen(

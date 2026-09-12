@@ -29,9 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
+import com.tendril.app.generated.resources.Res
+import com.tendril.app.generated.resources.taskshabits_add_habit
+import com.tendril.app.generated.resources.taskshabits_add_task
 import androidx.compose.ui.unit.dp
-import com.tendril.app.R
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.entry.intervalToPeriod
@@ -75,7 +77,7 @@ fun AddTaskDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.taskshabits_add_task)) },
+        title = { Text(stringResource(Res.string.taskshabits_add_task)) },
         text = {
             Column {
                 OutlinedTextField(value = title, onValueChange = { title = it; ignored = emptySet() }, label = { Text("Title") }, singleLine = true)
@@ -208,7 +210,7 @@ fun AddHabitDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.taskshabits_add_habit)) },
+        title = { Text(stringResource(Res.string.taskshabits_add_habit)) },
         text = {
             Column {
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)

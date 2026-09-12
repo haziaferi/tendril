@@ -1,6 +1,7 @@
 package com.tendril.app.ui
 
 import com.tendril.app.data.TendrilDatabase
+import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryEditor
@@ -42,6 +43,10 @@ class WorkbenchCore(
 ) {
     /** §0.6.8 — built from what is already here rather than passed in, so the two containers
      * need no change; [LabelMembership] holds no state of its own. */
+    /** §0.6.6 — a habit's check-in log; derived here since §0.8 step 7a moved the screen. Android's
+     * `AppContainer` keeps its own instance for the widget and notification paths. */
+    val checkInHabitUseCase: CheckInHabitUseCase by lazy { CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao()) }
+
     /** §0.8 step 6e — `.ics` in; derived like the rest. Out is [com.tendril.app.domain.ics.IcsWriter], pure. */
     val icsImporter: IcsImporter by lazy { IcsImporter(database.entryDao(), entryScheduleCoordinator) }
 
