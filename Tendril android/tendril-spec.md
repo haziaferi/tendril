@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-12 (step 8a: switcher) | §3.1.7 amended: the quick switcher / command palette (`domain/SwitcherQuery` pure and tested; `ui/switcher/QuickSwitcher`, owned by the scaffold, Ctrl+K on desktop) replaces the Pages search overlay. §3.1.1's defect fixed: titles in the FTS index, re-index on rename and at creation, **schema v16** (`page_fts` emptied) + `healIndex` at start. §0.10 item 5 resolved. Verified on both devices (the heal: 3/3 and 4/4 pages re-indexed with titles first; `boo` → *Books v12*; `>rev` → Review; `trip` found by title on the phone; `>jour` opened today's Journal). 663 tests. | §3.1.1, §3.1.7, §0.10 |
 
 ---
 
@@ -489,8 +490,8 @@ Genuinely undecided — distinct from §0.7.
 3. Whether habits become **measurable** (a value on the log entry) now or later (B§10.3).
 4. Whether a one-tap **mood/energy check-in** joins the human layer, and when — it is not a
    habit.
-5. **Command palette / quick switcher**: reopens §3.1.7's deferral; the FTS title-not-indexed
-   defect (§3.1.1) is fixed first regardless.
+5. ~~**Command palette / quick switcher**: reopens §3.1.7's deferral; the FTS title-not-indexed
+   defect (§3.1.1) is fixed first regardless.~~ *Resolved 2026-09-12 (step 8a): both — see §3.1.7's amendment.*
 6. Where **JSON Canvas** files go — in the Markdown zip or beside `.tendril`. *(2026-09-12: the `.ics` export answered the same question for itself — a file the person picks, never the sync folder — and JSON Canvas should follow when built.)*
 7. Whether the Canvas page kind and the block share one composable at two sizes exactly as the
    mind map does (recommended) or the page kind keeps its own screen.
@@ -1048,6 +1049,18 @@ App-wide search (folding in Entries/Habits, which are plain Room columns, not FT
 command-palette/omnibox layer are both real, larger features that nothing else in this spec actually
 calls for; both stay explicitly deferred alongside §10's existing block-level-granularity deferral —
 not decided against forever, just not v1.
+
+**[Amended] 2026-09-12 (§0.8 step 8a, B§6 #11) — the palette is built, the deferral lifted.**
+The search icon opens the **quick switcher** (`ui/switcher/QuickSwitcher`), on both platforms
+and from every route (the desktop also on **Ctrl+K**): one field; text finds pages — those whose
+*title* starts with it first, then the FTS hits — and a leading `>` finds commands (new page /
+database / to-do database / canvas, Journal today, Review, the five tabs, a timer on any pending
+task). ↑↓ Enter Esc; Back closes it. The overlay it replaces lives on in its rows and highlighting.
+**The FTS defect went with it**: `page_fts` never held titles, so a page could not be found by its
+own name; the index now starts with the title, every rename re-indexes, a new page is indexed at
+creation, and **schema v16** empties the table so `PageContentRepository.healIndex` (run at every
+start, idle when nothing is missing) rebuilds it once with titles in. Entries and Habits are
+still not searched here — that half of the deferral stands.
 
 **Acceptance:** the search icon opens a dedicated full-screen search surface, not an inline
 dropdown; an empty query shows nothing; a query with no matches uses the §2.5 `EmptyState`

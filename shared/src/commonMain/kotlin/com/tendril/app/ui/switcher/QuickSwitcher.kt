@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -114,7 +117,10 @@ fun QuickSwitcher(
             .background(MaterialTheme.colorScheme.background)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
     ) {
-        Column {
+        // The scaffold leaves the status-bar inset to each screen's own TopAppBar (see
+        // `WorkbenchScaffold`); this overlay has none, so it takes the inset itself or the field
+        // sits under the clock. Zero on the desktop.
+        Column(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
                 OutlinedTextField(
