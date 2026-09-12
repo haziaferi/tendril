@@ -126,7 +126,7 @@ class ViewOnlyPagesGuardTest {
         val completionDao = SilentEntryCompletionDao()
         val coordinator = RecordingEntryScheduleCoordinator()
 
-        val contentRepository = PageContentRepository(blockDao, ftsDao)
+        val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
         val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
         val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao)
         val databaseSyncManager =
@@ -160,7 +160,7 @@ class ViewOnlyPagesGuardTest {
          */
         fun pages() = PagesViewModel(
             pageDao, pageDatabaseDao, propertyDao, ftsDao, labelDao, purgeRegistry, databaseSyncManager,
-            templateManager, viewLockState,
+            templateManager, viewLockState, contentRepository,
         )
 
         fun lock() = viewLockState.setViewOnly(true)

@@ -182,3 +182,16 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
         connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `lastReviewedAt` INTEGER")
     }
 }
+
+/**
+ * §9.10 / §3.1.1 — v15 → v16. No schema change: the FTS rows are emptied so that the next
+ * launch's `PageContentRepository.healIndex` rebuilds every page *with its title*, which the
+ * rows written before 2026-09-12 lack. A version bump with an unchanged schema is how Room is
+ * told "the data in this table is stale", short of a rebuild in SQL that the index's text
+ * extraction (block content, in Kotlin) could not do.
+ */
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("DELETE FROM `page_fts`")
+    }
+}

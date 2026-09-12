@@ -28,7 +28,7 @@ class DesktopAppContainer(database: TendrilDatabase) {
 
     init {
         val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), NoOpEntryScheduleCoordinator)
-        val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
+        val pageContentRepository = PageContentRepository(database.pageDao(), database.blockDao(), database.pageFtsDao())
         val databaseSyncManager = DatabaseSyncManager(
             database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
             database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,

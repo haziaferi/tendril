@@ -63,7 +63,7 @@ class AppContainer(context: Context) {
     val entryScheduleCoordinator =
         AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
     val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), entryScheduleCoordinator)
-    val pageContentRepository = PageContentRepository(database.blockDao(), database.pageFtsDao())
+    val pageContentRepository = PageContentRepository(database.pageDao(), database.blockDao(), database.pageFtsDao())
     val purgeRegistry = PurgeRegistry(
         database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
         database.propertyDao(), entryScheduleCoordinator,

@@ -104,6 +104,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                     core.viewLockState,
                     core.database.labelDao(),
                     core.labelMembership,
+                    core.pageContentRepository,
                 )
             }
         }

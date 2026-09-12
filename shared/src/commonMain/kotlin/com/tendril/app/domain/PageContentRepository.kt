@@ -2,6 +2,7 @@ package com.tendril.app.domain
 
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
+import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.SpanStyle
@@ -13,20 +14,40 @@ import com.tendril.app.data.page.SpanStyle
  * — the block editor (§9.9 phase 5C) is the only caller today.
  */
 class PageContentRepository(
+    private val pageDao: PageDao,
     private val blockDao: BlockDao,
     private val pageFtsDao: PageFtsDao,
 ) {
     /** §3.1.1 — "a Room FTS4/5 virtual table indexing each page's concatenated block
      * plain-text, rebuilt on block write." Full delete+insert per page rather than an
      * incremental diff — page-level granularity (not per-block) makes this cheap enough
-     * not to need anything cleverer. */
+     * not to need anything cleverer.
+     *
+     * **The title is indexed too** (2026-09-12, §0.8 step 8a). It never was — the defect §3.1.1
+     * and §0.10 item 5 recorded — so a page could not be found by its own name, only by its
+     * body. It goes first in the text, so a snippet on a title match shows the title. Every
+     * title change calls this as a block change does; [healIndex] covers the rows that predate
+     * the fix. */
     suspend fun rebuildFtsForPage(pageId: Long) {
+        val title = pageDao.getById(pageId)?.title.orEmpty()
         val blocks = blockDao.getForPage(pageId)
-        val plainText = blocks.joinToString(" ") { it.content }
+        val plainText = (listOf(title) + blocks.map { it.content }).filter { it.isNotBlank() }.joinToString(" ")
         pageFtsDao.deleteForPage(pageId)
         if (plainText.isNotBlank()) {
             pageFtsDao.insert(PageFtsEntry(pageId = pageId, plainText = plainText))
         }
+    }
+
+    /**
+     * Indexes every live page that has no FTS row. Idempotent and cheap on an indexed database
+     * (one query, nothing to do), so both apps run it at start. Its one real job is the launch
+     * after `MIGRATION_15_16`, which empties `page_fts` so the titles get in: that first run
+     * re-indexes everything and every later run finds nothing missing. Returns how many it did.
+     */
+    suspend fun healIndex(): Int {
+        val missing = pageDao.getAll().filter { it.deletedAt == null && it.id !in pageFtsDao.indexedPageIds().toSet() }
+        missing.forEach { rebuildFtsForPage(it.id) }
+        return missing.size
     }
 
     /** Every block anywhere that mentions [pageId] — standalone PAGE_MENTION blocks plus

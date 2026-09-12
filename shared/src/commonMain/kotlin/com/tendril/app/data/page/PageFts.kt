@@ -27,6 +27,10 @@ interface PageFtsDao {
     @Query("DELETE FROM page_fts WHERE pageId = :pageId")
     suspend fun deleteForPage(pageId: Long)
 
+    /** Which pages have a row — what [com.tendril.app.domain.PageContentRepository.healIndex] diffs against. */
+    @Query("SELECT pageId FROM page_fts")
+    suspend fun indexedPageIds(): List<Long>
+
     /**
      * §3.1.7 — the search overlay's query. Returns everything a result row shows: "each
      * matching page's icon, title, and a highlighted snippet from the first matching block".

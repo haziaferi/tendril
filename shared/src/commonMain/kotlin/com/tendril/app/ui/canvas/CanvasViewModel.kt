@@ -15,6 +15,7 @@ import com.tendril.app.data.canvas.PageCanvasDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.domain.PageContentRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,7 @@ class CanvasViewModel(
     private val canvasNodeDao: CanvasNodeDao,
     private val canvasEdgeDao: CanvasEdgeDao,
     private val viewLockState: ViewLockState,
+    private val pageContentRepository: PageContentRepository,
 ) : ViewModel() {
     /** §3.1.2 — the same single enforcement point every other editing ViewModel keeps (see
      * [com.tendril.app.ui.pages.PageDetailViewModel.viewOnlyLocked] and
@@ -104,6 +106,8 @@ class CanvasViewModel(
         viewModelScope.launch {
             val current = page.value ?: pageDao.getById(pageId) ?: return@launch
             pageDao.update(current.copy(title = title, updatedAt = Instant.now()))
+            // The title is in the index (§3.1.1), so a rename re-indexes like a block edit does.
+            pageContentRepository.rebuildFtsForPage(pageId)
         }
     }
 

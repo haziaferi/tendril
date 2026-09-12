@@ -47,7 +47,7 @@ class PageParentHealingTest {
             FakePurgedRecordDao(), pageDao, FakeEntryDao(), FakeHabitDao(),
             FakePropertyDao(store), RecordingEntryScheduleCoordinator(),
         ),
-        pageContentRepository = PageContentRepository(blockDao, ftsDao),
+        pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
     )
 
     private companion object {
