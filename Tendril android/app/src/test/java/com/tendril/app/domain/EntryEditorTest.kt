@@ -85,10 +85,16 @@ class EntryEditorTest {
     }
 
     @Test
-    fun `an all-day entry moved to a time stays all-day`() = runBlocking {
+    fun `an all-day entry moved to another day stays all-day, and a time places an untimed task`() = runBlocking {
         val e = event("Holiday", monday)
-        val moved = editor.move(e, monday, monday.plusDays(1), toTime = LocalTime.of(9, 0), now = at)
+        val moved = editor.move(e, monday, monday.plusDays(1), toTime = null, now = at)
         assertNull(moved.startTime)
+
+        // Plan mode's drop: a task with no time lands at the hour it was dropped on.
+        val t = task("Call bank", monday)
+        val placed = editor.move(t, null, monday, toTime = LocalTime.of(10, 15), now = at)
+        assertEquals(LocalTime.of(10, 15), placed.startTime)
+        assertEquals(monday, placed.startDate)
     }
 
     @Test

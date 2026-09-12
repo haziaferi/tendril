@@ -92,6 +92,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 6c+6d: Agenda, layers) | `CalendarView.AGENDA` (30 days grouped by day); `CalendarLayers` in the ViewModel with a chip row — Tasks/Events filter the rows, Habits draws timed habits on every day, Database dates draws every stored `DATE` cell (`PropertyValueDao.observeDateCells`, a joined projection) and opens the page on tap; Week lists and Month counts the extras too. `CalendarScreen` gains `onOpenPage`, threaded through the scaffold's slot. §3.2 amended in place (Agenda; Show Habits built as a layer); §0.10 item 12 opened (layer persistence). Verified on desktop (Agenda; a seeded `Read on` cell on Wed 16 opening its page) and on the phone (Agenda; a timed habit *Stretch 09:00* appears with the layer on and hides with it off; 6b's sheet and Week drag also walked there: estimate saved, *Call bank* dragged Sat → Sun). 620 tests. | §0.8, §0.10, §3.2 |
 | 2026-09-12 (step 6e: ICS) | `domain/ics/` — `IcsWriter` (RFC 5545 by hand: VEVENT/VTODO, TZID times, exclusive all-day DTEND, RECURRENCE-ID + RELATED-TO for moved occurrences, EXDATE for skips, 75-octet folding), `IcsReader` (unfolding, `Z`/`TZID`/floating/`VALUE=DATE`, nested VALARM skipped) and `IcsImporter` (by UID, updates not duplicates, overrides and skips into §4.1's rows, every write through the coordinator). Android: Settings › Calendar (.ics); desktop: the Calendar's `···`. §3.2 gains the bullet; §0.10 item 6 annotated. Verified: desktop export → a valid file → re-import "0 new, 4 updated", still 4 rows; phone export ("1 event(s) and 6 task(s)") → re-import "0 new, 7 updated", still 7. 624 tests. **Step 6 complete.** | §0.8, §0.10, §3.2 |
 | 2026-09-12 (step 7a: Tasks & Habits → shared) | The four `ui/taskshabits/` files moved to `shared/`, the move step 6a made for the Calendar: the screen takes `WorkbenchCore`, the two Settings switches, and three slots — the Reminders sheet and the two Trash sheets — null on desktop. `EntryScheduleCoordinator.onHabitChanged` (defaulted) replaces the view-model's `AlarmScheduler`; `WorkbenchCore` gains a derived `checkInHabitUseCase`. 14 strings join `shared/`'s resources. Desktop gains Tasks & Habits; §0.10 item 13 opened for its two missing sheets. Rows show the bell only when a Reminders sheet was supplied (a composition local), so desktop has none. Verified on the phone (Habits tab, a check-in writes its row) and on desktop (Add task with `Read chapter 3 tmr 9pm for 45m` pre-fills the dialog; Merged › This week lists it, no bell); 624 tests. | §0.8, §0.10, §3.3 |
+| 2026-09-12 (step 7b: Plan mode) | `domain/plan/DayTimeline` (blocks by span/estimate/default, greedy lanes, quarter-hour snap, the unplanned rail's rule), `ui/calendar/PlanView` (hour grid, dashed estimated blocks, the now line, all-day chips, the rail, both long-press drags through `EntryEditor.move`, which now places a time on an untimed entry). A *Plan* chip on the Day view. §0.6.5's plan half done; §3.2's deferred hour-drag delivered. Verified on desktop (rail → 10:00, block → 14:15) and the phone (*Trip* → 08:00, the Provider mirror at 08:00). 630 tests. | §0.6.5, §0.8, §3.2 |
 
 ---
 
@@ -283,6 +284,16 @@ row — see §5.2.1's correction of the same date.
 compare, in that order (§0.8). Shape: Tiimo's visible day and Llama Life's "now", not a workload
 chart. Nothing built yet; recorded so the estimate field (0.6.4) is not designed without its
 consumers. (B§5, B§10.3)
+**Plan — done 2026-09-12 (step 7b).** The estimate has its first consumer. A *Plan* chip on the
+Day view turns the list into a timeline: hours down the side, a block per timed thing sized by
+its span (events) or its estimate (tasks; thirty minutes when there is none, drawn dashed so the
+guess reads as one), overlaps side by side, the current minute as a line, untimed items in a strip
+above and a rail of *unplanned* tasks — today's untimed ones and Someday — below. Placing is the
+person's: a rail task long-pressed and dragged onto the grid lands at the drop, snapped to a
+quarter hour; a block dragged up or down moves the same way, a series asking *this one / all*.
+**No automatic placement** (B§6 #8, drag-only first): the day is arranged by hand, not by an
+algorithm the person then argues with (§0.5.2). `domain/plan/DayTimeline` is the layout, pure and
+tested; `EntryEditor.move` gained "a time places an untimed entry". Track and compare follow.
 
 **0.6.6 Habits keep a completion log and show presence.** Finding **[Verified]**: `Habit` holds
 only `streak`, `previousStreak`, `lastCompletedDate`. Decision: add a completion log; the streak
@@ -396,7 +407,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
 | 6 | Calendar: **6a** the screen → `shared/`; **6b** edit path + drag-to-move; **6c+6d** Agenda, layers incl. "Show Habits" and database dates; **6e** ICS — *all done 2026-09-12* | 7 |
-| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; then Plan mode, tracking, planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
+| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; then tracking, planned-vs-actual (B§6 #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
 
@@ -995,7 +1006,9 @@ composable ("No pages match '…'").
   one use case, `EntryEditor` (`save`, `move`), which enforces the §4 kind invariants and calls
   `EntryScheduleCoordinator.onEntryChanged` — §4.1's "every write path" is now literally one path.
   The Day view is a list, not an hour grid, so dragging to another *hour* waits for the timeline
-  step 7's Plan mode builds; the sheet changes the time meanwhile.)* Neither half held on this screen. Quick Add is Calendar's only write
+  step 7's Plan mode builds; the sheet changes the time meanwhile.)* *(**2026-09-12, step 7b:** it
+  no longer waits — Plan mode's grid is that timeline, and a block dragged on it moves to the hour
+  it is dropped on. See §0.6.5.)* Neither half held on this screen. Quick Add is Calendar's only write
   path and it hard-codes `kind = EVENT` with a title and a date, so a Task cannot be created here at
   all — that is Tasks & Habits' own add dialog (§3.3). And nothing on this screen edits: a Day row
   offers a Done checkbox and a reminders bell and no tap target on the row itself, while Week and

@@ -51,6 +51,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.tendril.app.domain.plan.unplannedTasks
+import com.tendril.app.domain.plan.timelineBlocks
+import com.tendril.app.domain.plan.TimelineExtra
+import com.tendril.app.domain.plan.BlockKind
 import com.tendril.app.generated.resources.calendar_view_agenda
 import java.time.LocalTime
 import com.tendril.app.data.habit.Habit
@@ -185,6 +189,10 @@ fun CalendarScreen(
     // all?" once it has been dropped on another day.
     var editTarget by remember { mutableStateOf<Entry?>(null) }
     var pendingMove by remember { mutableStateOf<PendingMove?>(null) }
+    // §0.8 step 7b — Plan mode on the Day view, and a block's "this one or all?" for a series.
+    var planMode by remember { mutableStateOf(false) }
+    var pendingTimeMove by remember { mutableStateOf<PendingTimeMove?>(null) }
+    val allTasks by viewModel.tasks.collectAsState()
 
     editTarget?.let { entry ->
         EntryEditSheet(
@@ -193,6 +201,15 @@ fun CalendarScreen(
             onSave = { viewModel.save(it); editTarget = null },
             onDelete = { viewModel.trash(entry.id); editTarget = null },
             onDismiss = { editTarget = null },
+        )
+    }
+    pendingTimeMove?.let { move ->
+        AlertDialog(
+            onDismissRequest = { pendingTimeMove = null },
+            title = { Text("Move \"${move.occurrence.entry.title}\" to ${move.time}?") },
+            text = { Text("This repeats. Move only this occurrence, or the whole series?") },
+            confirmButton = { TextButton(onClick = { viewModel.moveTo(move.occurrence.entry, move.occurrence.startDate, move.time, MoveScope.THIS_ONE); pendingTimeMove = null }) { Text("This one") } },
+            dismissButton = { TextButton(onClick = { viewModel.moveTo(move.occurrence.entry, move.occurrence.startDate, move.time, MoveScope.ALL); pendingTimeMove = null }) { Text("All") } },
         )
     }
     pendingMove?.let { move ->
@@ -257,6 +274,10 @@ fun CalendarScreen(
                 FilterChip(selected = layers.events, onClick = { viewModel.setLayers(layers.copy(events = !layers.events)) }, label = { Text("Events") })
                 FilterChip(selected = layers.habits, onClick = { viewModel.setLayers(layers.copy(habits = !layers.habits)) }, label = { Text("Habits") })
                 FilterChip(selected = layers.databaseDates, onClick = { viewModel.setLayers(layers.copy(databaseDates = !layers.databaseDates)) }, label = { Text("Database dates") })
+                if (view == CalendarView.DAY) {
+                    // §0.6.5 — the day as a timeline, with a rail of what is not placed yet.
+                    FilterChip(selected = planMode, onClick = { planMode = !planMode }, label = { Text("Plan") })
+                }
             }
 
             // §4.1 — the stored rows are expanded into occurrences before anything is drawn:
@@ -287,6 +308,14 @@ fun CalendarScreen(
                     occurrences = occurrences,
                     extras = extras,
                     onOpenPage = onOpenPage,
+                    planMode = planMode,
+                    unplanned = remember(allTasks, selectedDate) { unplannedTasks(allTasks, selectedDate) },
+                    onPlace = { entry, time -> viewModel.place(entry, selectedDate, time) },
+                    onMoveBlock = { occurrence, time ->
+                        val entry = occurrence.entry
+                        if (entry.recurrenceRule != null && entry.originalEntryId == null) pendingTimeMove = PendingTimeMove(occurrence, time)
+                        else viewModel.moveTo(entry, occurrence.startDate, time, MoveScope.ALL)
+                    },
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
@@ -332,6 +361,10 @@ private fun DayView(
     occurrences: List<EntryOccurrence>,
     extras: List<CalendarExtra>,
     onOpenPage: (Long) -> Unit,
+    planMode: Boolean,
+    unplanned: List<Entry>,
+    onPlace: (Entry, LocalTime) -> Unit,
+    onMoveBlock: (EntryOccurrence, LocalTime) -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (ParsedEntry) -> Unit,
@@ -380,7 +413,19 @@ private fun DayView(
         }
         HorizontalDivider()
 
-        if (occurrences.isEmpty() && extras.isEmpty()) {
+        if (planMode) {
+            val habitExtras = extras.filterIsInstance<CalendarExtra.HabitAt>()
+                .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
+            PlanView(
+                day = date,
+                blocks = remember(occurrences, habitExtras) { timelineBlocks(occurrences, habitExtras) },
+                allDay = occurrences.filter { it.startTime == null || !it.isFirstDay },
+                unplanned = unplanned,
+                onEdit = onEdit,
+                onPlace = onPlace,
+                onMoveBlock = onMoveBlock,
+            )
+        } else if (occurrences.isEmpty() && extras.isEmpty()) {
             EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing scheduled", modifier = Modifier.fillMaxSize())
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -509,6 +554,9 @@ private fun occurrenceSubtitle(occurrence: EntryOccurrence, day: LocalDate): Str
 
 /** A dragged occurrence dropped on a day, waiting for "this one or all?". */
 private data class PendingMove(val occurrence: EntryOccurrence, val toDate: LocalDate)
+
+/** A block dragged to another hour on Plan mode's grid, waiting for the same question. */
+private data class PendingTimeMove(val occurrence: EntryOccurrence, val time: LocalTime)
 
 /**
  * Cards layout (§2.2) — the Grid/hour-grid alternative is a later refinement. §0.8 step 6b —

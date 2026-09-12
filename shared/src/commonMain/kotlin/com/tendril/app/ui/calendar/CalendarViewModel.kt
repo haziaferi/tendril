@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * §0.8 step 6d — what the Calendar draws. Tasks and events are the Entries; *habits* are §3.2's
@@ -47,6 +48,20 @@ class CalendarViewModel(
     private val _layers = MutableStateFlow(CalendarLayers())
     val layers: StateFlow<CalendarLayers> = _layers.asStateFlow()
     fun setLayers(layers: CalendarLayers) { _layers.value = layers }
+
+    /** §0.8 step 7b — every live task, for Plan mode's rail (`unplannedTasks` picks the day's). */
+    val tasks: StateFlow<List<Entry>> = entryDao.observeTasks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §0.8 step 7b — a rail task dropped on the grid: When = the day, time = the drop. */
+    fun place(entry: Entry, day: LocalDate, time: LocalTime) {
+        viewModelScope.launch { entryEditor.move(entry, null, day, time, MoveScope.ALL) }
+    }
+
+    /** §0.8 step 7b — a block dragged to another hour; a series asks the screen first. */
+    fun moveTo(entry: Entry, occurrenceDate: LocalDate, time: LocalTime, scope: MoveScope) {
+        viewModelScope.launch { entryEditor.move(entry, occurrenceDate, occurrenceDate, time, scope) }
+    }
 
     /** Habits with a time — the only ones a calendar can place. */
     val timedHabits: StateFlow<List<Habit>> = habitDao.observeActive()
