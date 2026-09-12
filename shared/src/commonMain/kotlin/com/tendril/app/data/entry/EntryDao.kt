@@ -39,6 +39,11 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE sourceRowId = :rowPageId AND deletedAt IS NULL LIMIT 1")
     suspend fun getBySourceRowId(rowPageId: Long): Entry?
 
+    /** §0.6.8 — the Task a page had before its label was removed, in Trash. Relabelling brings
+     * it back rather than seeding a fresh one, so unlabel → relabel loses nothing. */
+    @Query("SELECT * FROM entries WHERE sourceRowId = :rowPageId AND deletedAt IS NOT NULL ORDER BY deletedAt DESC LIMIT 1")
+    suspend fun getTrashedBySourceRowId(rowPageId: Long): Entry?
+
     @Query("SELECT * FROM entries WHERE sourceRowId IN (:rowPageIds) AND deletedAt IS NULL")
     fun observeBySourceRowIds(rowPageIds: List<Long>): Flow<List<Entry>>
 

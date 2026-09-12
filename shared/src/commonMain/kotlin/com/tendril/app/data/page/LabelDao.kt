@@ -16,6 +16,10 @@ interface LabelDao {
     @Query("SELECT * FROM tags WHERE name = :name LIMIT 1")
     suspend fun findByName(name: String): Label?
 
+    /** §0.6.8 — a database's bound label, for its snapshot (by name) and its menu. */
+    @Query("SELECT * FROM tags WHERE id = :id")
+    suspend fun getById(id: Long): Label?
+
     @Query("SELECT * FROM tags WHERE name LIKE '%' || :query || '%' ORDER BY name")
     suspend fun search(query: String): List<Label>
 

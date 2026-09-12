@@ -85,6 +85,7 @@ second copy of the reasoning.
 | 2026-09-11 (step 3: depth, mind map, canvas block) | §0.8 step 3 done. **§0.6.1** unlimited nesting — `outlineOf` walks the tree, `indentTargetFor`/`outdentPlanFor` are the outliner pair, the writer and the Notion parser follow. **§0.6.2** the outline mind map, `Block.mindMap` (**schema v12**), inert card and armed full screen, CMP `BackHandler` added. **§0.6.3** `BlockType.CANVAS`, the live board in a page. §3.1.1's one-level rule and §3.7's "never nested" corrected in place; §0.10 items 2 and 8 resolved, item 10 (desktop Escape) opened. Verified on desktop and phone. 585 tests. | §0.6.1–3, §0.8, §0.10, §3.1.1, §3.7 |
 | 2026-09-12 (desktop Escape) | §0.10 item 10 resolved — desktop-only change in `Tendril windows/`, no `shared/` code touched; the substantive entry is `tendril-windows-spec.md`'s row of the same date. | §0.10 |
 | 2026-09-12 (Label rename) | §0.6.9 done: `Tag`/`PageTag`/`TagDao`/`TagColors` → `Label`/`PageLabel`/`LabelDao`/`LabelColors` across `shared/`, the Android app and the desktop app; UI strings say "label". Tables, columns and the snapshot key unchanged, so no schema version and no folder-format change. §3.1.6 and §4's entity table corrected in place. 585 tests. | §0.6.9, §0.8, §3.1.6, §4 |
+| 2026-09-12 (step 4: schema on a label) | §0.8 step 4 done. **§0.6.8** — `PageDatabase.labelId`/`labelConfirmed` (**schema v13**), `PageDao.getMembersOf` (native ∪ labelled), `domain/LabelMembership`, `DatabaseSyncManager` over members, the snapshot's `labelName`/`labelConfirmed`, cell values on any page, the generalised unknown-column hold, `BindLabelSheet`, membership strips in the page header, the chip mark, the once-only dialog. §5.1 and §5.5 corrected in place. Verified on desktop and on the phone's v12 → v13 upgrade. 596 tests. | §0.6.8, §0.8, §5.1, §5.5 |
 
 ---
 
@@ -320,7 +321,26 @@ they purge with the database's own trash (§5.5.1.1). The first application of a
 to-do database asks once. Acceptance: a plain page under any parent can be labelled into a
 database, edited in its table, unlabelled and relabelled without loss; deleting the database
 leaves the page where it was. (B§12)
-
+**Done 2026-09-12.** Two columns on `page_databases` (**schema v13**): `labelId`, the doorway, and
+`labelConfirmed`, the once-only answer. Membership is one query — native rows ∪ pages carrying the
+label (`PageDao.getMembersOf`) — read by the views, by every §5.2.1 binding operation and by the
+relation picker; nothing about membership is stored twice. `LabelMembership` (domain) is the one
+place a label change becomes a Task change: applying a label whose database syncs makes the page a
+task; removing it sends the task to Trash unless another membership keeps it; relabelling restores
+the *same* task, so Done state survives; a page in two syncing databases is one task. Two decisions
+taken while building: **native rows are not auto-labelled** (the union already lists them, and
+labelling every row would touch every row's `updatedAt` — an authorship claim under §9.4 for
+nothing), and the bound label **syncs by name**, as a page's labels already do. Sync: cell values
+now travel for every page, and a page whose column nothing in the batch defines is held rather than
+merged with its values dropped — a rule that applied only to rows before. UI: "Bind a label…" on the
+database's `···`; one property strip per membership in the page header, titled when the membership
+is through a label; the bound label's chip carries a small table mark; a labelled member's row menu
+offers "Remove label from this page" where a native row's offers "Delete row"; the once-only
+dialog. Verified on desktop end to end (bind → label → row in the table, Author typed on the page
+read in the table → removed from the table, value still stored → relabelled, value back → Sync to
+Tasks on → a new page labelled, the dialog once, a task → label removed, task in Trash with its
+Done → relabelled, no dialog, the same task back); the v12 → v13 upgrade on the desktop and the
+phone databases in place, `integrity_check` ok. 596 tests.
 **0.6.9 The §3.1.6 feature is called *Label*.** So that *tag* keeps its Notion meaning — a Select
 property inside one database, which this app also has (§4). §3.1.6 is **Corrected** by this row
 in name only; the code's `Tag`/`PageTag` rename is separate and mechanical. (B§12.5)
@@ -363,7 +383,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 2 | **0.6.4** Entry fields + Postpone; **0.6.6** habit log + presence view — *done 2026-09-11; the second §5.2 binding is its own row below* | 3, 6, 7 |
 | 2b | **0.6.4**'s second binding: a database property bound to `Entry.dueDate` — *done 2026-09-11* | — |
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
-| 4 | **0.6.8** schema on a label; **0.6.9** rename — *0.6.9 done 2026-09-12* | labels on entries; linked views in a page |
+| 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line | pays §3.2's debt |
 | 6 | Calendar: edit path, drag-to-move, agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
 | 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
@@ -406,6 +426,7 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+11. **Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.
 
 ### 0.11 Relationship to the rest of this file and to the companion documents
 
@@ -1537,6 +1558,14 @@ accidentally flooding Tasks.
 
 ### 5.1 Row-as-page
 
+*(**Corrected 2026-09-12 (§0.6.8):** a row is a page, as below — and since §0.6.8 a page can be
+a row without living inside the database. A database's members are its *native* rows, whose
+`databaseId` names it as home, plus every page carrying the label it has bound. A labelled member
+is a full row in every view and carries the database's fields in its header, keeps its own place
+in the tree, is listed once in the Pages hub — where it lives — and leaves the database by losing
+the label, not by being trashed. Where this section says "row", read "member" unless it is about
+creation, which still makes a native.)*
+
 Every database row can hold free-form content beneath its properties, matching how Notion rows
 actually work (a row *is* a page). Confirmed directly against a real use case: a
 medical-appointments database with Tags, Date, Location, Means of transport as visible properties,
@@ -1761,6 +1790,14 @@ new property type ships.
 Four real gaps found by walking concrete cases through the schema rather than reviewing it in the
 abstract, all resolved the same way: confirm, and explain the consequence in plain language before
 it happens.
+
+*(**Added 2026-09-12 (§0.6.8):** a member through a label is not the database's to delete. Its
+row menu offers "Remove label from this page" instead of "Delete row"; the page stays where it
+lives, its values for this database stay stored but unseen, and its linked Task — if the database
+syncs — goes to Trash unless a native home or another bound label still makes it a task. The
+first time a label bound to a syncing database is applied, a dialog says so, once per database.
+Deleting the database forever purges the labelled pages' values with the schema, exactly as it
+purges its native rows' (§5.5.1.1); the pages themselves are untouched.)*
 
 **Updated 2026-07-16**: a fifth case, from the same family — **rebinding or unbinding a bound
 property** (`done_property_id`/`deadline_property_id`/`recurrence_property_id`, §5.2.1) outside of a

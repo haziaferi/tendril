@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
@@ -129,6 +130,7 @@ fun PageDetailScreen(
                     core.viewLockState,
                     core.checkboxOnlyState,
                     core.localImages,
+                    core.labelMembership,
                 )
             }
         }
@@ -147,7 +149,9 @@ fun PageDetailScreen(
     val outline = remember(blocks) { outlineOf(blocks) }
     val labels by viewModel.labels.collectAsState()
     val rowDatabase by viewModel.rowDatabase.collectAsState()
-    val rowProperties by viewModel.rowProperties.collectAsState()
+    val memberships by viewModel.memberships.collectAsState()
+    val boundLabelIds by viewModel.boundLabelIds.collectAsState()
+    val pendingLabel by viewModel.pendingLabel.collectAsState()
     val rowValues by viewModel.rowValues.collectAsState()
     val rowLinkedEntry by viewModel.rowLinkedEntry.collectAsState()
     val backlinks by viewModel.backlinks.collectAsState()
@@ -244,6 +248,11 @@ fun PageDetailScreen(
                         onClick = { viewModel.removeLabel(label) },
                         enabled = !contentLocked,
                         label = { Text(label.name) },
+                        // §0.6.8 / B§12.0 — "a bound label looks like any other, with a small mark
+                        // that it brings fields."
+                        leadingIcon = if (label.id in boundLabelIds) {
+                            { Icon(Icons.Filled.TableChart, contentDescription = "Brings a database's fields", modifier = Modifier.size(14.dp)) }
+                        } else null,
                         trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove label", modifier = Modifier.size(16.dp)) },
                     )
                 }
@@ -258,18 +267,36 @@ fun PageDetailScreen(
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 // §5.1 Row-as-page — a Database row shows its property values as a compact
-                // strip above the same free-form Block body every other Page has.
-                if (rowDatabase != null) {
-                    items(rowProperties, key = { "prop_${it.id}" }) { property ->
+                // strip above the same free-form Block body every other Page has. §0.6.8 — one
+                // strip per membership: the home database first, then each database a label
+                // opened. A lone native strip is untitled, as it always was; a labelled one says
+                // which database and which label, since the page's place in the tree no longer
+                // tells the reader.
+                memberships.forEach { membership ->
+                    val db = membership.database
+                    if (membership.viaLabel != null || memberships.size > 1) {
+                        item(key = "member_${db.id}") {
+                            Text(
+                                buildString {
+                                    append(membershipTitle(membership.database.pageId, viewModel))
+                                    membership.viaLabel?.let { append("  ·  #").append(it.name) }
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                    items(membership.properties, key = { "prop_${db.id}_${it.id}" }) { property ->
                         RowPropertyEditor(
                             property = property,
-                            database = rowDatabase,
+                            database = db,
                             storedValue = rowValues[property.id]?.value,
                             linkedEntry = rowLinkedEntry,
                             viewModel = viewModel,
                         )
                     }
-                    item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+                    item(key = "member_end_${db.id}") { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
                 }
                 // Children used to be filtered out here (`if (block.parentBlockId == null)`),
                 // which is why nesting existed in the schema but never on screen.
@@ -395,6 +422,22 @@ fun PageDetailScreen(
                 viewModel.updateBlockContent(block, newContent, block.formattingSpans + span)
                 mentionTarget = null
             },
+        )
+    }
+
+    // §0.6.8 — the once-only question, asked where the label is applied.
+    pendingLabel?.let { pending ->
+        val databaseTitle = membershipTitle(pending.database.pageId, viewModel)
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.dismissPendingLabel() },
+            title = { Text("Pages labelled #${pending.label.name} become tasks") },
+            text = {
+                Text(
+                    "$databaseTitle syncs to Tasks, and this label makes a page one of its rows — so this page becomes a task, and so will any other page given #${pending.label.name}. Removing the label sends the task to Trash. This is asked once.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.confirmPendingLabel() }) { Text("Continue") } },
+            dismissButton = { TextButton(onClick = { viewModel.dismissPendingLabel() }) { Text("Cancel") } },
         )
     }
 
@@ -918,6 +961,13 @@ private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit
                 onValueChange = { query = it; viewModel.searchLabelCandidates(it) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                singleLine = true,
+                // A bare field was invisible until typed into — on desktop, where no keyboard
+                // rises to say "type here", there was nothing to aim a click at.
+                decorationBox = { inner ->
+                    if (query.isEmpty()) Text("Label name", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    inner()
+                },
             )
             if (query.isNotBlank() && candidates.none { it.name.equals(query.trim(), ignoreCase = true) }) {
                 TextButton(onClick = { onPick(query) }) { Text("Create \"$query\"") }
@@ -1005,6 +1055,14 @@ private fun BacklinksPanel(backlinks: List<Backlink>, onOpenPage: (Long) -> Unit
 /** §5.1 Row-as-page property strip — one row per property, name on the left, an editor
  * matching the table view's own cell behavior on the right (a bound role edits through the
  * linked Entry, everything else edits the stored [PropertyValue] directly). */
+/** §0.6.8 — a database's title for a membership strip, read once; titles change rarely and the
+ * strip is rebuilt whenever the membership list is. */
+@Composable
+private fun membershipTitle(databasePageId: Long, viewModel: PageDetailViewModel): String {
+    val title by androidx.compose.runtime.produceState("", databasePageId) { value = viewModel.pageTitle(databasePageId) }
+    return title.ifBlank { "Database" }
+}
+
 @Composable
 private fun RowPropertyEditor(
     property: Property,

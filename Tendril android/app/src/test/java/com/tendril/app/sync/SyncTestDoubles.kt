@@ -124,6 +124,9 @@ class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
     override suspend fun getBySourceRowId(rowPageId: Long): Entry? =
         rows.values.firstOrNull { it.sourceRowId == rowPageId && it.deletedAt == null }
 
+    override suspend fun getTrashedBySourceRowId(rowPageId: Long): Entry? =
+        rows.values.filter { it.sourceRowId == rowPageId && it.deletedAt != null }.maxByOrNull { it.deletedAt!! }
+
     override suspend fun getAllDated(): List<Entry> = rows.values.filter { it.startDate != null }
 
     override suspend fun getExceptionsOf(baseEntryId: Long): List<Entry> =

@@ -120,7 +120,7 @@ class DatabaseSyncManager(
 
     /** §5.5 — bulk-cleanup: every row's linked Entry goes to Trash (restorable), bindings clear. */
     suspend fun disableSync(database: PageDatabase, now: Instant = Instant.now()): PageDatabase {
-        for (row in pageDao.getRowsOf(database.id)) {
+        for (row in pageDao.getMembersOf(database.id, database.labelId)) {
             entryDao.getBySourceRowId(row.id)?.let { resolveEntryUseCase.trash(it.id, now) }
         }
         val updated = database.copy(syncToTasks = false, donePropertyId = null, deadlinePropertyId = null, dueDatePropertyId = null, recurrencePropertyId = null, updatedAt = now)
@@ -137,7 +137,7 @@ class DatabaseSyncManager(
      * here on).
      */
     suspend fun bindProperty(database: PageDatabase, role: BindingRole, propertyId: Long, now: Instant = Instant.now()): PageDatabase {
-        val rows = pageDao.getRowsOf(database.id)
+        val rows = pageDao.getMembersOf(database.id, database.labelId)
         val oldPropertyId = database.propertyIdFor(role)
         if (oldPropertyId != null) crystallize(rows, oldPropertyId, role, now)
 
@@ -164,7 +164,7 @@ class DatabaseSyncManager(
      * value back into an ordinary stored column and stops proxying. */
     suspend fun unbindProperty(database: PageDatabase, role: BindingRole, now: Instant = Instant.now()): PageDatabase {
         val propertyId = database.propertyIdFor(role) ?: return database
-        crystallize(pageDao.getRowsOf(database.id), propertyId, role, now)
+        crystallize(pageDao.getMembersOf(database.id, database.labelId), propertyId, role, now)
         return commit(database.withPropertyIdFor(role, null).copy(updatedAt = now), now, touchRows = true)
     }
 
@@ -190,7 +190,7 @@ class DatabaseSyncManager(
     private suspend fun commit(updated: PageDatabase, now: Instant, touchRows: Boolean): PageDatabase {
         pageDatabaseDao.update(updated)
         pageDao.touch(updated.pageId, now)
-        if (touchRows) for (row in pageDao.getRowsOf(updated.id)) pageDao.touch(row.id, now)
+        if (touchRows) for (row in pageDao.getMembersOf(updated.id, updated.labelId)) pageDao.touch(row.id, now)
         return updated
     }
 

@@ -11,6 +11,8 @@ import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.entry.intervalToPeriod
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
+import com.tendril.app.data.page.Label
+import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
@@ -41,6 +43,7 @@ import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryScheduleCoordinator
+import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
@@ -75,8 +78,11 @@ import java.time.LocalDate
 import java.util.UUID
 
 /** One Table-view row (§5.1/§5.6): the Row page itself, its stored cell values keyed by
- * property id, and its linked Task Entry if this database is Sync-to-Tasks-enabled. */
-data class TableRow(val page: Page, val values: Map<Long, PropertyValue>, val linkedEntry: Entry?)
+ * property id, and its linked Task Entry if this database is Sync-to-Tasks-enabled.
+ * [viaLabel] (§0.6.8) marks a member that lives elsewhere and is here through the bound label:
+ * the same row in every respect, except that removing it from the database is removing the
+ * label, not trashing the page. */
+data class TableRow(val page: Page, val values: Map<Long, PropertyValue>, val linkedEntry: Entry?, val viaLabel: Boolean = false)
 
 class PageDatabaseViewModel(
     private val pageId: Long,
@@ -93,6 +99,8 @@ class PageDatabaseViewModel(
     private val templateManager: TemplateManager,
     private val purgeRegistry: PurgeRegistry,
     private val viewLockState: ViewLockState,
+    private val labelDao: LabelDao,
+    private val labelMembership: LabelMembership,
 ) : ViewModel() {
     /** §3.1.2 — see [PageDetailViewModel.viewOnlyLocked]'s note; the same single enforcement point,
      * duplicated per ViewModel rather than shared, since a Database Row's edits and a plain
@@ -134,9 +142,15 @@ class PageDatabaseViewModel(
         .flatMapLatest { propertyDao.observeForDatabase(it.id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // §0.6.8 — members, not native rows: the union with the pages carrying the bound label.
     private val rows: StateFlow<List<Page>> = database.filterNotNull()
-        .flatMapLatest { pageDao.observeRowsOf(it.id) }
+        .flatMapLatest { pageDao.observeMembersOf(it.id, it.labelId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §0.6.8 — the bound label, live, so the menu and the bind sheet read the current one. */
+    val boundLabel: StateFlow<Label?> = combine(database, labelDao.observeAll()) { db, all ->
+        db?.labelId?.let { id -> all.firstOrNull { it.id == id } }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val allValues = database.filterNotNull().flatMapLatest { propertyValueDao.observeForDatabase(it.id) }
 
@@ -144,11 +158,11 @@ class PageDatabaseViewModel(
         if (rowList.isEmpty()) flowOf(emptyList()) else entryDao.observeBySourceRowIds(rowList.map { it.id })
     }
 
-    val tableRows: StateFlow<List<TableRow>> = combine(rows, allValues, linkedEntries) { rowList, values, entries ->
+    val tableRows: StateFlow<List<TableRow>> = combine(rows, allValues, linkedEntries, database) { rowList, values, entries, db ->
         val entriesByRow = entries.associateBy { it.sourceRowId }
         val valuesByRow = values.groupBy { it.rowPageId }
         rowList.map { row ->
-            TableRow(row, valuesByRow[row.id].orEmpty().associateBy { it.propertyId }, entriesByRow[row.id])
+            TableRow(row, valuesByRow[row.id].orEmpty().associateBy { it.propertyId }, entriesByRow[row.id], viaLabel = db != null && row.databaseId != db.id)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -368,6 +382,42 @@ class PageDatabaseViewModel(
         val db = database.value ?: return
         launchAndTouch(pageId) { databaseSyncManager.bindProperty(db, role, propertyId) }
     }
+
+    /** §0.6.8 — bind a label by name, creating it if it is new, exactly as a page's label
+     * picker does. No confirm dialog: the sheet's own copy says what binding means, and the
+     * once-only question about tasks is asked where the label is *applied*. */
+    fun bindLabel(name: String) {
+        if (locked()) return
+        val db = database.value ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val label = labelDao.findByName(trimmed) ?: run {
+                labelDao.insert(Label(name = trimmed))
+                labelDao.findByName(trimmed)!!
+            }
+            labelMembership.bindLabel(db, label.id)
+        }
+    }
+
+    fun unbindLabel() {
+        if (locked()) return
+        val db = database.value ?: return
+        viewModelScope.launch { labelMembership.unbindLabel(db) }
+    }
+
+    /** §0.6.8 — a labelled member leaves the database by losing the label; the page stays where
+     * it lives. Native rows go through [requestDeleteRow] instead. */
+    fun removeMember(row: Page) {
+        if (locked()) return
+        val label = boundLabel.value ?: return
+        viewModelScope.launch {
+            labelMembership.removeLabel(row.id, label)
+            pageDao.touch(row.id, Instant.now())
+        }
+    }
+
+    suspend fun searchLabels(query: String): List<Label> = labelDao.search(query)
 
     fun requestRebind(role: BindingRole, currentPropertyId: Long, newPropertyId: Long?) {
         _pendingRebind.value = PendingRebind(role, currentPropertyId, newPropertyId)
@@ -728,7 +778,7 @@ class PageDatabaseViewModel(
         val target = parseRelationConfig(property.config) ?: return emptyList()
         val targetPage = pageDao.getByUid(target.targetDatabasePageUid) ?: return emptyList()
         val targetDb = pageDatabaseDao.getByPageId(targetPage.id) ?: return emptyList()
-        return pageDao.getRowsOf(targetDb.id)
+        return pageDao.getMembersOf(targetDb.id, targetDb.labelId)
     }
 
     /** Resolves a relation cell's stored uids to display titles for [RelationCell], dropping

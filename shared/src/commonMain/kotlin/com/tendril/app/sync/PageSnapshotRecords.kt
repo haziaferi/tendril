@@ -36,8 +36,9 @@ data class PageSnapshotRecord(
      * device needs no separate color sync, matching that mechanism's existing design intent. */
     @SerialName("tags") val labels: List<String> = emptyList(),
     val blocks: List<BlockSnapshotRecord> = emptyList(),
-    /** Row-only — this page's own database's property values, since a value's identity
-     * (`propertyId` + `rowPageId`) is really a property of the *row*, not the database. */
+    /** This page's cell values, since a value's identity (`propertyId` + `rowPageId`) is really
+     * a property of the *page*, not the database. Rows carried these from the start; since
+     * §0.6.8 (v13) any page can, because a label can make any page a member of a database. */
     val propertyValues: List<PropertyValueSnapshotRecord> = emptyList(),
     /** `kind = DATABASE` only. */
     val database: PageDatabaseSnapshotRecord? = null,
@@ -113,6 +114,11 @@ data class PageDatabaseSnapshotRecord(
     /** §0.8 step 2b (v11). Defaults so a v10 peer's record reads as "no deadline binding". */
     val dueDatePropertyUid: String? = null,
     val recurrencePropertyUid: String? = null,
+    /** §0.6.8 (v13) — the bound label, by *name*, the same way a page's [PageSnapshotRecord.labels]
+     * travel: a name resolves on any device with `findByName ?: insert`, a uid would not. Defaults
+     * so a v12 peer's record reads as "no label bound". */
+    val labelName: String? = null,
+    val labelConfirmed: Boolean = false,
     val properties: List<PropertySnapshotRecord> = emptyList(),
     val views: List<ViewSnapshotRecord> = emptyList(),
 )

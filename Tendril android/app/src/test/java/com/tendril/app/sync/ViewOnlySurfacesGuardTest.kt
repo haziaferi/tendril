@@ -14,6 +14,7 @@ import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.domain.DatabaseSyncManager
+import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
@@ -98,6 +99,7 @@ class ViewOnlySurfacesGuardTest {
     private val store = FakePageStore()
     private val pageDao = FakePageDao(store)
     private val blockDao = FakeBlockDao(store)
+    private val labelDao = FakeLabelDao(store)
     private val pageDatabaseDao = FakePageDatabaseDao(store)
     private val propertyDao = FakePropertyDao(store)
     private val propertyValueDao = FakePropertyValueDao(store)
@@ -165,6 +167,7 @@ class ViewOnlySurfacesGuardTest {
         val viewModel = PageDatabaseViewModel(
             pageId, pageDao, pageDatabaseDao, propertyDao, propertyValueDao, entryDao, viewDao, blockDao,
             databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState,
+            labelDao, LabelMembership(pageDao, pageDatabaseDao, labelDao, entryDao, databaseSyncManager, resolveEntryUseCase),
         )
         backgroundScope.launch { viewModel.database.collect { } }
         testScheduler.advanceUntilIdle()

@@ -102,6 +102,8 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                     core.templateManager,
                     core.purgeRegistry,
                     core.viewLockState,
+                    core.database.labelDao(),
+                    core.labelMembership,
                 )
             }
         }
@@ -123,6 +125,9 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
     val pendingTypeChange by viewModel.pendingTypeChange.collectAsState()
     val pendingDeleteRow by viewModel.pendingDeleteRow.collectAsState()
     val pendingRebind by viewModel.pendingRebind.collectAsState()
+    // §0.6.8 — the bound label, and the sheet that binds one.
+    val boundLabel by viewModel.boundLabel.collectAsState()
+    var showBindLabel by remember { mutableStateOf(false) }
 
     LaunchedEffect(database) { if (database != null) viewModel.ensureDefaultView() }
 
@@ -159,6 +164,12 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                             },
                         )
                         DropdownMenuItem(text = { Text("Add property") }, onClick = { showMenu = false; showAddProperty = true })
+                        // §0.6.8 — schema on a label. One item, opt-in; until it is used the app
+                        // is today's app (E12).
+                        DropdownMenuItem(
+                            text = { Text(boundLabel?.let { "Bound to #${it.name}…" } ?: "Bind a label…") },
+                            onClick = { showMenu = false; showBindLabel = true },
+                        )
                         DropdownMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
                     }
                 },
@@ -272,6 +283,18 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
         )
     }
 
+    if (showBindLabel) {
+        BindLabelSheet(
+            databaseTitle = page?.title.orEmpty(),
+            current = boundLabel,
+            syncToTasks = database?.syncToTasks == true,
+            search = { viewModel.searchLabels(it) },
+            onBind = { name -> viewModel.bindLabel(name); showBindLabel = false },
+            onUnbind = { viewModel.unbindLabel(); showBindLabel = false },
+            onDismiss = { showBindLabel = false },
+        )
+    }
+
     pendingDeleteRow?.let { row ->
         DeleteRowConfirm(
             row = row,
@@ -349,7 +372,11 @@ private fun TableBody(
                     }
                 }
                 Box(modifier = Modifier.width(40.dp)) {
-                    RowMenu(onDelete = { viewModel.requestDeleteRow(tableRow.page) })
+                    RowMenu(
+                        viaLabel = tableRow.viaLabel,
+                        onDelete = { viewModel.requestDeleteRow(tableRow.page) },
+                        onRemove = { viewModel.removeMember(tableRow.page) },
+                    )
                 }
             }
             HorizontalDivider()
@@ -864,15 +891,18 @@ private fun RebindConfirm(
     )
 }
 
+/** §0.6.8 — a member here through the label is not this database's to delete: its one action
+ * is leaving, which is losing the label. The page stays where it lives. */
 @Composable
-private fun RowMenu(onDelete: () -> Unit) {
+private fun RowMenu(viaLabel: Boolean, onDelete: () -> Unit, onRemove: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) {
             Icon(Icons.Filled.MoreVert, contentDescription = "Row options")
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("Delete row") }, onClick = { showMenu = false; onDelete() })
+            if (viaLabel) DropdownMenuItem(text = { Text("Remove label from this page") }, onClick = { showMenu = false; onRemove() })
+            else DropdownMenuItem(text = { Text("Delete row") }, onClick = { showMenu = false; onDelete() })
         }
     }
 }

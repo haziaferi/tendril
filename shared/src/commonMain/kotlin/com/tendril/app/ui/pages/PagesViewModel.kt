@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -63,6 +64,10 @@ class PagesViewModel(
 
     val allLabels: StateFlow<List<Label>> =
         labelDao.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §0.6.8 / B§12.0 — the labels that are doorways into a database, for the chip's mark. */
+    val boundLabelIds: StateFlow<Set<Long>> = pageDatabaseDao.observeBoundLabelIds().map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     private val _selectedTagIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedLabelIds: StateFlow<Set<Long>> = _selectedTagIds.asStateFlow()

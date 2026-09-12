@@ -28,6 +28,20 @@ interface PageDatabaseDao {
 
     @Query("SELECT * FROM page_databases WHERE pageId = :pageId")
     fun observeByPageId(pageId: Long): Flow<PageDatabase?>
+
+    /** §0.6.8 — the databases a label opens the door to. More than one is allowed: a page
+     * carrying `#book` can be a row of *Books* and of *2026 reading* alike. */
+    @Query("SELECT * FROM page_databases WHERE labelId = :labelId")
+    suspend fun getByLabelId(labelId: Long): List<PageDatabase>
+
+    /** §0.6.8 — the memberships a page's labels give it, for its header: every database bound
+     * to any of [labelIds]. Joined to `pages` so a trashed database's fields vanish with it. */
+    @Query("SELECT d.* FROM page_databases d INNER JOIN pages p ON p.id = d.pageId WHERE d.labelId IN (:labelIds) AND p.deletedAt IS NULL")
+    fun observeDatabasesForLabels(labelIds: List<Long>): Flow<List<PageDatabase>>
+
+    /** §0.6.8 — which labels are doorways, so a chip can carry the small mark (B§12.0). */
+    @Query("SELECT labelId FROM page_databases WHERE labelId IS NOT NULL")
+    fun observeBoundLabelIds(): Flow<List<Long>>
 }
 
 @Dao
