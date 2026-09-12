@@ -44,6 +44,7 @@ import com.tendril.app.sync.SnapshotSyncOrchestrator
 import com.tendril.app.sync.quarantineMessage
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.calendar.CalendarScreen
+import com.tendril.app.ui.taskshabits.TasksHabitsScreen
 import com.tendril.app.domain.ics.IcsWriter
 import com.tendril.app.ui.nav.WorkbenchScaffold
 import com.tendril.app.ui.theme.TendrilColorTheme
@@ -155,7 +156,18 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         reminderSheet = null,
                     )
                 },
-                tasksHabitsContent = { NotAvailableOnDesktop("Tasks & Habits") },
+                // §0.8 step 7a — shared. No alarms and no Settings here yet, so no bell, the
+                // switches off, and no Trash button until those sheets move too.
+                tasksHabitsContent = {
+                    TasksHabitsScreen(
+                        core = core,
+                        showImportance = false,
+                        showStreaks = false,
+                        reminderSheet = null,
+                        entryTrashSheet = null,
+                        habitTrashSheet = null,
+                    )
+                },
                 roadMapContent = { NotAvailableOnDesktop("Road Map") },
                 settingsContent = { NotAvailableOnDesktop("Settings") },
             )

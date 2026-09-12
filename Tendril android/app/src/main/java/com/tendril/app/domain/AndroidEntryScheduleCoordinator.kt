@@ -37,4 +37,8 @@ class AndroidEntryScheduleCoordinator(
     override suspend fun onHabitRemoved(habitId: Long) {
         alarmScheduler.cancelHabit(habitId)
     }
+
+    override suspend fun onHabitChanged(habit: com.tendril.app.data.habit.Habit) {
+        alarmScheduler.rescheduleHabit(habit)
+    }
 }

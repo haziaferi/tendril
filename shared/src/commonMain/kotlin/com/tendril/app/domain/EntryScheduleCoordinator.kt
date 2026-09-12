@@ -27,4 +27,9 @@ interface EntryScheduleCoordinator {
      * schedule has nothing to cancel.
      */
     suspend fun onHabitRemoved(habitId: Long) {}
+
+    /** A Habit was added or its time changed, so its reminder must follow (§9.7). Defaulted to
+     * a no-op for the same reason as [onHabitRemoved]; §0.8 step 7a moved the Tasks & Habits
+     * screen to `shared/`, and this is the seam that lets it stop knowing `AlarmScheduler`. */
+    suspend fun onHabitChanged(habit: com.tendril.app.data.habit.Habit) {}
 }
