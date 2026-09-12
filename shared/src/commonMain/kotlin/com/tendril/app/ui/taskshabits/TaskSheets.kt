@@ -157,6 +157,7 @@ internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, sho
     val presence by viewModel.habitPresence(habit.id).collectAsState(initial = null)
     // §0.6.5 — the logged minutes join the presence sentences; zero says nothing, like the rest.
     val loggedMinutes by viewModel.habitLoggedThisMonth(habit.id).collectAsState(initial = 0)
+    val perSession by viewModel.habitMinutesPerSession(habit.id).collectAsState(initial = null)
     TendrilSheet(title = habit.title, onDismiss = onDismiss) {
         Column {
             val p = presence
@@ -175,6 +176,7 @@ internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, sho
                     p.lastDate?.let { add("Last: ${it.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())}, ${it.dayOfMonth} ${it.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}") }
                     if (showStreak && habit.streak > 0) add("Streak: ${habit.streak}")
                     if (loggedMinutes > 0) add("${formatMinutes(loggedMinutes)} logged this month")
+                    perSession?.let { add("About ${formatMinutes(it)} each") }
                 }
                 lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
                 Spacer(Modifier.height(16.dp))

@@ -12,6 +12,11 @@ import com.tendril.app.data.habit.HabitCompletionDao
 import com.tendril.app.domain.track.TimeTracker
 import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.domain.track.loggedInMonth
+import com.tendril.app.domain.track.minuteTicker
+import com.tendril.app.domain.plan.loggedByEntry
+import com.tendril.app.domain.plan.loggedByHabit
+import com.tendril.app.domain.plan.minutesPerSession
+import kotlinx.coroutines.flow.combine
 import java.time.YearMonth
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.habit.HabitFrequency
@@ -51,6 +56,14 @@ class TasksHabitsViewModel(
     fun toggleTracking(target: TrackTarget) {
         viewModelScope.launch { timeTracker.toggle(target) }
     }
+
+    /** §0.8 step 7d — minutes logged today per entry and per habit, ticking with the open log. */
+    val loggedToday: StateFlow<Pair<Map<Long, Int>, Map<Long, Int>>> =
+        combine(timeTracker.logsOn(LocalDate.now()), minuteTicker()) { logs, now -> loggedByEntry(logs, now) to loggedByHabit(logs, now) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap<Long, Int>() to emptyMap())
+
+    /** The habit's mean session, for the presence sheet's "about N min each". */
+    fun habitMinutesPerSession(habitId: Long): Flow<Int?> = timeTracker.logsForHabit(habitId).map { minutesPerSession(it) }
 
     /** The habit's logged minutes this month, for the presence sheet — live, so it ticks. */
     fun habitLoggedThisMonth(habitId: Long): Flow<Int> =

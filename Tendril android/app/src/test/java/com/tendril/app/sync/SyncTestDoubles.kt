@@ -282,6 +282,9 @@ class FakeTimeLogDao(seed: List<TimeLog> = emptyList()) : TimeLogDao {
     override fun observeForHabit(habitId: Long): Flow<List<TimeLog>> =
         flowOf(rows.values.filter { it.habitId == habitId && it.deletedAt == null }.sortedByDescending { it.startedAt })
 
+    override fun observeBetween(from: Instant, to: Instant): Flow<List<TimeLog>> =
+        flowOf(rows.values.filter { it.deletedAt == null && it.startedAt >= from && it.startedAt < to }.sortedBy { it.startedAt })
+
     override suspend fun getAll(): List<TimeLog> = rows.values.toList()
 
     override suspend fun getByUid(uid: String): TimeLog? = rows.values.firstOrNull { it.uid == uid }

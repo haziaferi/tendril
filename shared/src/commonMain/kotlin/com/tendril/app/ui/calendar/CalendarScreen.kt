@@ -51,6 +51,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.tendril.app.data.track.TimeLog
+import com.tendril.app.domain.plan.loggedByEntry
+import com.tendril.app.domain.plan.loggedSegment
+import com.tendril.app.domain.plan.loggedSpans
+import com.tendril.app.domain.plan.plannedMinutes
+import com.tendril.app.domain.track.formatMinutes
+import com.tendril.app.domain.track.loggedMinutes
+import java.time.Instant
 import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.ui.track.TrackButton
 import com.tendril.app.ui.track.runningTargetState
@@ -197,6 +205,8 @@ fun CalendarScreen(
     var pendingTimeMove by remember { mutableStateOf<PendingTimeMove?>(null) }
     val allTasks by viewModel.tasks.collectAsState()
     val runningTarget by core.timeTracker.runningTargetState()
+    // §0.8 step 7d — the selected day's logs and a ticking now, for Planned · Logged.
+    val dayLogsNow by remember(selectedDate) { viewModel.logsOn(selectedDate) }.collectAsState(initial = emptyList<TimeLog>() to Instant.now())
 
     editTarget?.let { entry ->
         EntryEditSheet(
@@ -322,6 +332,8 @@ fun CalendarScreen(
                     },
                     runningTarget = runningTarget,
                     onToggleTracking = viewModel::toggleTracking,
+                    dayLogs = dayLogsNow.first,
+                    now = dayLogsNow.second,
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
@@ -373,6 +385,8 @@ private fun DayView(
     onMoveBlock: (EntryOccurrence, LocalTime) -> Unit,
     runningTarget: TrackTarget?,
     onToggleTracking: (TrackTarget) -> Unit,
+    dayLogs: List<TimeLog>,
+    now: Instant,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (ParsedEntry) -> Unit,
@@ -389,6 +403,25 @@ private fun DayView(
             IconButton(onClick = onPrev) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous day") }
             Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")), style = MaterialTheme.typography.titleMedium)
             IconButton(onClick = onNext) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next day") }
+        }
+        // §0.6.5 — compare: two numbers side by side, no score and no colour (§0.5.2). Absent
+        // when the day holds nothing planned and nothing logged.
+        val habitExtras = extras.filterIsInstance<CalendarExtra.HabitAt>()
+            .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
+        val blocks = remember(occurrences, habitExtras) { timelineBlocks(occurrences, habitExtras) }
+        val planned = remember(blocks, occurrences) { plannedMinutes(blocks, occurrences.filter { it.startTime == null }.map { it.entry }) }
+        val logged = remember(dayLogs, now) { loggedMinutes(dayLogs, Instant.MIN, Instant.MAX, now) }
+        val loggedPerEntry = remember(dayLogs, now) { loggedByEntry(dayLogs, now) }
+        if (planned > 0 || logged > 0) {
+            Text(
+                listOfNotNull(
+                    if (planned > 0) "Planned " + formatMinutes(planned) else null,
+                    if (logged > 0) "Logged " + formatMinutes(logged) else null,
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp),
+            )
         }
 
         // §0.8 step 5 — the line is read as it is typed and previewed as chips; a chip's × says
@@ -422,11 +455,10 @@ private fun DayView(
         HorizontalDivider()
 
         if (planMode) {
-            val habitExtras = extras.filterIsInstance<CalendarExtra.HabitAt>()
-                .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
             PlanView(
                 day = date,
-                blocks = remember(occurrences, habitExtras) { timelineBlocks(occurrences, habitExtras) },
+                blocks = blocks,
+                logged = remember(dayLogs, now) { loggedSpans(dayLogs, date, now) },
                 allDay = occurrences.filter { it.startTime == null || !it.isFirstDay },
                 unplanned = unplanned,
                 onEdit = onEdit,
@@ -457,7 +489,7 @@ private fun DayView(
                         Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
                             Text(entry.title, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                occurrenceSubtitle(occurrence, date),
+                                listOfNotNull(occurrenceSubtitle(occurrence, date), loggedSegment(loggedPerEntry[entry.id] ?: 0, entry.estimate)).joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
