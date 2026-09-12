@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.tendril.desktopapp
 
 import com.tendril.app.sync.DesktopLocalImageStore
@@ -41,6 +43,7 @@ import com.tendril.app.sync.PagesSyncEngine
 import com.tendril.app.sync.SnapshotSyncOrchestrator
 import com.tendril.app.sync.quarantineMessage
 import com.tendril.app.ui.WorkbenchCore
+import com.tendril.app.ui.calendar.CalendarScreen
 import com.tendril.app.ui.nav.WorkbenchScaffold
 import com.tendril.app.ui.theme.TendrilColorTheme
 import com.tendril.app.ui.theme.TendrilMode
@@ -141,10 +144,33 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
             HorizontalDivider()
             WorkbenchScaffold(
                 core = core,
-                calendarContent = { NotAvailableOnDesktop("Calendar") },
+                // §0.8 step 6a — the shared Calendar. Google Calendar sync is Play Services and
+                // reminders are AlarmManager, so the settings slot says so and the bell is absent.
+                calendarContent = {
+                    CalendarScreen(
+                        core = core,
+                        settingsSheet = { onDismiss -> DesktopCalendarSettingsSheet(onDismiss) },
+                        reminderSheet = null,
+                    )
+                },
                 tasksHabitsContent = { NotAvailableOnDesktop("Tasks & Habits") },
                 roadMapContent = { NotAvailableOnDesktop("Road Map") },
                 settingsContent = { NotAvailableOnDesktop("Settings") },
+            )
+        }
+    }
+}
+
+/** The Calendar's `···` on desktop: nothing to configure here yet, said plainly. */
+@Composable
+private fun DesktopCalendarSettingsSheet(onDismiss: () -> Unit) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+            Text("Calendar settings", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Google Calendar sync and reminders are Android-only for now — they need Play Services and the alarm manager (tendril-windows-spec.md §1).",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
     }
