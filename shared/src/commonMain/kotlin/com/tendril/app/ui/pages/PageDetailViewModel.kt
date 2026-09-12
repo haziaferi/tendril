@@ -14,7 +14,6 @@ import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
-import com.tendril.app.data.page.PageLabel
 import com.tendril.app.data.page.Label
 import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.pagedatabase.PageDatabase
@@ -27,6 +26,7 @@ import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.EntryScheduleCoordinator
+import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -68,6 +69,7 @@ class PageDetailViewModel(
     private val viewLockState: ViewLockState,
     private val checkboxOnlyState: CheckboxOnlyState,
     private val localImages: com.tendril.app.sync.LocalImageStore,
+    private val labelMembership: LabelMembership,
 ) : ViewModel() {
     /** §3.1.2 — "every page under Pages becomes read-only as a group... no per-page exception."
      * Every mutating function below early-returns through this guard rather than relying on the
@@ -124,15 +126,39 @@ class PageDetailViewModel(
     private val _mentionCandidates = MutableStateFlow<List<Page>>(emptyList())
     val mentionCandidates: StateFlow<List<Page>> = _mentionCandidates.asStateFlow()
 
-    /** §5.1 Row-as-page — populated only when this Page is a Database row (`databaseId` set);
-     * empty/null for an ordinary Page. */
+    /** §5.1 Row-as-page — the database this Page is a *native* row of (`databaseId` set), or null
+     * for an ordinary Page. Since §0.6.8 it is one of possibly several [memberships]; it is still
+     * the one that decides whether deleting this page is deleting a row. */
     val rowDatabase: StateFlow<PageDatabase?> = page.filterNotNull()
         .flatMapLatest { p -> p.databaseId?.let(pageDatabaseDao::observeById) ?: flowOf(null) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val rowProperties: StateFlow<List<Property>> = rowDatabase.filterNotNull()
-        .flatMapLatest { propertyDao.observeForDatabase(it.id) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** §0.6.8 — one database this page is a member of, with the label that opened the door
+     * (null for the native home) and the fields it brings to the header. */
+    data class Membership(val database: PageDatabase, val viaLabel: Label?, val properties: List<Property>)
+
+    private val labelledDatabases: kotlinx.coroutines.flow.Flow<List<Pair<PageDatabase, Label>>> = labels.flatMapLatest { carried ->
+        if (carried.isEmpty()) flowOf(emptyList())
+        else pageDatabaseDao.observeDatabasesForLabels(carried.map { it.id }).map { databases ->
+            databases.mapNotNull { db -> carried.firstOrNull { it.id == db.labelId }?.let { db to it } }
+        }
+    }
+
+    /** The home first, then the labelled memberships in label order; a native row that also
+     * carries its own database's label is listed once, as home. */
+    val memberships: StateFlow<List<Membership>> = combine(rowDatabase, labelledDatabases) { home, labelled ->
+        listOfNotNull(home?.let { it to null as Label? }) + labelled.filter { (db, _) -> db.id != home?.id }
+    }.flatMapLatest { pairs ->
+        if (pairs.isEmpty()) flowOf(emptyList())
+        else combine(pairs.map { (db, via) -> propertyDao.observeForDatabase(db.id).map { Membership(db, via, it) } }) { it.toList() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §0.6.8 — a database's title for its membership strip. */
+    suspend fun pageTitle(id: Long): String = pageDao.getById(id)?.title.orEmpty()
+
+    /** §0.6.8 / B§12.0 — which of this page's labels are doorways, for the chip's small mark. */
+    val boundLabelIds: StateFlow<Set<Long>> = pageDatabaseDao.observeBoundLabelIds().map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     val rowValues: StateFlow<Map<Long, PropertyValue>> = propertyValueDao.observeForRow(pageId)
         .map { values -> values.associateBy { it.propertyId } }
@@ -393,6 +419,23 @@ class PageDetailViewModel(
         }
     }
 
+    /** §0.6.8 — the once-only question: this label opens a database that syncs to Tasks, and
+     * nobody has said yes to that for it yet. The label is applied on [confirmPendingLabel]. */
+    data class PendingLabel(val label: Label, val database: PageDatabase)
+
+    private val _pendingLabel = MutableStateFlow<PendingLabel?>(null)
+    val pendingLabel: StateFlow<PendingLabel?> = _pendingLabel.asStateFlow()
+    fun dismissPendingLabel() { _pendingLabel.value = null }
+    fun confirmPendingLabel() {
+        if (contentLocked()) return
+        val pending = _pendingLabel.value ?: return
+        _pendingLabel.value = null
+        viewModelScope.launch {
+            labelMembership.confirm(pending.database)
+            if (labelMembership.applyLabel(pageId, pending.label)) touch()
+        }
+    }
+
     /** Type-to-search-or-create, matching [searchForMention]'s picker pattern: reuse a label
      * whose name matches exactly (case-insensitive), otherwise a new one is created on pick. */
     fun addLabel(name: String) {
@@ -406,18 +449,24 @@ class PageDetailViewModel(
                 // from the name at construction, so the stored row is the authoritative one.
                 labelDao.findByName(trimmed)!!
             }
+            // §0.6.8 — a label that makes this page a task is applied only after the person has
+            // been told so, once per database.
+            val asks = labelMembership.needsConfirmation(label)
+            if (asks != null && labels.value.none { it.id == label.id }) {
+                _pendingLabel.value = PendingLabel(label, asks)
+                return@launch
+            }
             // The one page-content mutation here that does not go through a launcher, because
             // its bump is conditional: picking a label the page already carries changes nothing,
             // and bumping anyway would claim authorship of an edit that did not happen — enough
             // under LWW to beat a real edit sitting unsynced on another device.
-            if (labels.value.none { it.id == label.id }) {
-                labelDao.addToPage(PageLabel(pageId = pageId, tagId = label.id))
-                touch()
-            }
+            if (labelMembership.applyLabel(pageId, label)) touch()
         }
     }
 
-    fun removeLabel(label: Label) = launchTouching { labelDao.removeFromPage(pageId, label.id) }
+    /** §0.6.8 — through [LabelMembership], so a label that made this page a task takes the task
+     * with it; the page's values for that database stay, hidden until the label returns. */
+    fun removeLabel(label: Label) = launchTouching { labelMembership.removeLabel(pageId, label) }
 
     /** Unbound cell edit for this Row — a bound role (Done/Deadline/Recurrence) never reaches
      * this path; those edit through [toggleRowDone]/[setRowBoundDate]/[setRowRecurrence]. */

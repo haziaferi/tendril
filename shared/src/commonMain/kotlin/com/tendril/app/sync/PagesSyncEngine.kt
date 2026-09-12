@@ -232,11 +232,10 @@ class PagesSyncEngine(
                 updatedAt = page.updatedAt.toEpochMilli(),
                 labels = labelDao.getForPage(page.id).map { it.name },
                 blocks = blocks.map { it.toSnapshot(pageIdToUid, blockIdToUid) },
-                propertyValues = if (page.databaseId != null) {
-                    propertyValueDao.getForRow(page.id).mapNotNull { pv ->
-                        propertyIdToUid[pv.propertyId]?.let { PropertyValueSnapshotRecord(it, pv.value) }
-                    }
-                } else emptyList(),
+                // §0.6.8 — every page, not only rows: a labelled page carries values too.
+                propertyValues = propertyValueDao.getForRow(page.id).mapNotNull { pv ->
+                    propertyIdToUid[pv.propertyId]?.let { PropertyValueSnapshotRecord(it, pv.value) }
+                },
                 database = if (page.kind == PageKind.DATABASE) exportDatabase(page.id, propertyIdToUid) else null,
                 canvas = if (page.kind == PageKind.CANVAS) exportCanvas(page.id, pageIdToUid) else null,
             )
@@ -252,6 +251,8 @@ class PagesSyncEngine(
             deadlinePropertyUid = db.deadlinePropertyId?.let { propertyIdToUid[it] },
             dueDatePropertyUid = db.dueDatePropertyId?.let { propertyIdToUid[it] },
             recurrencePropertyUid = db.recurrencePropertyId?.let { propertyIdToUid[it] },
+            labelName = db.labelId?.let { labelDao.getById(it)?.name },
+            labelConfirmed = db.labelConfirmed,
             properties = properties.map { PropertySnapshotRecord(it.uid, it.name, it.type.name, it.config, it.order) },
             views = pageDatabaseViewDao.getForDatabase(db.id).map { v ->
                 ViewSnapshotRecord(
@@ -620,6 +621,10 @@ class PagesSyncEngine(
                     deadlinePropertyId = db.deadlinePropertyUid?.let { propertyUidToId[it] },
                     dueDatePropertyId = db.dueDatePropertyUid?.let { propertyUidToId[it] },
                     recurrencePropertyId = db.recurrencePropertyUid?.let { propertyUidToId[it] },
+                    // §0.6.8 — resolved by name exactly as Pass 5 resolves a page's labels, and
+                    // created the same way when this device has never seen it.
+                    labelId = db.labelName?.let { name -> labelDao.findByName(name)?.id ?: labelDao.insert(Label(name = name)) },
+                    labelConfirmed = db.labelConfirmed,
                     updatedAt = Instant.ofEpochMilli(page.updatedAt),
                 )
             )
@@ -706,12 +711,11 @@ class PagesSyncEngine(
                 labelDao.addToPage(PageLabel(pageId = pageId, tagId = tagId))
             }
 
-            if (page.record.databaseUid != null) {
-                propertyValueDao.deleteAllForRow(pageId)
-                for (pv in page.record.propertyValues) {
-                    val propertyId = propertyUidToId[pv.propertyUid] ?: continue
-                    propertyValueDao.insert(PropertyValue(propertyId = propertyId, rowPageId = pageId, value = pv.value))
-                }
+            // §0.6.8 — every winning page, not only rows; see the record's own note.
+            propertyValueDao.deleteAllForRow(pageId)
+            for (pv in page.record.propertyValues) {
+                val propertyId = propertyUidToId[pv.propertyUid] ?: continue
+                propertyValueDao.insert(PropertyValue(propertyId = propertyId, rowPageId = pageId, value = pv.value))
             }
         }
 
@@ -884,9 +888,9 @@ private class PageQuarantineSweep(
  * That refinement is per *referenced thing*, not per referring record, and the two sets above are
  * separate for exactly that reason: a page reference resolves against [localPageUids], a column
  * reference against [localPropertyUids], and a locally-held DATABASE page satisfies the first
- * while saying nothing whatever about the second. [withheldPages] below is what keeps that
- * question askable — it holds every uid this pass withheld, local ones included, where
- * `danglingPages` deliberately drops those.
+ * while saying nothing whatever about the second. `knownColumns` below is what keeps that
+ * question askable: a cell is checked against the columns anything this pass can see defines,
+ * whichever page — local or not, withheld or not — it hangs off.
  */
 private fun quarantineSweep(
     admitted: List<PageSnapshotRecord>,
@@ -899,11 +903,6 @@ private fun quarantineSweep(
     // column standing behind them.
     val danglingPages = unreadableUids.filterNotTo(mutableSetOf()) { it in localPageUids }
     val danglingProperties = mutableSetOf<String>()
-    // Every uid this pass withheld, *including* the ones this device holds a row for. Those are
-    // not dangling as pages — but a database page is not only a page, and a row of one this pass
-    // could not read has to be asked a second question about its cells. See
-    // [PageSnapshotRecord.danglingReferenceDetail].
-    val withheldPages = unreadableUids.toMutableSet()
     // The columns a cell could still be placed against: everything this device already holds,
     // plus everything any record in this batch defines. A record withheld later still counts here
     // — its columns are named in `danglingProperties` by `withhold` below, which is the sharper
@@ -918,7 +917,6 @@ private fun quarantineSweep(
     // not decode: only `PropertyType` failed, so the uids are right there in the JSON. That is
     // what lets a row's cell values be checked at all.
     fun withhold(record: PageSnapshotRecord) {
-        withheldPages += record.uid
         if (record.uid !in localPageUids) danglingPages += record.uid
         for (p in record.database?.properties.orEmpty()) {
             if (p.uid !in localPropertyUids) danglingProperties += p.uid
@@ -943,7 +941,6 @@ private fun quarantineSweep(
             val detail = page.record.danglingReferenceDetail(
                 pages = danglingPages,
                 properties = danglingProperties,
-                withheldPages = withheldPages,
                 knownColumns = knownColumns,
             )
             if (detail == null) {
@@ -978,28 +975,26 @@ private fun quarantineSweep(
  *
  * [pages] and [properties] are the withheld referents that also fail to resolve locally. The
  * third clause is the one that cannot be expressed as a set of withheld uids, because the uids in
- * question were never legible: [withheldPages] holds *every* uid this pass withheld, local rows
- * included, and a row whose own `databaseUid` is one of them is asked whether its cells can still
- * be placed at all. A column that is neither local nor defined by any record in this batch
- * ([knownColumns]) can only have come from the withheld database page — so Pass 5 will drop that
- * cell and the export will republish the row without it. That is the loss the page-level test
- * cannot see, precisely because the database page itself resolves: this device has held it for
- * months, and the file it could not read is the one that added the column.
+ * question were never legible: a cell whose column is neither local nor defined by any record in
+ * this batch ([knownColumns]) can only have come from a database page this pass could not read
+ * — so Pass 5 would drop that cell and the export would republish the page without it. That is
+ * the loss the page-level test cannot see, precisely because the database page itself resolves:
+ * this device has held it for months, and the file it could not read is the one that added the
+ * column. Until §0.6.8 this was asked only of a row whose own `databaseUid` was withheld; a
+ * labelled page has no `databaseUid` pointing at the database whose column it carries, so it is
+ * now asked of every record, which for a native row is the same question.
  */
 private fun PageSnapshotRecord.danglingReferenceDetail(
     pages: Set<String>,
     properties: Set<String>,
-    withheldPages: Set<String>,
     knownColumns: Set<String>,
 ): String? {
     referencedPageUids().firstOrNull { it in pages }
         ?.let { return unrecognisedValueDetail("linked page", it) }
     propertyValues.firstOrNull { it.propertyUid in properties }
         ?.let { return unrecognisedValueDetail("database column", it.propertyUid) }
-    if (databaseUid?.let { it in withheldPages } == true) {
-        propertyValues.firstOrNull { it.propertyUid !in knownColumns }
-            ?.let { return unrecognisedValueDetail("database column", it.propertyUid) }
-    }
+    propertyValues.firstOrNull { it.propertyUid !in knownColumns }
+        ?.let { return unrecognisedValueDetail("database column", it.propertyUid) }
     return null
 }
 

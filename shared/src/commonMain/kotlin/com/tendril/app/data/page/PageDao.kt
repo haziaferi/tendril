@@ -43,12 +43,31 @@ interface PageDao {
     @Query("SELECT * FROM pages WHERE parentId IS NULL AND isTemplate = 0 AND databaseId IS NULL AND deletedAt IS NULL ORDER BY title")
     fun observeRootPages(): Flow<List<Page>>
 
-    /** Rows of a Database (§5.1) — a Row is a Page with `databaseId` set. */
-    @Query("SELECT * FROM pages WHERE databaseId = :databaseId AND deletedAt IS NULL ORDER BY id")
-    fun observeRowsOf(databaseId: Long): Flow<List<Page>>
-
+    /** *Native* rows of a Database (§5.1) — a Page with `databaseId` set, its home. Since
+     * §0.6.8 a database's members are more than its native rows; views and bindings read
+     * [observeMembersOf]/[getMembersOf], and this one is for the Notion importer, which only
+     * ever creates natives. */
     @Query("SELECT * FROM pages WHERE databaseId = :databaseId AND deletedAt IS NULL ORDER BY id")
     suspend fun getRowsOf(databaseId: Long): List<Page>
+
+    /**
+     * §0.6.8 — a database's members: its native rows, plus every undeleted, non-template page
+     * carrying its bound label (`page_tags`, the §3.1.6 join). One query rather than two merged
+     * in Kotlin so the table view keeps its single source, and a native row that also carries
+     * the label is one row, not two. [labelId] null means "natives only", which is every
+     * database that has not bound a label — the query then costs what [getRowsOf] does.
+     */
+    @Query(
+        "SELECT * FROM pages WHERE deletedAt IS NULL AND isTemplate = 0 AND (databaseId = :databaseId " +
+            "OR (:labelId IS NOT NULL AND id IN (SELECT pageId FROM page_tags WHERE tagId = :labelId))) ORDER BY id"
+    )
+    fun observeMembersOf(databaseId: Long, labelId: Long?): Flow<List<Page>>
+
+    @Query(
+        "SELECT * FROM pages WHERE deletedAt IS NULL AND isTemplate = 0 AND (databaseId = :databaseId " +
+            "OR (:labelId IS NOT NULL AND id IN (SELECT pageId FROM page_tags WHERE tagId = :labelId))) ORDER BY id"
+    )
+    suspend fun getMembersOf(databaseId: Long, labelId: Long?): List<Page>
 
     @Query("SELECT * FROM pages WHERE isTemplate = 1 AND deletedAt IS NULL ORDER BY title")
     fun observeTemplates(): Flow<List<Page>>

@@ -21,6 +21,7 @@ import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
+import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.formula.FormulaCheckResult
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
@@ -121,6 +122,7 @@ class WritePathSyncTest {
             DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase)
         val viewLockState = ViewLockState()
         val checkboxOnlyState = CheckboxOnlyState()
+        val labelMembership = LabelMembership(pageDao, pageDatabaseDao, labelDao, entryDao, databaseSyncManager, resolveEntryUseCase)
 
         val purgedDao = FakePurgedRecordDao()
         val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
@@ -143,12 +145,12 @@ class WritePathSyncTest {
 
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
-            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore()
+            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership
         )
 
         fun database(pageId: Long) = PageDatabaseViewModel(
             pageId, pageDao, pageDatabaseDao, propertyDao, propertyValueDao, entryDao, viewDao, blockDao,
-            databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState,
+            databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState, labelDao, labelMembership,
         )
 
         fun canvas(pageId: Long) = CanvasViewModel(pageId, pageDao, canvasDao, nodeDao, edgeDao, viewLockState)

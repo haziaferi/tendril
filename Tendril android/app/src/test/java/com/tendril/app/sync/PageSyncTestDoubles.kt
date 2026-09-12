@@ -129,6 +129,15 @@ class FakePageDao(private val store: FakePageStore) : PageDao {
     override suspend fun getRowsOf(databaseId: Long): List<Page> =
         store.pages.values.filter { it.databaseId == databaseId && it.deletedAt == null }
 
+    override suspend fun getMembersOf(databaseId: Long, labelId: Long?): List<Page> = membersOf(databaseId, labelId)
+    override fun observeMembersOf(databaseId: Long, labelId: Long?): Flow<List<Page>> = flowOf(membersOf(databaseId, labelId))
+    private fun membersOf(databaseId: Long, labelId: Long?): List<Page> {
+        val labelled = if (labelId == null) emptySet() else store.pageTags.filter { it.tagId == labelId }.map { it.pageId }.toSet()
+        return store.pages.values
+            .filter { it.deletedAt == null && !it.isTemplate && (it.databaseId == databaseId || it.id in labelled) }
+            .sortedBy { it.id }
+    }
+
     override suspend fun getByKind(kind: PageKind): List<Page> =
         store.pages.values.filter { it.kind == kind && it.deletedAt == null }.sortedBy { it.title }
 
@@ -162,9 +171,6 @@ class FakePageDao(private val store: FakePageStore) : PageDao {
     override fun observeById(id: Long): Flow<Page?> = flowOf(store.pages[id])
     override fun observeRootPages(): Flow<List<Page>> = flowOf(
         store.pages.values.filter { it.parentId == null && !it.isTemplate && it.databaseId == null && it.deletedAt == null }
-    )
-    override fun observeRowsOf(databaseId: Long): Flow<List<Page>> = flowOf(
-        store.pages.values.filter { it.databaseId == databaseId && it.deletedAt == null }
     )
     override fun observeTemplates(): Flow<List<Page>> = flowOf(store.pages.values.filter { it.isTemplate && it.deletedAt == null })
     override fun observeTrash(): Flow<List<Page>> = flowOf(store.pages.values.filter { it.deletedAt != null })
@@ -224,6 +230,7 @@ class FakeLabelDao(private val store: FakePageStore) : LabelDao {
     }
 
     override suspend fun findByName(name: String): Label? = store.labels.values.firstOrNull { it.name == name }
+    override suspend fun getById(id: Long): Label? = store.labels[id]
     override suspend fun search(query: String): List<Label> = store.labels.values.filter { it.name.contains(query) }
 
     override suspend fun getForPage(pageId: Long): List<Label> =
@@ -259,6 +266,10 @@ class FakePageDatabaseDao(private val store: FakePageStore) : PageDatabaseDao {
     override fun observeById(id: Long): Flow<PageDatabase?> = flowOf(store.databases[id])
     override fun observeByPageId(pageId: Long): Flow<PageDatabase?> =
         flowOf(store.databases.values.firstOrNull { it.pageId == pageId })
+    override suspend fun getByLabelId(labelId: Long): List<PageDatabase> = store.databases.values.filter { it.labelId == labelId }
+    override fun observeDatabasesForLabels(labelIds: List<Long>): Flow<List<PageDatabase>> =
+        flowOf(store.databases.values.filter { it.labelId in labelIds && store.pages[it.pageId]?.deletedAt == null })
+    override fun observeBoundLabelIds(): Flow<List<Long>> = flowOf(store.databases.values.mapNotNull { it.labelId })
 }
 
 class FakePropertyDao(private val store: FakePageStore) : PropertyDao {

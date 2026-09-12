@@ -136,3 +136,15 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
         connection.execSQL("ALTER TABLE `blocks` ADD COLUMN `mindMap` INTEGER NOT NULL DEFAULT 0")
     }
 }
+
+/**
+ * §9.10 / §0.6.8 — v12 → v13. Schema on a label: the database's bound label, nullable so no
+ * database gains one by upgrading, and the once-only acknowledgement, false for the same reason.
+ * Membership itself needs no table — it is `page_tags`, which already exists.
+ */
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `labelId` INTEGER")
+        connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `labelConfirmed` INTEGER NOT NULL DEFAULT 0")
+    }
+}

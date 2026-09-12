@@ -34,6 +34,19 @@ data class PageDatabase(
     val dueDatePropertyId: Long? = null,
     /** §5.2.2 — optional; only ever binds an `Interval`-type Property. */
     val recurrencePropertyId: Long? = null,
+    /**
+     * §0.6.8 (v13) — the *doorway*: a `Label` this database has bound. A page carrying it is a
+     * member — a full row in every view, this database's fields in its header — while keeping
+     * its own place in the tree; membership is the union `Page.databaseId == id` ∪ carries the
+     * label ([com.tendril.app.data.page.PageDao.getMembersOf]). Null until someone binds one,
+     * which is what keeps this the same app for anyone who never does (E12). No foreign key: a
+     * label is never deleted today, and a dangling id would simply match nothing.
+     */
+    val labelId: Long? = null,
+    /** §0.6.8 — set once the person has seen "pages carrying this label become tasks", which is
+     * asked the first time the label is applied while [syncToTasks] is on. A column rather than
+     * a device preference so the answer travels with the database. */
+    val labelConfirmed: Boolean = false,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

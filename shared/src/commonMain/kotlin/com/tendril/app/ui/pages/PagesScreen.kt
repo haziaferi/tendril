@@ -120,6 +120,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
     val pages by viewModel.filteredPages.collectAsState()
     val allLabels by viewModel.allLabels.collectAsState()
     val selectedLabelIds by viewModel.selectedLabelIds.collectAsState()
+    val boundLabelIds by viewModel.boundLabelIds.collectAsState()
     val viewOnly by viewModel.viewOnly.collectAsState()
     var showSearch by remember { mutableStateOf(false) }
     var showNewSheet by remember { mutableStateOf(false) }
@@ -213,6 +214,10 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, modifier: Modif
                             selected = label.id in selectedLabelIds,
                             onClick = { viewModel.toggleLabelFilter(label.id) },
                             label = { Text(label.name, maxLines = 1) },
+                            // §0.6.8 / B§12.0 — the small mark on a label that brings fields.
+                            leadingIcon = if (label.id in boundLabelIds) {
+                                { Icon(Icons.Filled.TableChart, contentDescription = "Brings a database's fields", modifier = Modifier.size(14.dp)) }
+                            } else null,
                         )
                     }
                 }
