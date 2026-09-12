@@ -4,6 +4,7 @@ import com.tendril.app.data.TendrilDatabase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryEditor
+import com.tendril.app.domain.ics.IcsImporter
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.PageContentRepository
@@ -41,6 +42,9 @@ class WorkbenchCore(
 ) {
     /** §0.6.8 — built from what is already here rather than passed in, so the two containers
      * need no change; [LabelMembership] holds no state of its own. */
+    /** §0.8 step 6e — `.ics` in; derived like the rest. Out is [com.tendril.app.domain.ics.IcsWriter], pure. */
+    val icsImporter: IcsImporter by lazy { IcsImporter(database.entryDao(), entryScheduleCoordinator) }
+
     /** §0.8 step 6b — the one edit path for a stored Entry; derived like [labelMembership]. */
     val entryEditor: EntryEditor by lazy { EntryEditor(database.entryDao(), entryScheduleCoordinator) }
 

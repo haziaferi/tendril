@@ -90,6 +90,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 6a: Calendar → shared) | `CalendarScreen`/`CalendarViewModel` moved to `shared/src/commonMain/.../ui/calendar/`, the same move step 1 made for the Canvas: the screen takes `WorkbenchCore` and two slots — the Google Calendar settings sheet (now `CalendarSettingsSheet.kt` in the Android app, Play Services) and the Reminders sheet (alarms; null on desktop hides the bell). Six strings join `shared/`'s resources. No behaviour change on Android; desktop gains the Calendar. Verified on the desktop preview: Day/Week/Month, Quick Add of `Standup 9-9:30am every weekday` drawn on Monday and not Sunday, the `···` sheet. 612 tests. | §0.8, §3.2 |
 | 2026-09-12 (step 6b: edit path, drag-to-move) | `domain/EntryEditor` (`save` normalises for the kind, `move` keeps a span's length and makes an override row for *this one* of a series), `ui/entries/EntryEditSheet`, a tap target on the Day row, long-press-drag between Week's day cards with a ghost and a *this one / all* question. Sheets that are taller than a desktop window now open fully expanded — §0.10 item 11 resolved. §3.2 amended in place; the Day view's hour-drag deferred to step 7's timeline, said there. Verified on desktop: a series edited (title, time; its `BYDAY` rule kept), a Saturday occurrence dragged to Monday as *this one* → an override row, the series untouched. 620 tests. | §0.8, §0.10, §3.2 |
 | 2026-09-12 (step 6c+6d: Agenda, layers) | `CalendarView.AGENDA` (30 days grouped by day); `CalendarLayers` in the ViewModel with a chip row — Tasks/Events filter the rows, Habits draws timed habits on every day, Database dates draws every stored `DATE` cell (`PropertyValueDao.observeDateCells`, a joined projection) and opens the page on tap; Week lists and Month counts the extras too. `CalendarScreen` gains `onOpenPage`, threaded through the scaffold's slot. §3.2 amended in place (Agenda; Show Habits built as a layer); §0.10 item 12 opened (layer persistence). Verified on desktop (Agenda; a seeded `Read on` cell on Wed 16 opening its page) and on the phone (Agenda; a timed habit *Stretch 09:00* appears with the layer on and hides with it off; 6b's sheet and Week drag also walked there: estimate saved, *Call bank* dragged Sat → Sun). 620 tests. | §0.8, §0.10, §3.2 |
+| 2026-09-12 (step 6e: ICS) | `domain/ics/` — `IcsWriter` (RFC 5545 by hand: VEVENT/VTODO, TZID times, exclusive all-day DTEND, RECURRENCE-ID + RELATED-TO for moved occurrences, EXDATE for skips, 75-octet folding), `IcsReader` (unfolding, `Z`/`TZID`/floating/`VALUE=DATE`, nested VALARM skipped) and `IcsImporter` (by UID, updates not duplicates, overrides and skips into §4.1's rows, every write through the coordinator). Android: Settings › Calendar (.ics); desktop: the Calendar's `···`. §3.2 gains the bullet; §0.10 item 6 annotated. Verified: desktop export → a valid file → re-import "0 new, 4 updated", still 4 rows; phone export ("1 event(s) and 6 task(s)") → re-import "0 new, 7 updated", still 7. 624 tests. **Step 6 complete.** | §0.8, §0.10, §3.2 |
 
 ---
 
@@ -393,7 +394,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
-| 6 | Calendar: **6a** the screen → `shared/` — *done 2026-09-12*; **6b** edit path + drag-to-move — *done 2026-09-12*; **6c+6d** Agenda, layers incl. "Show Habits" and database dates — *done 2026-09-12*; then **6e** ICS (B§6 #7) | 7 |
+| 6 | Calendar: **6a** the screen → `shared/`; **6b** edit path + drag-to-move; **6c+6d** Agenda, layers incl. "Show Habits" and database dates; **6e** ICS — *all done 2026-09-12* | 7 |
 | 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
@@ -427,7 +428,7 @@ Genuinely undecided — distinct from §0.7.
    habit.
 5. **Command palette / quick switcher**: reopens §3.1.7's deferral; the FTS title-not-indexed
    defect (§3.1.1) is fixed first regardless.
-6. Where **JSON Canvas** files go — in the Markdown zip or beside `.tendril`.
+6. Where **JSON Canvas** files go — in the Markdown zip or beside `.tendril`. *(2026-09-12: the `.ics` export answered the same question for itself — a file the person picks, never the sync folder — and JSON Canvas should follow when built.)*
 7. Whether the Canvas page kind and the block share one composable at two sizes exactly as the
    mind map does (recommended) or the page kind keeps its own screen.
 8. ~~Nesting **rendering** past a few levels on a phone width — an indentation budget, or a fold.~~ *Resolved 2026-09-11: a 24dp step for six levels, 8dp after.*
@@ -1069,6 +1070,16 @@ composable ("No pages match '…'").
   rows carry no bell; they navigate to Day. The same phrase is corrected in §5.4 the same day.)*
 - Recurrence (Decided, §6.2): `None / Daily / Weekly / Monthly / Custom (interval + unit)`, anchored
   to the **original fixed schedule** — a missed occurrence does not shift subsequent ones
+- **iCalendar (.ics)** *(**added 2026-09-12, §0.8 step 6e, B§6 #7)*: export every task and event —
+  `VEVENT` for events with their `RRULE`, `VTODO` for tasks with `DUE`, `STATUS`, `PRIORITY` for the
+  flag and `DURATION` for the estimate, a task's period written as an `RRULE`; a moved occurrence is
+  its own component with `RECURRENCE-ID` (and `RELATED-TO` its base), a skipped one an `EXDATE`;
+  `UID` = the Entry's uid. Import reads `VEVENT` and `VTODO` (Google's and Apple's `Z`, `TZID` and
+  all-day forms, folded lines), matches on `UID` so the same file twice — or Tendril's own export —
+  updates rather than duplicates, and writes every row through the coordinator. Reached from
+  Settings › Calendar (.ics) on Android (the document picker) and from the Calendar's `···` on
+  desktop (a file dialog), since desktop has no Settings yet. The file goes where the person puts
+  it, never into the sync folder — the same answer §0.10 item 6 wanted for JSON Canvas.
 
 ### 3.3 Tasks & Habits
 
