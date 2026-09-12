@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.domain.track.formatMinutes
 import com.tendril.app.domain.PostponeAmount
 import com.tendril.app.domain.PostponeUnit
 import com.tendril.app.domain.TimeOfDay
@@ -156,12 +157,14 @@ internal fun DeadlineDialog(current: LocalDate?, onSet: (LocalDate?) -> Unit, on
 @Composable
 internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onDismiss: () -> Unit) {
     val presence by viewModel.habitPresence(habit.id).collectAsState(initial = null)
+    // §0.6.5 — the logged minutes join the presence sentences; zero says nothing, like the rest.
+    val loggedMinutes by viewModel.habitLoggedThisMonth(habit.id).collectAsState(initial = 0)
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(habit.title, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
             val p = presence
-            if (p == null || (p.lastDate == null && p.timesThisMonth == 0)) {
+            if (p == null || (p.lastDate == null && p.timesThisMonth == 0 && loggedMinutes == 0)) {
                 Text(
                     "Here whenever you want it.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -175,6 +178,7 @@ internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, sho
                     p.usualTime?.let { add("Usually ${it.word()}") }
                     p.lastDate?.let { add("Last: ${it.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())}, ${it.dayOfMonth} ${it.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}") }
                     if (showStreak && habit.streak > 0) add("Streak: ${habit.streak}")
+                    if (loggedMinutes > 0) add("${formatMinutes(loggedMinutes)} logged this month")
                 }
                 lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
                 Spacer(Modifier.height(16.dp))

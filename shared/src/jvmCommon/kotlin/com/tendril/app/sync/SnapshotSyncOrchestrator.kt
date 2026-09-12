@@ -8,6 +8,8 @@ import com.tendril.app.data.enumOrNull
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.data.track.TimeLog
+import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
@@ -43,6 +45,7 @@ private const val FILE_HABITS = "habits.json"
 private const val FILE_REMINDERS = "reminders.json"
 private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_HABIT_COMPLETIONS = "habit_completions.json"
+private const val FILE_TIME_LOGS = "time_logs.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
 
@@ -60,7 +63,7 @@ private const val FILE_META = "sync_meta.json"
  * both would put one uid in two files at once. Pooling by family says that once, instead of
  * leaving each future file to remember it.
  */
-private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION, HABIT_COMPLETION }
+private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION, HABIT_COMPLETION, TIME_LOG }
 
 /**
  * **Every folder-wide array file the write pass publishes — the list a new one must join.**
@@ -106,6 +109,7 @@ private enum class FolderArrayFile(
         RecordFamily.HABIT_COMPLETION,
         HabitCompletionSnapshotRecord.serializer().descriptor,
     ),
+    TIME_LOGS(FILE_TIME_LOGS, RecordFamily.TIME_LOG, TimeLogSnapshotRecord.serializer().descriptor),
     RELATIONS(FILE_RELATIONS, RecordFamily.RELATION, PageRelationSnapshotRecord.serializer().descriptor),
     PURGED(FILE_PURGED, RecordFamily.PURGE, PurgedRecordSnapshot.serializer().descriptor),
 }
@@ -332,6 +336,7 @@ private class ReadTally {
     val reminders = HeldBuilder(FolderArrayFile.REMINDERS, quarantined)
     val completions = HeldBuilder(FolderArrayFile.ENTRY_COMPLETIONS, quarantined)
     val habitCompletions = HeldBuilder(FolderArrayFile.HABIT_COMPLETIONS, quarantined)
+    val timeLogs = HeldBuilder(FolderArrayFile.TIME_LOGS, quarantined)
     val relations = HeldBuilder(FolderArrayFile.RELATIONS, quarantined)
     val purged = HeldBuilder(FolderArrayFile.PURGED, quarantined)
 
@@ -439,6 +444,7 @@ class SnapshotSyncOrchestrator(
     private val reminderDao: ReminderDao,
     private val entryCompletionDao: EntryCompletionDao,
     private val habitCompletionDao: HabitCompletionDao,
+    private val timeLogDao: TimeLogDao,
     private val pagesSyncEngine: PagesSyncEngine,
     private val purgeRegistry: PurgeRegistry,
     /** §9.4 / S4 — where this device keeps its image files. Required rather than defaulted: a
@@ -632,6 +638,7 @@ class SnapshotSyncOrchestrator(
         val allReminders = reminderDao.getAll()
         val allCompletions = entryCompletionDao.getAll()
         val allHabitCompletions = habitCompletionDao.getAll()
+        val allTimeLogs = timeLogDao.getAll()
         val habitIdToUid = allHabits.associate { it.id to it.uid }
         val (active, archived) = allEntries.partition { it.isActive() }
 
@@ -684,6 +691,18 @@ class SnapshotSyncOrchestrator(
                     elementsOf(
                         allHabitCompletions.filterNot { it.uid in suppressed }
                             .mapNotNull { c -> habitIdToUid[c.habitId]?.let { c.toSnapshot(it) } }
+                    )
+                // §0.6.5 — both edited and tombstoned, so every row travels, closed or deleted or
+                // not. The owner is whichever of the two the log has; a log with neither, or with
+                // an owner Room no longer holds, is a state the cascades do not permit — dropped
+                // rather than published with an invented uid, as the reminder arm says.
+                FolderArrayFile.TIME_LOGS ->
+                    elementsOf(
+                        allTimeLogs.filterNot { it.uid in suppressed }.mapNotNull { log ->
+                            val entryUid = log.entryId?.let(idToUid::get)
+                            val habitUid = log.habitId?.let(habitIdToUid::get)
+                            if (entryUid == null && habitUid == null) null else log.toSnapshot(entryUid, habitUid)
+                        }
                     )
                 // §3.4's manual edges. Nothing is filtered against `suppressed`: a relation names
                 // no uid of its own, and what this device holds back is held whole — see
@@ -1025,6 +1044,8 @@ class SnapshotSyncOrchestrator(
         // [mergeReminderContent].
         mergeReminderFile(store, read)
         mergeCompletionFile(store, read)
+        // After both the Entries and the Habits: a log's owner is either.
+        mergeTimeLogFile(store, read)
 
         // Syncthing conflict siblings: <name>.sync-conflict-<date>-<deviceID>.json
         //
@@ -1046,6 +1067,7 @@ class SnapshotSyncOrchestrator(
                     mergeCompletionContent(readRootText(store, name, read), read.tally)
                 name.startsWith("habit_completions") ->
                     mergeHabitCompletionContent(readRootText(store, name, read), read.tally)
+                name.startsWith("time_logs") -> mergeTimeLogContent(readRootText(store, name, read), read.tally)
                 name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, read))
                 name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, read))
                 else -> false
@@ -1076,6 +1098,7 @@ class SnapshotSyncOrchestrator(
                     FolderArrayFile.REMINDERS -> read.tally.reminders
                     FolderArrayFile.ENTRY_COMPLETIONS -> read.tally.completions
                     FolderArrayFile.HABIT_COMPLETIONS -> read.tally.habitCompletions
+                    FolderArrayFile.TIME_LOGS -> read.tally.timeLogs
                     FolderArrayFile.RELATIONS -> read.tally.relations
                     FolderArrayFile.PURGED -> read.tally.purged
                 }.frozen()
@@ -1768,6 +1791,60 @@ class SnapshotSyncOrchestrator(
                 local == null -> habitCompletionDao.insert(entity)
                 local.deletedAt == null && remoteDeletedAt != null ->
                     habitCompletionDao.softDelete(local.id, remoteDeletedAt)
+                else -> Unit
+            }
+        }
+        return allRead
+    }
+
+    private suspend fun mergeTimeLogFile(store: SyncFileStore, read: ReadKey) {
+        mergeTimeLogContent(readRootText(store, FolderArrayFile.TIME_LOGS.fileName, read), read.tally, held = read.tally.timeLogs)
+    }
+
+    /**
+     * §0.6.5 — tracked time. The one family that is both edited and tombstoned: a log is inserted
+     * open, closed later, and can be deleted. So the two rules the other families use alone are
+     * combined, in this order — **"deleted on any device wins"** ([mergeReminderContent]'s rule,
+     * comparison-free), and otherwise **the later `updatedAt` wins** ([mergeHabitContent]'s).
+     * A device that stops a timer the other device deleted keeps the deletion; two devices that
+     * both close the same log keep the later close, which is the honest one — the person was
+     * still working when the first device thought they had stopped.
+     *
+     * Held on an unresolvable owner for the reason [mergeReminderContent] gives; an unreadable
+     * element is held only once known to outrank the local row, as [mergeHabitContent] does.
+     */
+    private suspend fun mergeTimeLogContent(
+        content: String,
+        tally: ReadTally,
+        held: HeldBuilder? = null,
+    ): Boolean {
+        val elements = decodeArray(content, held) ?: return false
+        val entryUidToId = entryDao.getAll().associate { it.uid to it.id }
+        val habitUidToId = habitDao.getAll().associate { it.uid to it.id }
+        var allRead = true
+        for (element in elements) {
+            val record = decodeRecord<TimeLogSnapshotRecord>(element)
+            if (record == null) {
+                allRead = false
+                tally.quarantineElement(QuarantinedRecord.TIME_LOG, element)
+                val uid = element.uidOrNull()
+                if (element.outranks(uid?.let { timeLogDao.getByUid(it) }?.updatedAt)) held?.hold(element, uid)
+                continue
+            }
+            val entryId = record.entryUid?.let(entryUidToId::get)
+            val habitId = record.habitUid?.let(habitUidToId::get)
+            if (entryId == null && habitId == null) {
+                allRead = false
+                held?.hold(element, record.uid)
+                continue
+            }
+            val entity: TimeLog = record.toEntity(entryId, habitId)
+            val local = timeLogDao.getByUid(record.uid)
+            when {
+                local == null -> timeLogDao.insert(entity)
+                local.deletedAt == null && entity.deletedAt != null -> timeLogDao.softDelete(local.id, entity.deletedAt)
+                local.deletedAt != null -> Unit
+                entity.updatedAt.isAfter(local.updatedAt) -> timeLogDao.update(entity.copy(id = local.id))
                 else -> Unit
             }
         }

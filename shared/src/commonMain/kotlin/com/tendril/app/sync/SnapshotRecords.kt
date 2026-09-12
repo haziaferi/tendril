@@ -136,6 +136,23 @@ data class HabitCompletionSnapshotRecord(
 )
 
 /**
+ * §0.6.5 / v14 — one stretch of tracked time, travelling as [com.tendril.app.data.track.TimeLog]
+ * does locally: the owner by uid (one of the two, never both), a tombstone *and* an `updatedAt`,
+ * because a log is both edited (closed) and deletable — "deleted on any device wins", else the
+ * later write. An owner that has not merged here yet holds the record, as a reminder's does.
+ */
+@Serializable
+data class TimeLogSnapshotRecord(
+    val uid: String,
+    val entryUid: String? = null,
+    val habitUid: String? = null,
+    val startedAt: Long,
+    val endedAt: Long? = null,
+    val deletedAt: Long? = null,
+    val updatedAt: Long,
+)
+
+/**
  * §5.5.1.1 — one "deleted forever" fact, as it travels. Carrying [purgedAt] rather than just
  * the uid is what makes a purge comparable with an edit: the later of the two wins, so a stale
  * delete can't quietly destroy work a device did after it (see

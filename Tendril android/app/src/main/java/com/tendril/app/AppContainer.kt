@@ -7,6 +7,7 @@ import com.tendril.app.data.TendrilDatabase
 import com.tendril.app.data.openTendrilDatabase
 import com.tendril.app.domain.AndroidEntryScheduleCoordinator
 import com.tendril.app.domain.CheckInHabitUseCase
+import com.tendril.app.domain.track.TimeTracker
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
@@ -78,7 +79,7 @@ class AppContainer(context: Context) {
     val localImages = AndroidLocalImageStore(context)
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), pagesSyncEngine, purgeRegistry,
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.timeLogDao(), pagesSyncEngine, purgeRegistry,
         localImages,
     )
     /** §7 in reverse — every live page as Markdown in a zip. Takes daos and a stream rather
@@ -91,7 +92,7 @@ class AppContainer(context: Context) {
     val viewLockState = ViewLockState()
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(),
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.timeLogDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4 / S4 — the same store the sync folder's fetch writes into, so a picture that
         // arrived in a `.tendril` package and one that arrived from a peer are indistinguishable
@@ -117,6 +118,8 @@ class AppContainer(context: Context) {
         database.propertyDao(), database.propertyValueDao(), pageContentRepository,
     )
     val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao())
+    /** §0.6.5 — the notification's Stop action and the shade's chronometer share this with the UI. */
+    val timeTracker = TimeTracker(database.timeLogDao())
     val googleCalendarPreferences = GoogleCalendarPreferences(context)
     // `by lazy`, not an eager val: GoogleCalendarAuthManager's constructor calls
     // Identity.getAuthorizationClient(...), so an eager one built a Play Services

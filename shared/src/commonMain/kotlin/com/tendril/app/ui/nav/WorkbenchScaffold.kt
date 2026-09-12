@@ -1,6 +1,7 @@
 package com.tendril.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -23,6 +24,7 @@ import com.tendril.app.ui.canvas.CanvasScreen
 import com.tendril.app.ui.pages.PageDatabaseScreen
 import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
+import com.tendril.app.ui.track.RunningTimerBar
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -87,7 +89,9 @@ fun WorkbenchScaffold(
             // the LaunchedEffect above deactivates on a page change, but it runs after that frame
             // has already been drawn, which is exactly one frame of Settings too many. Removing
             // the control removes the path, rather than racing it.
-            bottomBar = { if (!bypassingKeyguard) WorkbenchBottomBar(navState) },
+            // §0.6.5 / step 7c — the running timer rides above the tabs: the one place every
+            // route on both platforms shares, since no screen's own TopAppBar is.
+            bottomBar = { if (!bypassingKeyguard) Column { RunningTimerBar(core); WorkbenchBottomBar(navState) } },
         ) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
                 when (val current = route) {

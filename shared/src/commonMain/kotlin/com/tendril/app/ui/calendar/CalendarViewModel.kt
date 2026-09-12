@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import com.tendril.app.domain.track.TimeTracker
+import com.tendril.app.domain.track.TrackTarget
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -44,6 +46,7 @@ class CalendarViewModel(
     private val entryEditor: EntryEditor,
     habitDao: HabitDao,
     propertyValueDao: PropertyValueDao,
+    private val timeTracker: TimeTracker,
 ) : ViewModel() {
     private val _layers = MutableStateFlow(CalendarLayers())
     val layers: StateFlow<CalendarLayers> = _layers.asStateFlow()
@@ -61,6 +64,11 @@ class CalendarViewModel(
     /** §0.8 step 7b — a block dragged to another hour; a series asks the screen first. */
     fun moveTo(entry: Entry, occurrenceDate: LocalDate, time: LocalTime, scope: MoveScope) {
         viewModelScope.launch { entryEditor.move(entry, occurrenceDate, occurrenceDate, time, scope) }
+    }
+
+    /** §0.6.5 / step 7c — ▶/■ on a Day row. */
+    fun toggleTracking(target: TrackTarget) {
+        viewModelScope.launch { timeTracker.toggle(target) }
     }
 
     /** Habits with a time — the only ones a calendar can place. */

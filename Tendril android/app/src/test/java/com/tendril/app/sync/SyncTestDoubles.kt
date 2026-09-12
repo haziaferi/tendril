@@ -7,10 +7,13 @@ import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.data.track.TimeLog
+import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
 import java.time.LocalDate
@@ -248,6 +251,47 @@ class FakeHabitCompletionDao(seed: List<HabitCompletion> = emptyList()) : HabitC
     }
 
     override suspend fun deleteAll() { rows.clear() }
+}
+
+/** In-memory [TimeLogDao] — the running list is a [MutableStateFlow] so a test can observe a stop. */
+class FakeTimeLogDao(seed: List<TimeLog> = emptyList()) : TimeLogDao {
+    private val rows = linkedMapOf<Long, TimeLog>()
+    private var nextId = 1L
+    private val running = MutableStateFlow<List<TimeLog>>(emptyList())
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) }; publish() }
+
+    private fun publish() { running.value = rows.values.filter { it.isRunning }.sortedByDescending { it.startedAt } }
+
+    override suspend fun insert(log: TimeLog): Long {
+        val id = nextId++
+        rows[id] = log.copy(id = id)
+        publish()
+        return id
+    }
+
+    override suspend fun update(log: TimeLog) { rows[log.id] = log; publish() }
+
+    override fun observeRunning(): Flow<List<TimeLog>> = running
+
+    override suspend fun getRunning(): List<TimeLog> = running.value
+
+    override fun observeForEntry(entryId: Long): Flow<List<TimeLog>> =
+        flowOf(rows.values.filter { it.entryId == entryId && it.deletedAt == null }.sortedByDescending { it.startedAt })
+
+    override fun observeForHabit(habitId: Long): Flow<List<TimeLog>> =
+        flowOf(rows.values.filter { it.habitId == habitId && it.deletedAt == null }.sortedByDescending { it.startedAt })
+
+    override suspend fun getAll(): List<TimeLog> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): TimeLog? = rows.values.firstOrNull { it.uid == uid }
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt, updatedAt = deletedAt) }
+        publish()
+    }
+
+    override suspend fun deleteAll() { rows.clear(); publish() }
 }
 
 /** Autoincrementing in-memory [HabitDao], same shape as [FakeEntryDao]. */

@@ -43,6 +43,8 @@ import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.data.purge.PurgedRecordDao
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
+import com.tendril.app.data.track.TimeLog
+import com.tendril.app.data.track.TimeLogDao
 import kotlinx.coroutines.Dispatchers
 
 /**
@@ -71,7 +73,7 @@ import kotlinx.coroutines.Dispatchers
         Page::class, Label::class, PageLabel::class, Block::class, PageFtsEntry::class,
         PageDatabase::class, Property::class, PropertyValue::class, PageDatabaseView::class,
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
-        PurgedRecord::class,
+        PurgedRecord::class, TimeLog::class,
     ],
     // Bump this on ANY change to the entity set or to a column — Room hashes the schema
     // and compares it against the hash stored in `room_master_table` at open time. A hash
@@ -86,7 +88,7 @@ import kotlinx.coroutines.Dispatchers
     //
     // v9 adds `uid` to `reminders` and `entry_completions` (S2). Unlike every bump
     // before it, it is migrated rather than destructive — see [MIGRATION_8_9].
-    version = 13, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log; v11 §0.8 step 2b dueDate binding; v12 §0.6.2 Block.mindMap; v13 §0.6.8 schema on a label
+    version = 14, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log; v11 §0.8 step 2b dueDate binding; v12 §0.6.2 Block.mindMap; v13 §0.6.8 schema on a label; v14 §0.6.5 time_logs
     exportSchema = true, // §9.10 — see `shared/schemas/`; a version with no JSON cannot be migrated from
 )
 @TypeConverters(Converters::class)
@@ -97,6 +99,7 @@ abstract class TendrilDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun entryCompletionDao(): EntryCompletionDao
     abstract fun habitCompletionDao(): HabitCompletionDao
+    abstract fun timeLogDao(): TimeLogDao
 
     abstract fun pageDao(): PageDao
     abstract fun labelDao(): LabelDao
@@ -164,7 +167,7 @@ internal fun finishBuilding(
     builder
         .setDriver(driver)
         .setQueryCoroutineContext(Dispatchers.IO)
-        .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13) // §9.10 — the declared paths, tried before any fallback
+        .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14) // §9.10 — the declared paths, tried before any fallback
         // §9.10 / S1b — destructive **only** from a pre-v9 schema. See [PRE_RELEASE_VERSIONS].
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, *PRE_RELEASE_VERSIONS)
         .build()

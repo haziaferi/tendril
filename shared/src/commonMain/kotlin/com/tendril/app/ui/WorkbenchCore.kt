@@ -12,6 +12,7 @@ import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
+import com.tendril.app.domain.track.TimeTracker
 import com.tendril.app.domain.ViewLockState
 
 /**
@@ -52,6 +53,10 @@ class WorkbenchCore(
 
     /** §0.8 step 6b — the one edit path for a stored Entry; derived like [labelMembership]. */
     val entryEditor: EntryEditor by lazy { EntryEditor(database.entryDao(), entryScheduleCoordinator) }
+
+    /** §0.6.5 / step 7c — the one start/stop funnel; derived like the rest. Android's
+     * `AppContainer` builds its own on the same DAO for the notification's Stop action. */
+    val timeTracker: TimeTracker by lazy { TimeTracker(database.timeLogDao()) }
 
     val labelMembership: LabelMembership by lazy {
         LabelMembership(

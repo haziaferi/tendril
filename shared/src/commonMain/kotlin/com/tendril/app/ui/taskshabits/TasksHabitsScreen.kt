@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Checkbox
+import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.ui.track.TrackButton
+import com.tendril.app.ui.track.runningTargetState
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -110,6 +113,7 @@ fun TasksHabitsScreen(
                     core.resolveEntryUseCase,
                     core.entryScheduleCoordinator,
                     core.checkInHabitUseCase,
+                    core.timeTracker,
                 )
             }
         }
@@ -154,12 +158,14 @@ private fun TasksHabitsBody(
     var subtaskParent by remember { mutableStateOf<Entry?>(null) }
     var deadlineTarget by remember { mutableStateOf<Entry?>(null) }
     var habitDetail by remember { mutableStateOf<Habit?>(null) }
-    val rowActions = remember(showImportance) {
+    val runningTarget by core.timeTracker.runningTargetState()
+    val rowActions = remember(showImportance, runningTarget) {
         TaskRowActions(
             onPostpone = { postponeTarget = it },
             onAddSubtask = { subtaskParent = it },
             onSetDeadline = { deadlineTarget = it },
             showImportance = showImportance,
+            runningTarget = runningTarget,
         )
     }
 
@@ -236,7 +242,7 @@ private fun TasksHabitsBody(
                     tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
                     onAdd = { showAddDialog = true },
                 ) { reminderTarget = it }
-                TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, onOpen = { habitDetail = it }, onAdd = { showAddDialog = true })
+                TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, onOpen = { habitDetail = it }, onAdd = { showAddDialog = true })
                 TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions) { reminderTarget = it }
             }
         }
@@ -352,6 +358,8 @@ internal class TaskRowActions(
     val onSetDeadline: (Entry) -> Unit,
     /** §0.5.1 — the flag is drawn, and offered, only while Settings says so. */
     val showImportance: Boolean,
+    /** §0.6.5 — what runs now, so each row knows whether it draws ▶ or ■. */
+    val runningTarget: TrackTarget?,
 )
 
 @Composable
@@ -405,6 +413,8 @@ private fun TaskRow(
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        // §0.6.5 — start/stop, on steps too: a step is a task.
+        TrackButton(TrackTarget.Entry(entry.id), actions.runningTarget, viewModel::toggleTracking)
         // No bell where nothing can fire (desktop, §0.8 step 7a): the sheet's absence is the signal.
         if (!isStep && LocalRemindersAvailable.current) {
             IconButton(onClick = { onOpenReminders(entry) }) {
@@ -442,7 +452,7 @@ private fun TaskRow(
 }
 
 @Composable
-private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, showStreaks: Boolean, onOpen: (Habit) -> Unit, onAdd: () -> Unit) {
+private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, showStreaks: Boolean, runningTarget: TrackTarget?, onOpen: (Habit) -> Unit, onAdd: () -> Unit) {
     if (habits.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.LocalFireDepartment,
@@ -484,6 +494,7 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, sho
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                TrackButton(TrackTarget.Habit(habit.id), runningTarget, viewModel::toggleTracking)
                 IconButton(onClick = { viewModel.trashHabit(habit.id) }) {
                     Icon(Icons.Filled.Close, contentDescription = "Delete")
                 }

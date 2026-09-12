@@ -17,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import com.tendril.app.data.track.TimeLog
 import java.time.Instant
 import java.time.LocalDate
 
@@ -43,6 +44,7 @@ class PortableArchiveTest {
         reminderDao: FakeReminderDao = FakeReminderDao(),
         entryCompletionDao: FakeEntryCompletionDao = FakeEntryCompletionDao(),
         habitCompletionDao: FakeHabitCompletionDao = FakeHabitCompletionDao(),
+        timeLogDao: FakeTimeLogDao = FakeTimeLogDao(),
     ) = PortableArchive(
         context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
         entryDao = entryDao,
@@ -51,6 +53,7 @@ class PortableArchiveTest {
         reminderDao = reminderDao,
         entryCompletionDao = entryCompletionDao,
         habitCompletionDao = habitCompletionDao,
+        timeLogDao = timeLogDao,
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         localImages = InMemoryLocalImageStore(),
@@ -262,6 +265,30 @@ class PortableArchiveTest {
         assertEquals(listOf("c1"), restoredCompletions.getAll().map { it.uid })
     }
 
+    /** §0.6.5 — a log travels closed, open or deleted, and a restore adopts it on the folder's rule. */
+    @Test
+    fun `an exported archive carries time logs, tombstones included`() = runBlocking {
+        val entry = localEntry("e1", "Tracked task")
+        val backing = FakeContentResolverBacking()
+        val destination = backing.writableFile()
+        val at = Instant.ofEpochMilli(5_000)
+        val source = FakeTimeLogDao(
+            listOf(
+                TimeLog(id = 1, uid = "l-open", entryId = entry.id, startedAt = at, updatedAt = at),
+                TimeLog(id = 2, uid = "l-gone", entryId = entry.id, startedAt = at, endedAt = at, deletedAt = at, updatedAt = at),
+            )
+        )
+        archive(FakeEntryDao(listOf(entry)), FakeHabitDao(), backing, timeLogDao = source).export(destination)
+        assertTrue("no time_logs.json in the archive", unzip(backing.bytesWrittenTo(destination)).containsKey("time_logs.json"))
+
+        val restored = FakeTimeLogDao()
+        archive(FakeEntryDao(listOf(entry)), FakeHabitDao(), backing, timeLogDao = restored)
+            .importAdditive(backing.givenFile(backing.bytesWrittenTo(destination)))
+        assertEquals(setOf("l-open", "l-gone"), restored.getAll().map { it.uid }.toSet())
+        assertEquals(listOf("l-open"), restored.getRunning().map { it.uid })
+        assertEquals(at, restored.getByUid("l-gone")!!.deletedAt)
+    }
+
     /** Append-only means importing the same archive twice must add nothing the second time. */
     @Test
     fun `importing an archive twice does not duplicate its completions`() = runBlocking {
@@ -273,6 +300,7 @@ class PortableArchiveTest {
             FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
             entryCompletionDao = FakeEntryCompletionDao(listOf(archivedCompletion(1, "c1", entry.id))),
             habitCompletionDao = FakeHabitCompletionDao(),
+            timeLogDao = FakeTimeLogDao(),
         ).export(destination)
 
         val exported = backing.bytesWrittenTo(destination)
@@ -282,6 +310,7 @@ class PortableArchiveTest {
                 FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
                 entryCompletionDao = restoredCompletions,
                 habitCompletionDao = FakeHabitCompletionDao(),
+                timeLogDao = FakeTimeLogDao(),
             ).importAdditive(backing.givenFile(exported))
         }
 

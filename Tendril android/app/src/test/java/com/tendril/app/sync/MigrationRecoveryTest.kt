@@ -49,6 +49,7 @@ class MigrationRecoveryTest {
             reminderDao = reminderDao,
             entryCompletionDao = completionDao,
             habitCompletionDao = FakeHabitCompletionDao(),
+            timeLogDao = FakeTimeLogDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

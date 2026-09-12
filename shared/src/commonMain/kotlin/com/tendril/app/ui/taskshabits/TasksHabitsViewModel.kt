@@ -9,6 +9,10 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.domain.track.TimeTracker
+import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.domain.track.loggedInMonth
+import java.time.YearMonth
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.domain.CheckInHabitUseCase
@@ -36,11 +40,21 @@ class TasksHabitsViewModel(
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val checkInHabitUseCase: CheckInHabitUseCase,
+    private val timeTracker: TimeTracker,
 ) : ViewModel() {
     val tasks: StateFlow<List<Entry>> =
         entryDao.observeTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val habits: StateFlow<List<Habit>> =
         habitDao.observeActive().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §0.6.5 / step 7c — ▶/■ on a row; one timer at a time, see [TimeTracker.toggle]. */
+    fun toggleTracking(target: TrackTarget) {
+        viewModelScope.launch { timeTracker.toggle(target) }
+    }
+
+    /** The habit's logged minutes this month, for the presence sheet — live, so it ticks. */
+    fun habitLoggedThisMonth(habitId: Long): Flow<Int> =
+        timeTracker.logsForHabit(habitId).map { loggedInMonth(it, YearMonth.now(), Instant.now()) }
 
     fun addTask(
         title: String,

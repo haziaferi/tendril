@@ -148,3 +148,29 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
         connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `labelConfirmed` INTEGER NOT NULL DEFAULT 0")
     }
 }
+
+/**
+ * §9.10 / §0.6.5 — v13 → v14. `time_logs`, the tracked time of §0.8 step 7c. A new table and
+ * nothing else, so no backfill: no timer ran before this version. The DDL mirrors what Room
+ * generates for [com.tendril.app.data.track.TimeLog] (see `schemas/14.json`), cascades included.
+ */
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `time_logs` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`uid` TEXT NOT NULL, " +
+                "`entryId` INTEGER, " +
+                "`habitId` INTEGER, " +
+                "`startedAt` INTEGER NOT NULL, " +
+                "`endedAt` INTEGER, " +
+                "`deletedAt` INTEGER, " +
+                "`updatedAt` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`entryId`) REFERENCES `entries`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                "FOREIGN KEY(`habitId`) REFERENCES `habits`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_time_logs_uid` ON `time_logs` (`uid`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_time_logs_entryId` ON `time_logs` (`entryId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_time_logs_habitId` ON `time_logs` (`habitId`)")
+    }
+}

@@ -73,6 +73,7 @@ class PurgePropagationTest {
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
             habitCompletionDao = FakeHabitCompletionDao(),
+            timeLogDao = FakeTimeLogDao(),
             localImages = InMemoryLocalImageStore(),
         )
 
