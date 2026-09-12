@@ -6,23 +6,31 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
-/** §3.1.6 — global, freeform, reusable, flat (no nesting). Resolves the removed `category` field. */
+/**
+ * §3.1.6 — global, freeform, reusable, flat (no nesting). Resolves the removed `category` field.
+ *
+ * Called *Label* since §0.6.9 (2026-09-12), so that *tag* keeps its Notion meaning — a Select
+ * property inside one database, which this app also has. The rename is in name only: the table
+ * stays `tags`, the join stays `page_tags` with its `tagId` column, and the snapshot key stays
+ * `tags`. The key has to, for every peer already on the folder; the tables could move but only
+ * through a migration whose one effect would be a nicer word in a place no one reads.
+ */
 @Entity(tableName = "tags", indices = [Index("uid", unique = true)])
-data class Tag(
+data class Label(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val uid: String = UUID.randomUUID().toString(),
     val name: String,
-    val color: String = TagColors.forName(name),
+    val color: String = LabelColors.forName(name),
 )
 
-/** The spec (§3.1.6, §4) leaves per-tag color assignment unspecified beyond the `color`
- * field's existence — create-on-type tags need one immediately, with no picker step called
- * for anywhere. Assigned deterministically from a small fixed palette so re-creating a tag
+/** The spec (§3.1.6, §4) leaves per-label color assignment unspecified beyond the `color`
+ * field's existence — create-on-type labels need one immediately, with no picker step called
+ * for anywhere. Assigned deterministically from a small fixed palette so re-creating a label
  * with the same name is stable across devices without needing to sync a color choice. */
-object TagColors {
+object LabelColors {
     private val palette = listOf(
         // Eight is load-bearing: forName indexes by hash modulo size, so the count
-        // has to stay put or every existing tag re-colours. Within that, these are
+        // has to stay put or every existing label re-colours. Within that, these are
         // the smallest moves off the original set that keep every pair at least 12
         // CIEDE2000 apart under normal vision, deuteranopia and protanopia -- the
         // previous set had two pairs at 1.6 and 3.6 under dichromacy, and one pair
@@ -34,14 +42,14 @@ object TagColors {
     fun forName(name: String): String = palette[Math.floorMod(name.hashCode(), palette.size)]
 }
 
-/** Many-to-many join between [Page] and [Tag] (§3.1.6, §4). */
+/** Many-to-many join between [Page] and [Label] (§3.1.6, §4). */
 @Entity(
     tableName = "page_tags",
     primaryKeys = ["pageId", "tagId"],
     foreignKeys = [
         ForeignKey(entity = Page::class, parentColumns = ["id"], childColumns = ["pageId"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(entity = Tag::class, parentColumns = ["id"], childColumns = ["tagId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Label::class, parentColumns = ["id"], childColumns = ["tagId"], onDelete = ForeignKey.CASCADE),
     ],
     indices = [Index("pageId"), Index("tagId")],
 )
-data class PageTag(val pageId: Long, val tagId: Long)
+data class PageLabel(val pageId: Long, val tagId: Long)

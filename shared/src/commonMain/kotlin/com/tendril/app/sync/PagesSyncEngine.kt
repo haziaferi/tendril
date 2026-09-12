@@ -17,10 +17,10 @@ import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageRelationDao
-import com.tendril.app.data.page.PageTag
+import com.tendril.app.data.page.PageLabel
 import com.tendril.app.data.page.SpanStyle
-import com.tendril.app.data.page.Tag
-import com.tendril.app.data.page.TagDao
+import com.tendril.app.data.page.Label
+import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.page.addRelation
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
@@ -127,7 +127,7 @@ data class PageMergeOutcome(
  * and non-winners alike; see Pass 2 for why the non-winner case fills nulls only.
  *
  * Merge is whole-record LWW: a winning [PageSnapshotRecord] fully replaces its local
- * blocks/tags/property values/database schema/canvas content rather than diffing them in —
+ * blocks/labels/property values/database schema/canvas content rather than diffing them in —
  * the same "concurrent edits to the same page... already an accepted v1 limitation" §9.4
  * documents for Page content generally. The one deliberate exception is
  * [com.tendril.app.data.pagedatabase.Property]: it's upserted by `uid` rather than
@@ -138,7 +138,7 @@ data class PageMergeOutcome(
 class PagesSyncEngine(
     private val pageDao: PageDao,
     private val blockDao: BlockDao,
-    private val tagDao: TagDao,
+    private val labelDao: LabelDao,
     private val pageDatabaseDao: PageDatabaseDao,
     private val propertyDao: PropertyDao,
     private val propertyValueDao: PropertyValueDao,
@@ -230,7 +230,7 @@ class PagesSyncEngine(
                 deletedAt = page.deletedAt?.toEpochMilli(),
                 createdAt = page.createdAt.toEpochMilli(),
                 updatedAt = page.updatedAt.toEpochMilli(),
-                tags = tagDao.getForPage(page.id).map { it.name },
+                labels = labelDao.getForPage(page.id).map { it.name },
                 blocks = blocks.map { it.toSnapshot(pageIdToUid, blockIdToUid) },
                 propertyValues = if (page.databaseId != null) {
                     propertyValueDao.getForRow(page.id).mapNotNull { pv ->
@@ -474,7 +474,7 @@ class PagesSyncEngine(
         val uidToId = localPages.associate { it.uid to it.id }.toMutableMap()
         val wonUids = mutableSetOf<String>()
         // The local copies about to be replaced. A winning record overwrites the page row and
-        // Pass 5 clears and rebuilds its blocks, tags and cell values, so whatever this device
+        // Pass 5 clears and rebuilds its blocks, labels and cell values, so whatever this device
         // held is gone by the time the passes finish -- and unlike a losing *remote* record it
         // is not sitting in a file anywhere. Captured here, before Pass 1, because afterwards
         // there is nothing left to capture. Same deferral as `candidateLosers` below: the
@@ -700,10 +700,10 @@ class PagesSyncEngine(
             }
             pageContentRepository.rebuildFtsForPage(pageId)
 
-            tagDao.clearForPage(pageId)
-            for (tagName in page.record.tags) {
-                val tagId = tagDao.findByName(tagName)?.id ?: tagDao.insert(Tag(name = tagName))
-                tagDao.addToPage(PageTag(pageId = pageId, tagId = tagId))
+            labelDao.clearForPage(pageId)
+            for (labelName in page.record.labels) {
+                val tagId = labelDao.findByName(labelName)?.id ?: labelDao.insert(Label(name = labelName))
+                labelDao.addToPage(PageLabel(pageId = pageId, tagId = tagId))
             }
 
             if (page.record.databaseUid != null) {

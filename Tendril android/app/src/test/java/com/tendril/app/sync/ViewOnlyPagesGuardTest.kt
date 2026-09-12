@@ -111,7 +111,7 @@ class ViewOnlyPagesGuardTest {
         val store = FakePageStore()
         val pageDao = FakePageDao(store)
         val blockDao = FakeBlockDao(store)
-        val tagDao = FakeTagDao(store)
+        val labelDao = FakeLabelDao(store)
         val pageDatabaseDao = FakePageDatabaseDao(store)
         val propertyDao = FakePropertyDao(store)
         val propertyValueDao = FakePropertyValueDao(store)
@@ -140,7 +140,7 @@ class ViewOnlyPagesGuardTest {
         val engine = PagesSyncEngine(
             pageDao = pageDao,
             blockDao = blockDao,
-            tagDao = tagDao,
+            labelDao = labelDao,
             pageDatabaseDao = pageDatabaseDao,
             propertyDao = propertyDao,
             propertyValueDao = propertyValueDao,
@@ -159,7 +159,7 @@ class ViewOnlyPagesGuardTest {
          * ViewModels: a create is a write even though there is no page open to gate it against.
          */
         fun pages() = PagesViewModel(
-            pageDao, pageDatabaseDao, propertyDao, ftsDao, tagDao, purgeRegistry, databaseSyncManager,
+            pageDao, pageDatabaseDao, propertyDao, ftsDao, labelDao, purgeRegistry, databaseSyncManager,
             templateManager, viewLockState,
         )
 

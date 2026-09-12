@@ -28,9 +28,9 @@ import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
 import com.tendril.app.data.page.PageRelationDao
-import com.tendril.app.data.page.PageTag
-import com.tendril.app.data.page.Tag
-import com.tendril.app.data.page.TagDao
+import com.tendril.app.data.page.PageLabel
+import com.tendril.app.data.page.Label
+import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.PageDatabaseView
@@ -68,7 +68,7 @@ import kotlinx.coroutines.Dispatchers
 @Database(
     entities = [
         Entry::class, Habit::class, Reminder::class, EntryCompletion::class, HabitCompletion::class,
-        Page::class, Tag::class, PageTag::class, Block::class, PageFtsEntry::class,
+        Page::class, Label::class, PageLabel::class, Block::class, PageFtsEntry::class,
         PageDatabase::class, Property::class, PropertyValue::class, PageDatabaseView::class,
         PageRelation::class, PageCanvas::class, CanvasNode::class, CanvasEdge::class,
         PurgedRecord::class,
@@ -99,7 +99,7 @@ abstract class TendrilDatabase : RoomDatabase() {
     abstract fun habitCompletionDao(): HabitCompletionDao
 
     abstract fun pageDao(): PageDao
-    abstract fun tagDao(): TagDao
+    abstract fun labelDao(): LabelDao
     abstract fun blockDao(): BlockDao
     abstract fun pageFtsDao(): PageFtsDao
     abstract fun pageDatabaseDao(): PageDatabaseDao

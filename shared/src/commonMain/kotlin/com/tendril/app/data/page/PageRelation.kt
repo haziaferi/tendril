@@ -12,9 +12,9 @@ import java.util.UUID
 
 /**
  * §3.4 — the manual "Relate to…" edge source, for pages that are conceptually connected but
- * don't reference each other in text. A small dedicated join entity (matching [PageTag]'s own
- * shape), not a reuse of Block/Tag — a relation isn't page content (§3.1.1's block inventory
- * is fixed and deliberate) and isn't a label (§3.1.6's tags are freeform, not opaque markers).
+ * don't reference each other in text. A small dedicated join entity (matching [PageLabel]'s own
+ * shape), not a reuse of Block/Label — a relation isn't page content (§3.1.1's block inventory
+ * is fixed and deliberate) and isn't a label (§3.1.6's labels are freeform, not opaque markers).
  * Undirected in practice: [fromPageId]/[toPageId] only record *who created it*, every query
  * reads both directions.
  */

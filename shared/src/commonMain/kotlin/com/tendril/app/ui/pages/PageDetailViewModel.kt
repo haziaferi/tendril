@@ -14,9 +14,9 @@ import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
-import com.tendril.app.data.page.PageTag
-import com.tendril.app.data.page.Tag
-import com.tendril.app.data.page.TagDao
+import com.tendril.app.data.page.PageLabel
+import com.tendril.app.data.page.Label
+import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.Property
@@ -56,7 +56,7 @@ class PageDetailViewModel(
     private val pageId: Long,
     private val pageDao: PageDao,
     private val blockDao: BlockDao,
-    private val tagDao: TagDao,
+    private val labelDao: LabelDao,
     private val propertyDao: PropertyDao,
     private val propertyValueDao: PropertyValueDao,
     private val pageDatabaseDao: PageDatabaseDao,
@@ -115,11 +115,11 @@ class PageDetailViewModel(
         checkboxOnlyState.deactivate()
     }
 
-    val tags: StateFlow<List<Tag>> =
-        tagDao.observeForPage(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val labels: StateFlow<List<Label>> =
+        labelDao.observeForPage(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _tagCandidates = MutableStateFlow<List<Tag>>(emptyList())
-    val tagCandidates: StateFlow<List<Tag>> = _tagCandidates.asStateFlow()
+    private val _labelCandidates = MutableStateFlow<List<Label>>(emptyList())
+    val labelCandidates: StateFlow<List<Label>> = _labelCandidates.asStateFlow()
 
     private val _mentionCandidates = MutableStateFlow<List<Page>>(emptyList())
     val mentionCandidates: StateFlow<List<Page>> = _mentionCandidates.asStateFlow()
@@ -385,39 +385,39 @@ class PageDetailViewModel(
         }
     }
 
-    fun searchTagCandidates(query: String) {
+    fun searchLabelCandidates(query: String) {
         viewModelScope.launch {
-            val existingIds = tags.value.map { it.id }.toSet()
-            _tagCandidates.value = if (query.isBlank()) emptyList() else
-                tagDao.search(query).filter { it.id !in existingIds }
+            val existingIds = labels.value.map { it.id }.toSet()
+            _labelCandidates.value = if (query.isBlank()) emptyList() else
+                labelDao.search(query).filter { it.id !in existingIds }
         }
     }
 
-    /** Type-to-search-or-create, matching [searchForMention]'s picker pattern: reuse a tag
+    /** Type-to-search-or-create, matching [searchForMention]'s picker pattern: reuse a label
      * whose name matches exactly (case-insensitive), otherwise a new one is created on pick. */
-    fun addTag(name: String) {
+    fun addLabel(name: String) {
         if (contentLocked()) return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            val tag = tagDao.findByName(trimmed) ?: run {
-                tagDao.insert(Tag(name = trimmed))
-                // Re-read rather than building a Tag from the returned id: `color` is derived
+            val label = labelDao.findByName(trimmed) ?: run {
+                labelDao.insert(Label(name = trimmed))
+                // Re-read rather than building a Label from the returned id: `color` is derived
                 // from the name at construction, so the stored row is the authoritative one.
-                tagDao.findByName(trimmed)!!
+                labelDao.findByName(trimmed)!!
             }
             // The one page-content mutation here that does not go through a launcher, because
-            // its bump is conditional: picking a tag the page already carries changes nothing,
+            // its bump is conditional: picking a label the page already carries changes nothing,
             // and bumping anyway would claim authorship of an edit that did not happen — enough
             // under LWW to beat a real edit sitting unsynced on another device.
-            if (tags.value.none { it.id == tag.id }) {
-                tagDao.addToPage(PageTag(pageId = pageId, tagId = tag.id))
+            if (labels.value.none { it.id == label.id }) {
+                labelDao.addToPage(PageLabel(pageId = pageId, tagId = label.id))
                 touch()
             }
         }
     }
 
-    fun removeTag(tag: Tag) = launchTouching { tagDao.removeFromPage(pageId, tag.id) }
+    fun removeLabel(label: Label) = launchTouching { labelDao.removeFromPage(pageId, label.id) }
 
     /** Unbound cell edit for this Row — a bound role (Done/Deadline/Recurrence) never reaches
      * this path; those edit through [toggleRowDone]/[setRowBoundDate]/[setRowRecurrence]. */
@@ -464,7 +464,7 @@ class PageDetailViewModel(
     }
 
     /**
-     * §9.4 — see [PageDao.touch]. Blocks, tags and cell values all travel *inside* this page's
+     * §9.4 — see [PageDao.touch]. Blocks, labels and cell values all travel *inside* this page's
      * snapshot, and the merge decides whether to apply any of them by looking at the page row
      * alone. Writing only the child row leaves the exported snapshot claiming, truthfully as far
      * as the page row knows, that nothing changed — so the peer drops the edit.
@@ -477,7 +477,7 @@ class PageDetailViewModel(
      * after it — which is exactly the shape of the bug this fixes, and the shape it would come
      * back in. Two mutations call this directly and say why at their own site: [setChecked],
      * whose lock gate is the narrower [viewOnlyLocked] (§3.1.2 keeps a to-do tappable on an
-     * otherwise locked page), and [addTag], whose bump is conditional.
+     * otherwise locked page), and [addLabel], whose bump is conditional.
      */
     private suspend fun touch() = pageDao.touch(pageId, Instant.now())
 
@@ -491,7 +491,7 @@ class PageDetailViewModel(
     }
 
     /** The same guarantee for the page-content mutations that are not block edits and so have
-     * no FTS index to rebuild — tags, and this Row's own cell values. Separate launcher rather
+     * no FTS index to rebuild — labels, and this Row's own cell values. Separate launcher rather
      * than a flag on [launchAndReindex], because "rebuild the index" and "say the page changed"
      * are two different claims and a boolean at the call site would read as neither. */
     private fun launchTouching(block: suspend () -> Unit) {
