@@ -4,8 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
-import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.domain.EntryScheduleCoordinator
+import com.tendril.app.domain.ParsedEntry
+import com.tendril.app.domain.toEntry
 import com.tendril.app.domain.ResolveEntryUseCase
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,24 +23,14 @@ class CalendarViewModel(
     val entries: StateFlow<List<Entry>> =
         entryDao.observeDated().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Quick Add (§3.2) — deliberately minimal, single-line capture; no reminders list here. */
-    fun quickAdd(title: String, date: LocalDate) {
-        if (title.isBlank()) return
+    /** Quick Add (§3.2) — deliberately minimal, single-line capture; no reminders list here.
+     * §0.8 step 5: the line is read by [com.tendril.app.domain.QuickAddParser] on the screen,
+     * previewed, and arrives here already a Task or an Event; [date] is the day on view, used
+     * when the line named none. */
+    fun quickAdd(parsed: ParsedEntry, date: LocalDate) {
+        if (parsed.title.isBlank()) return
         viewModelScope.launch {
-            val now = Instant.now()
-            val id = entryDao.insert(
-                Entry(
-                    title = title.trim(),
-                    kind = EntryKind.EVENT,
-                    startDate = date,
-                    startTime = null,
-                    endDate = null,
-                    endTime = null,
-                    recurrenceRule = null,
-                    createdAt = now,
-                    updatedAt = now,
-                )
-            )
+            val id = entryDao.insert(parsed.toEntry(fallbackDate = date, now = Instant.now()))
             entryDao.getById(id)?.let { entryScheduleCoordinator.onEntryChanged(it) }
         }
     }

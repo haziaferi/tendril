@@ -39,6 +39,11 @@ import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.Duration
+import androidx.compose.runtime.LaunchedEffect
+import com.tendril.app.data.entry.EntryKind
+import com.tendril.app.domain.QuickAddParser
+import com.tendril.app.domain.TokenKind
+import com.tendril.app.ui.entries.QuickAddPreview
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -49,9 +54,13 @@ private enum class RepeatOption(val label: String) {
 @Composable
 fun AddTaskDialog(
     onDismiss: () -> Unit,
-    onAdd: (title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?, deadline: LocalDate?) -> Unit,
+    onAdd: (title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?, deadline: LocalDate?, estimate: Duration?, important: Boolean) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
+    // §0.8 step 5 — the title is read as a line (`Gym every monday 7am by friday`) and its
+    // tokens pre-fill the controls below, which stay editable; the chips say what was read.
+    var ignored by remember { mutableStateOf(emptySet<TokenKind>()) }
+    val parsed = remember(title, ignored) { QuickAddParser.parse(title, LocalDate.now(), EntryKind.TASK, ignored, EntryKind.TASK) }
     // §0.6.4 — the Deadline is a second, optional date, off by default: most tasks have none.
     var hasDeadline by remember { mutableStateOf(false) }
     var deadline by remember { mutableStateOf(LocalDate.now()) }
@@ -69,7 +78,26 @@ fun AddTaskDialog(
         title = { Text(stringResource(R.string.taskshabits_add_task)) },
         text = {
             Column {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(value = title, onValueChange = { title = it; ignored = emptySet() }, label = { Text("Title") }, singleLine = true)
+                if (parsed.spans.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    QuickAddPreview(parsed = parsed, onFlipKind = {}, onDrop = { ignored = ignored + it })
+                }
+                // Each parsed field lands on its control once, when it appears or changes; the
+                // person can still change the control afterwards without the line fighting back.
+                LaunchedEffect(parsed.date) { parsed.date?.let { hasDate = true; date = it } }
+                LaunchedEffect(parsed.time) { parsed.time?.let { hasTime = true; time = it } }
+                LaunchedEffect(parsed.deadline) { parsed.deadline?.let { hasDeadline = true; deadline = it } }
+                LaunchedEffect(parsed.recurrence) {
+                    (parsed.recurrence as? RecurrenceRule.Elastic)?.period?.let { p ->
+                        repeat = when {
+                            p.days == 1 -> RepeatOption.DAILY
+                            p.days == 7 -> RepeatOption.WEEKLY
+                            p.months == 1 -> RepeatOption.MONTHLY
+                            else -> repeat
+                        }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Has date", modifier = Modifier.fillMaxWidth().weight(1f))
@@ -121,7 +149,7 @@ fun AddTaskDialog(
                     RepeatOption.WEEKLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.WEEK))
                     RepeatOption.MONTHLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.MONTH))
                 }
-                onAdd(title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence, if (hasDeadline) deadline else null)
+                onAdd(parsed.title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence, if (hasDeadline) deadline else null, parsed.estimate, parsed.important)
                 onDismiss()
             }) { Text("Add") }
         },

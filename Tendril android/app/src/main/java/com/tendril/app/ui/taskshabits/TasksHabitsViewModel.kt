@@ -51,6 +51,8 @@ class TasksHabitsViewModel(
         repeat: RecurrenceRule.Elastic?,
         deadline: LocalDate? = null,
         parentEntryId: Long? = null,
+        estimate: Duration? = null,
+        important: Boolean = false,
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -67,6 +69,8 @@ class TasksHabitsViewModel(
                     status = EntryStatus.PENDING,
                     dueDate = deadline,
                     parentEntryId = parentEntryId,
+                    estimate = estimate,
+                    important = important,
                     createdAt = now,
                     updatedAt = now,
                 )

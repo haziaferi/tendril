@@ -198,7 +198,7 @@ fun TasksHabitsScreen(container: AppContainer, modifier: Modifier = Modifier) {
         } else {
             AddTaskDialog(
                 onDismiss = { showAddDialog = false },
-                onAdd = { title, date, time, repeat, deadline -> viewModel.addTask(title, date, time, repeat, deadline) },
+                onAdd = { title, date, time, repeat, deadline, estimate, important -> viewModel.addTask(title, date, time, repeat, deadline, estimate = estimate, important = important) },
             )
         }
     }
