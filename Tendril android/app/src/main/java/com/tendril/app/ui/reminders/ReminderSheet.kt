@@ -22,7 +22,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.AppContainer
 import com.tendril.app.R
 import com.tendril.app.data.entry.Entry
@@ -90,17 +90,11 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
     var anchor by remember { mutableStateOf<LocalTime?>(null) }
     var showAnchorPicker by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        // Scrolls: with reminders listed, the offset chips, the all-day anchor row and the
-        // Add button together run past the sheet's height, and an unscrollable Column just
-        // clips the button off the bottom.
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Text(stringResource(R.string.reminders_title), style = MaterialTheme.typography.titleMedium)
+    // Scrolls: with reminders listed, the offset chips, the all-day anchor row and the
+    // Add button together run past the sheet's height, and an unscrollable Column just
+    // clips the button off the bottom.
+    TendrilSheet(title = stringResource(R.string.reminders_title), onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Column {
             Text(entry.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
 

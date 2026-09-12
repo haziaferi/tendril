@@ -42,7 +42,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -70,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.data.canvas.CanvasArrowDirection
 import com.tendril.app.data.canvas.CanvasEdge
@@ -521,8 +521,8 @@ private fun CanvasNodeCard(
 @Composable
 private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember(node.id) { mutableStateOf(node.text.orEmpty()) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
+    TendrilSheet(onDismiss = onDismiss) {
+        Column {
             // §3.1.2 — a reader, not an editor, while the lock is on: the field goes read-only
             // (so the full text of a card the board truncates at three lines is still legible)
             // and Save goes away, leaving one button that closes the sheet.
@@ -543,9 +543,8 @@ private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () ->
 @Composable
 private fun EdgeEditor(edge: CanvasEdge, viewOnly: Boolean, onDismiss: () -> Unit, onCycleDirection: () -> Unit, onSetLabel: (String) -> Unit, onDelete: () -> Unit) {
     var label by remember(edge.id) { mutableStateOf(edge.label.orEmpty()) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("Arrow", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+    TendrilSheet(title = "Arrow", onDismiss = onDismiss) {
+        Column {
             // §3.1.2 — the sheet is how an arrow's label is read at all (the board draws the
             // line, never the text), so the field stays and turns read-only. "Change" and
             // "Delete arrow" both write, so both go.
@@ -584,8 +583,8 @@ private fun CanvasPagePickerSheet(viewModel: CanvasViewModel, onDismiss: () -> U
     var query by remember { mutableStateOf("") }
     val results by viewModel.pageSearchResults.collectAsState()
 
-    ModalBottomSheet(onDismissRequest = { viewModel.clearPageSearch(); onDismiss() }) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.6f)) {
+    TendrilSheet(onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Add a page card", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.clearPageSearch(); onDismiss() }) { Icon(Icons.Filled.Close, contentDescription = "Close") }

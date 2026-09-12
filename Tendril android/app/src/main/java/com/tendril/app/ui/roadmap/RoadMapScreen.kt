@@ -38,7 +38,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -73,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.AppContainer
 import com.tendril.app.R
 import com.tendril.app.data.page.Page
@@ -497,10 +497,8 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
         if (query.isBlank()) pages else pages.filter { it.title.contains(query, ignoreCase = true) }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.7f)) {
-            Text("All Pages", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
+    TendrilSheet(title = "All Pages", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
+        Column {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -569,8 +567,8 @@ private fun PagePickerSheet(title: String, viewModel: RoadMapViewModel, excludeP
     var query by remember { mutableStateOf("") }
     val results by viewModel.pageSearchResults.collectAsState()
 
-    ModalBottomSheet(onDismissRequest = { viewModel.clearPageSearch(); onDismiss() }) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.6f)) {
+    TendrilSheet(onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.clearPageSearch(); onDismiss() }) { Icon(Icons.Filled.Close, contentDescription = "Close") }

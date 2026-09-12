@@ -22,7 +22,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.domain.track.formatMinutes
@@ -58,9 +58,8 @@ internal fun PostponeSheet(entry: Entry, onPostpone: (PostponeAmount) -> Unit, o
     var customAmount by remember { mutableStateOf("2") }
     var customUnit by remember { mutableStateOf(PostponeUnit.DAY) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Text("Postpone", style = MaterialTheme.typography.titleMedium)
+    TendrilSheet(title = "Postpone", onDismiss = onDismiss) {
+        Column {
             Text(
                 if (entry.startDate == null) "This will give it a date — from today."
                 else "Moves when you plan to do it. A deadline, if there is one, stays where it is.",
@@ -97,7 +96,6 @@ internal fun PostponeSheet(entry: Entry, onPostpone: (PostponeAmount) -> Unit, o
                     onClick = { onPostpone(PostponeAmount(customAmount.toInt(), customUnit)); onDismiss() },
                 ) { Text("Postpone") }
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -159,10 +157,8 @@ internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, sho
     val presence by viewModel.habitPresence(habit.id).collectAsState(initial = null)
     // §0.6.5 — the logged minutes join the presence sentences; zero says nothing, like the rest.
     val loggedMinutes by viewModel.habitLoggedThisMonth(habit.id).collectAsState(initial = 0)
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Text(habit.title, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(12.dp))
+    TendrilSheet(title = habit.title, onDismiss = onDismiss) {
+        Column {
             val p = presence
             if (p == null || (p.lastDate == null && p.timesThisMonth == 0 && loggedMinutes == 0)) {
                 Text(
@@ -184,7 +180,6 @@ internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, sho
                 Spacer(Modifier.height(16.dp))
                 MonthOfDots(days = p.daysThisMonth, month = p.month)
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 }

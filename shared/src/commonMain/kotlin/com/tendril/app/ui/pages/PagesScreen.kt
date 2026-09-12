@@ -46,7 +46,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -75,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageSearchHit
@@ -329,10 +329,8 @@ private fun NewPageSheet(
     onFromTemplate: (Page, String) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
-            Text("New", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
+    TendrilSheet(title = "New", onDismiss = onDismiss) {
+        Column {
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -493,10 +491,10 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteForever by remember { mutableStateOf<List<Long>?>(null) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
         // A fraction of the current screen's height, not a flat dp figure — stays
         // proportionate from small phones to tablets rather than over/under-filling.
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.6f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("Trash", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (pages.isNotEmpty()) {

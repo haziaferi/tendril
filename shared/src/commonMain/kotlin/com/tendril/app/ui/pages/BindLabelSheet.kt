@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.page.Label
 
 /**
@@ -50,8 +50,8 @@ internal fun BindLabelSheet(
     var candidates by remember { mutableStateOf<List<Label>>(emptyList()) }
     LaunchedEffect(query) { candidates = search(query).filter { it.id != current?.id } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxHeight(0.6f)) {
+    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (current == null) "Bind a label" else "Bound to #${current.name}",
