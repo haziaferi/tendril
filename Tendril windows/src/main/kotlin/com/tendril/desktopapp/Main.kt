@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,12 +23,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.navigationevent.NavigationEventInput
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
 import com.tendril.app.sync.PagesSyncEngine
@@ -77,22 +84,52 @@ fun main() {
         DesktopLocalImageStore(File(dbFile.parentFile, "images")),
     )
     val folderManager = DesktopSyncFolderManager()
+    val escapeBack = EscapeBackInput()
 
     application {
         Window(
             onCloseRequest = ::exitApplication,
             title = "Tendril (desktop preview)",
             icon = painterResource("tendril_icon.png"),
+            // Preview, not consume: a text field that wants Escape for itself still gets it, and
+            // an Escape nobody handles falls through to nothing, as before. On the *release*,
+            // because that is the half of an Escape press this callback sees: the window swallows
+            // the press before preview (observed 2026-09-12 with a log on every event; `A` arrived
+            // as down and up, Esc as up alone). A release also cannot auto-repeat.
+            onPreviewKeyEvent = { event ->
+                if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) escapeBack.back()
+                false
+            },
         ) {
             TendrilTheme(colorTheme = TendrilColorTheme.INK, mode = TendrilMode.LIGHT, typeface = TendrilTypeface.SANS) {
-                App(core, orchestrator, folderManager)
+                App(core, orchestrator, folderManager, escapeBack)
             }
         }
     }
 }
 
+/**
+ * tendril-spec.md §0.10 item 10 — the desktop half of Back. Compose Multiplatform's `BackHandler`
+ * (the mind map and the canvas block arm through it) registers on the `NavigationEventDispatcher`
+ * the skiko window already provides, but nothing on desktop ever *feeds* that dispatcher: Android
+ * has the system gesture, desktop has no equivalent, so an armed map ignored Escape. This is the
+ * missing input — one key, one completed back event — and nothing else: the handlers that decide
+ * what Back means stay in shared code, where Android's already are.
+ */
+private class EscapeBackInput : NavigationEventInput() {
+    fun back() = dispatchOnBackCompleted()
+}
+
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput) {
+    // The dispatcher is a composition local of the window's content, so the key input can only be
+    // attached from inside it; the key event itself arrives at the window, outside. Hence the
+    // input is built in `main` and joined here.
+    val backOwner = LocalNavigationEventDispatcherOwner.current
+    DisposableEffect(backOwner) {
+        backOwner?.navigationEventDispatcher?.addInput(escapeBack)
+        onDispose { backOwner?.navigationEventDispatcher?.removeInput(escapeBack) }
+    }
     // Compose Multiplatform doesn't supply a default ViewModelStoreOwner outside NavHost (which
     // this app's hand-rolled nav doesn't use — see WorkbenchNavState's doc comment) — one
     // application-lifetime owner, provided once here, is what the ported screens' viewModel()

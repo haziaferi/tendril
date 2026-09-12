@@ -19,6 +19,10 @@ dependencies {
     // ViewModel coroutines to run correctly under Compose Desktop (see Main.kt).
     implementation(compose.materialIconsExtended)
     implementation(libs.kotlinx.coroutines.swing)
+    // tendril-spec.md 0.10 item 10 -- the desktop Back input (Main.kt's EscapeBackInput) subclasses
+    // NavigationEventInput, which shared's ui-backhandler pulls in only transitively; the compiler
+    // wants it named. Same version the transitive edge resolves to.
+    implementation("org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0")
 }
 
 compose.desktop {
