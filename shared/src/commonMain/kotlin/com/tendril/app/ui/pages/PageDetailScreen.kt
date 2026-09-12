@@ -265,7 +265,16 @@ fun PageDetailScreen(
                 }
             }
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            // §0.6.8 — a membership strip is inserted *above* the first block, and a LazyColumn
+            // keeps its first visible item where it was, so the fields a person just gained by
+            // labelling the page would appear scrolled out of sight. Show them.
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            var membershipCount by remember { mutableStateOf(-1) }
+            LaunchedEffect(memberships.size) {
+                if (membershipCount in 0 until memberships.size) listState.scrollToItem(0)
+                membershipCount = memberships.size
+            }
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 // §5.1 Row-as-page — a Database row shows its property values as a compact
                 // strip above the same free-form Block body every other Page has. §0.6.8 — one
                 // strip per membership: the home database first, then each database a label

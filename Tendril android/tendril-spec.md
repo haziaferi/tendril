@@ -339,8 +339,12 @@ offers "Remove label from this page" where a native row's offers "Delete row"; t
 dialog. Verified on desktop end to end (bind → label → row in the table, Author typed on the page
 read in the table → removed from the table, value still stored → relabelled, value back → Sync to
 Tasks on → a new page labelled, the dialog once, a task → label removed, task in Trash with its
-Done → relabelled, no dialog, the same task back); the v12 → v13 upgrade on the desktop and the
-phone databases in place, `integrity_check` ok. 596 tests.
+Done → relabelled, no dialog, the same task back); the same on the phone (Errands, which syncs:
+bind `errand` → label *Trip* → the dialog → a row in Errands' table with "Remove label from this
+page" where the native row has "Delete row" → removed, task in Trash → relabelled, no dialog, the
+same task back), where the LazyColumn's anchor had hidden the new strip until the list is scrolled
+to the top on a membership gained; the v12 → v13 upgrade on the desktop and the phone databases in
+place, `integrity_check` ok. 596 tests.
 **0.6.9 The §3.1.6 feature is called *Label*.** So that *tag* keeps its Notion meaning — a Select
 property inside one database, which this app also has (§4). §3.1.6 is **Corrected** by this row
 in name only; the code's `Tag`/`PageTag` rename is separate and mechanical. (B§12.5)
