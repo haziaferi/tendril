@@ -117,6 +117,32 @@ fun TasksHabitsScreen(
 
     var tab by remember { mutableStateOf(TabSelection.TASKS) }
     var filter by remember { mutableStateOf(TimeFilter.TODAY) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalRemindersAvailable provides (reminderSheet != null)) {
+        TasksHabitsBody(
+            viewModel, core, showImportance, showStreaks, reminderSheet, entryTrashSheet, habitTrashSheet, modifier,
+            tab, { tab = it }, filter, { filter = it },
+        )
+    }
+}
+
+/** Whether a Reminders sheet was supplied — rows show the bell only then. */
+private val LocalRemindersAvailable = androidx.compose.runtime.staticCompositionLocalOf { true }
+
+@Composable
+private fun TasksHabitsBody(
+    viewModel: TasksHabitsViewModel,
+    core: WorkbenchCore,
+    showImportance: Boolean,
+    showStreaks: Boolean,
+    reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
+    entryTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
+    habitTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
+    modifier: Modifier,
+    tab: TabSelection,
+    setTab: (TabSelection) -> Unit,
+    filter: TimeFilter,
+    setFilter: (TimeFilter) -> Unit,
+) {
     var showUndated by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     // §5.4 — the reminder list opens over whichever Entry was tapped; null means closed.
@@ -165,7 +191,7 @@ fun TasksHabitsScreen(
                 TabSelection.entries.forEachIndexed { index, t ->
                     SegmentedButton(
                         selected = tab == t,
-                        onClick = { tab = t },
+                        onClick = { setTab(t) },
                         shape = SegmentedButtonDefaults.itemShape(index, TabSelection.entries.size),
                     ) {
                         Text(
@@ -186,7 +212,7 @@ fun TasksHabitsScreen(
                     TimeFilter.entries.forEachIndexed { index, f ->
                         SegmentedButton(
                             selected = filter == f,
-                            onClick = { filter = f },
+                            onClick = { setFilter(f) },
                             shape = SegmentedButtonDefaults.itemShape(index, TimeFilter.entries.size),
                         ) {
                             Text(
@@ -379,7 +405,8 @@ private fun TaskRow(
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (!isStep) {
+        // No bell where nothing can fire (desktop, §0.8 step 7a): the sheet's absence is the signal.
+        if (!isStep && LocalRemindersAvailable.current) {
             IconButton(onClick = { onOpenReminders(entry) }) {
                 Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open))
             }
