@@ -96,6 +96,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7c: tracking) | Schema **v14**: `time_logs` (`MIGRATION_13_14`, verified in place on both real databases). `domain/track/TimeTracker` (one running timer; start closes the rest, stop, toggle) and `TimeLogTotals` (window-clipped minutes, an open log counts to now). `time_logs.json` in the sync folder and the archive: deleted-wins, else LWW; an unresolvable owner is held and republished (negative control). UI: ▶/■ on task and habit rows and Day rows, the running strip above the tabs (`ui/track/`), the habit sheet's logged minutes. Phone: `NotificationChannels.TIMER`, a chronometer notification with a *Stop* broadcast (`TimerStopReceiver`), no service. 642 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (sheet frame) | `ui/components/TendrilSheet` replaces all 29 `ModalBottomSheet` sites: one frame (sides, title slot, proportional bottom room), always fully expanded; the two refused alternatives recorded. §0.10 item 11 applied everywhere, phone included; item 14 opened (desktop layout revision). 642 tests. | §3, §0.10 |
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
+| 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 
 ---
 
@@ -407,6 +408,26 @@ screen takes `WorkbenchCore` where it took `AppContainer`, the scaffold's `canva
 gone. Verified on the running desktop preview: a canvas created from the New sheet opens, a text
 card is added, a mouse drag moves it, a link drag draws an edge.
 
+**0.6.11 Review is a weekly walk, not a report.** Finding: nothing in the app revisits what has
+gone quiet — a database nobody has opened in weeks, a task parked in Someday, a task whose When
+passed without a word. OmniFocus's review mode does exactly that on a cadence; Sunsama ends the
+week with a few numbers. Decision (2026-09-12): a **Review** screen off Tasks (an icon in its
+top bar, both platforms), one card at a time in a fixed order — databases due for review (never
+reviewed first, then longest ago), then Someday tasks, then tasks whose When is more than a week
+past — each with the few answers a review needs: *Open / Reviewed* for a database, *Keep / Today
+/ Someday / Done / Trash* for a task, *Skip* everywhere. Above the cards, last week as three
+numbers: logged time, tasks done, habit check-ins. `page_databases.lastReviewedAt` (**schema
+v15**) travels in the page record; marking reviewed touches the page so the LWW merge carries it.
+**Cadence: one global week, fixed for now** — a setting waits for the preference store (§0.10
+item 12); per-database is one column later if a week ever fits nothing. **Tone (§0.5.2)**: the
+only trace outside the screen is a dot on the icon when there is something to walk through —
+no count, no colour, no "overdue" anywhere else in the app; a review offers a thing again, it
+does not say it was missed. Acceptance: with nothing due the screen says so; a database
+reviewed today does not return for seven days on either device; steps and series overrides
+never appear as cards. (B§6 #10) **Done 2026-09-12** — `domain/review/ReviewPlanner` (pure,
+tested), `Review` over DAOs that already existed, `ui/review/ReviewScreen`, the
+`WorkbenchRoute.Review` route. Verified on desktop and phone.
+
 ### 0.7 Explicitly out of scope
 
 Ruled out on purpose. Not to be reopened without amending §0.1 or §0.2. The evidence for each
@@ -436,7 +457,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
 | 6 | Calendar: **6a** the screen → `shared/`; **6b** edit path + drag-to-move; **6c+6d** Agenda, layers incl. "Show Habits" and database dates; **6e** ICS — *all done 2026-09-12* | 7 |
-| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; **7c** tracking — *done 2026-09-12*; **7d** planned-vs-actual — *done 2026-09-12*. §0.6.5 complete (B§6 #9) | Review (B§6 #10) |
+| 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; **7c** tracking — *done 2026-09-12*; **7d** planned-vs-actual — *done 2026-09-12*. §0.6.5 complete (B§6 #9); **7e** Review — *done 2026-09-12* (§0.6.11, B§6 #10) | — |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
 

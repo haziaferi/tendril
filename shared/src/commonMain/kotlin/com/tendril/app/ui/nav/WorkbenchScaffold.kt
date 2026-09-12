@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.tendril.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
@@ -17,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
@@ -25,6 +28,7 @@ import com.tendril.app.ui.pages.PageDatabaseScreen
 import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.track.RunningTimerBar
+import com.tendril.app.ui.review.ReviewScreen
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -46,10 +50,14 @@ fun WorkbenchScaffold(
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
-    tasksHabitsContent: @Composable () -> Unit,
+    tasksHabitsContent: @Composable (onOpenReview: () -> Unit) -> Unit,
     roadMapContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
 ) {
+    // Back pops the stack on both platforms: Android's gesture and desktop's Escape reach the
+    // same Compose Multiplatform dispatcher (§0.10 item 10). Was Android-only until Review
+    // (2026-09-12) showed Escape leaving a pushed route in place on desktop.
+    BackHandler(enabled = navState.canGoBack) { navState.back() }
     val viewOnly by core.viewLockState.viewOnly.collectAsState()
     val checkboxOnlyPageId by core.checkboxOnlyState.activePageId.collectAsState()
     val route = navState.current
@@ -98,10 +106,11 @@ fun WorkbenchScaffold(
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage)
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
-                        WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent()
+                        WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview)
                         WorkbenchDestination.ROAD_MAP -> roadMapContent(navState::openPage)
                         WorkbenchDestination.SETTINGS -> settingsContent()
                     }
+                    is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
                     is WorkbenchRoute.PageDetail -> {
                         // A Database page (§5.1) gets the Table view; every other page (including a
                         // Database's own Row, which is `kind = PAGE` with `databaseId` set) gets the

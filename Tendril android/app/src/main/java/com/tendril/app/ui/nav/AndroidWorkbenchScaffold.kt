@@ -1,6 +1,5 @@
 package com.tendril.app.ui.nav
 
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -37,7 +36,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
     val navState = remember { WorkbenchNavState() }
     val activity = LocalActivity.current as? FragmentActivity
 
-    BackHandler(enabled = navState.canGoBack) { navState.back() }
+    // The nav stack's back is in the shared scaffold (2026-09-12), so desktop's Escape pops it too.
 
     WorkbenchScaffold(
         core = container.workbenchCore,
@@ -67,9 +66,10 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
             )
         },
         // §0.8 step 7a — Tasks & Habits is shared; Android supplies the switches and its sheets.
-        tasksHabitsContent = {
+        tasksHabitsContent = { onOpenReview ->
             TasksHabitsScreen(
                 core = container.workbenchCore,
+                onOpenReview = onOpenReview,
                 showImportance = container.taskPreferences.showImportance.collectAsState().value,
                 showStreaks = container.taskPreferences.showHabitStreaks.collectAsState().value,
                 reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },

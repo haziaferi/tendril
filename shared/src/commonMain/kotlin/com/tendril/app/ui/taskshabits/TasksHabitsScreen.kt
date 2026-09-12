@@ -25,6 +25,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Checkbox
 import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.domain.track.formatMinutes
@@ -69,6 +73,7 @@ import com.tendril.app.generated.resources.taskshabits_tab_merged
 import com.tendril.app.generated.resources.taskshabits_tab_tasks
 import com.tendril.app.generated.resources.taskshabits_undated_toggle
 import com.tendril.app.generated.resources.trash_entries_open
+import com.tendril.app.generated.resources.review_open
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -98,6 +103,7 @@ private enum class TimeFilter { TODAY, WEEK, MONTH }
 @Composable
 fun TasksHabitsScreen(
     core: WorkbenchCore,
+    onOpenReview: () -> Unit,
     showImportance: Boolean,
     showStreaks: Boolean,
     reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
@@ -125,7 +131,7 @@ fun TasksHabitsScreen(
     var filter by remember { mutableStateOf(TimeFilter.TODAY) }
     androidx.compose.runtime.CompositionLocalProvider(LocalRemindersAvailable provides (reminderSheet != null)) {
         TasksHabitsBody(
-            viewModel, core, showImportance, showStreaks, reminderSheet, entryTrashSheet, habitTrashSheet, modifier,
+            viewModel, core, onOpenReview, showImportance, showStreaks, reminderSheet, entryTrashSheet, habitTrashSheet, modifier,
             tab, { tab = it }, filter, { filter = it },
         )
     }
@@ -138,6 +144,7 @@ private val LocalRemindersAvailable = androidx.compose.runtime.staticComposition
 private fun TasksHabitsBody(
     viewModel: TasksHabitsViewModel,
     core: WorkbenchCore,
+    onOpenReview: () -> Unit,
     showImportance: Boolean,
     showStreaks: Boolean,
     reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
@@ -175,6 +182,10 @@ private fun TasksHabitsBody(
 
     val tasks by viewModel.tasks.collectAsState()
     val habits by viewModel.habits.collectAsState()
+    // §0.6.11 — a dot when the walk has something, and no number: the review says what (§0.5.2).
+    // Re-asked whenever the tasks change, which is also every return from the Review route.
+    var reviewDue by remember { mutableStateOf(false) }
+    LaunchedEffect(tasks) { reviewDue = core.review.isDue() }
 
     Scaffold(
         modifier = modifier,
@@ -182,6 +193,11 @@ private fun TasksHabitsBody(
             TopAppBar(
                 title = { Text(stringResource(Res.string.nav_tasks_habits)) },
                 actions = {
+                    IconButton(onClick = onOpenReview) {
+                        BadgedBox(badge = { if (reviewDue) Badge() }) {
+                            Icon(Icons.Outlined.Checklist, contentDescription = stringResource(Res.string.review_open))
+                        }
+                    }
                     if (entryTrashSheet != null || habitTrashSheet != null) IconButton(onClick = { showTrash = true }) {
                         Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.trash_entries_open))
                     }
