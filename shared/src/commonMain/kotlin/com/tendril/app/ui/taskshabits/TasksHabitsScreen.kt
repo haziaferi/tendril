@@ -182,7 +182,7 @@ private fun TasksHabitsBody(
 
     val tasks by viewModel.tasks.collectAsState()
     val habits by viewModel.habits.collectAsState()
-    // §0.6.10 — a dot when the walk has something, and no number: the review says what (§0.5.2).
+    // §0.6.11 — a dot when the walk has something, and no number: the review says what (§0.5.2).
     // Re-asked whenever the tasks change, which is also every return from the Review route.
     var reviewDue by remember { mutableStateOf(false) }
     LaunchedEffect(tasks) { reviewDue = core.review.isDue() }

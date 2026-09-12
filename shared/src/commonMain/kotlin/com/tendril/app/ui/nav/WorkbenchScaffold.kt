@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.tendril.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
@@ -17,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
@@ -51,6 +54,10 @@ fun WorkbenchScaffold(
     roadMapContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
 ) {
+    // Back pops the stack on both platforms: Android's gesture and desktop's Escape reach the
+    // same Compose Multiplatform dispatcher (§0.10 item 10). Was Android-only until Review
+    // (2026-09-12) showed Escape leaving a pushed route in place on desktop.
+    BackHandler(enabled = navState.canGoBack) { navState.back() }
     val viewOnly by core.viewLockState.viewOnly.collectAsState()
     val checkboxOnlyPageId by core.checkboxOnlyState.activePageId.collectAsState()
     val route = navState.current

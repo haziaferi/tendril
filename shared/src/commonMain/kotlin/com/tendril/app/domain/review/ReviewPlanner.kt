@@ -15,7 +15,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * §0.6.10 — how long a database may go unreviewed before Review offers it again. One global
+ * §0.6.11 — how long a database may go unreviewed before Review offers it again. One global
  * number, fixed for now: a setting waits for the cross-platform preference store (§0.10 item
  * 12), and a per-database interval is one nullable column later if a week ever fits nothing.
  */

@@ -175,7 +175,7 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
-/** §9.10 / §0.6.10 — v14 → v15. `page_databases.lastReviewedAt`, nullable: no database has been
+/** §9.10 / §0.6.11 — v14 → v15. `page_databases.lastReviewedAt`, nullable: no database has been
  * reviewed before this version, and null is exactly "never", which Review treats as due now. */
 val MIGRATION_14_15 = object : Migration(14, 15) {
     override fun migrate(connection: SQLiteConnection) {

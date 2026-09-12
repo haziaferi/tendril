@@ -19,7 +19,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * §0.6.10 — the Review's reads and writes, over DAOs that already exist: a walk is a one-shot
+ * §0.6.11 — the Review's reads and writes, over DAOs that already exist: a walk is a one-shot
  * load re-taken after each answer, not a live query, so nothing new is asked of Room. The
  * decisions are [reviewItems] and [weekSummary]; this class only fetches and applies.
  */

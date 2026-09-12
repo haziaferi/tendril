@@ -88,7 +88,7 @@ import kotlinx.coroutines.Dispatchers
     //
     // v9 adds `uid` to `reminders` and `entry_completions` (S2). Unlike every bump
     // before it, it is migrated rather than destructive — see [MIGRATION_8_9].
-    version = 15, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log; v11 §0.8 step 2b dueDate binding; v12 §0.6.2 Block.mindMap; v13 §0.6.8 schema on a label; v14 §0.6.5 time_logs; v15 §0.6.10 lastReviewedAt
+    version = 15, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log; v11 §0.8 step 2b dueDate binding; v12 §0.6.2 Block.mindMap; v13 §0.6.8 schema on a label; v14 §0.6.5 time_logs; v15 §0.6.11 lastReviewedAt
     exportSchema = true, // §9.10 — see `shared/schemas/`; a version with no JSON cannot be migrated from
 )
 @TypeConverters(Converters::class)

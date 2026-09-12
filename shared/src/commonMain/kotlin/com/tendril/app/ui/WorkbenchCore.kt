@@ -59,7 +59,7 @@ class WorkbenchCore(
      * `AppContainer` builds its own on the same DAO for the notification's Stop action. */
     val timeTracker: TimeTracker by lazy { TimeTracker(database.timeLogDao()) }
 
-    /** §0.6.10 — the weekly walk; derived like the rest, over DAOs that already exist. */
+    /** §0.6.11 — the weekly walk; derived like the rest, over DAOs that already exist. */
     val review: Review by lazy {
         Review(
             database.pageDao(), database.pageDatabaseDao(), database.entryDao(), database.entryCompletionDao(),

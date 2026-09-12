@@ -10,7 +10,7 @@ sealed interface WorkbenchRoute {
 
     data class TabRoot(override val tab: WorkbenchDestination) : WorkbenchRoute
     data class PageDetail(val pageId: Long, override val tab: WorkbenchDestination) : WorkbenchRoute
-    /** §0.6.10 — the weekly walk, pushed from Tasks; Back returns there. */
+    /** §0.6.11 — the weekly walk, pushed from Tasks; Back returns there. */
     data class Review(override val tab: WorkbenchDestination = WorkbenchDestination.TASKS_HABITS) : WorkbenchRoute
 }
 

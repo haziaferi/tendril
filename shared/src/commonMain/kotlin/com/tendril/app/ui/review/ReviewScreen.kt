@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
 /**
- * §0.6.10 — the weekly walk (B§6 #10): OmniFocus's review mode on a cadence, Sunsama's summary
+ * §0.6.11 — the weekly walk (B§6 #10): OmniFocus's review mode on a cadence, Sunsama's summary
  * as three numbers at the top. One card at a time — a database that has gone a week without a
  * look, a task parked in Someday, a task whose When passed a week ago — each with the few
  * answers a review needs and nothing to scroll past. The list is re-taken after every answer,
