@@ -51,6 +51,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlin.math.roundToInt
+import com.tendril.app.ui.entries.EntryEditSheet
+import com.tendril.app.domain.MoveScope
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -100,10 +114,12 @@ fun CalendarScreen(
     settingsSheet: @Composable (onDismiss: () -> Unit) -> Unit,
     reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
     modifier: Modifier = Modifier,
+    /** §0.6.4 — the Settings switch that shows the importance flag; desktop has no Settings yet. */
+    showImportant: Boolean = false,
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator) }
+            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor) }
         }
     )
     // Defaults to Day, not Month (§2.2).
@@ -113,6 +129,29 @@ fun CalendarScreen(
     var showSettings by remember { mutableStateOf(false) }
     // §5.4 — reminders open over the tapped Entry; null means closed.
     var reminderTarget by remember { mutableStateOf<Entry?>(null) }
+    // §0.8 step 6b — the edit sheet over a tapped row, and a dragged occurrence's "this one or
+    // all?" once it has been dropped on another day.
+    var editTarget by remember { mutableStateOf<Entry?>(null) }
+    var pendingMove by remember { mutableStateOf<PendingMove?>(null) }
+
+    editTarget?.let { entry ->
+        EntryEditSheet(
+            entry = entry,
+            showImportant = showImportant,
+            onSave = { viewModel.save(it); editTarget = null },
+            onDelete = { viewModel.trash(entry.id); editTarget = null },
+            onDismiss = { editTarget = null },
+        )
+    }
+    pendingMove?.let { move ->
+        AlertDialog(
+            onDismissRequest = { pendingMove = null },
+            title = { Text("Move \"${move.occurrence.entry.title}\"?") },
+            text = { Text("This repeats. Move only this occurrence, or the whole series?") },
+            confirmButton = { TextButton(onClick = { viewModel.move(move.occurrence.entry, move.occurrence.startDate, move.toDate, MoveScope.THIS_ONE); pendingMove = null }) { Text("This one") } },
+            dismissButton = { TextButton(onClick = { viewModel.move(move.occurrence.entry, move.occurrence.startDate, move.toDate, MoveScope.ALL); pendingMove = null }) { Text("All") } },
+        )
+    }
 
     if (showSettings) settingsSheet { showSettings = false }
 
@@ -182,11 +221,17 @@ fun CalendarScreen(
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
                     onSetDone = viewModel::setDone,
                     onOpenReminders = if (reminderSheet != null) { { reminderTarget = it } } else null,
+                    onEdit = { editTarget = it },
                 )
                 CalendarView.WEEK -> WeekStripView(
                     selectedDate = selectedDate,
                     occurrences = occurrences,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
+                    onMove = { occurrence, toDate ->
+                        val entry = occurrence.entry
+                        if (entry.recurrenceRule != null && entry.originalEntryId == null) pendingMove = PendingMove(occurrence, toDate)
+                        else viewModel.move(entry, occurrence.startDate, toDate, MoveScope.ALL)
+                    },
                 )
                 CalendarView.MONTH -> MonthGridView(
                     month = gridMonth,
@@ -208,6 +253,7 @@ private fun DayView(
     onQuickAdd: (ParsedEntry) -> Unit,
     onSetDone: (Long, Boolean) -> Unit,
     onOpenReminders: ((Entry) -> Unit)?,
+    onEdit: (Entry) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -270,7 +316,8 @@ private fun DayView(
                                 onCheckedChange = { checked -> onSetDone(entry.id, checked) },
                             )
                         }
-                        Column(modifier = Modifier.weight(1f)) {
+                        // §3.2 — the row itself opens the edit sheet (it had no tap target before 6b).
+                        Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
                             Text(entry.title, style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 occurrenceSubtitle(occurrence, date),
@@ -301,34 +348,89 @@ private fun occurrenceSubtitle(occurrence: EntryOccurrence, day: LocalDate): Str
     return "$base · day $index of $total"
 }
 
-/** Cards layout (§2.2) — the Grid/hour-grid alternative is a later refinement. */
+/** A dragged occurrence dropped on a day, waiting for "this one or all?". */
+private data class PendingMove(val occurrence: EntryOccurrence, val toDate: LocalDate)
+
+/**
+ * Cards layout (§2.2) — the Grid/hour-grid alternative is a later refinement. §0.8 step 6b —
+ * an occurrence line can be long-pressed and dragged onto another day's card; the drop is a move
+ * (or, on a series, the question). The cards report their bounds so the drop knows which day is
+ * under the finger; a ghost of the title follows it.
+ */
 @Composable
-private fun WeekStripView(selectedDate: LocalDate, occurrences: List<EntryOccurrence>, onSelectDate: (LocalDate) -> Unit) {
+private fun WeekStripView(
+    selectedDate: LocalDate,
+    occurrences: List<EntryOccurrence>,
+    onSelectDate: (LocalDate) -> Unit,
+    onMove: (EntryOccurrence, LocalDate) -> Unit,
+) {
     val monday = selectedDate.minusDays((selectedDate.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong())
     val days = (0..6).map { monday.plusDays(it.toLong()) }
+    val cardBounds = remember { mutableStateMapOf<LocalDate, Rect>() }
+    var dragging by remember { mutableStateOf<EntryOccurrence?>(null) }
+    // Root coordinates throughout: the cards report `boundsInRoot`, the ghost subtracts the
+    // Box's own origin when it draws.
+    var dragPosition by remember { mutableStateOf(Offset.Zero) }
+    var boxOrigin by remember { mutableStateOf(Offset.Zero) }
+    val hoverDay = dragging?.let { d -> cardBounds.entries.firstOrNull { it.value.contains(dragPosition) }?.key?.takeIf { it != d.date } }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-        items(days) { day ->
-            val dayEntries = occurrences.filter { it.date == day }
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                tonalElevation = 1.dp,
-                shape = MaterialTheme.shapes.medium,
-                onClick = { onSelectDate(day) },
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "${day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${day.dayOfMonth}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
-                    )
-                    if (dayEntries.isEmpty()) {
-                        Text("—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        dayEntries.take(3).forEach { Text("• ${it.entry.title}", style = MaterialTheme.typography.bodySmall) }
-                        if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.bodySmall)
+    Box(modifier = Modifier.fillMaxSize().onGloballyPositioned { boxOrigin = it.boundsInRoot().topLeft }) {
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+            items(days) { day ->
+                val dayEntries = occurrences.filter { it.date == day }
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        .onGloballyPositioned { cardBounds[day] = it.boundsInRoot() },
+                    tonalElevation = if (hoverDay == day) 4.dp else 1.dp,
+                    shape = MaterialTheme.shapes.medium,
+                    onClick = { onSelectDate(day) },
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "${day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${day.dayOfMonth}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
+                        )
+                        if (dayEntries.isEmpty()) {
+                            Text("—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            dayEntries.take(3).forEach { occurrence ->
+                                var lineOrigin by remember(occurrence) { mutableStateOf(Offset.Zero) }
+                                Text(
+                                    "• ${occurrence.entry.title}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.onGloballyPositioned { lineOrigin = it.boundsInRoot().topLeft }.pointerInput(occurrence) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { start ->
+                                                dragging = occurrence
+                                                dragPosition = lineOrigin + start
+                                            },
+                                            onDrag = { change, delta -> change.consume(); dragPosition += delta },
+                                            onDragEnd = {
+                                                val target = cardBounds.entries.firstOrNull { it.value.contains(dragPosition) }?.key
+                                                val moved = dragging
+                                                dragging = null
+                                                if (moved != null && target != null && target != moved.date) onMove(moved, target)
+                                            },
+                                            onDragCancel = { dragging = null },
+                                        )
+                                    },
+                                )
+                            }
+                            if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
+            }
+        }
+        dragging?.let { d ->
+            Surface(
+                modifier = Modifier.offset { IntOffset((dragPosition.x - boxOrigin.x).roundToInt() + 16, (dragPosition.y - boxOrigin.y).roundToInt() - 16) },
+                tonalElevation = 6.dp,
+                shadowElevation = 6.dp,
+                shape = MaterialTheme.shapes.small,
+            ) {
+                Text(d.entry.title, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
             }
         }
     }
