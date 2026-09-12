@@ -103,11 +103,27 @@ interface PropertyValueDao {
     @Query("DELETE FROM property_values WHERE rowPageId = :rowPageId")
     suspend fun deleteAllForRow(rowPageId: Long)
 
+    /**
+     * §0.8 step 6d — the Calendar's *database dates* layer: every stored `DATE` cell in the app
+     * with the row it belongs to, as one projection. A bound date column has no stored values
+     * (it is a live proxy of an Entry, §5.2.1), and that Entry is already on the Calendar as a
+     * task, so nothing is drawn twice.
+     */
+    @Query(
+        "SELECT pg.id AS pageId, pg.title AS title, p.name AS propertyName, pv.value AS value " +
+            "FROM property_values pv INNER JOIN properties p ON p.id = pv.propertyId INNER JOIN pages pg ON pg.id = pv.rowPageId " +
+            "WHERE p.type = 'DATE' AND pv.value IS NOT NULL AND pg.deletedAt IS NULL"
+    )
+    fun observeDateCells(): Flow<List<DateCell>>
+
     /** Table view (§5.1) — every stored cell value across a whole Database in one Flow,
      * rather than one Flow per row, so the table recomposes from a single combined source. */
     @Query("SELECT pv.* FROM property_values pv INNER JOIN properties p ON p.id = pv.propertyId WHERE p.databaseId = :databaseId")
     fun observeForDatabase(databaseId: Long): Flow<List<PropertyValue>>
 }
+
+/** One stored DATE cell and the row that holds it — [PropertyValueDao.observeDateCells]. */
+data class DateCell(val pageId: Long, val title: String, val propertyName: String, val value: String)
 
 /** Room's `@Upsert` resolves conflicts on the primary key, not the `(propertyId, rowPageId)`
  * unique index this table actually keys cell identity on — a fresh [PropertyValue] always has

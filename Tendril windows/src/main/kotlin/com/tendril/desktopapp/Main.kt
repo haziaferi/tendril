@@ -146,9 +146,10 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                 core = core,
                 // §0.8 step 6a — the shared Calendar. Google Calendar sync is Play Services and
                 // reminders are AlarmManager, so the settings slot says so and the bell is absent.
-                calendarContent = {
+                calendarContent = { onOpenPage ->
                     CalendarScreen(
                         core = core,
+                        onOpenPage = onOpenPage,
                         settingsSheet = { onDismiss -> DesktopCalendarSettingsSheet(onDismiss) },
                         reminderSheet = null,
                     )

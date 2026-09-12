@@ -48,9 +48,10 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
             activity?.let { showAppUnlockPrompt(it, onResult) } ?: onResult(false)
         },
         // §0.8 step 6a — the Calendar is shared; Android supplies the two surfaces only it has.
-        calendarContent = {
+        calendarContent = { onOpenPage ->
             CalendarScreen(
                 core = container.workbenchCore,
+                onOpenPage = onOpenPage,
                 settingsSheet = { onDismiss ->
                     CalendarSettingsSheet(
                         authManager = container.googleCalendarAuthManager,

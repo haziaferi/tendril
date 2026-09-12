@@ -326,6 +326,7 @@ class FakePropertyValueDao(private val store: FakePageStore) : PropertyValueDao 
     override fun observeForRow(rowPageId: Long): Flow<List<PropertyValue>> =
         flowOf(store.propertyValues.values.filter { it.rowPageId == rowPageId })
 
+    override fun observeDateCells(): Flow<List<com.tendril.app.data.pagedatabase.DateCell>> = flowOf(emptyList())
     override fun observeForDatabase(databaseId: Long): Flow<List<PropertyValue>> = flowOf(
         store.propertyValues.values.filter { pv -> store.properties[pv.propertyId]?.databaseId == databaseId }
     )

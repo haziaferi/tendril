@@ -89,6 +89,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 5: natural-language Quick Add) | §0.8 step 5 done. `domain/QuickAddParser` (pure, English first, ISO/24h in any language) + `ParsedEntry.toEntry`; `ui/entries/QuickAddPreview` chip row in `shared/`; Calendar's Quick Add creates a Task or an Event from the line, Tasks' add dialog pre-fills from its title. B§6 #3's open decisions answered: English only first; recurrence phrases `daily/weekly/monthly`, `every N days/weeks/months`, `every <weekday>`, `every weekday`. §3.2 and §3.3 amended in place. Verified on the phone (`Dentist tmr 3pm` → event 15:00 tomorrow; `todo Call bank by friday !` → flagged task due Friday; `Gym every monday 7am` → weekly task from Monday 07:00). 612 tests. | §0.8, §3.2, §3.3 |
 | 2026-09-12 (step 6a: Calendar → shared) | `CalendarScreen`/`CalendarViewModel` moved to `shared/src/commonMain/.../ui/calendar/`, the same move step 1 made for the Canvas: the screen takes `WorkbenchCore` and two slots — the Google Calendar settings sheet (now `CalendarSettingsSheet.kt` in the Android app, Play Services) and the Reminders sheet (alarms; null on desktop hides the bell). Six strings join `shared/`'s resources. No behaviour change on Android; desktop gains the Calendar. Verified on the desktop preview: Day/Week/Month, Quick Add of `Standup 9-9:30am every weekday` drawn on Monday and not Sunday, the `···` sheet. 612 tests. | §0.8, §3.2 |
 | 2026-09-12 (step 6b: edit path, drag-to-move) | `domain/EntryEditor` (`save` normalises for the kind, `move` keeps a span's length and makes an override row for *this one* of a series), `ui/entries/EntryEditSheet`, a tap target on the Day row, long-press-drag between Week's day cards with a ghost and a *this one / all* question. Sheets that are taller than a desktop window now open fully expanded — §0.10 item 11 resolved. §3.2 amended in place; the Day view's hour-drag deferred to step 7's timeline, said there. Verified on desktop: a series edited (title, time; its `BYDAY` rule kept), a Saturday occurrence dragged to Monday as *this one* → an override row, the series untouched. 620 tests. | §0.8, §0.10, §3.2 |
+| 2026-09-12 (step 6c+6d: Agenda, layers) | `CalendarView.AGENDA` (30 days grouped by day); `CalendarLayers` in the ViewModel with a chip row — Tasks/Events filter the rows, Habits draws timed habits on every day, Database dates draws every stored `DATE` cell (`PropertyValueDao.observeDateCells`, a joined projection) and opens the page on tap; Week lists and Month counts the extras too. `CalendarScreen` gains `onOpenPage`, threaded through the scaffold's slot. §3.2 amended in place (Agenda; Show Habits built as a layer); §0.10 item 12 opened (layer persistence). Verified on desktop (Agenda; a seeded `Read on` cell on Wed 16 opening its page) and on the phone (Agenda; a timed habit *Stretch 09:00* appears with the layer on and hides with it off; 6b's sheet and Week drag also walked there: estimate saved, *Call bank* dragged Sat → Sun). 620 tests. | §0.8, §0.10, §3.2 |
 
 ---
 
@@ -392,7 +393,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 3 | **0.6.1** depth, then **0.6.2** mind map, **0.6.3** canvas block — *done 2026-09-11*; **0.6.7** as time allows | — |
 | 4 | **0.6.8** schema on a label; **0.6.9** rename — *done 2026-09-12* | labels on entries; linked views in a page |
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
-| 6 | Calendar: **6a** the screen → `shared/` — *done 2026-09-12*; **6b** edit path + drag-to-move — *done 2026-09-12*; then agenda, layers, "Show Habits", ICS (B§6 #6, #7) | 7 |
+| 6 | Calendar: **6a** the screen → `shared/` — *done 2026-09-12*; **6b** edit path + drag-to-move — *done 2026-09-12*; **6c+6d** Agenda, layers incl. "Show Habits" and database dates — *done 2026-09-12*; then **6e** ICS (B§6 #7) | 7 |
 | 7 | Time: Plan mode, then tracking, then planned-vs-actual (B§6 #8, #9) | Review (B§6 #10) |
 | 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
@@ -433,6 +434,7 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+12. **Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting. B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet.*
 
 ### 0.11 Relationship to the rest of this file and to the companion documents
@@ -970,7 +972,7 @@ composable ("No pages match '…'").
 
 ### 3.2 Calendar
 
-- Day, Week, Month views; **week starts Monday**; defaults to **Day** view on open. All three draw
+- Day, Week, Month views *(**and Agenda, added 2026-09-12 (§0.8 step 6c):** the next 30 days as one list grouped by day, empty days skipped — the fourth view, off the same segmented row)*; **week starts Monday**; defaults to **Day** view on open. All three draw
   *occurrences*, not stored rows (§4.1.1) — a recurring EVENT appears on every occurrence in view
   and a multi-day one on every day it covers. The "day N of M" label is the **Day view's alone**
   *(corrected 2026-09-06)*: Week lists bare titles and Month draws a presence dot, so neither has
@@ -1044,7 +1046,15 @@ composable ("No pages match '…'").
   list (see §5.4) — that lives behind its own bell icon on a row, keeping Quick Add fast
   *(**corrected 2026-09-06**: "the fuller edit sheet" named a surface that was never built — see the
   Reminders bullet below)*
-- **Show Habits** button — **not built (recorded 2026-09-06)**. Still the intended design: a small
+- **Show Habits** button — ~~**not built (recorded 2026-09-06)**~~ *(**built 2026-09-12 (§0.8 step
+  6d)** as one of four **layers** on a chip row under the views: *Tasks* and *Events* (on, and they
+  filter the rows), *Habits* (off; every habit with a time, drawn on every day at its time with its
+  duration — the human layer shows presence, never an obligation, so the frequency is not turned
+  into "due today") and *Database dates* (off; every stored `DATE` cell in every database, drawn on
+  its day as the row's title and the column's name, and opening the page — Notion Calendar's layer,
+  built from the rows the databases already hold. A bound date column is a live proxy of an Entry
+  (§5.2.1) and that Entry is already a task on the Calendar, so nothing draws twice). Layer state is
+  the session's; persisting it is §0.10 item 12.)*. Still the intended design: a small
   toggle surfacing habit entries (with time+duration) inline in the calendar view. `CalendarViewModel`
   does not take a `HabitDao` at all, so habit rows never reach this screen — a genuinely unbuilt item
   rather than a rendering detail. Habits with a time are visible today only in Tasks & Habits' Merged
