@@ -97,6 +97,7 @@ second copy of the reasoning.
 | 2026-09-12 (sheet frame) | `ui/components/TendrilSheet` replaces all 29 `ModalBottomSheet` sites: one frame (sides, title slot, proportional bottom room), always fully expanded; the two refused alternatives recorded. §0.10 item 11 applied everywhere, phone included; item 14 opened (desktop layout revision). 642 tests. | §3, §0.10 |
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
+| 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 
 ---
 
@@ -504,7 +505,7 @@ Genuinely undecided — distinct from §0.7.
     rows, keyboard shortcuts); a benchmark section to gather first. Raised 2026-09-12 while
     settling the sheet frame (§3); the frame is the phone's answer and a placeholder for this.
 13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec).
-12. **Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting. B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
+12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
 
 ### 0.11 Relationship to the rest of this file and to the companion documents
@@ -2710,6 +2711,12 @@ person having to reconfigure each placed instance.
 ## 9. Android Architecture & Build Plan
 
 ### 9.1 Architecture decision (Decided)
+
+**Device preferences (2026-09-12, §0.10 item 12).** `shared/…/data/prefs/KeyValueStore` is the one
+place a *device* preference lives on either platform — strings only, each consumer encoding its own
+value; `MapKeyValueStore` is the shared body (a map behind one `StateFlow` per observed key) and
+each platform supplies `persist`. Android's older `*Preferences` classes stay as they are; new
+settings go here. Secrets never do (Android `SecretStore`; the desktop's key file, step 8g).
 
 **Native Kotlin + Jetpack Compose**, not a WebView/hybrid wrapper around the HTML prototypes. Two
 constraints force this regardless of preference: home-screen widgets cannot be WebViews (require
