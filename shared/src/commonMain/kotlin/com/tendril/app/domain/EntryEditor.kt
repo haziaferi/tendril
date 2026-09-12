@@ -37,7 +37,8 @@ class EntryEditor(
 
     /**
      * Moves an Entry — or one occurrence of a recurring one — to [toDate] at [toTime] (null
-     * keeps the entry's own time; an all-day entry stays all-day). A span keeps its length in
+     * keeps the entry's own time, so a day drag leaves an all-day entry all-day; a time places
+     * one that had none, which is Plan mode's drop). A span keeps its length in
      * days and minutes. [occurrenceDate] names which occurrence was dragged; with
      * [MoveScope.THIS_ONE] on a recurring base that becomes an override row (§4.1's exception
      * machinery), with [MoveScope.ALL] the series' anchor moves. A non-recurring entry, or an
@@ -52,7 +53,7 @@ class EntryEditor(
         now: Instant = Instant.now(),
     ): Entry {
         val spanDays = if (entry.startDate != null && entry.endDate != null) ChronoUnit.DAYS.between(entry.startDate, entry.endDate) else 0L
-        val newStartTime = if (entry.startTime == null) null else (toTime ?: entry.startTime)
+        val newStartTime = toTime ?: entry.startTime
         val spanMinutes = if (entry.startTime != null && entry.endTime != null) Duration.between(entry.startTime, entry.endTime) else null
         val newEndTime = if (newStartTime != null && spanMinutes != null) newStartTime.plus(spanMinutes) else if (entry.kind == EntryKind.EVENT) entry.endTime else null
         val newEndDate = if (entry.endDate != null) toDate.plusDays(spanDays) else null
