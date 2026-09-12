@@ -13,4 +13,11 @@
     <string name="empty_pages_message">No pages yet</string>
     <string name="empty_pages_cta">New page</string>
     <string name="empty_trash_message">Trash is empty</string>
+
+    <!-- Calendar (§0.8 step 6a) — the screen moved to shared/; these are its own strings. -->
+    <string name="calendar_view_day">Day</string>
+    <string name="calendar_view_week">Week</string>
+    <string name="calendar_view_month">Month</string>
+    <string name="calendar_quick_add_hint">Quick add…</string>
+    <string name="reminders_open">Reminders</string>
 </resources>

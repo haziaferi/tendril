@@ -8,6 +8,8 @@ import androidx.fragment.app.FragmentActivity
 import com.tendril.app.AppContainer
 import com.tendril.app.applock.showAppUnlockPrompt
 import com.tendril.app.ui.calendar.CalendarScreen
+import com.tendril.app.ui.reminders.ReminderSheet
+import com.tendril.app.ui.calendar.CalendarSettingsSheet
 import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.settings.SettingsScreen
 import com.tendril.app.ui.taskshabits.TasksHabitsScreen
@@ -44,7 +46,21 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
         onCheckboxOnlyUnlockRequest = { onResult ->
             activity?.let { showAppUnlockPrompt(it, onResult) } ?: onResult(false)
         },
-        calendarContent = { CalendarScreen(container = container) },
+        // §0.8 step 6a — the Calendar is shared; Android supplies the two surfaces only it has.
+        calendarContent = {
+            CalendarScreen(
+                core = container.workbenchCore,
+                settingsSheet = { onDismiss ->
+                    CalendarSettingsSheet(
+                        authManager = container.googleCalendarAuthManager,
+                        syncEngine = container.googleCalendarSyncEngine,
+                        preferences = container.googleCalendarPreferences,
+                        onDismiss = onDismiss,
+                    )
+                },
+                reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },
+            )
+        },
         tasksHabitsContent = { TasksHabitsScreen(container = container) },
         roadMapContent = { onOpenPage -> RoadMapScreen(container = container, onOpenPage = onOpenPage) },
         settingsContent = {
