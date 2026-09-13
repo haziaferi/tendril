@@ -105,6 +105,7 @@ private const val CENTERING_STRENGTH = 0.015f
 private const val DAMPING = 0.82f
 private const val SETTLE_THRESHOLD_DP_PER_S = 4f
 private const val DIMMED_ALPHA = 0.28f
+private const val SETTLE_WARMUP_FRAMES = 30
 
 /**
  * §3.4 — full-screen interactive canvas of relationships between existing Pages, reworked
@@ -372,6 +373,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
         if (canvasSize == IntSize.Zero) return@LaunchedEffect
         val ids = graph.nodes.map { it.id }
         var lastFrameTime = 0L
+        var frames = 0
         while (isActive) {
             var settled = false
             withFrameNanos { frameTimeNanos ->
@@ -430,7 +432,12 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                     totalSpeed += vel.getDistance()
                 }
 
-                if (ids.isNotEmpty() && totalSpeed / ids.size < settleThresholdPx) settled = true
+                // Never on the first frames: velocities start at zero, and one frame of
+                // acceleration is below the threshold even for nodes seeded on top of each
+                // other — the loop used to declare the layout settled before it had moved
+                // (found on the desktop, step 8c; the phone hid it behind the first drag).
+                frames++
+                if (frames > SETTLE_WARMUP_FRAMES && ids.isNotEmpty() && totalSpeed / ids.size < settleThresholdPx) settled = true
             }
             if (settled) break
         }
