@@ -19,6 +19,12 @@ enum class BlockType {
     /** §0.6.3 — a Canvas page shown in this page, inert until armed; [Block.mentionedPageId]
      * names the page. Not a second canvas model: §3.7's page kind, embedded. */
     CANVAS,
+    /** §0.6.12 — another block's *live* text shown here, inert; [Block.referencedBlockUid] names
+     * the block and [Block.mentionedPageId] its page (where a tap goes). [Block.content] caches
+     * the text at insertion, so the export and a device without the source still have the words.
+     * A block, not a span, because the editor's inline spans are not tappable and a span would
+     * have to copy the text into the field and re-copy it on every source edit. */
+    BLOCK_REFERENCE,
 }
 
 /** §3.1.1 — "inline formatting... is stored as (start, end, style) spans over a block's
@@ -73,8 +79,14 @@ data class Block(
     val calloutIcon: String? = null,
     val calloutColor: String? = null,
     /** PAGE_MENTION block only — the standalone-block form; an inline `@mention` within
-     * running text is a [SpanStyle.PageMention] span instead. */
+     * running text is a [SpanStyle.PageMention] span instead. Also the source page of a
+     * CANVAS block and of a BLOCK_REFERENCE block. */
     val mentionedPageId: Long? = null,
+    /** BLOCK_REFERENCE only — the source block's uid (v17). A uid, not an id, because uids are
+     * the one identity a block keeps across the sync's delete-and-reinsert (§9.4) and across
+     * devices; it needs no remapping in a snapshot and can name a block this device has not
+     * received yet, in which case the card shows the cached [content]. */
+    val referencedBlockUid: String? = null,
     /** TOGGLE only — "actually collapses" (§3.1.1), state persisted so it survives navigation. */
     val toggleExpanded: Boolean = true,
     /** §0.6.2 — this block's subtree is shown as a mind map instead of as indented rows. A view

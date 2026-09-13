@@ -8,6 +8,7 @@ import com.tendril.app.data.canvas.PageCanvas
 import com.tendril.app.data.canvas.PageCanvasDao
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.page.Block
+import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
@@ -195,6 +196,13 @@ class FakeBlockDao(private val store: FakePageStore) : BlockDao {
     override suspend fun getById(id: Long): Block? = store.blocks[id]
 
     override suspend fun getByUid(uid: String): Block? = store.blocks.values.firstOrNull { it.uid == uid }
+    override fun observeByUid(uid: String): Flow<Block?> = flowOf(store.blocks.values.firstOrNull { it.uid == uid })
+    override suspend fun searchContent(query: String): List<Block> = store.blocks.values.filter { b ->
+        val page = store.pages[b.pageId]
+        page != null && page.deletedAt == null && !page.isTemplate &&
+            b.type !in setOf(BlockType.BLOCK_REFERENCE, BlockType.DIVIDER, BlockType.IMAGE, BlockType.CANVAS, BlockType.PAGE_MENTION) &&
+            b.content.contains(query, ignoreCase = true)
+    }.sortedByDescending { it.updatedAt }.take(30)
 
     override suspend fun getWithLocalImage(): List<Block> =
         store.blocks.values.filter { it.imagePath != null }

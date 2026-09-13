@@ -195,3 +195,11 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
         connection.execSQL("DELETE FROM `page_fts`")
     }
 }
+
+/** §9.10 / §0.6.12 — v16 → v17. `blocks.referencedBlockUid`, nullable: only a BLOCK_REFERENCE
+ * block sets it, and no block of that type exists before this version. */
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `blocks` ADD COLUMN `referencedBlockUid` TEXT")
+    }
+}

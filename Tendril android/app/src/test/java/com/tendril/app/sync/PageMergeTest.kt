@@ -2,6 +2,7 @@ package com.tendril.app.sync
 
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
+import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.purge.PurgedKind
@@ -328,6 +329,24 @@ class PageMergeTest {
 
         assertEquals("Newer here", pageDao.getById(id)?.title)
         assertEquals("a loser must not wipe the winner's blocks", listOf("kept"), blockDao.getForPage(id).map { it.content })
+    }
+
+    @Test
+    fun `a block reference travels by uid, verbatim, and needs no source to merge`() = runBlocking {
+        // §0.6.12 — the source block lives on a page this device has never seen: the record
+        // merges anyway (a block uid is never resolved), and the card falls back to its cache.
+        val id = localPage(UID_A, "Notes", 1_000L)
+        val reference = BlockSnapshotRecord(
+            uid = UID_BLOCK, type = "BLOCK_REFERENCE", order = 0, content = "cached words",
+            referencedBlockUid = "block-on-a-page-not-here", createdAt = 2_000L, updatedAt = 2_000L,
+        )
+        engine.mergePages(listOf(pageRecord(UID_A, "Notes", updatedAt = 2_000L, blocks = listOf(reference))))
+
+        val merged = blockDao.getForPage(id).single()
+        assertEquals(BlockType.BLOCK_REFERENCE, merged.type)
+        assertEquals("block-on-a-page-not-here", merged.referencedBlockUid)
+        assertEquals("cached words", merged.content)
+        assertEquals("and goes back out unchanged", "block-on-a-page-not-here", engine.exportPages().single().blocks.single().referencedBlockUid)
     }
 
     @Test

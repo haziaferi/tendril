@@ -34,6 +34,10 @@ import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
 import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.references.MIN_UNLINKED_TITLE_LENGTH
+import com.tendril.app.domain.references.UnlinkedMention
+import com.tendril.app.domain.references.linkMention
+import com.tendril.app.domain.references.unlinkedMentions
 import com.tendril.app.domain.journal.JournalToday
 import com.tendril.app.domain.journal.journalDayOf
 import com.tendril.app.domain.journal.todayHabits
@@ -220,21 +224,92 @@ class PageDetailViewModel(
     private val _backlinks = MutableStateFlow<List<Backlink>>(emptyList())
     val backlinks: StateFlow<List<Backlink>> = _backlinks.asStateFlow()
 
+    /** §3.1.5 (amended, §0.6.12) — pages naming this one in plain text without a link; loaded
+     * with [backlinks], for the same reason, and reloaded after [link]. */
+    private val _unlinkedMentions = MutableStateFlow<List<UnlinkedMention>>(emptyList())
+    val unlinkedMentions: StateFlow<List<UnlinkedMention>> = _unlinkedMentions.asStateFlow()
+
     init {
         viewModelScope.launch {
-            val mentioningBlocks = contentRepository.mentionsOf(pageId)
-            _backlinks.value = mentioningBlocks.mapNotNull { block ->
-                // §5.5.1 — a trashed page is "invisible everywhere except Trash", the
-                // backlinks panel named alongside FTS and Road Map. `mentionsOf` reads blocks
-                // without joining `pages`, and `getById` has no `deletedAt` filter, so a
-                // trashed page's mentions kept showing up here and stayed tappable. Road Map
-                // already filters the same edge data (RoadMapViewModel.refresh); this is the
-                // second consumer §3.1.5 says should agree with it.
-                pageDao.getById(block.pageId)
-                    ?.takeIf { it.deletedAt == null }
-                    ?.let { Backlink(it, block) }
-            }
+            loadMentions()
+            refreshBlockReferenceCaches()
         }
+    }
+
+    private suspend fun loadMentions() {
+        val mentioningBlocks = contentRepository.mentionsOf(pageId)
+        _backlinks.value = mentioningBlocks.mapNotNull { block ->
+            // §5.5.1 — a trashed page is "invisible everywhere except Trash", the
+            // backlinks panel named alongside FTS and Road Map. `mentionsOf` reads blocks
+            // without joining `pages`, and `getById` has no `deletedAt` filter, so a
+            // trashed page's mentions kept showing up here and stayed tappable. Road Map
+            // already filters the same edge data (RoadMapViewModel.refresh); this is the
+            // second consumer §3.1.5 says should agree with it.
+            pageDao.getById(block.pageId)
+                ?.takeIf { it.deletedAt == null }
+                ?.let { Backlink(it, block) }
+        }
+        val title = pageDao.getById(pageId)?.title.orEmpty().trim()
+        _unlinkedMentions.value = if (title.length < MIN_UNLINKED_TITLE_LENGTH) emptyList() else {
+            // The picker's substring scan doubles as the candidate set: live, non-template
+            // pages' text blocks containing the title. The pure function does the rest.
+            val candidates = blockDao.searchContent(title)
+            val pages = candidates.map { it.pageId }.distinct().mapNotNull { pageDao.getById(it) }.associateBy { it.id }
+            unlinkedMentions(title, pageId, candidates, pages, _backlinks.value.mapTo(mutableSetOf()) { it.fromPage.id })
+        }
+    }
+
+    /** §0.6.12 — Obsidian's "Link": the plain words become a real mention, on the *other* page.
+     * A write to that page, so it is re-indexed and its timestamp touched (the mentioning page is
+     * what changed; this one only gained a backlink). Gated like every write here. */
+    fun link(mention: UnlinkedMention) {
+        if (contentLocked()) return
+        viewModelScope.launch {
+            blockDao.update(linkMention(mention.block, mention.range, pageId).copy(updatedAt = Instant.now()))
+            contentRepository.rebuildFtsForPage(mention.block.pageId)
+            pageDao.touch(mention.block.pageId, Instant.now())
+            loadMentions()
+        }
+    }
+
+    /** §0.6.12 — a reference block's [Block.content] is a cache of its source's text, refreshed
+     * here when the source has moved on. Derived, not authored, so neither the block's nor the
+     * page's timestamp moves: every device refreshes its own copy on open, and the export
+     * carries whatever is current. */
+    private suspend fun refreshBlockReferenceCaches() {
+        for (block in blockDao.getForPage(pageId)) {
+            val uid = block.referencedBlockUid ?: continue
+            val source = blockDao.getByUid(uid) ?: continue
+            if (source.content != block.content) blockDao.update(block.copy(content = source.content))
+        }
+    }
+
+    /** §0.6.12 — the block-reference picker's search; the page title rides along for the row. */
+    fun searchBlocks(query: String, onResult: (List<Pair<Page, Block>>) -> Unit) {
+        viewModelScope.launch {
+            if (query.isBlank()) { onResult(emptyList()); return@launch }
+            val blocks = blockDao.searchContent(query)
+            val pages = blocks.map { it.pageId }.distinct().mapNotNull { pageDao.getById(it) }.associateBy { it.id }
+            onResult(blocks.mapNotNull { b -> pages[b.pageId]?.let { it to b } })
+        }
+    }
+
+    /** §0.6.12 — a block showing [source]'s live text, inserted after [afterOrder] like any other.
+     * The words are cached as content (see [refreshBlockReferenceCaches]); the source's page is
+     * the tap target. A reference to a reference is refused — it would show a cache of a cache. */
+    fun insertBlockReference(afterOrder: Int, source: Block) = launchAndReindex {
+        if (source.type == BlockType.BLOCK_REFERENCE) return@launchAndReindex
+        val existing = blockDao.getForPage(pageId).sortedBy { it.order }
+        val insertAt = (afterOrder + 1).coerceIn(0, existing.size)
+        val now = Instant.now()
+        existing.drop(insertAt).forEach { b -> blockDao.update(b.copy(order = b.order + 1)) }
+        blockDao.insert(
+            Block(
+                pageId = pageId, type = BlockType.BLOCK_REFERENCE, order = insertAt,
+                content = source.content, mentionedPageId = source.pageId, referencedBlockUid = source.uid,
+                createdAt = now, updatedAt = now,
+            )
+        )
     }
 
     /** §3.1.3 — "Save as template" from this page's "···" menu. Clones this page's own block

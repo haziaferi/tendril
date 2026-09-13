@@ -38,6 +38,20 @@ interface BlockDao {
     @Query("SELECT * FROM blocks WHERE uid = :uid")
     suspend fun getByUid(uid: String): Block?
 
+    /** §0.6.12 — the live text behind a BLOCK_REFERENCE card; null while the source is not here. */
+    @Query("SELECT * FROM blocks WHERE uid = :uid")
+    fun observeByUid(uid: String): Flow<Block?>
+
+    /** §0.6.12 — the block-reference picker's search: text blocks on live, non-template pages.
+     * A substring scan rather than the page-level FTS, which cannot say *which* block matched. */
+    @Query(
+        "SELECT blocks.* FROM blocks JOIN pages ON pages.id = blocks.pageId " +
+            "WHERE pages.deletedAt IS NULL AND pages.isTemplate = 0 " +
+            "AND blocks.type NOT IN ('BLOCK_REFERENCE', 'DIVIDER', 'IMAGE', 'CANVAS', 'PAGE_MENTION') " +
+            "AND blocks.content LIKE '%' || :query || '%' ORDER BY blocks.updatedAt DESC LIMIT 30"
+    )
+    suspend fun searchContent(query: String): List<Block>
+
     /** §9.4 / S4 — every block this device holds an image file for, so the write pass can put
      * those files in the folder. Not filtered on `type = 'IMAGE'`: the path is what says a file
      * exists, and a block whose type was changed out from under an attached image should still

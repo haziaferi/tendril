@@ -60,6 +60,9 @@ data class BlockSnapshotRecord(
     val calloutIcon: String? = null,
     val calloutColor: String? = null,
     val mentionedPageUid: String? = null,
+    /** §0.6.12 — verbatim: a block uid is global, so it neither needs remapping nor has to
+     * resolve at merge time (a source not yet here leaves the card on its cached [content]). */
+    val referencedBlockUid: String? = null,
     val toggleExpanded: Boolean = true,
     /** §0.6.2 (v12). Defaults so a v11 peer's block reads as a list. */
     val mindMap: Boolean = false,

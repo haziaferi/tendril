@@ -126,6 +126,14 @@ object MarkdownWriter {
                 else listOf("[$label](${encodePath(target)})")
             }
 
+            // §0.6.12 — the words as cached (the live text is a screen concern), quoted so a
+            // reader sees they are someone else's, with the source named when it is in the export.
+            BlockType.BLOCK_REFERENCE -> {
+                val target = block.mentionedPageId?.let(pageLinkFor)
+                val quoted = text.ifBlank { "(empty block)" }.split('\n').map { "> $it" }
+                if (target == null) quoted else quoted + listOf("> — [source](${encodePath(target)})")
+            }
+
             // §0.6.3 — a canvas is a page, so the block is a link to that page's file, labelled so
             // a reader knows what stood here. Its board is not in Markdown at all (JSON Canvas is
             // §0.6.7); the link is the honest most this format can carry.

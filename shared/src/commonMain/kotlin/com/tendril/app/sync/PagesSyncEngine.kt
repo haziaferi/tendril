@@ -309,6 +309,7 @@ class PagesSyncEngine(
         formattingSpans = formattingSpans.mapNotNull { it.toSnapshot(pageIdToUid) },
         checked = checked, codeLanguage = codeLanguage, calloutIcon = calloutIcon, calloutColor = calloutColor,
         mentionedPageUid = mentionedPageId?.let { pageIdToUid[it] },
+        referencedBlockUid = referencedBlockUid,
         toggleExpanded = toggleExpanded,
         mindMap = mindMap,
         imageName = imagePath?.let { imageNameFor(uid, it) },
@@ -694,6 +695,7 @@ class PagesSyncEngine(
                         formattingSpans = b.formattingSpans.mapNotNull { it.toEntity(uidToId) },
                         checked = b.checked, codeLanguage = b.codeLanguage, calloutIcon = b.calloutIcon, calloutColor = b.calloutColor,
                         mentionedPageId = b.mentionedPageUid?.let { uidToId[it] },
+                        referencedBlockUid = b.referencedBlockUid,
                         toggleExpanded = b.toggleExpanded,
                         mindMap = b.mindMap,
                         createdAt = Instant.ofEpochMilli(b.createdAt), updatedAt = Instant.ofEpochMilli(b.updatedAt),
@@ -974,7 +976,10 @@ private fun quarantineSweep(
  * block's `parentBlockUid`, a canvas edge's endpoints, and every property uid a
  * [PageDatabaseSnapshotRecord] names in its own views and its done/deadline/recurrence columns.
  * Those resolve against the same record's own contents, and the record is all-or-nothing: if it
- * is here at all, they are here with it.
+ * is here at all, they are here with it. Nor is a BLOCK_REFERENCE's `referencedBlockUid`
+ * (§0.6.12): it is stored as the uid itself, never resolved to an id, and a source that is not
+ * here yet costs nothing but the card showing its cached text — the block's `mentionedPageUid`
+ * (the source *page*) is in the list above like any other page reference.
  *
  * [pages] and [properties] are the withheld referents that also fail to resolve locally. The
  * third clause is the one that cannot be expressed as a set of withheld uids, because the uids in
