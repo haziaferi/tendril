@@ -47,7 +47,7 @@ import kotlin.math.roundToLong
 
 private val DAY_WIDTH = 36.dp
 private val LANE_HEIGHT = 40.dp
-private val HEADER_HEIGHT = 44.dp
+private val HEADER_HEIGHT = 54.dp
 
 /**
  * §0.6.14 / B§6 #17 — the fifth database view: a day per column, a row per lane, a bar from
@@ -208,7 +208,7 @@ private fun TimelineBarRow(
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(
-            (if (isBlocked) "⏸ " else "") + bar.row.page.title,
+            bar.row.page.title,
             style = MaterialTheme.typography.labelMedium,
             color = ink,
             maxLines = 1,
