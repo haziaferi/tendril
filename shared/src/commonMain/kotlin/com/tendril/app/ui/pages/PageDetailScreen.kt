@@ -131,6 +131,8 @@ fun PageDetailScreen(
                     core.checkboxOnlyState,
                     core.localImages,
                     core.labelMembership,
+                    core.database.habitDao(),
+                    core.checkInHabitUseCase,
                 )
             }
         }
@@ -155,6 +157,7 @@ fun PageDetailScreen(
     val rowValues by viewModel.rowValues.collectAsState()
     val rowLinkedEntry by viewModel.rowLinkedEntry.collectAsState()
     val backlinks by viewModel.backlinks.collectAsState()
+    val journalToday by viewModel.journalToday.collectAsState()
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var blockActionSheetFor by remember { mutableStateOf<Block?>(null) }
     // §0.6.2 / B§9.6 — the armed map: the block whose subtree fills the viewport, or null.
@@ -275,6 +278,9 @@ fun PageDetailScreen(
                 membershipCount = memberships.size
             }
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                // §3.1.4 (amended, step 8b) — today's Journal page opens with the day: its tasks
+                // and due habits, checkable, above everything else. Null on every other page.
+                journalToday?.let { (date, today) -> journalTodayItems(today, date, viewModel) }
                 // §5.1 Row-as-page — a Database row shows its property values as a compact
                 // strip above the same free-form Block body every other Page has. §0.6.8 — one
                 // strip per membership: the home database first, then each database a label

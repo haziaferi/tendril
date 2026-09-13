@@ -24,6 +24,8 @@ import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.BindingRole
+import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.LabelMembership
@@ -32,6 +34,11 @@ import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
 import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.journal.JournalToday
+import com.tendril.app.domain.journal.journalDayOf
+import com.tendril.app.domain.journal.todayHabits
+import com.tendril.app.domain.journal.todayTasks
+import com.tendril.app.domain.track.minuteTicker
 import com.tendril.app.domain.outdentPlanFor
 import com.tendril.app.domain.outlineOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,6 +47,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -47,6 +55,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 
 /** §3.1.5 backlinks panel entry — the page doing the mentioning, and the specific block the
  * mention lives in (its content is the snippet shown in the panel). */
@@ -70,6 +79,8 @@ class PageDetailViewModel(
     private val checkboxOnlyState: CheckboxOnlyState,
     private val localImages: com.tendril.app.sync.LocalImageStore,
     private val labelMembership: LabelMembership,
+    private val habitDao: HabitDao,
+    private val checkInHabitUseCase: CheckInHabitUseCase,
 ) : ViewModel() {
     /** §3.1.2 — "every page under Pages becomes read-only as a group... no per-page exception."
      * Every mutating function below early-returns through this guard rather than relying on the
@@ -87,6 +98,40 @@ class PageDetailViewModel(
 
     val blocks: StateFlow<List<Block>> =
         blockDao.observeForPage(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §3.1.4 (amended, step 8b) — the strip above today's Journal page, null on every other
+     * page. The day is re-read each minute (`loggedToday`'s pattern in `TasksHabitsViewModel`)
+     * so a page left open past midnight stops claiming to be today; the root lookup runs once
+     * per page/day, the string parse is all a non-Journal page pays. */
+    val journalToday: StateFlow<Pair<LocalDate, JournalToday>?> =
+        combine(page.filterNotNull(), minuteTicker().map { LocalDate.now() }.distinctUntilChanged()) { p, today -> p to today }
+            .flatMapLatest { (p, today) ->
+                if (journalDayOf(p, pageDao.findRootByTitle("Journal")) != today) flowOf(null)
+                else combine(entryDao.observeTasks(), habitDao.observeActive()) { tasks, habits ->
+                    today to JournalToday(todayTasks(tasks, today), todayHabits(habits, today))
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The strip's boxes. Not behind [contentLocked]: these are task and habit writes, which
+     * View-Only (§3.1.2, "pages become read-only") never covered — the Tasks tab ticks under
+     * the lock, and the strip ticks the same rows through the same use cases (§9.8 R1). */
+    fun setTaskDone(entryId: Long, done: Boolean) {
+        viewModelScope.launch { resolveEntryUseCase.setDone(entryId, done) }
+    }
+
+    fun checkInHabit(habitId: Long) {
+        viewModelScope.launch { checkInHabitUseCase.checkIn(habitId); rearmHabit(habitId) }
+    }
+
+    fun undoCheckInHabit(habitId: Long) {
+        viewModelScope.launch { checkInHabitUseCase.undoCheckIn(habitId); rearmHabit(habitId) }
+    }
+
+    /** §9.7 — every write that moves when a habit is next due re-arms from the row as it stands. */
+    private suspend fun rearmHabit(habitId: Long) {
+        habitDao.getById(habitId)?.let { entryScheduleCoordinator.onHabitChanged(it) }
+    }
 
     /** §3.1.2 — "Available on any page containing block-level checkboxes not linked to a Task
      * (§3.1.1's to-do block)." A to-do block is never Task-linked by construction — only a

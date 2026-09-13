@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-13 (step 8b: Journal shows today) | §3.1.4 amended: today's Journal page opens with a checkable *Today* strip — the day's tasks (`EntryOccurrences.onDay`) and due-or-done habits — live, never blocks; today only. `domain/journal/JournalToday` pure and tested; `PageDetailViewModel` takes `HabitDao` + `CheckInHabitUseCase`. Verified on both devices (desktop: `>jour` → *Read chapter 3 · 21:00* and *Stretch*; a tick and its undo landed as a check-in + tombstone and a `DONE` resolution; no strip on a plain page. Phone: *Call bank*, *Stretch 09:00* first, *Meditate*; Meditate ticked from the strip showed filled on the Habits tab with its streak; yesterday's page and the Journal root show nothing). 666 tests. | §3.1.4 |
 | 2026-09-12 (step 8a: switcher) | §3.1.7 amended: the quick switcher / command palette (`domain/SwitcherQuery` pure and tested; `ui/switcher/QuickSwitcher`, owned by the scaffold, Ctrl+K on desktop) replaces the Pages search overlay. §3.1.1's defect fixed: titles in the FTS index, re-index on rename and at creation, **schema v16** (`page_fts` emptied) + `healIndex` at start. §0.10 item 5 resolved. Verified on both devices (the heal: 3/3 and 4/4 pages re-indexed with titles first; `boo` → *Books v12*; `>rev` → Review; `trip` found by title on the phone; `>jour` opened today's Journal). 663 tests. | §3.1.1, §3.1.7, §0.10 |
 
 ---
@@ -987,6 +988,26 @@ yet.
 
 No streak/gamification here — that's Habits' job (§6). A day with no journal entry simply has no
 page; there's no "missed" state to track, deliberately unlike Habits' streak model.
+
+**[Amended] 2026-09-13 (§0.8 step 8b, B§6 #15) — today's page shows the day.** Above its blocks,
+today's Journal page carries a *Today* strip: the tasks that fall on today (through
+`EntryOccurrences.onDay`, so the Calendar and the Journal never disagree about a day; done ones
+kept so the box can be unticked) and the habits due today or already checked in today (the
+just-ticked habit must stay). **Checkable, not a mirror:** a task ticks through
+`ResolveEntryUseCase.setDone` and a habit through `CheckInHabitUseCase`, the one path each already
+has (§9.8 R1), so the Journal is a place to work the day and not only to look at it. **Live,
+never blocks:** the page's text, its FTS row and its Markdown export stay what the person wrote —
+the benchmark's open question, closed on that side. **Today only:** a past day's habit state would
+need per-day queries and a resolved recurring task's past occurrence cannot be honestly
+reconstructed from its advanced `startDate` (§6.2); the root page and every other day show
+nothing. Not overdue tasks either — the Tasks tab's *Today* filter is `date == today` and the two
+surfaces agree: the strip is the day, Tasks is the backlog. An empty day says "Nothing due today"
+rather than hiding the strip (the deliberate opposite of §3.1.5's silent panel: a Journal reader
+wants to know the day is clear). Not behind View-Only: these are task and habit writes, which
+§3.1.2 never covered. Home: `domain/journal/JournalToday.kt` (pure, tested — `journalDayOf`,
+`todayTasks`, `todayHabits`), `PageDetailViewModel.journalToday` (null on every page but
+today's Journal; the day re-read each minute so a page left open past midnight stops claiming to
+be today), `ui/pages/JournalTodayStrip.kt`.
 
 ### 3.1.5 Backlinks panel (Decided 2026-08-08)
 
