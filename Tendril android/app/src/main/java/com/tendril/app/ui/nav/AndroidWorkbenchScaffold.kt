@@ -90,6 +90,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 entryDao = container.database.entryDao(),
                 icsImporter = container.workbenchCore.icsImporter,
                 notionImporter = container.notionImporter,
+                core = container.workbenchCore,
                 databaseSyncManager = container.databaseSyncManager,
             )
         },

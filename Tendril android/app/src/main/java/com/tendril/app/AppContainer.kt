@@ -26,6 +26,7 @@ import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.CalendarProviderPreferences
 import com.tendril.app.storage.TaskPreferences
 import com.tendril.app.storage.GoogleCalendarPreferences
+import com.tendril.app.storage.AndroidAiKeyStore
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
@@ -146,7 +147,7 @@ class AppContainer(context: Context) {
     val workbenchCore = WorkbenchCore(
         database, databaseSyncManager, templateManager, viewLockState, checkboxOnlyState,
         resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository, purgeRegistry,
-        localImages, AndroidKeyValueStore(context),
+        localImages, AndroidKeyValueStore(context), AndroidAiKeyStore(secretStore),
     )
 
     companion object {

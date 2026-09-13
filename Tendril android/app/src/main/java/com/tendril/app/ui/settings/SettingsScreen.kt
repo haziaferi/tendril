@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.UploadFile
@@ -77,6 +76,7 @@ import com.tendril.app.storage.ThemePreferences
 import com.tendril.app.sync.PortableArchive
 import com.tendril.app.sync.SyncCoordinator
 import com.tendril.app.ui.pages.LocalViewOnly
+import com.tendril.app.ui.settings.AiSettingsSection
 import com.tendril.app.ui.theme.TendrilColorTheme
 import com.tendril.app.ui.theme.TendrilMode
 import com.tendril.app.ui.theme.TendrilTypeface
@@ -99,6 +99,8 @@ fun SettingsScreen(
     icsImporter: IcsImporter,
     notionImporter: NotionImporter,
     databaseSyncManager: DatabaseSyncManager,
+    /** §0.6.15 — the key store and preferences the Claude section needs. */
+    core: com.tendril.app.ui.WorkbenchCore,
     modifier: Modifier = Modifier,
 ) {
     // §3.1.2 as the user decided it: "View-Only is absolute, and it covers Settings." Read from
@@ -127,7 +129,8 @@ fun SettingsScreen(
             // `NotionImportSection` itself, also keeps that file's signature alone.)
             if (viewOnly) NotionImportLockedSection() else NotionImportSection(notionImporter, databaseSyncManager)
             HorizontalDivider()
-            AnthropicKeySection(secretStore)
+            // §0.6.15 — the shared section: key, model, what is sent.
+            AiSettingsSection(core.aiKeyStore, core.keyValueStore)
             HorizontalDivider()
             AppLockSection(appLockPreferences)
             HorizontalDivider()
@@ -710,58 +713,6 @@ private fun NotionImportLockedSection() {
                 Text("Import from Notion", style = MaterialTheme.typography.bodyLarge)
                 ViewOnlyReason("Importing a Notion export is")
             }
-        }
-    }
-}
-
-/**
- * Settings → Anthropic API key (§3.5): stored via [SecretStore] (Keystore-backed encrypted
- * prefs) the moment it's saved here — but saving the key does not itself make any network
- * call. The app stays fully local until a feature that actually uses the key exists (§9.9
- * item 6+) and is invoked.
- */
-@Composable
-private fun AnthropicKeySection(secretStore: SecretStore) {
-    val storedKey by secretStore.anthropicApiKey.collectAsState()
-    var draft by remember(storedKey) { mutableStateOf(storedKey ?: "") }
-    var revealed by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Key, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Anthropic API key", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = if (storedKey != null) "Key saved" else "Not set — local only until used",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                label = { Text("API key") },
-                visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { revealed = !revealed }) {
-                        Icon(
-                            imageVector = if (revealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                            contentDescription = if (revealed) "Hide key" else "Show key",
-                        )
-                    }
-                },
-            )
-            Spacer(Modifier.width(12.dp))
-            Button(
-                onClick = { secretStore.setAnthropicApiKey(draft) },
-                enabled = draft != (storedKey ?: ""),
-            ) { Text("Save") }
         }
     }
 }

@@ -9,6 +9,7 @@ import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.data.prefs.FileAiKeyStore
 import com.tendril.app.data.prefs.PropertiesKeyValueStore
 import com.tendril.app.ui.WorkbenchCore
 
@@ -40,6 +41,8 @@ class DesktopAppContainer(database: TendrilDatabase) {
             DesktopLocalImageStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/images")),
             // §0.10 item 12 — one flat file beside the database.
             PropertiesKeyValueStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/prefs.properties")),
+            // §0.6.15 — the key in a file of its own, never the .properties beside it.
+            FileAiKeyStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/anthropic.key")),
         )
     }
 }

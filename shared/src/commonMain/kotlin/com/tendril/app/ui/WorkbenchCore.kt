@@ -1,6 +1,7 @@
 package com.tendril.app.ui
 
 import com.tendril.app.data.TendrilDatabase
+import com.tendril.app.data.prefs.AiKeyStore
 import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
@@ -47,6 +48,9 @@ class WorkbenchCore(
     /** §0.10 item 12 — device preferences. Required, not defaulted: a platform that forgot it
      * would silently forget every setting on restart, which is the bug this closes. */
     val keyValueStore: KeyValueStore,
+    /** §0.6.15 — the Anthropic key's home on this platform; a secret, so never [keyValueStore].
+     * Required for the same reason: a platform that forgot it would hide the feature silently. */
+    val aiKeyStore: AiKeyStore,
 ) {
     /** §0.6.8 — built from what is already here rather than passed in, so the two containers
      * need no change; [LabelMembership] holds no state of its own. */

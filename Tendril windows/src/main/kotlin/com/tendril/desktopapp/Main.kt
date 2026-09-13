@@ -68,11 +68,10 @@ import javax.swing.JFileChooser
  * PageDatabase block editor). This is also the point desktop starts originating edits rather
  * than only ever writing back data just merged in from sync — see §3's re-affirmed gate.
  *
- * Calendar/Tasks & Habits/Road Map/Settings aren't ported this pass (Android-integration-heavy:
- * AlarmManager, Calendar Provider, Google Calendar, Notion import, BiometricPrompt) —
- * [NotAvailableOnDesktop] stands in for each. Canvas was on that list until 2026-09-11, when it
- * moved into `shared/` and the scaffold began routing to it itself (`tendril-spec.md` §0.6.10). Theme is fixed (Ink/Light/Sans)
- * since there's no Settings screen yet to pick one on desktop.
+ * Every tab is shared now: Canvas (2026-09-11, `tendril-spec.md` §0.6.10), Calendar, Tasks &
+ * Habits, Road Map (2026-09-12/13) and, with §0.6.15, Settings — a minimal [DesktopSettingsScreen]
+ * holding the Claude section; theme, the sync folder, backups and reminders are still Android's.
+ * Theme is fixed (Ink/Light/Sans) until the desktop pass (§0.10 item 14) gives it a picker.
  */
 fun main() {
     val dbFile = File(File(System.getProperty("user.home"), ".tendril-desktop-dev"), "tendril.db")
@@ -178,7 +177,8 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         habitTrashSheet = null,
                     )
                 },
-                settingsContent = { NotAvailableOnDesktop("Settings") },
+                // §0.6.15 — the last stand-in gone: Settings holds the Claude section.
+                settingsContent = { DesktopSettingsScreen(core) },
             )
         }
     }

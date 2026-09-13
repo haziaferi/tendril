@@ -97,6 +97,8 @@ import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.OutlineBlock
 import com.tendril.app.domain.outlineOf
 import com.tendril.app.domain.references.UnlinkedMention
+import com.tendril.app.domain.ai.AiVerb
+import androidx.compose.material3.CircularProgressIndicator
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
@@ -137,6 +139,8 @@ fun PageDetailScreen(
                     core.database.habitDao(),
                     core.checkInHabitUseCase,
                     core.pageHistory,
+                    core.aiKeyStore,
+                    core.keyValueStore,
                 )
             }
         }
@@ -704,6 +708,19 @@ private fun BlockRow(
                     }
                 }
 
+                // §0.6.15 — a verb in flight or answered: the sheet owns the answer, the field
+                // keeps the selection it was asked about.
+                var aiVerb by remember { mutableStateOf<AiVerb?>(null) }
+                var aiResult by remember { mutableStateOf<Result<String>?>(null) }
+                var aiRange by remember { mutableStateOf(TextRange.Zero) }
+                val aiAvailable by viewModel.aiAvailable.collectAsState()
+                val aiBusy by viewModel.aiBusy.collectAsState()
+                fun askClaude(verb: AiVerb) {
+                    aiRange = fieldValue.selection
+                    aiVerb = verb
+                    aiResult = null
+                    viewModel.runVerb(verb, fieldValue.text.substring(aiRange.min, aiRange.max)) { aiResult = it }
+                }
                 if (!locked && fieldValue.selection.length > 0) {
                     FormattingToolbar(
                         onApply = { style ->
@@ -712,6 +729,24 @@ private fun BlockRow(
                             viewModel.updateBlockContent(block, fieldValue.text, block.formattingSpans + span)
                         },
                         onMention = { onRequestMention(fieldValue.text) },
+                        verbs = if (aiAvailable) ::askClaude else null,
+                        busy = aiBusy,
+                    )
+                }
+                aiVerb?.let { verb ->
+                    AiResultSheet(
+                        verb = verb,
+                        result = aiResult,
+                        onReplace = { replacement ->
+                            val newText = fieldValue.text.replaceRange(aiRange.min, aiRange.max, replacement)
+                            fieldValue = TextFieldValue(newText, TextRange(aiRange.min + replacement.length))
+                            lastWrittenContent = newText
+                            viewModel.updateBlockContent(block, newText, remapSpans(block.formattingSpans, block.content, newText))
+                            aiVerb = null
+                        },
+                        onInsertBelow = { text -> viewModel.addBlock(BlockType.PARAGRAPH, block.order, text); aiVerb = null },
+                        onRetry = { aiResult = null; viewModel.runVerb(verb, fieldValue.text.substring(aiRange.min, aiRange.max)) { aiResult = it } },
+                        onDismiss = { aiVerb = null },
                     )
                 }
 
@@ -851,7 +886,14 @@ private fun remapSpans(spans: List<FormattingSpan>, oldText: String, newText: St
 }
 
 @Composable
-private fun FormattingToolbar(onApply: (SpanStyle) -> Unit, onMention: () -> Unit) {
+private fun FormattingToolbar(
+    onApply: (SpanStyle) -> Unit,
+    onMention: () -> Unit,
+    /** §0.6.15 — the verb row, present only while a key is set (null otherwise). */
+    verbs: ((AiVerb) -> Unit)? = null,
+    busy: Boolean = false,
+) {
+    Column {
     Row(modifier = Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         IconButton(onClick = { onApply(SpanStyle.Bold) }, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Filled.FormatBold, contentDescription = "Bold", modifier = Modifier.size(18.dp))
@@ -868,6 +910,15 @@ private fun FormattingToolbar(onApply: (SpanStyle) -> Unit, onMention: () -> Uni
         IconButton(onClick = onMention, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Filled.AlternateEmail, contentDescription = "Mention a page", modifier = Modifier.size(18.dp))
         }
+    }
+    if (verbs != null) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            AiVerb.entries.forEach { verb ->
+                TextButton(onClick = { verbs(verb) }, enabled = !busy) { Text(verb.label) }
+            }
+            if (busy) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+        }
+    }
     }
 }
 
