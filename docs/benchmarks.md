@@ -780,10 +780,10 @@ a phone smoke test that nothing moved there, spec rows in both files.
 | **14a — the shell** | A left `NavigationRail` (icons + labels) on a wide window, the bottom bar kept under it — one `if (wide)` in `WorkbenchScaffold` driven by window width at **840 dp**, so a narrow desktop window falls back to the phone's shape rather than a broken one; `rememberWindowState` persisted in `KeyValueStore` (size, position; default 1200×800, minimum 800×600); the title *Tendril*; the `RunningTimerBar` at the rail's foot. | **Rail**, not a full sidebar. The sidebar would swallow the Pages tree into the shell (Notion) and make 14c's pane moot; the rail keeps the tree where the tab is, at 84 dp instead of 240. |
 | **14b — sheets become slide-overs** | `TendrilSheet` already frames every sheet; on a wide window it renders as a **right slide-over** (~440 dp, full height, the same title slot) — one change, 29 sheets. Pickers anchored to a control (dates, labels, the relation menus) stay `DropdownMenu`s; confirms stay `AlertDialog`s. | **Slide-over**, not a centred dialog: the page stays readable beside it (Notion's side peek), and a sheet's content is already a column that expects height. |
 | **14c — Pages as two panes** | On a wide window the Pages tab shows the tree on the left (the existing list, ~280 dp) and the open page on the right; the route stack unchanged underneath (a page from the tree replaces the right pane; Escape closes it). Databases and canvases take the right pane too. | **Resizable** (a drag handle, width remembered with the window) **and collapsible** (Ctrl+\, a chevron in the tree's header). |
-| **14d — density under a pointer** | A `LocalDensityProfile` — *Compact* 36 dp / *Comfortable* 40 dp / *Touch* 52 dp rows, with table cells 200 dp for the first two and `bodyMedium` in lists; row controls (`···`) appear on hover. | **A Settings choice on desktop, default 36 dp; hover-only controls yes.** The phone stays Touch and does not show the setting (Android's 48 dp minimum target is not a preference). Todoist and Notion are the precedent for density as a setting. |
+| **14d — density under a pointer** | One knob, not a profile per component: `LocalDensity` overridden once at the window's root, so every `dp` in the app — rows, `CELL_WIDTH`, `DAY_WIDTH`, icons, padding — scales together. **Scale = clamp(shorter side of the window ÷ 800 dp, 0.85…1.25) × profile**, the profile being *Compact* 0.9× / *Comfortable* 1.0× / *Touch* 1.3× (the earlier 36 / 40 / 52 dp rows, as proportions). The OS font scale stays multiplied on top and is never overridden; the clamp keeps a maximised 4K window from becoming a poster. Row controls (`···`) appear on hover. | **Proportional to the screen on both platforms; the profile a Settings choice on desktop, default Compact; hover-only controls yes.** The phone runs the same rule with the profile fixed to Touch (Android's 48 dp minimum target is a floor, not a preference); at 360–430 dp wide the window term is near 1.0, so the rule is one rule whose effect is small where the screen is small. Todoist and Notion are the precedent for density as a setting. |
 | **14e — the keyboard** | A fixed set in `Main.kt`'s `onPreviewKeyEvent`: Ctrl+N new page, Ctrl+Shift+N quick-add task, Ctrl+T today's Journal, Ctrl+F find in page, Ctrl+1…5 the tabs, Ctrl+, Settings, Ctrl+\ the tree, ↑↓ ↵ in lists; a `?` overlay listing them. | **No Alt-mnemonics and no menu bar.** Mnemonics serve a menu bar; Tendril's actions live in each screen's `···` and in the palette's `>` commands, so a bar would be a third home for the same list. Ctrl+1…5 is the section shortcut (Things, Fantastical, Apple). |
 | **14f — Tasks & Calendar as desktop surfaces** | Tasks: list left, the task's sheet content inline on the right (TickTick, Apple). Calendar: day columns wider, Quick Add in the top bar (Fantastical); the desktop Trash and the reminder bell (§0.10 item 13) folded in, since the sheets are slide-overs by then. | **The calendar's opening view is a Settings choice, default Week** on a wide window (Fantastical, Sunsama, Akiflow open on the week); the phone keeps Month. |
-| **14g — theme on desktop** | The picker in the desktop Settings pane (mode, colour, typeface — all four colours and the Serif face are shared already), stored in `KeyValueStore`. | **Default Dark on desktop**; the picker offers *Follow system* / Light / Dark. |
+| **14g — theme on desktop** | The picker in the desktop Settings pane (mode, colour, typeface — all four colours and the Serif face are shared already), stored in `KeyValueStore`. | **System / Light / Dark in Settings, default System.** Colours and themes themselves are a later discussion. |
 
 Two settings from this pass are per device by construction — `KeyValueStore` does not sync (§0.10
 item 12) — which is right for them: density and the calendar's opening view are properties of the
@@ -796,11 +796,30 @@ For the record, by number — the form the mock's "Your answers" box produces.
 1. Navigation: **rail**.
 2. Sheets on desktop: **right slide-over**.
 3. Pages tree: **resizable, collapsible**.
-4. Density: **a Settings choice — 36 / 40 / 52 dp — default 36; hover-only row controls: yes.**
+4. Density: **proportional to the screen on both platforms** (one `LocalDensity` scale from the window's shorter side, clamped) **× a profile chosen in desktop Settings — Compact 0.9 / Comfortable 1.0 / Touch 1.3 — default Compact; hover-only row controls: yes.**
 5. Alt-mnemonics: **no** (and no menu bar); reasoning under 14e.
 6. Calendar opening view: **a Settings choice — Week / Month — default Week.**
-7. Theme on desktop: **Dark** by default, with the picker.
+7. Theme on desktop: **System / Light / Dark in Settings, default System.**
 
 What stays open is not a decision but a measurement: the breakpoint. 840 dp is the Material
 medium-width boundary and the mock's; the first PR proves it against the real rail and tree at
 the widths a person actually drags a window to.
+
+### 13.6 Other diffs with the bar — candidates, not yet decided (2026-09-13)
+
+Layout-axis things the thirteen do that Tendril does not, each judged on whether it would
+*improve* on them rather than copy, and on whether the offline build can do it. Answer by number
+to fold one into the pass; the recommendation is the last column.
+
+| # | Diff | Who | Tendril's angle | Cost | Recommend |
+|---|---|---|---|---|---|
+| 1 | **Right-click menus** on rows and blocks — the pointer's long-press | every desktop app | Today a long-press opens a sheet; `ContextMenuArea` is in-window on Compose Desktop | cheap | Fold into **14d** |
+| 2 | **Back / forward** — Ctrl+[ ], the mouse's side buttons | Notion, browsers | The route stack has back only | cheap | Fold into **14e** |
+| 3 | **Hover preview** of a mention or block reference — the target's first lines | Obsidian, Notion | Better than theirs: a block reference's preview is *live* text (§0.6.12) | cheap | A small follow-up after 14e |
+| 4 | **A second page beside the first** — a shelf or split | Logseq, Obsidian | The shelf holds the Road Map's local graph or today's Journal next to the page being edited; only Obsidian pairs graph and page, no one pairs Journal-today with a page | medium | Candidate **14h** after 14g |
+| 5 | **Drag between panes** — a task onto a Calendar day, a page from the tree onto a Timeline day | Sunsama, Akiflow, Things | A bound date means the drop *is* the Table's cell write (§0.6.14) | medium | Candidate after 14f |
+| 6 | **Pop-out windows** — a page in its own window | Notion, Obsidian | Compose `Window`s are cheap; the ViewModel cache is keyed by page already | cheap–medium | Candidate after 14c |
+| 7 | **System tray** — keep running closed; desktop notifications for reminders (`TrayState.sendNotification`) | Things, TickTick, Fantastical | Would give desktop the reminder bell the windows spec §12.1 says it lacks. A *global* quick-add hotkey is **not** possible: it needs JNA, which the offline build cannot fetch | cheap | A small follow-up; reminders on desktop are a feature decision first |
+| 8 | **Keyboard in the tree and lists** — arrows, type-ahead, Enter | Apple, Things | Rows are click-only today | cheap | Fold into **14e** |
+| 9 | **Tabs** | Obsidian, Capacities | Rail + tree (+ a shelf, #4) covers it; tabs are a browser's answer | medium | **No** |
+| 10 | **Cross-block selection and undo** | Notion | A real gap, but the editor's — one `BasicTextField` per block — not the layout's | high | Recorded; out of this pass |

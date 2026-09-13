@@ -82,9 +82,6 @@ button:focus-visible,[tabindex]:focus-visible,input:focus-visible{outline:2px so
   --m-tert:#EFB8C8; --m-tert-soft:#3B2830; --m-err:#F2B8B5; --m-err-soft:#3B1F1E; --m-ok:#9FD3A7;
   --m-scrim:rgba(0,0,0,.5);
 }
-.mk[data-density="36"]{--row:36px;--cell:200px;--list-fs:13.5px}
-.mk[data-density="40"]{--row:40px;--cell:200px;--list-fs:14px}
-.mk[data-density="48"]{--row:52px;--cell:160px;--list-fs:16px;--title-fs:28px}
 
 .titlebar{height:32px;display:flex;align-items:center;padding:0 12px;gap:10px;background:var(--m-s2);border-bottom:1px solid var(--m-border);font-size:12px;color:var(--m-dim);flex:none;user-select:none}
 .titlebar .dot{width:10px;height:10px;border-radius:50%;background:var(--m-border)}
@@ -344,7 +341,7 @@ try{const j=localStorage.getItem('tendril-shell-mock');if(j)Object.assign(S,JSON
 function save(){try{localStorage.setItem('tendril-shell-mock',JSON.stringify(S));}catch(e){}}
 
 const TODAY_PRESET={nav:'bottom',modal:'sheet',density:'48',hoverOnly:false,mnemonics:false,calDefault:'month',theme:'light',treeOpen:true};
-const PROPOSED={nav:'rail',modal:'slideover',density:'36',hoverOnly:true,mnemonics:false,calDefault:'week',theme:'dark',treeOpen:true,treeResize:true,treeCollapse:true}; // B§13.5, answered 2026-09-13
+const PROPOSED={nav:'rail',modal:'slideover',density:'36',hoverOnly:true,mnemonics:false,calDefault:'week',theme:'system',treeOpen:true,treeResize:true,treeCollapse:true}; // B§13.5, answered 2026-09-13
 function isToday(){return S.preset==='today';}
 function narrow(){return S.width<840;}
 function eff(){ // the effective layout after the breakpoint and the preset
@@ -589,6 +586,9 @@ function render(){
   win.style.width=S.width+'px'; win.style.height=e.height+'px';
   mk.setAttribute('data-mock',mockTheme(e.theme));
   mk.setAttribute('data-density',e.density);
+  const prof={'36':0.9,'40':1,'48':1.3}[e.density], win=isToday()?1:Math.max(.85,Math.min(1.25,Math.min(S.width,e.height)/800)), k=prof*win;
+  mk.style.setProperty('--row',Math.round(40*k)+'px'); mk.style.setProperty('--cell',Math.round(200*k)+'px'); mk.style.setProperty('--list-fs',(14*k).toFixed(1)+'px'); mk.style.setProperty('--title-fs',Math.round(26*k)+'px');
+  mk.style.setProperty('--k',k);
   mk.setAttribute('data-hover',e.hover);
   const content = S.tab==='pages'?pagesTab(e):S.tab==='calendar'?calendarTab(e):S.tab==='tasks'?tasksTab(e):S.tab==='map'?mapTab(e):settingsTab(e);
   const side = e.nav==='rail'?rail():e.nav==='sidebar'?sidebar():'';
@@ -600,7 +600,7 @@ function render(){
 }
 function renderNote(e){
   const n=$('#note');
-  n.innerHTML=[`<span><b>${S.width}×${e.height}</b> px</span>`,`<span>rows <b>${getComputedStyle($('#mk')).getPropertyValue('--row').trim()}</b></span>`,`<span>theme <b>${mockTheme(e.theme)}</b>${e.theme==='system'?' (system)':''}</span>`,`<span>try <b>?</b>, <b>Ctrl+K</b>, <b>1–5</b>, <b>Ctrl+\\</b>, <b>Esc</b>, the page ··· → History, drag the tree edge</span>`].join('');
+  n.innerHTML=[`<span><b>${S.width}×${e.height}</b> px</span>`,`<span>scale <b>${(+$('#mk').style.getPropertyValue('--k')).toFixed(2)}×</b> · rows <b>${$('#mk').style.getPropertyValue('--row')}</b></span>`,`<span>theme <b>${mockTheme(e.theme)}</b>${e.theme==='system'?' (system)':''}</span>`,`<span>try <b>?</b>, <b>Ctrl+K</b>, <b>1–5</b>, <b>Ctrl+\\</b>, <b>Esc</b>, the page ··· → History, drag the tree edge</span>`].join('');
 }
 function fit(){
   const stage=$('.stage'), win=$('#win');
@@ -624,10 +624,10 @@ function renderPanel(){
   <div class="dec"${dis}><h3><span class="n">3</span>Pages tree pane<span class="pr">14c</span></h3><p>Tree left (~280 dp), page right; Escape closes the page.</p>
     <div class="ctl col">${chk('treeResize','Resizable — drag its edge')}${chk('treeCollapse','Collapsible — Ctrl+\\')}</div>
     <div class="cons">Both are cheap; the width would be remembered with the window.</div></div>
-  <div class="dec"${dis}><h3><span class="n">4</span>Density<span class="pr">14d</span></h3><p>A Settings choice on desktop — 36 default; the phone stays touch.</p>
-    <div class="ctl">${opt('density','36','36 dp',true)}${opt('density','40','40 dp')}${opt('density','48','Touch (52)')}</div>
+  <div class="dec"${dis}><h3><span class="n">4</span>Density<span class="pr">14d</span></h3><p>One <code>LocalDensity</code> scale: the window’s shorter side ÷ 800, clamped 0.85–1.25, × the profile. A Settings choice on desktop, Compact default; the phone stays Touch.</p>
+    <div class="ctl">${opt('density','36','Compact 0.9×',true)}${opt('density','40','Comfortable 1×')}${opt('density','48','Touch 1.3×')}</div>
     <div class="ctl" style="margin-top:6px">${chk('hoverOnly','Hover-only row controls')}</div>
-    <div class="cons">Hover-only hides affordances from a touch-screen laptop — the real trade-off. Table cells go 160 → 200 dp with the profile.</div></div>
+    <div class="cons">Everything scales together — rows, cells, type, icons — so the 700 px window is 0.875× of the 1200 one. Hover-only hides affordances from a touch-screen laptop: the real trade-off.</div></div>
   <div class="dec"${dis}><h3><span class="n">5</span>Keyboard<span class="pr">14e</span></h3><p>The fixed set behind <kbd>?</kbd>. Ctrl+K and Esc exist today. Mnemonics: decided no — a menu-bar convention with no menu bar to serve.</p>
     <div class="ctl col">${chk('mnemonics','Alt-mnemonics on the rail (Windows)')}</div>
     <div class="cons">Mnemonics cost nothing on the rail; the question is whether they matter without menus.</div></div>
@@ -635,14 +635,14 @@ function renderPanel(){
     <div class="ctl">${opt('calDefault','week','Week',true)}${opt('calDefault','month','Month')}</div>
     <div class="cons">Week is what Fantastical, Sunsama and Akiflow open on; Month is the phone’s default and what the app does today.</div></div>
   <div class="dec"${dis}><h3><span class="n">7</span>Theme on desktop<span class="pr">14g</span></h3><p>The picker reaches the desktop Settings pane.</p>
-    <div class="ctl">${opt('theme','system','Follow system')}${opt('theme','light','Light')}${opt('theme','dark','Dark',true)}</div></div>
+    <div class="ctl">${opt('theme','system','Follow system',true)}${opt('theme','light','Light')}${opt('theme','dark','Dark')}</div></div>
   <div class="summary"><h3>Your answers</h3><textarea readonly id="sum"></textarea><div class="row"><button data-act="copy">Copy</button><span id="copied">paste them back in chat, by number</span></div></div>`;
   $('#sum').value=summary();
   document.querySelectorAll('[data-preset]').forEach(b=>b.setAttribute('aria-pressed',S.preset===b.dataset.preset));
   document.querySelectorAll('[data-width]').forEach(b=>b.setAttribute('aria-pressed',String(S.width)===b.dataset.width));
 }
 function summary(){
-  return [`1 nav: ${S.nav}`,`2 sheets: ${S.modal}`,`3 tree: ${S.treeResize?'resizable':'fixed'}, ${S.treeCollapse?'collapsible':'always shown'}`,`4 density: ${S.density==='48'?'touch':S.density+' dp'}, hover-only ${S.hoverOnly?'yes':'no'}`,`5 mnemonics: ${S.mnemonics?'yes':'no'}`,`6 calendar: ${S.calDefault}`,`7 theme: ${S.theme}`].join('\n');
+  return [`1 nav: ${S.nav}`,`2 sheets: ${S.modal}`,`3 tree: ${S.treeResize?'resizable':'fixed'}, ${S.treeCollapse?'collapsible':'always shown'}`,`4 density: ${({'36':'compact 0.9x','40':'comfortable 1x','48':'touch 1.3x'})[S.density]} (proportional), hover-only ${S.hoverOnly?'yes':'no'}`,`5 mnemonics: ${S.mnemonics?'yes':'no'}`,`6 calendar: ${S.calDefault}`,`7 theme: ${S.theme}`].join('\n');
 }
 
 /* events */
