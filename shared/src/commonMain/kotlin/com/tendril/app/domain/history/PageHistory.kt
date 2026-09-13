@@ -10,6 +10,8 @@ import com.tendril.app.sync.BlockSnapshotRecord
 import com.tendril.app.sync.replaceBlocks
 import com.tendril.app.sync.toSnapshot
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.time.Duration
@@ -38,13 +40,18 @@ class PageHistory(
 ) {
     fun revisions(pageId: Long): Flow<List<PageRevision>> = revisionDao.observeForPage(pageId)
 
-    suspend fun captureBeforeEdit(pageId: Long) {
+    /** Captures are read-then-write, and a burst of keystrokes is a burst of concurrent
+     * launches: without this each one read "no revision yet" and kept its own — one per
+     * keystroke, found on the desktop. Serialised, the second waits and sees the first. */
+    private val captures = Mutex()
+
+    suspend fun captureBeforeEdit(pageId: Long) = captures.withLock {
         val latest = revisionDao.latestForPage(pageId)
         if (latest != null && Duration.between(latest.takenAt, clock()) < EDIT_WINDOW) return
         capture(pageId, RevisionReason.EDIT)
     }
 
-    suspend fun captureBeforeMerge(pageId: Long) {
+    suspend fun captureBeforeMerge(pageId: Long) = captures.withLock {
         val body = bodyOf(pageId) ?: return
         val latest = revisionDao.latestForPage(pageId)
         if (latest != null && latest.title == body.title && latest.blocksJson == body.blocksJson) return
@@ -56,7 +63,7 @@ class PageHistory(
     suspend fun restore(revisionId: Long) {
         val revision = revisionDao.getById(revisionId) ?: return
         val page = pageDao.getById(revision.pageId) ?: return
-        capture(page.id, RevisionReason.RESTORE)
+        captures.withLock { capture(page.id, RevisionReason.RESTORE) }
         val records = json.decodeFromString(ListSerializer(BlockSnapshotRecord.serializer()), revision.blocksJson)
         val decoded = records.mapNotNull { r -> BlockType.entries.firstOrNull { it.name == r.type }?.let { r to it } }
         val uidToId = pageDao.getAll().associate { it.uid to it.id }
