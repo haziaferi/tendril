@@ -34,6 +34,10 @@ data class PageDatabase(
     val dueDatePropertyId: Long? = null,
     /** §5.2.2 — optional; only ever binds an `Interval`-type Property. */
     val recurrencePropertyId: Long? = null,
+    /** §0.6.14 (v19) — which RELATION property (pointing at this database itself) means
+     * "blocked by". A pointer only: unlike the bindings above nothing is proxied through an
+     * Entry and the relation values stay stored, so it is not a [com.tendril.app.domain.BindingRole]. */
+    val blockedByPropertyId: Long? = null,
     /**
      * §0.6.8 (v13) — the *doorway*: a `Label` this database has bound. A page carrying it is a
      * member — a full row in every view, this database's fields in its header — while keeping

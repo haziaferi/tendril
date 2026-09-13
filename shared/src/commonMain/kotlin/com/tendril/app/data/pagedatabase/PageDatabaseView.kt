@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
-enum class ViewType { TABLE, BOARD, GALLERY, CALENDAR }
+enum class ViewType { TABLE, BOARD, GALLERY, CALENDAR, /** §0.6.14 — bars on day columns. */ TIMELINE }
 enum class SortDirection { ASC, DESC }
 
 /** Single-condition filter (§5.6) — "one property, one comparison, one value... no AND/OR-group
@@ -34,8 +34,10 @@ data class PageDatabaseView(
     val viewType: ViewType,
     /** BOARD only — must be a SELECT-type property. */
     val groupByPropertyId: Long? = null,
-    /** CALENDAR only — must be a DATE-type property. */
+    /** CALENDAR: the day a row is plotted on; TIMELINE (§0.6.14): the bar's start. DATE-typed. */
     val datePropertyId: Long? = null,
+    /** TIMELINE only (v19) — the bar's end, optional: a bar with none is one day long. */
+    val endDatePropertyId: Long? = null,
     /** Empty means "all properties" — TABLE/GALLERY's column/field chooser. */
     val visiblePropertyIds: List<Long> = emptyList(),
     val filter: ViewFilter? = null,
