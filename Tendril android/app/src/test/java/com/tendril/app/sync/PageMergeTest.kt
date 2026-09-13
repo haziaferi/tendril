@@ -8,6 +8,7 @@ import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -91,6 +92,7 @@ class PageMergeTest {
         pageRelationDao = relationDao,
         purgeRegistry = purgeRegistry,
         pageContentRepository = contentRepository,
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
     )
 
     private fun at(millis: Long): Instant = Instant.ofEpochMilli(millis)

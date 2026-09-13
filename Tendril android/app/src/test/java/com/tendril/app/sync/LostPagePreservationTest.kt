@@ -2,6 +2,7 @@ package com.tendril.app.sync
 
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -54,6 +55,7 @@ class LostPagePreservationTest {
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = registry,
             pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
         val orchestrator = SnapshotSyncOrchestrator(
             entryDao = FakeEntryDao(),

@@ -11,6 +11,7 @@ import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -142,6 +143,7 @@ class UnknownEnumQuarantineTest {
             pageRelationDao = relationDao,
             purgeRegistry = registry,
             pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
         val orchestrator = SnapshotSyncOrchestrator(

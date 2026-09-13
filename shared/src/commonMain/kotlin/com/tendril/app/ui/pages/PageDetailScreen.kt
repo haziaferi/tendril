@@ -136,6 +136,7 @@ fun PageDetailScreen(
                     core.labelMembership,
                     core.database.habitDao(),
                     core.checkInHabitUseCase,
+                    core.pageHistory,
                 )
             }
         }
@@ -177,6 +178,8 @@ fun PageDetailScreen(
     var mentionTarget by remember { mutableStateOf<Pair<Block, String>?>(null) }
     /** §0.6.12 — the block a reference is being inserted after (`((` or the slash sheet). */
     var blockReferenceAfter by remember { mutableStateOf<Block?>(null) }
+    /** §0.6.13 — the History sheet. */
+    var showHistory by remember { mutableStateOf(false) }
     var showAddLabelDialog by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -238,6 +241,7 @@ fun PageDetailScreen(
                             }
                         }
                         DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = { showMoreMenu = false; onShowOnRoadMap(pageId) })
+                        DropdownMenuItem(text = { Text("History") }, onClick = { showMoreMenu = false; showHistory = true })
                         DropdownMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
                         DropdownMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
                     }
@@ -447,6 +451,10 @@ fun PageDetailScreen(
                 mentionTarget = null
             },
         )
+    }
+
+    if (showHistory) {
+        HistorySheet(viewModel = viewModel, contentLocked = contentLocked, onDismiss = { showHistory = false })
     }
 
     blockReferenceAfter?.let { after ->

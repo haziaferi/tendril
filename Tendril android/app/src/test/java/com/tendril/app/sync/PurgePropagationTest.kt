@@ -4,6 +4,7 @@ import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -62,6 +63,7 @@ class PurgePropagationTest {
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = registry,
             pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
         val orchestrator = SnapshotSyncOrchestrator(

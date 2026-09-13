@@ -86,7 +86,7 @@ fun main() {
         database.pageDao(), database.blockDao(), database.labelDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
-        database.pageRelationDao(), container.purgeRegistry, core.pageContentRepository,
+        database.pageRelationDao(), container.purgeRegistry, core.pageContentRepository, core.pageHistory,
     )
     val orchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),

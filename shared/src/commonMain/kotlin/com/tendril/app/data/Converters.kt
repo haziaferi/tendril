@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.tendril.app.data.canvas.CanvasArrowDirection
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.data.entry.EntryKind
+import com.tendril.app.data.page.RevisionReason
 import com.tendril.app.data.entry.EntrySource
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.IntervalUnit
@@ -108,6 +109,11 @@ class Converters {
     // now reading it. The cost is that such a row re-exports under the fallback value rather than
     // the one it was written with; the alternative is that the screen showing it does not open.
     @TypeConverter fun entryKindToString(value: EntryKind?): String? = value?.name
+
+    /** §0.6.13 — a revision of an unrecognised reason reads as an EDIT: it is still a body worth restoring. */
+    @TypeConverter fun revisionReasonToString(value: RevisionReason?): String? = value?.name
+    @TypeConverter fun stringToRevisionReason(value: String?): RevisionReason? =
+        value?.let { enumOrNull<RevisionReason>(it) ?: RevisionReason.EDIT }
 
     /** Non-null column: an Entry of an unrecognised kind reads as a TASK — it keeps its title,
      * dates and status, and stays visible somewhere the person can find it. */
