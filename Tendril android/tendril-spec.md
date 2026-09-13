@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-13 (step 8d: block references) | **§0.6.12** written and done. Schema **v17** (`blocks.referencedBlockUid`, `MIGRATION_16_17`). `BlockType.BLOCK_REFERENCE` + `ui/pages/BlockReference.kt` (card, picker); `((` and the slash sheet; the cache refreshed on open without timestamps; the snapshot carries the uid verbatim, no quarantine. §3.1.5 amended: **Unlinked mentions** with *Link* (`domain/references/UnlinkedMentions.kt`, pure, tested). Also: a page's mentions now reload on every open (they loaded once per ViewModel life, which outlives the route). Verified on both devices (v16→v17 in place; desktop: `((` → *Child* → card, source edited → card live, cache refreshed on reopen with timestamps unchanged, *Link* moved the Journal root from Unlinked to Linked; phone: the slash sheet's *Block reference* → *Jackets · Trip*, tap → Trip, *Link* on "notes for the trip"). 677 tests. | §0.6.12, §3.1.1, §3.1.5, §4 |
 | 2026-09-13 (step 8c: Road Map) | §3.4 amended: `ui/roadmap/` → `shared/` (desktop parity; `roadMapContent` slot retired), `domain/roadmap/RoadMapGraph.kt` pure and tested (types, depth walk, `RoadMapFilter` — Journal hidden by default, kinds, one label; persisted `roadmap_filter`), tinted edge kinds, "Show on Road Map" from a page's `···`. Two layout defects fixed (first-frame settle; px-space repulsion). §0.10 item 15 (B§6 #16's remainder). Verified on both devices: chips, the label filter, the focus handoff at depth 1 and 2, "Relate to…" on the desktop; the filter survived a process kill on the phone. 671 tests. | §3.4, §0.10 |
 | 2026-09-13 (step 8b: Journal shows today) | §3.1.4 amended: today's Journal page opens with a checkable *Today* strip — the day's tasks (`EntryOccurrences.onDay`) and due-or-done habits — live, never blocks; today only. `domain/journal/JournalToday` pure and tested; `PageDetailViewModel` takes `HabitDao` + `CheckInHabitUseCase`. Verified on both devices (desktop: `>jour` → *Read chapter 3 · 21:00* and *Stretch*; a tick and its undo landed as a check-in + tombstone and a `DONE` resolution; no strip on a plain page. Phone: *Call bank*, *Stretch 09:00* first, *Meditate*; Meditate ticked from the strip showed filled on the Habits tab with its streak; yesterday's page and the Journal root show nothing). 666 tests. | §3.1.4 |
 | 2026-09-12 (step 8a: switcher) | §3.1.7 amended: the quick switcher / command palette (`domain/SwitcherQuery` pure and tested; `ui/switcher/QuickSwitcher`, owned by the scaffold, Ctrl+K on desktop) replaces the Pages search overlay. §3.1.1's defect fixed: titles in the FTS index, re-index on rename and at creation, **schema v16** (`page_fts` emptied) + `healIndex` at start. §0.10 item 5 resolved. Verified on both devices (the heal: 3/3 and 4/4 pages re-indexed with titles first; `boo` → *Books v12*; `>rev` → Review; `trip` found by title on the phone; `>jour` opened today's Journal). 663 tests. | §3.1.1, §3.1.7, §0.10 |
@@ -431,6 +432,36 @@ reviewed today does not return for seven days on either device; steps and series
 never appear as cards. (B§6 #10) **Done 2026-09-12** — `domain/review/ReviewPlanner` (pure,
 tested), `Review` over DAOs that already existed, `ui/review/ReviewScreen`, the
 `WorkbenchRoute.Review` route. Verified on desktop and phone.
+
+**0.6.12 A block reference is a block, and a plain-text title is one tap from a link.** Finding
+**[Verified]**: the block editor is a `BasicTextField` per block, so an inline span is not
+tappable — today's inline `@mention` spans never navigate; only the standalone `PAGE_MENTION`
+*block* does. Logseq's `((uid))` transclusion is the benchmark (B§6 #13), and its inline form
+would have to copy the source's text into the field and re-copy it on every source edit.
+Decision (2026-09-13): **`BlockType.BLOCK_REFERENCE`** — an inert card of the source block's
+*live* text behind an accent bar, its page's title under it, a tap opening that page; `content`
+caches the words at insertion so the Markdown export and a device without the source still have
+them, and each open of the page refreshes that cache from the source **without moving any
+timestamp** (derived, not authored — a bumped `updatedAt` would make every open look like an edit
+to the page-level LWW). `blocks.referencedBlockUid` (**schema v17**) names the block by its uid —
+the one identity a block keeps across the sync's delete-and-reinsert and across devices — so the
+snapshot carries it verbatim and **no quarantine clause** is needed: a source not here yet costs
+only the card showing its cache; `mentionedPageId` names the source *page*, as a `PAGE_MENTION`'s
+does, and is a page reference like any other. Inserted by typing `((` at the end of a block
+(Logseq's convention, beside `/` and `@`) or from the slash sheet, through a picker that searches
+the words (`BlockDao.searchContent`, a substring scan — the page-level FTS cannot say *which*
+block matched). A reference to a reference is refused. Edit the words at their source: the card
+is not an editor. **Unlinked mentions**: §3.1.5's v1 exclusion lifted — the same substring scan
+finds other live pages whose text contains this page's title (three characters or more, never a
+Journal day's), minus pages that already link and occurrences already under a mention span;
+each row has Obsidian's **Link**, which adds a `PageMention` span over the words on the *other*
+page (that page is what changed: re-indexed and touched). A block reference counts as a link to
+its source page — it appears under Linked mentions and as a Road Map edge — which is what makes
+Linked and Unlinked disjoint. Acceptance: a source edited on its own page shows the new words on
+every card at the next open of the referencing page, on both devices, with the referencing
+page's `updatedAt` unchanged; a record whose source page is missing merges by uid; Link moves the
+row from Unlinked to Linked. **Done 2026-09-13** — `domain/references/UnlinkedMentions.kt` (pure,
+tested), `ui/pages/BlockReference.kt`, `MIGRATION_16_17`. Verified on desktop and phone.
 
 ### 0.7 Explicitly out of scope
 
@@ -796,7 +827,8 @@ canvases), which would be a multi-month subsystem on its own and isn't needed fo
   edges (§3.4)
 
 **Data model:** a `Block` entity per row — `id, page_id, type, order, parent_block_id (nullable, for
-list/toggle nesting), content (typed per block type), created/updated`. Inline formatting
+list/toggle nesting), content (typed per block type), created/updated` *(2026-09-13: and
+`referenced_block_uid`, nullable, for the BLOCK_REFERENCE block — §0.6.12)*. Inline formatting
 (bold/italic/strikethrough/inline code/links/page-mentions) is stored as `(start, end, style)` spans
 over a block's plain-text content rather than embedded markup — keeps FTS indexing (below) simple,
 since the indexed text is just the plain content with spans stripped.
@@ -1026,9 +1058,13 @@ Page whose body contains an `@Page Title` mention of this one (§3.1.1) — the 
 or a new data source. Each entry shows the linking page's title and the block containing the
 mention; tapping opens that page.
 
-No "unlinked mentions" (plain-text title occurrences that were never turned into a real `@mention`)
+~~No "unlinked mentions" (plain-text title occurrences that were never turned into a real `@mention`)
 for v1 — surfacing those requires scanning all page content for substring matches, a real
-FTS-adjacent feature of its own scope, not needed to satisfy "what links here."
+FTS-adjacent feature of its own scope, not needed to satisfy "what links here."~~ **[Amended]
+2026-09-13 (§0.6.12, step 8d):** a second collapsed section, **Unlinked mentions**, lists the live
+pages whose text contains this page's title without linking to it, each with a *Link* that adds
+the real mention span on that page; the scan is the block-reference picker's substring query,
+cheap at personal scale. A block reference to a block of this page counts as a linked mention.
 
 ### 3.1.6 Labels (Decided 2026-08-08 — resolves the previously-undefined `category` field)
 
@@ -1591,7 +1627,7 @@ but the omission is on the record instead of being inferred.
 | **Page** | id, uid, title, icon, kind, parent_id, database_id (nullable), is_template, deleted_at (nullable, added 2026-08-08 — Trash, §5.5.1), created/updated | `kind` distinguishes a plain page from a database. `parent_id` builds the page tree (also what Notion import needs to reconstruct, §7). Body content is a structured `Block` list (§3.1.1), not a blob field. **`category` removed 2026-08-08** — carried from an early draft with no behavior ever specified behind it; replaced by the `Tag`/`PageTag` entities below (§3.1.6). **Corrected 2026-09-06:** `kind` is three-valued — `PAGE` \| `DATABASE` \| `CANVAS` — the third having arrived with the Canvas feature §3.4 records, while this cell still described the two-valued version; and three key fields were missing from it. `uid` is the cross-device identity every merge in §9.4 is keyed on. `database_id` is listed here rather than only under **Row** because a row *is* a page (§5.1): the link physically lives on this table, and reading it as a Row-table column is exactly the mistake §5.1's row=page model exists to prevent. `is_template` (§3.1.3) is what keeps saved templates out of the Pages list and out of Road Map's edge set. |
 | **Tag** *(code: `Label`, §0.6.9)* | id, name, color | Global, freeform, reusable across all Pages (§3.1.6, added 2026-08-08) — resolves the removed `category` field. Flat, no nesting. |
 | **PageTag** *(code: `PageLabel`, §0.6.9)* | page_id, tag_id | Many-to-many join table between Page and Tag (§3.1.6, added 2026-08-08). |
-| **Block** | id, page_id, type, order, parent_block_id (nullable), content, formatting spans, created/updated | One row per content block inside a Page's (or Row's) body (§3.1.1) — paragraph, heading, list item, code, image, toggle, callout, page-mention, etc. Feeds the FTS index (§3.1.1). |
+| **Block** | id, page_id, type, order, parent_block_id (nullable), content, formatting spans, referenced_block_uid (nullable, v17 — §0.6.12), created/updated | One row per content block inside a Page's (or Row's) body (§3.1.1) — paragraph, heading, list item, code, image, toggle, callout, page-mention, etc. Feeds the FTS index (§3.1.1). |
 | **PageCanvas** *(added to this table 2026-09-07 — the entity has existed since the Canvas feature shipped, §3.7)* | id, uid, page_id (unique, FK → Page, cascade delete), created/updated | The 1:1 companion row that makes a `kind = CANVAS` Page a board — structurally the same move as **Database** below, which is why Canvas cost the router one branch. Created **lazily on first open**, not at page creation, and that write is deliberately exempt from both the View-Only gate and the `updated_at` bump (§3.7): it is repair-on-open, not an edit, and bumping it would let merely opening a board outrank a real edit made on another device (§9.4). Carries no content of its own; the board is its child rows. |
 | **CanvasNode** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), type (`TEXT` \| `PAGE_EMBED`), x, y, width, height, text (nullable — TEXT only), embedded_page_id (nullable, FK → Page, cascade — PAGE_EMBED only), created/updated | One card on the board. Position and size are content-space floats, not pixels — the screen transform is applied once at render (§3.7), so the same board is the same board at any zoom or on any screen size. `text` is plain, with no `Block` model of its own: a card is a sticky note, not a second page editor (§3.1.1's "obvious 80% subset" reasoning). `embedded_page_id` cascades from Page, so deleting the embedded page removes the card — the one place a canvas is changed by an action taken outside it. In the snapshot the target travels as the page's `uid` and resolves on arrival; unresolvable means an empty card, never a rejected record. |
 | **CanvasEdge** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), from_node_id, to_node_id (both FK → CanvasNode, cascade), direction (`NONE` \| `ONE_WAY` \| `TWO_WAY`), label (nullable) | One arrow. The `uid` exists in Room but is **not written to the snapshot** — an edge is referenced from nowhere else, so its identity only needs to be stable within one canvas record, and the node-uid pair it connects supplies that (§3.7). `direction = NONE` draws a plain line, for two cards that are related without the relation having a direction. A blank label is stored as null rather than `""`, so an emptied label is absence rather than content the merge has to carry. Both endpoint cascades are what makes deleting a card delete its arrows, with no application-level cleanup. |
