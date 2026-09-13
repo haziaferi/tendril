@@ -336,6 +336,11 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
     val springLengthPx = nodeWidthPx * 1.8f
     val minDistancePx = nodeWidthPx * 1.1f
     val settleThresholdPx = with(density) { SETTLE_THRESHOLD_DP_PER_S.dp.toPx() }
+    // REPULSION is a dp-space constant; a 1/d² force in px space scales by density³ (two for
+    // the distance, one for the px-per-dp of the resulting acceleration). Without it the phone's
+    // ~2.75× density made repulsion ~7× weaker than the desktop's — below the settle threshold
+    // for nodes seeded on top of each other, which is why they stayed stacked (step 8c).
+    val repulsionPx = REPULSION * density.density * density.density * density.density
 
     // A selection surviving into a graph that no longer contains it (focus/depth changed,
     // or a refresh dropped the node) would otherwise dim everything forever with nothing to
@@ -400,7 +405,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                         // clamp keeps force magnitude finite while still pushing hard, rather
                         // than a discontinuous separate "collision" pass.
                         val clampedDist = dist.coerceAtLeast(minDistancePx * 0.5f)
-                        val forceMag = REPULSION / (clampedDist * clampedDist)
+                        val forceMag = repulsionPx / (clampedDist * clampedDist)
                         forces[a] = forces[a]!! + dir * forceMag
                         forces[b] = forces[b]!! - dir * forceMag
                     }
@@ -428,7 +433,13 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                     if (id == draggingId) return@forEach
                     val vel = ((velocities[id] ?: Offset.Zero) + (forces[id] ?: Offset.Zero) * dt) * DAMPING
                     velocities[id] = vel
-                    positions[id] = (positions[id] ?: center) + vel * dt
+                    // Kept on the canvas: a node the layout pushes past the edge is unreachable
+                    // on a phone, and nothing the person can do brings it back but a lucky drag.
+                    val next = (positions[id] ?: center) + vel * dt
+                    positions[id] = Offset(
+                        next.x.coerceIn(nodeWidthPx / 2f, (canvasSize.width - nodeWidthPx / 2f).coerceAtLeast(nodeWidthPx / 2f)),
+                        next.y.coerceIn(nodeHeightPx / 2f, (canvasSize.height - nodeHeightPx / 2f).coerceAtLeast(nodeHeightPx / 2f)),
+                    )
                     totalSpeed += vel.getDistance()
                 }
 
