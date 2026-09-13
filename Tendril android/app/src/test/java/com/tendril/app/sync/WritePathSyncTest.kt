@@ -19,6 +19,7 @@ import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.data.pagedatabase.parseRelationConfig
 import com.tendril.app.data.pagedatabase.parseRelationValue
 import com.tendril.app.data.pagedatabase.setValue
+import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.LabelMembership
@@ -114,6 +115,8 @@ class WritePathSyncTest {
         val entryDao = FakeEntryDao()
         val completionDao = FakeEntryCompletionDao()
         val coordinator = RecordingEntryScheduleCoordinator()
+        val habitDao = FakeHabitDao()
+        val habitCompletionDao = FakeHabitCompletionDao()
 
         val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
         val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
@@ -125,7 +128,7 @@ class WritePathSyncTest {
         val labelMembership = LabelMembership(pageDao, pageDatabaseDao, labelDao, entryDao, databaseSyncManager, resolveEntryUseCase)
 
         val purgedDao = FakePurgedRecordDao()
-        val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
+        val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, habitDao, propertyDao, coordinator)
 
         val engine = PagesSyncEngine(
             pageDao = pageDao,
@@ -145,7 +148,8 @@ class WritePathSyncTest {
 
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
-            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership
+            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership,
+            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao),
         )
 
         fun database(pageId: Long) = PageDatabaseViewModel(
