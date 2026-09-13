@@ -117,6 +117,8 @@ data class PageDatabaseSnapshotRecord(
     /** §0.8 step 2b (v11). Defaults so a v10 peer's record reads as "no deadline binding". */
     val dueDatePropertyUid: String? = null,
     val recurrencePropertyUid: String? = null,
+    /** §0.6.14 — the "blocked by" relation column, by uid like the bindings above. */
+    val blockedByPropertyUid: String? = null,
     /** §0.6.8 (v13) — the bound label, by *name*, the same way a page's [PageSnapshotRecord.labels]
      * travel: a name resolves on any device with `findByName ?: insert`, a uid would not. Defaults
      * so a v12 peer's record reads as "no label bound". */
@@ -146,6 +148,8 @@ data class ViewSnapshotRecord(
     val viewType: String,
     val groupByPropertyUid: String? = null,
     val datePropertyUid: String? = null,
+    /** §0.6.14 — a TIMELINE bar's end. */
+    val endDatePropertyUid: String? = null,
     val visiblePropertyUids: List<String> = emptyList(),
     val filter: ViewFilterSnapshot? = null,
     val sortPropertyUid: String? = null,

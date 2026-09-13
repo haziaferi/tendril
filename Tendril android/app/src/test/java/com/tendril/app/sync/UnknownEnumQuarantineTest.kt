@@ -335,7 +335,7 @@ class UnknownEnumQuarantineTest {
                         UID_DB, "Tasks", updatedAt = 1_000L, kind = PageKind.DATABASE.name,
                         database = PageDatabaseSnapshotRecord(
                             properties = listOf(PropertySnapshotRecord(UID_PROP, "Status", "TEXT", order = 0)),
-                            views = listOf(ViewSnapshotRecord(uid = UID_VIEW, name = "By quarter", viewType = "TIMELINE", order = 0)),
+                            views = listOf(ViewSnapshotRecord(uid = UID_VIEW, name = "By quarter", viewType = "GANTT", order = 0)),
                         ),
                     ),
                     goodSibling(),
@@ -1765,7 +1765,7 @@ class UnknownEnumQuarantineTest {
             Pair("stringToPageKind", { c.stringToPageKind("TIMELINE") }),
             Pair("stringToBlockType", { c.stringToBlockType("SUPER_CALLOUT") }),
             Pair("stringToPropertyType", { c.stringToPropertyType("LOOKUP") }),
-            Pair("stringToViewType", { c.stringToViewType("TIMELINE") }),
+            Pair("stringToViewType", { c.stringToViewType("GANTT") }),
             Pair("stringToSortDirection", { c.stringToSortDirection("RANDOM") }),
             Pair("stringToPurgedKind", { c.stringToPurgedKind("WORKSPACE") }),
             Pair("stringToCanvasNodeType", { c.stringToCanvasNodeType("STICKY_NOTE") }),

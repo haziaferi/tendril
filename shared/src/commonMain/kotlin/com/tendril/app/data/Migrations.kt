@@ -217,3 +217,12 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_page_revisions_pageId` ON `page_revisions` (`pageId`)")
     }
 }
+
+/** §9.10 / §0.6.14 — v18 → v19. A TIMELINE view's end-date column and a database's "blocked by"
+ * relation column, both nullable pointers: nothing existing has either. */
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `page_database_views` ADD COLUMN `endDatePropertyId` INTEGER")
+        connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `blockedByPropertyId` INTEGER")
+    }
+}

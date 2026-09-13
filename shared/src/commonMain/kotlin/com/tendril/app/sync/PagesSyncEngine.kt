@@ -254,6 +254,7 @@ class PagesSyncEngine(
             donePropertyUid = db.donePropertyId?.let { propertyIdToUid[it] },
             deadlinePropertyUid = db.deadlinePropertyId?.let { propertyIdToUid[it] },
             dueDatePropertyUid = db.dueDatePropertyId?.let { propertyIdToUid[it] },
+            blockedByPropertyUid = db.blockedByPropertyId?.let { propertyIdToUid[it] },
             recurrencePropertyUid = db.recurrencePropertyId?.let { propertyIdToUid[it] },
             labelName = db.labelId?.let { labelDao.getById(it)?.name },
             labelConfirmed = db.labelConfirmed,
@@ -266,6 +267,7 @@ class PagesSyncEngine(
                     viewType = v.viewType.name,
                     groupByPropertyUid = v.groupByPropertyId?.let { propertyIdToUid[it] },
                     datePropertyUid = v.datePropertyId?.let { propertyIdToUid[it] },
+                    endDatePropertyUid = v.endDatePropertyId?.let { propertyIdToUid[it] },
                     visiblePropertyUids = v.visiblePropertyIds.mapNotNull { propertyIdToUid[it] },
                     filter = v.filter?.let { f -> propertyIdToUid[f.propertyId]?.let { ViewFilterSnapshot(it, f.comparator.name, f.value) } },
                     sortPropertyUid = v.sortPropertyId?.let { propertyIdToUid[it] },
@@ -564,6 +566,7 @@ class PagesSyncEngine(
                         uid = v.uid, databaseId = pageDatabaseId, name = v.name, viewType = view.viewType,
                         groupByPropertyId = v.groupByPropertyUid?.let { propertyUidToId[it] },
                         datePropertyId = v.datePropertyUid?.let { propertyUidToId[it] },
+                        endDatePropertyId = v.endDatePropertyUid?.let { propertyUidToId[it] },
                         visiblePropertyIds = v.visiblePropertyUids.mapNotNull { propertyUidToId[it] },
                         // `comparator` is non-null exactly when the record carries a filter — the
                         // decode pass guarantees it, and an unreadable one quarantined the whole
@@ -584,6 +587,7 @@ class PagesSyncEngine(
                     donePropertyId = db.donePropertyUid?.let { propertyUidToId[it] },
                     deadlinePropertyId = db.deadlinePropertyUid?.let { propertyUidToId[it] },
                     dueDatePropertyId = db.dueDatePropertyUid?.let { propertyUidToId[it] },
+                    blockedByPropertyId = db.blockedByPropertyUid?.let { propertyUidToId[it] },
                     recurrencePropertyId = db.recurrencePropertyUid?.let { propertyUidToId[it] },
                     // §0.6.8 — resolved by name exactly as Pass 5 resolves a page's labels, and
                     // created the same way when this device has never seen it.

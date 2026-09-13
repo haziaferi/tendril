@@ -3,6 +3,7 @@
 package com.tendril.app.ui.pages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -129,6 +130,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
     // §0.6.8 — the bound label, and the sheet that binds one.
     val boundLabel by viewModel.boundLabel.collectAsState()
     var showBindLabel by remember { mutableStateOf(false) }
+    var showBlockedBy by remember { mutableStateOf(false) }
 
     LaunchedEffect(database) { if (database != null) viewModel.ensureDefaultView() }
 
@@ -171,6 +173,8 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                             text = { Text(boundLabel?.let { "Bound to #${it.name}…" } ?: "Bind a label…") },
                             onClick = { showMenu = false; showBindLabel = true },
                         )
+                        // §0.6.14 — which relation column means "blocked by".
+                        DropdownMenuItem(text = { Text("Blocked by…") }, onClick = { showMenu = false; showBlockedBy = true })
                         DropdownMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
                     }
                 },
@@ -201,6 +205,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                 ViewType.BOARD -> BoardBody(boardColumns, properties, selectedView, viewModel, onOpenPage)
                 ViewType.GALLERY -> GalleryBody(displayedRows, visibleProperties, rowCovers, viewModel, onOpenPage)
                 ViewType.CALENDAR -> CalendarBody(displayedRows, selectedView, viewModel, onOpenPage)
+                ViewType.TIMELINE -> TimelineBody(displayedRows, selectedView, viewModel, onOpenPage)
                 else -> TableBody(displayedRows, visibleProperties, properties, database, hScroll, viewModel, onOpenPage)
             }
         }
@@ -284,6 +289,9 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
         )
     }
 
+    if (showBlockedBy) {
+        BlockedBySheet(viewModel = viewModel, onDismiss = { showBlockedBy = false })
+    }
     if (showBindLabel) {
         BindLabelSheet(
             databaseTitle = page?.title.orEmpty(),
@@ -360,12 +368,10 @@ private fun TableBody(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                    Text(
-                        tableRow.page.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(tableRow.page.id) },
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(tableRow.page.id) }) {
+                        Text(tableRow.page.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        BlockedChip(tableRow, viewModel)
+                    }
                 }
                 properties.forEach { property ->
                     Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
@@ -472,7 +478,10 @@ private fun BoardCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(row.page.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickableRow { onOpenPage(row.page.id) })
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickableRow { onOpenPage(row.page.id) }) {
+                Text(row.page.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false))
+                BlockedChip(row, viewModel)
+            }
             if (editable) {
                 Spacer(Modifier.height(6.dp))
                 Box {
@@ -518,7 +527,10 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
                         }
                     }
                     Column(modifier = Modifier.padding(8.dp)) {
-                        Text(row.page.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(row.page.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                            BlockedChip(row, viewModel)
+                        }
                         properties.take(3).forEach { property ->
                             val value = viewModel.valueForCell(row, property.id)
                             if (!value.isNullOrBlank()) {
@@ -627,6 +639,14 @@ private fun ViewConfigSheet(
                 }
                 ViewType.CALENDAR -> BindingPicker("Plot by (Date property)", properties.filter { it.type == PropertyType.DATE }, view.datePropertyId) { id ->
                     onUpdate(view.copy(datePropertyId = id))
+                }
+                // §0.6.14 — a bar's start and, optionally, its end.
+                ViewType.TIMELINE -> {
+                    val dates = properties.filter { it.type == PropertyType.DATE }
+                    BindingPicker("Start (Date property)", dates, view.datePropertyId) { id -> onUpdate(view.copy(datePropertyId = id)) }
+                    BindingPicker("End (Date property, optional)", dates.filter { it.id != view.datePropertyId }, view.endDatePropertyId, allowNone = true) { id ->
+                        onUpdate(view.copy(endDatePropertyId = id))
+                    }
                 }
                 else -> {}
             }
@@ -1580,6 +1600,53 @@ fun EnableSyncSheet(
                 enabled = donePropertyId != null,
                 onClick = { donePropertyId?.let { onConfirm(it, deadlinePropertyId, recurrencePropertyId, selectedRowIds.toList(), dueDatePropertyId?.takeIf { d -> d != deadlinePropertyId }) } },
             ) { Text("Turn on") }
+        }
+    }
+}
+
+/** §0.6.14 — "Blocked" on a row with an open blocker; nothing when the database names no
+ * "blocked by" column or every blocker is done. */
+@Composable
+private fun BlockedChip(row: TableRow, viewModel: PageDatabaseViewModel) {
+    val states by viewModel.blockedStates.collectAsState()
+    val state = states[row.page.id] ?: return
+    if (!state.isBlocked) return
+    Text(
+        "Blocked",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(4.dp))
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
+}
+
+/** §0.6.14 — pick the RELATION column (one pointing back at this database) that means
+ * "blocked by". A pointer, cleared with None; the relation's values are untouched. */
+@Composable
+private fun BlockedBySheet(viewModel: PageDatabaseViewModel, onDismiss: () -> Unit) {
+    val candidates by viewModel.selfRelationProperties.collectAsState()
+    val database by viewModel.database.collectAsState()
+    TendrilSheet(title = "Blocked by", onDismiss = onDismiss) {
+        Column {
+            if (candidates.isEmpty()) {
+                Text(
+                    "Add a Relation property that points at this database first — its cells will say which rows block which.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    "A row whose blockers are not done shows as Blocked on every view; the Timeline draws the dependency.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                BindingPicker("Blocked by (Relation to this database)", candidates, database?.blockedByPropertyId, allowNone = true) { id ->
+                    viewModel.setBlockedByProperty(id)
+                }
+            }
         }
     }
 }

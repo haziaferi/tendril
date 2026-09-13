@@ -55,6 +55,10 @@ import com.tendril.app.domain.formula.FormulaNode
 import com.tendril.app.domain.formula.FormulaPropertyKind
 import com.tendril.app.domain.formula.FormulaPropertyResolver
 import com.tendril.app.domain.formula.FormulaPropertyTypeLookup
+import com.tendril.app.domain.timeline.BlockedState
+import com.tendril.app.domain.timeline.TimelineBar
+import com.tendril.app.domain.timeline.blockedBy
+import com.tendril.app.domain.timeline.shifted
 import com.tendril.app.domain.formula.FormulaSyntaxError
 import com.tendril.app.domain.formula.FormulaType
 import com.tendril.app.domain.formula.FormulaValue
@@ -624,6 +628,8 @@ class PageDatabaseViewModel(
                     db.deadlinePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DEADLINE)
                     db.dueDatePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DUE_DATE)
                     db.recurrencePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.RECURRENCE)
+                    // §0.6.14 — a pointer, not a binding: nothing to crystallise, just cleared.
+                    db.blockedByPropertyId -> pageDatabaseDao.update(db.copy(blockedByPropertyId = null, updatedAt = Instant.now()))
                 }
             }
             // Through the registry, not `propertyDao.delete`: §9.4's merge upserts every
@@ -999,6 +1005,69 @@ class PageDatabaseViewModel(
     fun toggleDone(entry: Entry, checked: Boolean) {
         if (locked()) return
         viewModelScope.launch { resolveEntryUseCase.setDone(entry.id, checked) }
+    }
+
+    // ------------------------------------------------------------------ §0.6.14 Timeline
+
+    /** One routing call for every date write a view makes: a bound When/Deadline on a synced row
+     * goes through the Entry ([setBoundDate] — alarms re-armed), anything else is a stored cell.
+     * The Timeline's drag and the Table's date cell both come here, so dragging a synced row's
+     * bar *is* moving its task. */
+    fun setDateCell(row: TableRow, propertyId: Long, date: LocalDate?) {
+        val db = database.value
+        val entry = row.linkedEntry
+        val role = when (propertyId) {
+            db?.deadlinePropertyId -> BindingRole.DEADLINE
+            db?.dueDatePropertyId -> BindingRole.DUE_DATE
+            else -> null
+        }
+        if (role != null && entry != null) {
+            setBoundDate(entry, role, date)
+        } else {
+            val property = properties.value.find { it.id == propertyId } ?: return
+            setCellValue(property, row.page, date?.toString())
+        }
+    }
+
+    /** A bar dragged by [days]: start, and the end when the view has one, move together. */
+    fun moveBar(view: PageDatabaseView, bar: TimelineBar<TableRow>, days: Long) {
+        val startId = view.datePropertyId ?: return
+        val moved = bar.shifted(days)
+        setDateCell(bar.row, startId, moved.start)
+        view.endDatePropertyId?.let { endId -> if (valueForCell(bar.row, endId) != null) setDateCell(bar.row, endId, moved.end) }
+    }
+
+    /** A row's date cell as a date, through the same bound-or-stored read every view uses. */
+    fun dateForCell(row: TableRow, propertyId: Long): LocalDate? =
+        valueForCell(row, propertyId)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+    /** §0.6.14 — per row, what blocks it; empty when the database names no "blocked by" column.
+     * Done is read through the Done binding; without one every blocker counts (see [blockedBy]). */
+    val blockedStates: StateFlow<Map<Long, BlockedState>> = combine(tableRows, database) { rowList, db ->
+        val propertyId = db?.blockedByPropertyId ?: return@combine emptyMap()
+        val byUid = rowList.associateBy { it.page.uid }
+        val doneId = db.donePropertyId
+        rowList.associate { row ->
+            row.page.id to blockedBy(
+                relationValue = row.values[propertyId]?.value,
+                rowByUid = { uid -> byUid[uid]?.page },
+                isDone = { page -> doneId != null && byUid[page.uid]?.let { valueForCell(it, doneId) } == "true" },
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** The RELATION properties that point back at this database — the only ones "blocked by"
+     * can name. */
+    val selfRelationProperties: StateFlow<List<Property>> = combine(properties, page) { props, p ->
+        props.filter { it.type == PropertyType.RELATION && parseRelationConfig(it.config)?.targetDatabasePageUid == p?.uid }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §0.6.14 — the pointer itself; null clears it. Not a [BindingRole]: the relation values
+     * stay stored, nothing is proxied through an Entry. Travels with the database record. */
+    fun setBlockedByProperty(propertyId: Long?) {
+        if (locked()) return
+        val db = database.value ?: return
+        launchAndTouch(pageId) { pageDatabaseDao.update(db.copy(blockedByPropertyId = propertyId, updatedAt = Instant.now())) }
     }
 
     /** Writes the date a bound cell edits: the When for [BindingRole.DEADLINE], the deadline
