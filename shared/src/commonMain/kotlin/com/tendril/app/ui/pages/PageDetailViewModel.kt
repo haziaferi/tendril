@@ -229,10 +229,13 @@ class PageDetailViewModel(
     private val _unlinkedMentions = MutableStateFlow<List<UnlinkedMention>>(emptyList())
     val unlinkedMentions: StateFlow<List<UnlinkedMention>> = _unlinkedMentions.asStateFlow()
 
-    init {
+    /** Called by the screen each time the page is entered — not from `init`, because the
+     * ViewModel is keyed per page in the window's store and outlives the route: "once per
+     * page-open" was, until step 8d, once per session. Both loads are cheap. */
+    fun onOpened() {
         viewModelScope.launch {
-            loadMentions()
             refreshBlockReferenceCaches()
+            loadMentions()
         }
     }
 

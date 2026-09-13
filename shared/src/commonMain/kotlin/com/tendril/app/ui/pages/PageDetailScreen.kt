@@ -159,6 +159,7 @@ fun PageDetailScreen(
     val pendingLabel by viewModel.pendingLabel.collectAsState()
     val rowValues by viewModel.rowValues.collectAsState()
     val rowLinkedEntry by viewModel.rowLinkedEntry.collectAsState()
+    LaunchedEffect(pageId) { viewModel.onOpened() }
     val backlinks by viewModel.backlinks.collectAsState()
     val unlinkedMentions by viewModel.unlinkedMentions.collectAsState()
     val journalToday by viewModel.journalToday.collectAsState()
