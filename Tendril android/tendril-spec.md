@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-13 (step 8c: Road Map) | §3.4 amended: `ui/roadmap/` → `shared/` (desktop parity; `roadMapContent` slot retired), `domain/roadmap/RoadMapGraph.kt` pure and tested (types, depth walk, `RoadMapFilter` — Journal hidden by default, kinds, one label; persisted `roadmap_filter`), tinted edge kinds, "Show on Road Map" from a page's `···`. Two layout defects fixed (first-frame settle; px-space repulsion). §0.10 item 15 (B§6 #16's remainder). Verified on both devices: chips, the label filter, the focus handoff at depth 1 and 2, "Relate to…" on the desktop; the filter survived a process kill on the phone. 671 tests. | §3.4, §0.10 |
 | 2026-09-13 (step 8b: Journal shows today) | §3.1.4 amended: today's Journal page opens with a checkable *Today* strip — the day's tasks (`EntryOccurrences.onDay`) and due-or-done habits — live, never blocks; today only. `domain/journal/JournalToday` pure and tested; `PageDetailViewModel` takes `HabitDao` + `CheckInHabitUseCase`. Verified on both devices (desktop: `>jour` → *Read chapter 3 · 21:00* and *Stretch*; a tick and its undo landed as a check-in + tombstone and a `DONE` resolution; no strip on a plain page. Phone: *Call bank*, *Stretch 09:00* first, *Meditate*; Meditate ticked from the strip showed filled on the Habits tab with its streak; yesterday's page and the Journal root show nothing). 666 tests. | §3.1.4 |
 | 2026-09-12 (step 8a: switcher) | §3.1.7 amended: the quick switcher / command palette (`domain/SwitcherQuery` pure and tested; `ui/switcher/QuickSwitcher`, owned by the scaffold, Ctrl+K on desktop) replaces the Pages search overlay. §3.1.1's defect fixed: titles in the FTS index, re-index on rename and at creation, **schema v16** (`page_fts` emptied) + `healIndex` at start. §0.10 item 5 resolved. Verified on both devices (the heal: 3/3 and 4/4 pages re-indexed with titles first; `boo` → *Books v12*; `>rev` → Review; `trip` found by title on the phone; `>jour` opened today's Journal). 663 tests. | §3.1.1, §3.1.7, §0.10 |
 
@@ -500,6 +501,11 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+15. **Canvas frames/sections and canvas templates** — B§6 #16's remainder after step 8c's check: a
+    nested canvas already exists as a `PAGE_EMBED` card pointing at a Canvas page (no new entity,
+    the benchmark's guess), and the mind-map layout lives on the outline block (§0.6.2), not the
+    canvas. Frames and templates are not built; neither is needed until a canvas outgrows one
+    screen.
 14. **The desktop layout mirrors the phone's.** The desktop app draws the phone's touch layout — a
     bottom tab bar, sheets, finger-sized rows — in a window driven by a keyboard and mouse. To be
     revised against real desktop apps of similar purpose (which ones, and what changes: a side
@@ -1305,6 +1311,26 @@ still not built and stays deferred (§10).
   similar to what an early, since-scrapped prototype used for a different, broader "every page" tree
   view; that prototype's scope (all pages, parent/child edges only) is explicitly not what Road Map
   is, only its layout-algorithm category is worth reusing.
+
+**[Amended] 2026-09-13 (§0.8 step 8c, B§6 #14) — shared, filtered, reachable from a page.**
+`ui/roadmap/` moved from the Android app to `shared/` unchanged in behaviour (everything it read
+was already on `WorkbenchCore`; nothing in it was Android-specific), so the desktop draws the same
+map; the `roadMapContent` slot it filled is retired and the scaffold renders the screen itself.
+The graph's shape — the types, the depth walk, the filters — is pure in `domain/roadmap/`. **Three
+filters**, always visible under the app bar: the **Journal** (root and day pages) hidden by default
+— Logseq's answer, a day page mentions everything and says nothing about structure; each **page
+kind** switchable (never all off); **one label** at a time. Applied *before* the focus walk, so
+"depth 2" never routes through a hidden page; the Journal/kind half persists per device
+(`roadmap_filter` in the `KeyValueStore`), the label id is per-device and does not. **Typed edges
+tinted**: a mention keeps its arrowhead in the neutral ink, a manual "Relate to" line takes the
+tertiary hue, with a legend at the row's end; Canvas nodes tinted apart from Databases. **"Show on
+Road Map"** in an ordinary page's `···` opens the map focused on it at depth 1
+(`WorkbenchNavState.showOnRoadMap`); depth is then set on the existing focus bar. Two layout
+defects found on the desktop's first map and fixed in `shared/`: the loop declared the layout
+settled on its first frame (a warm-up floor now), and repulsion was a px-space constant, ~7×
+weaker at phone density than on the desktop, which is why phone nodes seeded on top of each
+other stayed stacked (scaled by density³; positions clamped to the canvas). The constants are
+still tuned by eye — §0.10 item 14's desktop pass owns the rest.
 
 ### 3.5 Settings
 

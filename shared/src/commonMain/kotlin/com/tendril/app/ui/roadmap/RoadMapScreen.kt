@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
@@ -73,8 +72,21 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tendril.app.ui.components.TendrilSheet
-import com.tendril.app.AppContainer
-import com.tendril.app.R
+import com.tendril.app.ui.WorkbenchCore
+import com.tendril.app.data.page.Label
+import com.tendril.app.domain.roadmap.EdgeSource
+import com.tendril.app.domain.roadmap.RoadMapGraph
+import com.tendril.app.generated.resources.Res
+import com.tendril.app.generated.resources.empty_pages_message
+import com.tendril.app.generated.resources.empty_road_map_cta
+import com.tendril.app.generated.resources.empty_road_map_message
+import com.tendril.app.generated.resources.nav_road_map
+import org.jetbrains.compose.resources.stringResource
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.components.EmptyState
@@ -93,6 +105,7 @@ private const val CENTERING_STRENGTH = 0.015f
 private const val DAMPING = 0.82f
 private const val SETTLE_THRESHOLD_DP_PER_S = 4f
 private const val DIMMED_ALPHA = 0.28f
+private const val SETTLE_WARMUP_FRAMES = 30
 
 /**
  * §3.4 — full-screen interactive canvas of relationships between existing Pages, reworked
@@ -104,19 +117,31 @@ private const val DIMMED_ALPHA = 0.28f
  * the canvas on that page plus its neighbors out to a depth slider.
  */
 @Composable
-fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier: Modifier = Modifier) {
+fun RoadMapScreen(
+    core: WorkbenchCore,
+    onOpenPage: (Long) -> Unit,
+    /** A page asking to be the focus — "Show on Road Map" from its `···` (step 8c); consumed once. */
+    focusRequest: Long? = null,
+    onFocusConsumed: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val viewModel: RoadMapViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
                 RoadMapViewModel(
-                    container.database.pageDao(),
-                    container.database.pageRelationDao(),
-                    container.pageContentRepository,
-                    container.workbenchCore.viewLockState,
+                    core.database.pageDao(),
+                    core.database.pageRelationDao(),
+                    core.pageContentRepository,
+                    core.viewLockState,
+                    core.database.labelDao(),
+                    core.keyValueStore,
                 )
             }
         }
     )
+    LaunchedEffect(focusRequest) {
+        if (focusRequest != null) { viewModel.setFocus(focusRequest); onFocusConsumed() }
+    }
     // §3.1.2 — the same global toggle [RoadMapViewModel.locked] refuses on, read here so the
     // screen stops offering the one write it has. Provided by
     // [com.tendril.app.ui.nav.WorkbenchScaffold], which hosts this tab.
@@ -125,6 +150,8 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
     val allPages by viewModel.allPages.collectAsState()
     val focusedPageId by viewModel.focusedPageId.collectAsState()
     val focusDepth by viewModel.focusDepth.collectAsState()
+    val filter by viewModel.filter.collectAsState()
+    val labels by viewModel.labels.collectAsState()
     var showAllPages by remember { mutableStateOf(false) }
     var showRelateFlow by remember { mutableStateOf(false) }
     val focusedPage = allPages.find { it.id == focusedPageId }
@@ -134,7 +161,7 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.nav_road_map)) },
+                    title = { Text(stringResource(Res.string.nav_road_map)) },
                     actions = {
                         // The only control on this screen that writes anything. Hidden rather
                         // than disabled while View-Only is on, matching the Pages hub's own
@@ -152,6 +179,13 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
                             Icon(Icons.AutoMirrored.Filled.List, contentDescription = "All Pages")
                         }
                     },
+                )
+                FilterRow(
+                    filter = filter,
+                    labels = labels,
+                    onHideJournal = { viewModel.setHideJournal(it) },
+                    onToggleKind = { viewModel.toggleKind(it) },
+                    onLabel = { viewModel.setLabel(it) },
                 )
                 if (focusedPage != null) {
                     FocusBar(
@@ -171,7 +205,7 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
                     message = if (focusedPage != null) {
                         "\"${focusedPage.title}\" has no connections within ${focusDepth} hop(s)"
                     } else {
-                        "${stringResource(R.string.empty_road_map_message)} — ${stringResource(R.string.empty_road_map_cta)}"
+                        stringResource(Res.string.empty_road_map_message) + " — " + stringResource(Res.string.empty_road_map_cta)
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -197,6 +231,63 @@ fun RoadMapScreen(container: AppContainer, onOpenPage: (Long) -> Unit, modifier:
             viewModel = viewModel,
             onDismiss = { showRelateFlow = false },
             onDone = { showRelateFlow = false },
+        )
+    }
+}
+
+/**
+ * §3.4 (amended, step 8c / B§6 #14) — what the map leaves out, always visible under the app bar
+ * like the FocusBar: the Journal (hidden by default), each page kind, one label. A legend for the
+ * two edge kinds sits at the end, since the tint is the only thing that tells them apart at a
+ * glance.
+ */
+@Composable
+private fun FilterRow(
+    filter: com.tendril.app.domain.roadmap.RoadMapFilter,
+    labels: List<Label>,
+    onHideJournal: (Boolean) -> Unit,
+    onToggleKind: (PageKind) -> Unit,
+    onLabel: (Long?) -> Unit,
+) {
+    var labelMenu by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FilterChip(
+            selected = !filter.hideJournal,
+            onClick = { onHideJournal(!filter.hideJournal) },
+            label = { Text("Journal") },
+            modifier = Modifier.padding(end = 6.dp),
+        )
+        for ((kind, name) in listOf(PageKind.PAGE to "Pages", PageKind.DATABASE to "Databases", PageKind.CANVAS to "Canvases")) {
+            FilterChip(
+                selected = kind in filter.kinds,
+                onClick = { onToggleKind(kind) },
+                label = { Text(name) },
+                modifier = Modifier.padding(end = 6.dp),
+            )
+        }
+        Box {
+            val chosen = labels.find { it.id == filter.labelId }
+            AssistChip(
+                onClick = { labelMenu = true },
+                label = { Text(if (chosen != null) "#" + chosen.name else "Any label") },
+                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+            )
+            DropdownMenu(expanded = labelMenu, onDismissRequest = { labelMenu = false }) {
+                DropdownMenuItem(text = { Text("Any label") }, onClick = { labelMenu = false; onLabel(null) })
+                labels.forEach { label ->
+                    DropdownMenuItem(text = { Text("#" + label.name) }, onClick = { labelMenu = false; onLabel(label.id) })
+                }
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            "→ mention   — related",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
         )
     }
 }
@@ -245,6 +336,11 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
     val springLengthPx = nodeWidthPx * 1.8f
     val minDistancePx = nodeWidthPx * 1.1f
     val settleThresholdPx = with(density) { SETTLE_THRESHOLD_DP_PER_S.dp.toPx() }
+    // REPULSION is a dp-space constant; a 1/d² force in px space scales by density³ (two for
+    // the distance, one for the px-per-dp of the resulting acceleration). Without it the phone's
+    // ~2.75× density made repulsion ~7× weaker than the desktop's — below the settle threshold
+    // for nodes seeded on top of each other, which is why they stayed stacked (step 8c).
+    val repulsionPx = REPULSION * density.density * density.density * density.density
 
     // A selection surviving into a graph that no longer contains it (focus/depth changed,
     // or a refresh dropped the node) would otherwise dim everything forever with nothing to
@@ -282,6 +378,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
         if (canvasSize == IntSize.Zero) return@LaunchedEffect
         val ids = graph.nodes.map { it.id }
         var lastFrameTime = 0L
+        var frames = 0
         while (isActive) {
             var settled = false
             withFrameNanos { frameTimeNanos ->
@@ -308,7 +405,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                         // clamp keeps force magnitude finite while still pushing hard, rather
                         // than a discontinuous separate "collision" pass.
                         val clampedDist = dist.coerceAtLeast(minDistancePx * 0.5f)
-                        val forceMag = REPULSION / (clampedDist * clampedDist)
+                        val forceMag = repulsionPx / (clampedDist * clampedDist)
                         forces[a] = forces[a]!! + dir * forceMag
                         forces[b] = forces[b]!! - dir * forceMag
                     }
@@ -336,11 +433,22 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                     if (id == draggingId) return@forEach
                     val vel = ((velocities[id] ?: Offset.Zero) + (forces[id] ?: Offset.Zero) * dt) * DAMPING
                     velocities[id] = vel
-                    positions[id] = (positions[id] ?: center) + vel * dt
+                    // Kept on the canvas: a node the layout pushes past the edge is unreachable
+                    // on a phone, and nothing the person can do brings it back but a lucky drag.
+                    val next = (positions[id] ?: center) + vel * dt
+                    positions[id] = Offset(
+                        next.x.coerceIn(nodeWidthPx / 2f, (canvasSize.width - nodeWidthPx / 2f).coerceAtLeast(nodeWidthPx / 2f)),
+                        next.y.coerceIn(nodeHeightPx / 2f, (canvasSize.height - nodeHeightPx / 2f).coerceAtLeast(nodeHeightPx / 2f)),
+                    )
                     totalSpeed += vel.getDistance()
                 }
 
-                if (ids.isNotEmpty() && totalSpeed / ids.size < settleThresholdPx) settled = true
+                // Never on the first frames: velocities start at zero, and one frame of
+                // acceleration is below the threshold even for nodes seeded on top of each
+                // other — the loop used to declare the layout settled before it had moved
+                // (found on the desktop, step 8c; the phone hid it behind the first drag).
+                frames++
+                if (frames > SETTLE_WARMUP_FRAMES && ids.isNotEmpty() && totalSpeed / ids.size < settleThresholdPx) settled = true
             }
             if (settled) break
         }
@@ -356,14 +464,18 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                 detectTapGestures(onTap = { selectedId = null })
             },
     ) {
+        // Step 8c — the two edge kinds tinted apart, not only shaped apart: a mention keeps its
+        // arrowhead in the neutral ink, a manual "Relate to" line takes the tertiary hue.
+        val mentionInk = MaterialTheme.colorScheme.onSurfaceVariant
+        val relatedInk = MaterialTheme.colorScheme.tertiary
         Canvas(modifier = Modifier.fillMaxSize()) {
             graph.edges.forEach { edge ->
                 val from = positions[edge.fromPageId]
                 val to = positions[edge.toPageId]
                 if (from != null && to != null) {
                     val touchesSelection = selectedId != null && (edge.fromPageId == selectedId || edge.toPageId == selectedId)
-                    val alpha = if (highlightSet == null || touchesSelection) 0.5f else DIMMED_ALPHA * 0.5f
-                    val lineColor = Color.Gray.copy(alpha = alpha)
+                    val alpha = if (highlightSet == null || touchesSelection) 0.6f else DIMMED_ALPHA * 0.6f
+                    val lineColor = (if (edge.source == EdgeSource.MENTION) mentionInk else relatedInk).copy(alpha = alpha)
                     drawLine(color = lineColor, start = from, end = to, strokeWidth = 2f)
                     if (edge.source == EdgeSource.MENTION) {
                         drawArrowhead(from, to, nodeWidthPx / 2f, lineColor.copy(alpha = alpha * 1.6f))
@@ -441,7 +553,11 @@ private fun RoadMapNode(
     val borderColor = MaterialTheme.colorScheme.primary.copy(alpha = (0.25f + min(degree, 6) * 0.1f).coerceAtMost(0.9f))
 
     Surface(
-        color = if (page.kind == PageKind.DATABASE) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        color = when (page.kind) {
+            PageKind.DATABASE -> MaterialTheme.colorScheme.secondaryContainer
+            PageKind.CANVAS -> MaterialTheme.colorScheme.tertiaryContainer
+            PageKind.PAGE -> MaterialTheme.colorScheme.surfaceVariant
+        },
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(borderWidth, borderColor),
         modifier = Modifier
@@ -507,7 +623,7 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
                 placeholder = { Text("Filter…") },
             )
             if (filtered.isEmpty()) {
-                EmptyState(icon = Icons.Outlined.Description, message = stringResource(R.string.empty_pages_message), modifier = Modifier.fillMaxSize())
+                EmptyState(icon = Icons.Outlined.Description, message = stringResource(Res.string.empty_pages_message), modifier = Modifier.fillMaxSize())
             } else {
                 LazyColumn {
                     items(filtered, key = { it.id }) { page ->

@@ -1,6 +1,9 @@
 package com.tendril.app.ui.nav
 
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /** Which screen is on top: either a tab's own root, or a page pushed on top of one. [tab] on
  * [PageDetail] is the tab it was opened from, so switching back to the bottom bar's current
@@ -41,6 +44,15 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
 
     fun openPage(pageId: Long) {
         backStack.add(WorkbenchRoute.PageDetail(pageId, currentTab))
+    }
+
+    /** §3.4 (step 8c) — a page's "Show on Road Map": the map opens focused on it. Set here,
+     * read by the Road Map tab, cleared by it once applied — the one cross-tab intent. */
+    var roadMapFocusRequest: Long? by mutableStateOf(null)
+
+    fun showOnRoadMap(pageId: Long) {
+        roadMapFocusRequest = pageId
+        switchTab(WorkbenchDestination.ROAD_MAP)
     }
 
     fun openReview() {

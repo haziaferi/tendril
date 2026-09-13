@@ -12,6 +12,7 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.data.prefs.MapKeyValueStore
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.LabelMembership
@@ -159,6 +160,8 @@ class ViewOnlySurfacesGuardTest {
         relationDao = relationDao,
         contentRepository = contentRepository,
         viewLockState = viewLockState,
+        labelDao = labelDao,
+        keyValueStore = MapKeyValueStore(),
     )
 
     /** Same `WhileSubscribed` problem as [canvasViewModel]: `ensureDefaultView` reads

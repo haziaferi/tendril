@@ -9,6 +9,7 @@ import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.data.prefs.MapKeyValueStore
 import com.tendril.app.data.pagedatabase.PageDatabase
 import com.tendril.app.data.pagedatabase.PageDatabaseView
 import com.tendril.app.data.pagedatabase.Property
@@ -185,7 +186,7 @@ class WritePathSyncTest {
          * Note it constructs eagerly: `init { refresh() }` launches on `viewModelScope`, which
          * is why every caller must already be inside `runTest(mainDispatcher)`.
          */
-        fun roadmap() = RoadMapViewModel(pageDao, relationDao, contentRepository, viewLockState)
+        fun roadmap() = RoadMapViewModel(pageDao, relationDao, contentRepository, viewLockState, labelDao, MapKeyValueStore())
 
         /** Local ids are each device's own; a page is the same page across devices only by `uid`. */
         suspend fun pageIdOf(uid: String): Long =

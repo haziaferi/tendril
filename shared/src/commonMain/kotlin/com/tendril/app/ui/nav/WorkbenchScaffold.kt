@@ -29,6 +29,7 @@ import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.track.RunningTimerBar
 import com.tendril.app.ui.review.ReviewScreen
+import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.switcher.QuickSwitcher
 import com.tendril.app.ui.switcher.SwitcherState
 import com.tendril.app.domain.SwitcherCommand
@@ -65,7 +66,6 @@ fun WorkbenchScaffold(
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     tasksHabitsContent: @Composable (onOpenReview: () -> Unit) -> Unit,
-    roadMapContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
 ) {
     // Back pops the stack on both platforms: Android's gesture and desktop's Escape reach the
@@ -121,7 +121,13 @@ fun WorkbenchScaffold(
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true })
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
                         WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview)
-                        WorkbenchDestination.ROAD_MAP -> roadMapContent(navState::openPage)
+                        // §0.8 step 8c — shared; the slot it used to fill is gone.
+                        WorkbenchDestination.ROAD_MAP -> RoadMapScreen(
+                            core = core,
+                            onOpenPage = navState::openPage,
+                            focusRequest = navState.roadMapFocusRequest,
+                            onFocusConsumed = { navState.roadMapFocusRequest = null },
+                        )
                         WorkbenchDestination.SETTINGS -> settingsContent()
                     }
                     is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
@@ -148,6 +154,7 @@ fun WorkbenchScaffold(
                                 pageId = current.pageId,
                                 onBack = { navState.back() },
                                 onOpenPage = navState::openPage,
+                                onShowOnRoadMap = navState::showOnRoadMap,
                                 onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
                             )
                         }

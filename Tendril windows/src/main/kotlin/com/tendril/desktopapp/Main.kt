@@ -178,7 +178,6 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         habitTrashSheet = null,
                     )
                 },
-                roadMapContent = { NotAvailableOnDesktop("Road Map") },
                 settingsContent = { NotAvailableOnDesktop("Settings") },
             )
         }
