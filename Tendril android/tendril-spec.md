@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-13 (step 8g: Claude verbs) | **§0.6.15** written and done; **§0.8 step 8 complete** (the row updated). `domain/ai/` (verbs, request/response records, failure wording — pure, tested; `ClaudeClient` over `HttpURLConnection`, built per press), `ui/pages/AiResultSheet.kt`, the verb row on the selection toolbar (key-gated), `data/prefs/AiKeyStore` (Android over `SecretStore`, desktop `FileAiKeyStore`), `ui/settings/AiSettingsSection.kt` shared (Android's private section deleted), the desktop's first Settings pane — `NotAvailableOnDesktop` deleted. §3.5 amended; §0.10 items 17 and 18. Verified on both devices: no row without a key; a dummy key → the row → *Rewrite* → a genuine 401 → "The key was rejected"; Clear removed the desktop's file; `prefs.properties` never held the key. 690 tests. | §0.6.15, §0.8, §3.5, §0.10 |
 | 2026-09-13 (step 8f: Timeline) | **§0.6.14** written and done. Schema **v19** (`page_database_views.endDatePropertyId`, `page_databases.blockedByPropertyId`, `MIGRATION_18_19`). `ViewType.TIMELINE`, `ui/pages/TimelineView.kt`, `domain/timeline/Timeline.kt` (pure, tested); `PageDatabaseViewModel.setDateCell` routes every view's date write; *Blocked* on Table/Board/Gallery, dependencies drawn on the Timeline; `···` → *Blocked by…*. §5.6 and §4 updated. Verified on both devices (v18→v19 in place; desktop: a bar dragged three columns → *Read on* 2026-09-16 → 09-19, a self-relation bound, the chip appearing when the blocker's Done is cleared, the dependency line; phone: *Errands*' Deadline is bound as the task's due date, the dragged bar moved `entries.dueDate` and the Tasks tab showed *due 2026-09-13*). 686 tests. | §0.6.14, §5.6, §4 |
 | 2026-09-13 (step 8e: page history) | **§0.6.13** written and done. Schema **v18** (`page_revisions`, `MIGRATION_17_18`) — the first table that stays home (§9.4 note, §4 entity). `domain/history/PageHistory` (edit / merge / restore captures; ten-minute window, dedupe, fifty per page; serialised), `sync/BlockSnapshots.kt` (the merge's block rebuild extracted and shared), `ui/pages/HistorySheet.kt`; `PagesSyncEngine` keeps the local body before a winning record replaces it. §0.10 item 16. Verified on both devices (v17→v18 in place; ten keystrokes → one revision; preview; Restore brought a nested tree back with children relinked and uids kept; the merge-loser case by `PageMergeTest`). 682 tests. | §0.6.13, §9.4, §4, §0.10 |
 | 2026-09-13 (step 8d: block references) | **§0.6.12** written and done. Schema **v17** (`blocks.referencedBlockUid`, `MIGRATION_16_17`). `BlockType.BLOCK_REFERENCE` + `ui/pages/BlockReference.kt` (card, picker); `((` and the slash sheet; the cache refreshed on open without timestamps; the snapshot carries the uid verbatim, no quarantine. §3.1.5 amended: **Unlinked mentions** with *Link* (`domain/references/UnlinkedMentions.kt`, pure, tested). Also: a page's mentions now reload on every open (they loaded once per ViewModel life, which outlives the route). Verified on both devices (v16→v17 in place; desktop: `((` → *Child* → card, source edited → card live, cache refreshed on reopen with timestamps unchanged, *Link* moved the Journal root from Unlinked to Linked; phone: the slash sheet's *Block reference* → *Jackets · Trip*, tap → Trip, *Link* on "notes for the trip"). 677 tests. | §0.6.12, §3.1.1, §3.1.5, §4 |
@@ -518,6 +519,35 @@ whose start column is deleted falls back to the configure prompt. **Done 2026-09
 `domain/timeline/Timeline.kt` (pure, tested), `ui/pages/TimelineView.kt`, `MIGRATION_18_19`.
 Verified on desktop and phone.
 
+**0.6.15 Three verbs on a selection, with the person's own key, and nothing else.** Finding
+**[Verified]**: §3.5's key field has stored an Anthropic key in the Keystore since 2026-07 with
+nothing using it; the app already speaks HTTP through `HttpURLConnection` (§9.5) and the build is
+offline, so no library can be added; §0.1/§0.2 stand — offline-first, no telemetry, opt-in.
+Decision (2026-09-13, B§6 #18, C4): the selection toolbar gains **Rewrite · Expand · Summarise**,
+present **only while a key is set**. A press builds one client, sends **only the selected text
+and the verb's fixed instruction** — never the page title, other blocks, or anything about the
+person — to the Messages API with the key as a header, and drops the client with the reply. The
+answer opens a **result sheet**: *Replace selection* or *Insert below as a new block* are the only
+writes, Cancel is free, and the sheet says what left the device; a failure reads as its cause
+(the key rejected, rate limited, the service down, no connection). Applying is an ordinary edit
+— locked, re-indexed, touched, kept in History first. **The key's home is `AiKeyStore`**: Android's
+Keystore-backed `SecretStore`, the desktop's own file (`~/.tendril-desktop-dev/anthropic.key`,
+owner-only where the filesystem speaks POSIX; on NTFS it inherits the profile's ACL — this
+account and administrators — since the JDK's `setReadable` is a no-op there and a DPAPI wrap
+would need a library the offline build cannot fetch); **never the `KeyValueStore`**, which holds
+only the model (`ai_model`, default `claude-sonnet-5`; Opus 5 and Haiku 4.5 offered). A shared
+Settings section (key, model, "what is sent") replaces Android's private one, and the desktop's
+first Settings pane holds it — no `NotAvailableOnDesktop` stand-in remains. **Out, on purpose:**
+page-wide or vault-wide context in a request, an agent over the Markdown export, a local-model
+option (§0.10 item 17 — the export is the honest interface for an agent, and nothing here
+precludes one); the Claude-generated mind map stays deferred (§10). Acceptance: with no key the
+toolbar is unchanged and no connection is ever opened; a wrong key yields a real 401 and the
+sheet's "rejected" line; the request body never contains the key. **Done 2026-09-13** —
+`domain/ai/AiVerbs.kt` (pure, tested) and `ClaudeClient.kt`, `ui/pages/AiResultSheet.kt`,
+`ui/settings/AiSettingsSection.kt`, `data/prefs/AiKeyStore.kt` (+ `FileAiKeyStore`,
+`AndroidAiKeyStore`). Verified on desktop and phone against the real endpoint (the failure path,
+by design — a dummy key, a genuine 401). **§0.8 step 8 complete.**
+
 ### 0.7 Explicitly out of scope
 
 Ruled out on purpose. Not to be reopened without amending §0.1 or §0.2. The evidence for each
@@ -548,7 +578,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 5 | Natural-language Quick Add (B§6 #3) — a Task *or* an Event from one line — *done 2026-09-12* | pays §3.2's debt |
 | 6 | Calendar: **6a** the screen → `shared/`; **6b** edit path + drag-to-move; **6c+6d** Agenda, layers incl. "Show Habits" and database dates; **6e** ICS — *all done 2026-09-12* | 7 |
 | 7 | Time: **7a** Tasks & Habits → `shared/` — *done 2026-09-12*; **7b** Plan mode — *done 2026-09-12*; **7c** tracking — *done 2026-09-12*; **7d** planned-vs-actual — *done 2026-09-12*. §0.6.5 complete (B§6 #9); **7e** Review — *done 2026-09-12* (§0.6.11, B§6 #10) | — |
-| 8 | The rest of B§6 by value: quick switcher (after the FTS title defect, §3.1.1), history, transclusion, Road Map filters, Journal-shows-today, Timeline view, AI verbs | — |
+| 8 | The rest of B§6 by value — **8·0** KeyValueStore, **8a** switcher, **8b** Journal shows today, **8c** Road Map shared + filters, **8d** block references, **8e** page history, **8f** Timeline + blocked by, **8g** Claude verbs: *all done 2026-09-12/13* (§0.6.12–§0.6.15, §3.1.4/§3.1.7/§3.4 amendments). Schema v19. **Step 8 complete; §0.8 complete.** | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
 
 Desktop **[Assumed]** *(two of five since 2026-09-12: the Calendar moved to `shared/` at step 6a, Tasks & Habits at 7a)*: four of five destinations are stubs and neither export reaches it
@@ -587,6 +617,13 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+17. **An agent over the export, and a local model** — B§6 #18's other two halves, kept out of
+    §0.6.15 on purpose: the Markdown export (§7) is the honest interface for an agent (it reads
+    files, not the app), and a local model would need a runtime the offline build cannot fetch.
+    Neither is precluded by the verbs; neither is planned.
+18. **A relation cell on a row's own page shows raw uids** — the row-as-page property strip
+    (`RowPropertyEditor`) renders a RELATION value as its comma-joined page uids; the Table's
+    cell resolves them to titles. Seen 2026-09-13 on *Escape test* after step 8f bound "Blocked by".
 16. **Database-level history** — §0.6.13 versions a page's title and blocks only. A database's
     columns, views and a row's property values have no history; if a lost column or value is ever
     missed, the record to version is the full `PageSnapshotRecord` with a restore that goes through
@@ -1431,7 +1468,9 @@ still tuned by eye — §0.10 item 14's desktop pass owns the rest.
 
 - **Appearance**: theme picker (§2.3), collapsed behind a disclosure toggle
 - **Anthropic API key** field (for any Claude-API-assisted features, e.g. a future in-page mind-map
-  generator). **Decided (2026-07-13)**: the app is fully local and makes zero network calls until
+  generator). *(**2026-09-13, §0.6.15:** the feature that uses it exists — three verbs on a
+  selection; the field is now the shared Claude section, key + model + what is sent, on both
+  platforms.)* **Decided (2026-07-13)**: the app is fully local and makes zero network calls until
   this key (or Google OAuth, §3.2) is actually toggled on — no client/library is constructed at
   startup. On first toggle-on, the key is written to Android Keystore-backed encrypted storage
   (Jetpack Security `EncryptedSharedPreferences` or equivalent), never plain prefs/Room. **Corrected

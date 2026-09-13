@@ -34,6 +34,12 @@ import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.data.prefs.AiKeyStore
+import com.tendril.app.data.prefs.KeyValueStore
+import com.tendril.app.domain.ai.AI_MODEL_KEY
+import com.tendril.app.domain.ai.AiModels
+import com.tendril.app.domain.ai.AiVerb
+import com.tendril.app.domain.ai.ClaudeClient
 import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.references.MIN_UNLINKED_TITLE_LENGTH
@@ -89,6 +95,8 @@ class PageDetailViewModel(
     private val habitDao: HabitDao,
     private val checkInHabitUseCase: CheckInHabitUseCase,
     private val pageHistory: PageHistory,
+    private val aiKeyStore: AiKeyStore,
+    private val keyValueStore: KeyValueStore,
 ) : ViewModel() {
     /** §3.1.2 — "every page under Pages becomes read-only as a group... no per-page exception."
      * Every mutating function below early-returns through this guard rather than relying on the
@@ -289,6 +297,27 @@ class PageDetailViewModel(
             val uid = block.referencedBlockUid ?: continue
             val source = blockDao.getByUid(uid) ?: continue
             if (source.content != block.content) blockDao.update(block.copy(content = source.content))
+        }
+    }
+
+    /** §0.6.15 — the verb row exists only while a key is set; nothing else changes without one. */
+    val aiAvailable: StateFlow<Boolean> = aiKeyStore.key.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), aiKeyStore.key.value != null)
+
+    private val _aiBusy = MutableStateFlow(false)
+    val aiBusy: StateFlow<Boolean> = _aiBusy.asStateFlow()
+
+    /** §0.6.15 — one press, one client, one request carrying only [text] and the verb's
+     * instruction; the client is built here and dropped with the call. The result goes back
+     * to the sheet — nothing is written until the person chooses. */
+    fun runVerb(verb: AiVerb, text: String, onResult: (Result<String>) -> Unit) {
+        val key = aiKeyStore.key.value ?: return
+        val model = keyValueStore.get(AI_MODEL_KEY)?.takeIf { it in AiModels } ?: AiModels.first()
+        viewModelScope.launch {
+            _aiBusy.value = true
+            val result = ClaudeClient(key, model).complete(verb, text)
+            _aiBusy.value = false
+            onResult(result)
         }
     }
 

@@ -329,3 +329,10 @@ class FakeHabitDao(seed: List<Habit> = emptyList()) : HabitDao {
     override fun observeActive(): Flow<List<Habit>> = flowOf(rows.values.filter { it.deletedAt == null })
     override fun observeTrash(): Flow<List<Habit>> = flowOf(rows.values.filter { it.deletedAt != null })
 }
+
+/** §0.6.15 — an in-memory key; the tests never touch the network. */
+class FakeAiKeyStore(initial: String? = null) : com.tendril.app.data.prefs.AiKeyStore {
+    private val _key = kotlinx.coroutines.flow.MutableStateFlow(initial)
+    override val key: kotlinx.coroutines.flow.StateFlow<String?> = _key
+    override fun set(value: String?) { _key.value = value?.trim()?.takeIf { it.isNotEmpty() } }
+}
