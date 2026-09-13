@@ -12,7 +12,6 @@ import com.tendril.app.ui.reminders.ReminderSheet
 import com.tendril.app.ui.trash.HabitTrashSheet
 import com.tendril.app.ui.trash.EntryTrashSheet
 import com.tendril.app.ui.calendar.CalendarSettingsSheet
-import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.settings.SettingsScreen
 import com.tendril.app.ui.taskshabits.TasksHabitsScreen
 
@@ -77,7 +76,6 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 habitTrashSheet = { onDismiss -> HabitTrashSheet(container = container, onDismiss = onDismiss) },
             )
         },
-        roadMapContent = { onOpenPage -> RoadMapScreen(container = container, onOpenPage = onOpenPage) },
         settingsContent = {
             SettingsScreen(
                 themePreferences = container.themePreferences,

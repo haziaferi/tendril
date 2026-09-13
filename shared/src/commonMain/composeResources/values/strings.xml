@@ -13,6 +13,8 @@
     <string name="empty_pages_message">No pages yet</string>
     <string name="empty_pages_cta">New page</string>
     <string name="empty_trash_message">Trash is empty</string>
+    <string name="empty_road_map_message">Nothing to map yet</string>
+    <string name="empty_road_map_cta">Mention another page to get started</string>
 
     <!-- Calendar (§0.8 step 6a) — the screen moved to shared/; these are its own strings. -->
     <string name="calendar_view_day">Day</string>

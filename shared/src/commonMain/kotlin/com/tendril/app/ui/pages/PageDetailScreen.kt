@@ -109,6 +109,8 @@ fun PageDetailScreen(
     onBack: () -> Unit,
     onOpenPage: (Long) -> Unit,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
+    /** §3.4 (step 8c) — "Show on Road Map" in `···`: the map, focused on this page. */
+    onShowOnRoadMap: (Long) -> Unit = {},
 ) {
     val viewModel: PageDetailViewModel = viewModel(
         key = "page_$pageId",
@@ -230,6 +232,7 @@ fun PageDetailScreen(
                                 )
                             }
                         }
+                        DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = { showMoreMenu = false; onShowOnRoadMap(pageId) })
                         DropdownMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
                         DropdownMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
                     }

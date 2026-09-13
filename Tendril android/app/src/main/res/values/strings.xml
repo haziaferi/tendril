@@ -35,8 +35,6 @@
     <string name="empty_tasks_cta">Add a task</string>
     <string name="empty_habits_message">No habits yet</string>
     <string name="empty_habits_cta">Add a habit</string>
-    <string name="empty_road_map_message">Nothing to map yet</string>
-    <string name="empty_road_map_cta">Mention another page to get started</string>
     <string name="empty_trash_message">Trash is empty</string>
 
     <!-- Content descriptions for icon-only controls (accessibility scope, spec §2.4) -->
