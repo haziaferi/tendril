@@ -26,6 +26,7 @@ import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.formula.FormulaCheckResult
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
@@ -145,12 +146,13 @@ class WritePathSyncTest {
             pageRelationDao = relationDao,
             purgeRegistry = purgeRegistry,
             pageContentRepository = contentRepository,
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
             resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership,
-            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao),
+            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao), PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
         fun database(pageId: Long) = PageDatabaseViewModel(

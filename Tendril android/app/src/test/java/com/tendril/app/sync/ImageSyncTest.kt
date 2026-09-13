@@ -5,6 +5,7 @@ import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -63,6 +64,7 @@ class ImageSyncTest {
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = purgeRegistry,
             pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store)),
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
         val orchestrator = SnapshotSyncOrchestrator(

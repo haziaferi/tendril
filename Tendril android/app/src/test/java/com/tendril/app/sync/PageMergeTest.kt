@@ -3,11 +3,14 @@ package com.tendril.app.sync
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.page.BlockType
+import com.tendril.app.data.page.RevisionReason
+import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.purge.PurgedRecord
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -76,6 +79,7 @@ class PageMergeTest {
 
     private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
     private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
+    private val revisionDao = FakePageRevisionDao()
 
     private val engine = PagesSyncEngine(
         pageDao = pageDao,
@@ -91,6 +95,7 @@ class PageMergeTest {
         pageRelationDao = relationDao,
         purgeRegistry = purgeRegistry,
         pageContentRepository = contentRepository,
+            pageHistory = PageHistory(pageDao, blockDao, revisionDao),
     )
 
     private fun at(millis: Long): Instant = Instant.ofEpochMilli(millis)
@@ -329,6 +334,24 @@ class PageMergeTest {
 
         assertEquals("Newer here", pageDao.getById(id)?.title)
         assertEquals("a loser must not wipe the winner's blocks", listOf("kept"), blockDao.getForPage(id).map { it.content })
+    }
+
+    @Test
+    fun `the body a winning remote record replaces is kept in History, once, and only if it changed`() = runBlocking {
+        // §0.6.13 — §9.4's LWW loser: the local edit, made while the peer edited too, lands in
+        // History instead of nowhere. An unchanged page merged again produces nothing.
+        val id = localPage(UID_A, "Trip", 1_000L)
+        blockDao.insert(Block(uid = UID_BLOCK, pageId = id, type = BlockType.PARAGRAPH, order = 0, content = "my local words", createdAt = at(1_000L), updatedAt = at(1_000L)))
+
+        engine.mergePages(listOf(pageRecord(UID_A, "Trip", updatedAt = 2_000L, blocks = listOf(blockRecord(UID_BLOCK, "the peer's words")))))
+        val kept = revisionDao.latestForPage(id)
+        assertEquals(RevisionReason.MERGE, kept?.reason)
+        assertTrue("the loser's text is what was kept", kept!!.blocksJson.contains("my local words"))
+        assertEquals("the peer's words", blockDao.getForPage(id).single().content)
+
+        engine.mergePages(listOf(pageRecord(UID_A, "Trip", updatedAt = 3_000L, blocks = listOf(blockRecord(UID_BLOCK, "the peer's words")))))
+        engine.mergePages(listOf(pageRecord(UID_A, "Trip", updatedAt = 4_000L, blocks = listOf(blockRecord(UID_BLOCK, "the peer's newer words")))))
+        assertEquals("the merge after an unchanged page kept nothing; the one after a real change kept the previous body", 2, revisionDao.rows.size)
     }
 
     @Test

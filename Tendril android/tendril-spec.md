@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-13 (step 8e: page history) | **§0.6.13** written and done. Schema **v18** (`page_revisions`, `MIGRATION_17_18`) — the first table that stays home (§9.4 note, §4 entity). `domain/history/PageHistory` (edit / merge / restore captures; ten-minute window, dedupe, fifty per page; serialised), `sync/BlockSnapshots.kt` (the merge's block rebuild extracted and shared), `ui/pages/HistorySheet.kt`; `PagesSyncEngine` keeps the local body before a winning record replaces it. §0.10 item 16. Verified on both devices (v17→v18 in place; ten keystrokes → one revision; preview; Restore brought a nested tree back with children relinked and uids kept; the merge-loser case by `PageMergeTest`). 682 tests. | §0.6.13, §9.4, §4, §0.10 |
 | 2026-09-13 (step 8d: block references) | **§0.6.12** written and done. Schema **v17** (`blocks.referencedBlockUid`, `MIGRATION_16_17`). `BlockType.BLOCK_REFERENCE` + `ui/pages/BlockReference.kt` (card, picker); `((` and the slash sheet; the cache refreshed on open without timestamps; the snapshot carries the uid verbatim, no quarantine. §3.1.5 amended: **Unlinked mentions** with *Link* (`domain/references/UnlinkedMentions.kt`, pure, tested). Also: a page's mentions now reload on every open (they loaded once per ViewModel life, which outlives the route). Verified on both devices (v16→v17 in place; desktop: `((` → *Child* → card, source edited → card live, cache refreshed on reopen with timestamps unchanged, *Link* moved the Journal root from Unlinked to Linked; phone: the slash sheet's *Block reference* → *Jackets · Trip*, tap → Trip, *Link* on "notes for the trip"). 677 tests. | §0.6.12, §3.1.1, §3.1.5, §4 |
 | 2026-09-13 (step 8c: Road Map) | §3.4 amended: `ui/roadmap/` → `shared/` (desktop parity; `roadMapContent` slot retired), `domain/roadmap/RoadMapGraph.kt` pure and tested (types, depth walk, `RoadMapFilter` — Journal hidden by default, kinds, one label; persisted `roadmap_filter`), tinted edge kinds, "Show on Road Map" from a page's `···`. Two layout defects fixed (first-frame settle; px-space repulsion). §0.10 item 15 (B§6 #16's remainder). Verified on both devices: chips, the label filter, the focus handoff at depth 1 and 2, "Relate to…" on the desktop; the filter survived a process kill on the phone. 671 tests. | §3.4, §0.10 |
 | 2026-09-13 (step 8b: Journal shows today) | §3.1.4 amended: today's Journal page opens with a checkable *Today* strip — the day's tasks (`EntryOccurrences.onDay`) and due-or-done habits — live, never blocks; today only. `domain/journal/JournalToday` pure and tested; `PageDetailViewModel` takes `HabitDao` + `CheckInHabitUseCase`. Verified on both devices (desktop: `>jour` → *Read chapter 3 · 21:00* and *Stretch*; a tick and its undo landed as a check-in + tombstone and a `DONE` resolution; no strip on a plain page. Phone: *Call bank*, *Stretch 09:00* first, *Meditate*; Meditate ticked from the strip showed filled on the Habits tab with its streak; yesterday's page and the Journal root show nothing). 666 tests. | §3.1.4 |
@@ -463,6 +464,33 @@ page's `updatedAt` unchanged; a record whose source page is missing merges by ui
 row from Unlinked to Linked. **Done 2026-09-13** — `domain/references/UnlinkedMentions.kt` (pure,
 tested), `ui/pages/BlockReference.kt`, `MIGRATION_16_17`. Verified on desktop and phone.
 
+**0.6.13 A page keeps its own history; the sync's loser is kept too.** Finding: nothing in the
+app remembers what a page said yesterday, and §9.4's accepted limitation — concurrent edits to
+one page before either syncs lose one side by LWW — loses it silently. Notion keeps page history;
+the benchmark (B§6 #12) asked what a revision holds, how often, and whether it syncs. Decision
+(2026-09-13): **a revision is the title and the body's blocks** — as the sync's own
+`BlockSnapshotRecord` JSON, so a restore rebuilds through the merge's proven block rebuild
+(`sync/BlockSnapshots.kt`, `replaceBlocks`, extracted from Pass 5 for exactly that). Not labels,
+property values, a database's schema or a canvas's board: each has its own merge rule, none is
+where "I lost a paragraph" lives, and the full-record alternative is a second merge path
+(database-level history is §0.10 item 16 if it is ever missed). **Three captures, three rules:**
+*before an edit*, the body as it stood when an editing window opened — at most one per ten
+minutes per page, serialised so a burst of keystrokes is one capture, not one each; *before a
+merge*, the local body a winning remote record is about to replace — unthrottled but skipped when
+it equals the last kept body, so an unchanged page produces nothing and §9.4's loser is what
+lands in History; *before a restore*, always, so a restore is undoable. Fifty per page.
+`page_revisions` (**schema v18**) **stays home**: not in the sync folder, not in the `.tendril`
+archive — history is this device's memory of this device's edits and of what a sync overwrote
+here; the page row is what travels. `···` → **History** on an ordinary page (a Database's or a
+Canvas's body is not its content): rows "12 min ago · before an edit · 7 blocks", a read-only
+preview, *Restore* with a confirm; a restore is an edit like any other — locked, re-indexed,
+touched — and keeps block uids, so a block reference to a restored block still resolves.
+Acceptance: ten keystrokes make one revision; a page merged over with a local change shows a
+"replaced by a sync" row holding the local words; a restore brings back a nested tree with its
+children relinked and leaves a "before a restore" row of what it replaced. **Done 2026-09-13** —
+`domain/history/PageHistory.kt` (tested), `ui/pages/HistorySheet.kt`, `MIGRATION_17_18`.
+Verified on desktop and phone.
+
 ### 0.7 Explicitly out of scope
 
 Ruled out on purpose. Not to be reopened without amending §0.1 or §0.2. The evidence for each
@@ -532,6 +560,10 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+16. **Database-level history** — §0.6.13 versions a page's title and blocks only. A database's
+    columns, views and a row's property values have no history; if a lost column or value is ever
+    missed, the record to version is the full `PageSnapshotRecord` with a restore that goes through
+    the real merge under a fresh timestamp (so it syncs as a newer edit). Not needed until it is.
 15. **Canvas frames/sections and canvas templates** — B§6 #16's remainder after step 8c's check: a
     nested canvas already exists as a `PAGE_EMBED` card pointing at a Canvas page (no new entity,
     the benchmark's guess), and the mind-map layout lives on the outline block (§0.6.2), not the
@@ -1630,6 +1662,7 @@ but the omission is on the record instead of being inferred.
 | **Block** | id, page_id, type, order, parent_block_id (nullable), content, formatting spans, referenced_block_uid (nullable, v17 — §0.6.12), created/updated | One row per content block inside a Page's (or Row's) body (§3.1.1) — paragraph, heading, list item, code, image, toggle, callout, page-mention, etc. Feeds the FTS index (§3.1.1). |
 | **PageCanvas** *(added to this table 2026-09-07 — the entity has existed since the Canvas feature shipped, §3.7)* | id, uid, page_id (unique, FK → Page, cascade delete), created/updated | The 1:1 companion row that makes a `kind = CANVAS` Page a board — structurally the same move as **Database** below, which is why Canvas cost the router one branch. Created **lazily on first open**, not at page creation, and that write is deliberately exempt from both the View-Only gate and the `updated_at` bump (§3.7): it is repair-on-open, not an edit, and bumping it would let merely opening a board outrank a real edit made on another device (§9.4). Carries no content of its own; the board is its child rows. |
 | **CanvasNode** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), type (`TEXT` \| `PAGE_EMBED`), x, y, width, height, text (nullable — TEXT only), embedded_page_id (nullable, FK → Page, cascade — PAGE_EMBED only), created/updated | One card on the board. Position and size are content-space floats, not pixels — the screen transform is applied once at render (§3.7), so the same board is the same board at any zoom or on any screen size. `text` is plain, with no `Block` model of its own: a card is a sticky note, not a second page editor (§3.1.1's "obvious 80% subset" reasoning). `embedded_page_id` cascades from Page, so deleting the embedded page removes the card — the one place a canvas is changed by an action taken outside it. In the snapshot the target travels as the page's `uid` and resolves on arrival; unresolvable means an empty card, never a rejected record. |
+| **PageRevision** *(added 2026-09-13, §0.6.13)* | id, page_id (FK → Page, cascade), taken_at, reason (`EDIT` \| `MERGE` \| `RESTORE`), title, blocks_json, block_count | A page's kept body — this device's only, never synced or archived. |
 | **CanvasEdge** *(added 2026-09-07, §3.7)* | id, uid, canvas_id (FK → PageCanvas, cascade), from_node_id, to_node_id (both FK → CanvasNode, cascade), direction (`NONE` \| `ONE_WAY` \| `TWO_WAY`), label (nullable) | One arrow. The `uid` exists in Room but is **not written to the snapshot** — an edge is referenced from nowhere else, so its identity only needs to be stable within one canvas record, and the node-uid pair it connects supplies that (§3.7). `direction = NONE` draws a plain line, for two cards that are related without the relation having a direction. A blank label is stored as null rather than `""`, so an emptied label is absence rather than content the merge has to carry. Both endpoint cascades are what makes deleting a card delete its arrows, with no application-level cleanup. |
 | **Database** | *(a Page with a schema)* — schema (ordered Property list), `sync_to_tasks` flag, `done_property_id`, `deadline_property_id`, `recurrence_property_id` (nullable) | The Sync-to-Tasks flag and the explicit property bindings are the mechanism from §5.2 — not inferred from schema shape, always deliberate. `recurrence_property_id` added 2026-07-16 — see §5.2 for the binding and §4's Property type note below for the `Interval` type it points at. |
 | **DatabaseView** | id, database_id, name, view_type (`TABLE` \| `BOARD` \| `GALLERY` \| `CALENDAR`), group_by_property_id (nullable, BOARD-only), date_property_id (nullable, CALENDAR-only), visible_property_ids, filter (single condition, nullable), sort_property_id (nullable), sort_direction | Saved views over a Database's rows (§5.6, added 2026-08-08) — display configuration only, never alters stored row/property data. A Database always has at least one Table view (default, matches §5.1's existing behavior). |
@@ -2949,6 +2982,9 @@ single-writer Habit-folder case:
 - **Accepted v1 limitation**: for Pages specifically, LWW applies at the whole-page snapshot level —
   concurrent edits to the *same page* on two devices before either syncs means one edit is lost.
   Acceptable for a personal, limit-case scenario; flagged explicitly rather than left implicit.
+  *(**Softened 2026-09-13, §0.6.13:** the losing body is kept in the losing device's page History
+  before the winner replaces it, so it is recoverable by hand; the merge rule itself is unchanged.
+  `page_revisions` is the first table that stays home — never in the folder, never in the archive.)*
 - **UI**: a "last synced at ·" indicator plus a manual "Sync now" action.
 - **Decided (2026-08-04, resolves the 2026-07-15 reopening — Page-snapshot write timing):**
   debounce, not per-mutation. A Page's `pages/<uid>.json` snapshot is written 2 seconds after

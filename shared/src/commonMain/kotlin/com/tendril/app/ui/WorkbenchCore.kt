@@ -10,6 +10,7 @@ import com.tendril.app.domain.ics.IcsImporter
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.LabelMembership
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
@@ -62,6 +63,10 @@ class WorkbenchCore(
     /** §0.6.5 / step 7c — the one start/stop funnel; derived like the rest. Android's
      * `AppContainer` builds its own on the same DAO for the notification's Stop action. */
     val timeTracker: TimeTracker by lazy { TimeTracker(database.timeLogDao()) }
+
+    /** §0.6.13 — a page's kept bodies; derived like the rest. Stateless, so the sync engine's
+     * own instance (built in each container) and this one are the same thing. */
+    val pageHistory: PageHistory by lazy { PageHistory(database.pageDao(), database.blockDao(), database.pageRevisionDao()) }
 
     /** §0.6.11 — the weekly walk; derived like the rest, over DAOs that already exist. */
     val review: Review by lazy {

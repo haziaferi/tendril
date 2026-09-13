@@ -203,3 +203,17 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
         connection.execSQL("ALTER TABLE `blocks` ADD COLUMN `referencedBlockUid` TEXT")
     }
 }
+
+/** §9.10 / §0.6.13 — v17 → v18. `page_revisions`: a page's kept bodies, this device's only.
+ * Cascades with the page; indexed by page for the History list and the per-page prune. */
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `page_revisions` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pageId` INTEGER NOT NULL, `takenAt` INTEGER NOT NULL, " +
+                "`reason` TEXT NOT NULL, `title` TEXT NOT NULL, `blocksJson` TEXT NOT NULL, `blockCount` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`pageId`) REFERENCES `pages`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+        )
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_page_revisions_pageId` ON `page_revisions` (`pageId`)")
+    }
+}

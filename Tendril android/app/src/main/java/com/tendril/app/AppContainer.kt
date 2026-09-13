@@ -12,6 +12,7 @@ import com.tendril.app.domain.track.TimeTracker
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.markdown.MarkdownExporter
 import com.tendril.app.domain.ResolveEntryUseCase
@@ -73,6 +74,7 @@ class AppContainer(context: Context) {
         database.propertyDao(), database.propertyValueDao(), database.pageDatabaseViewDao(),
         database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao(),
         database.pageRelationDao(), purgeRegistry, pageContentRepository,
+        PageHistory(database.pageDao(), database.blockDao(), database.pageRevisionDao()),
     )
     /** §3.1.1 / §9.4 — one instance for both: the picker writes here and the sync fetch writes
      * here, so an image inserted on this device and one that arrived from a peer are the same

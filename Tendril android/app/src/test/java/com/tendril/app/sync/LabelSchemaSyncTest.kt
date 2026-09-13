@@ -9,6 +9,7 @@ import com.tendril.app.data.pagedatabase.Property
 import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -49,6 +50,7 @@ class LabelSchemaSyncTest {
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = PurgeRegistry(FakePurgedRecordDao(), pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator),
             pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store)),
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
     }
 

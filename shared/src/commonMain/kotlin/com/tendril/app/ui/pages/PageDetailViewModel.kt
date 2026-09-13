@@ -14,6 +14,7 @@ import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.page.PageRevision
 import com.tendril.app.data.page.Label
 import com.tendril.app.data.page.LabelDao
 import com.tendril.app.data.pagedatabase.PageDatabase
@@ -33,6 +34,7 @@ import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.references.MIN_UNLINKED_TITLE_LENGTH
 import com.tendril.app.domain.references.UnlinkedMention
@@ -46,6 +48,7 @@ import com.tendril.app.domain.track.minuteTicker
 import com.tendril.app.domain.outdentPlanFor
 import com.tendril.app.domain.outlineOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +88,7 @@ class PageDetailViewModel(
     private val labelMembership: LabelMembership,
     private val habitDao: HabitDao,
     private val checkInHabitUseCase: CheckInHabitUseCase,
+    private val pageHistory: PageHistory,
 ) : ViewModel() {
     /** §3.1.2 — "every page under Pages becomes read-only as a group... no per-page exception."
      * Every mutating function below early-returns through this guard rather than relying on the
@@ -268,6 +272,7 @@ class PageDetailViewModel(
     fun link(mention: UnlinkedMention) {
         if (contentLocked()) return
         viewModelScope.launch {
+            pageHistory.captureBeforeEdit(mention.block.pageId)
             blockDao.update(linkMention(mention.block, mention.range, pageId).copy(updatedAt = Instant.now()))
             contentRepository.rebuildFtsForPage(mention.block.pageId)
             pageDao.touch(mention.block.pageId, Instant.now())
@@ -286,6 +291,14 @@ class PageDetailViewModel(
             if (source.content != block.content) blockDao.update(block.copy(content = source.content))
         }
     }
+
+    /** §0.6.13 — History: the page's kept bodies, newest first. */
+    val revisions: Flow<List<PageRevision>> = pageHistory.revisions(pageId)
+
+    /** §0.6.13 — the title and blocks become the revision's; the current body is kept first.
+     * An edit like any other: locked, re-indexed, touched — and the block-reference caches on
+     * the restored body refresh at the next open like everyone else's. */
+    fun restore(revisionId: Long) = launchAndReindex { pageHistory.restore(revisionId) }
 
     /** §0.6.12 — the block-reference picker's search; the page title rides along for the row. */
     fun searchBlocks(query: String, onResult: (List<Pair<Page, Block>>) -> Unit) {
@@ -344,6 +357,7 @@ class PageDetailViewModel(
         if (contentLocked()) return
         viewModelScope.launch {
             val current = page.value ?: pageDao.getById(pageId) ?: return@launch
+            pageHistory.captureBeforeEdit(pageId)
             pageDao.update(current.copy(title = title, updatedAt = Instant.now()))
             // The title is in the index (§3.1.1), so a rename re-indexes like a block edit does.
             contentRepository.rebuildFtsForPage(pageId)
@@ -658,6 +672,8 @@ class PageDetailViewModel(
     private fun launchAndReindex(block: suspend () -> Unit) {
         if (contentLocked()) return
         viewModelScope.launch {
+            // §0.6.13 — the body as it stands before this edit, at most once per window.
+            pageHistory.captureBeforeEdit(pageId)
             block()
             contentRepository.rebuildFtsForPage(pageId)
             touch()

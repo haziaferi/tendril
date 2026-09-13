@@ -13,6 +13,8 @@ import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.data.page.PageRevision
+import com.tendril.app.data.page.PageRevisionDao
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
@@ -468,4 +470,16 @@ class RecordingEntryScheduleCoordinator : EntryScheduleCoordinator {
 
     override suspend fun onEntryChanged(entry: Entry) { changed += entry }
     override suspend fun onEntryRemoved(entry: Entry) { removed += entry }
+}
+
+/** §0.6.13 — in-memory page revisions, newest first like the real DAO. */
+class FakePageRevisionDao : PageRevisionDao {
+    val rows = mutableMapOf<Long, PageRevision>()
+    private var nextId = 1L
+    private fun ofPage(pageId: Long) = rows.values.filter { it.pageId == pageId }.sortedWith(compareByDescending<PageRevision> { it.takenAt }.thenByDescending { it.id })
+    override suspend fun insert(revision: PageRevision): Long { val id = nextId++; rows[id] = revision.copy(id = id); return id }
+    override fun observeForPage(pageId: Long): Flow<List<PageRevision>> = flowOf(ofPage(pageId))
+    override suspend fun getById(id: Long): PageRevision? = rows[id]
+    override suspend fun latestForPage(pageId: Long): PageRevision? = ofPage(pageId).firstOrNull()
+    override suspend fun pruneBeyond(pageId: Long, keep: Int) { ofPage(pageId).drop(keep).forEach { rows.remove(it.id) } }
 }

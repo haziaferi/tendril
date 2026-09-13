@@ -8,6 +8,7 @@ import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.PurgeRegistry
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
@@ -151,6 +152,7 @@ class ViewOnlyPagesGuardTest {
             pageRelationDao = relationDao,
             purgeRegistry = purgeRegistry,
             pageContentRepository = contentRepository,
+            pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
         /**
