@@ -147,6 +147,8 @@ kbd{font:11px/1 var(--sans);color:var(--m-faint);border:1px solid var(--m-border
 .row{display:flex;align-items:center;gap:10px;height:var(--row);padding:0 12px;min-width:0;color:var(--m-text)}
 .row:hover{background:var(--m-s2)}
 .row[aria-current="true"]{background:var(--m-soft);color:var(--m-soft-text)}
+.row.kb{outline:2px solid var(--m-accent);outline-offset:-2px;border-radius:4px}
+.kbhint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:var(--m-bg);border:1px solid var(--m-border);color:var(--m-dim);padding:6px 12px;border-radius:8px;font-size:12px;z-index:7;box-shadow:0 8px 20px -12px rgba(0,0,0,.4)}
 .row .ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.75}
 .row .tt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .meta{font-size:12px;color:var(--m-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -335,7 +337,7 @@ const S={
   preset:'proposed', width:1200,
   nav:'rail', modal:'dialog', treeResize:true, treeCollapse:true, treeOpen:true, treeW:280,
   density:'40', hoverOnly:true, mnemonics:false, calDefault:'week', theme:'system',
-  tab:'pages', page:'escape', task:'call', sheet:null, menu:false, switcher:false, help:false, toast:null, calMode:null,
+  kb:-1, ta:'', tab:'pages', page:'escape', task:'call', sheet:null, menu:false, switcher:false, help:false, toast:null, calMode:null,
 };
 try{const j=localStorage.getItem('tendril-shell-mock');if(j)Object.assign(S,JSON.parse(j),{sheet:null,menu:false,switcher:false,help:false,toast:null});}catch(e){}
 function save(){try{localStorage.setItem('tendril-shell-mock',JSON.stringify(S));}catch(e){}}
@@ -576,7 +578,7 @@ function switcher(){
 }
 function help(){
   if(!S.help)return '';
-  const rows=[['Quick switcher','Ctrl+K'],['New page','Ctrl+N'],['Quick add task','Ctrl+Shift+N'],['Today’s Journal','Ctrl+T'],['Find in page','Ctrl+F'],['Pages · Calendar · Tasks · Road Map · Settings','Ctrl+1 … 5'],['Settings','Ctrl+,'],['Hide or show the tree','Ctrl+\\'],['Move · open in a list','↑ ↓ ↵'],['Back · close','Esc'],['This list','?']];
+  const rows=[['Quick switcher','Ctrl+K'],['New page','Ctrl+N'],['Quick add task','Ctrl+Shift+N'],['Today’s Journal','Ctrl+T'],['Find in page','Ctrl+F'],['Pages · Calendar · Tasks · Road Map · Settings','Ctrl+1 … 5'],['Settings','Ctrl+,'],['Hide or show the tree','Ctrl+\\'],['Move · open in a list','↑ ↓ ↵'],['Jump to a row by its first letters','type'],['Back · close','Esc'],['This list','?']];
   return `<div class="help" data-act="closeall"><div class="card" onclick="event.stopPropagation()"><h3>Keyboard shortcuts</h3><div class="g">${rows.map(([a,b])=>`<div><span>${a}</span><span><kbd>${b}</kbd></span></div>`).join('')}</div><div class="ft">In this mock the browser owns Ctrl+N, Ctrl+T and Ctrl+1–5, so plain <kbd>1</kbd>–<kbd>5</kbd> stand in for the tab keys. ${S.mnemonics?'Alt-mnemonics are on: the underlined letters in the rail.':''}</div></div></div>`;
 }
 
@@ -586,7 +588,7 @@ function render(){
   win.style.width=S.width+'px'; win.style.height=e.height+'px';
   mk.setAttribute('data-mock',mockTheme(e.theme));
   mk.setAttribute('data-density',e.density);
-  const prof={'36':0.9,'40':1,'48':1.3}[e.density], win=isToday()?1:Math.max(.85,Math.min(1.25,Math.min(S.width,e.height)/800)), k=prof*win;
+  const prof={'36':0.9,'40':1,'48':1.3}[e.density], wf=isToday()?1:Math.max(.85,Math.min(1.25,Math.min(S.width,e.height)/800)), k=prof*wf;
   mk.style.setProperty('--row',Math.round(40*k)+'px'); mk.style.setProperty('--cell',Math.round(200*k)+'px'); mk.style.setProperty('--list-fs',(14*k).toFixed(1)+'px'); mk.style.setProperty('--title-fs',Math.round(26*k)+'px');
   mk.style.setProperty('--k',k);
   mk.setAttribute('data-hover',e.hover);
@@ -595,12 +597,15 @@ function render(){
   const frame = e.nav==='bottom'?`<div class="frame bottom">${content}${bottombar()}</div>`:`<div class="frame">${side}${content}</div>`;
   const badge = narrow()?'<span class="badge">narrow · bottom bar fallback</span>':isToday()?'<span class="badge">default window · no WindowState</span>':'';
   mk.innerHTML=`<div class="titlebar"><span class="dot"></span><span class="t">${e.title}</span>${badge}<span class="ctl"><span>—</span><span>▢</span><span>✕</span></span></div>${frame}${sheet(e)}${switcher()}${help()}${S.toast?`<div class="toast">${S.toast}</div>`:''}`;
+  applyKb();
   renderPanel(); renderNote(e); fit(); save();
   const h=$('#handle'); if(h) bindHandle(h);
 }
+function kbRows(){ return Array.from(document.querySelectorAll(S.tab==='pages' ? '.tree .row[data-page], .side .row[data-page]' : S.tab==='tasks' ? '.row[data-task]' : '')); }
+function applyKb(){ const rows=kbRows(); rows.forEach((r,i)=>r.classList.toggle('kb',i===S.kb)); const r=rows[S.kb]; if(r){ r.scrollIntoView({block:'nearest'}); if(S.ta) { const h=document.createElement('div'); h.className='kbhint'; h.textContent='type-ahead: “'+S.ta+'”'; $('#mk').appendChild(h);} } }
 function renderNote(e){
   const n=$('#note');
-  n.innerHTML=[`<span><b>${S.width}×${e.height}</b> px</span>`,`<span>scale <b>${(+$('#mk').style.getPropertyValue('--k')).toFixed(2)}×</b> · rows <b>${$('#mk').style.getPropertyValue('--row')}</b></span>`,`<span>theme <b>${mockTheme(e.theme)}</b>${e.theme==='system'?' (system)':''}</span>`,`<span>try <b>?</b>, <b>Ctrl+K</b>, <b>1–5</b>, <b>Ctrl+\\</b>, <b>Esc</b>, the page ··· → History, drag the tree edge</span>`].join('');
+  n.innerHTML=[`<span><b>${S.width}×${e.height}</b> px</span>`,`<span>scale <b>${(+$('#mk').style.getPropertyValue('--k')).toFixed(2)}×</b> · rows <b>${$('#mk').style.getPropertyValue('--row')}</b></span>`,`<span>theme <b>${mockTheme(e.theme)}</b>${e.theme==='system'?' (system)':''}</span>`,`<span>try <b>?</b>, <b>Ctrl+K</b>, <b>1–5</b>, <b>↓↑</b> + typing in the tree, <b>Ctrl+\\</b>, <b>Esc</b>, the page ··· → History, drag the tree edge</span>`].join('');
 }
 function fit(){
   const stage=$('.stage'), win=$('#win');
@@ -628,7 +633,7 @@ function renderPanel(){
     <div class="ctl">${opt('density','36','Compact 0.9×',true)}${opt('density','40','Comfortable 1×')}${opt('density','48','Touch 1.3×')}</div>
     <div class="ctl" style="margin-top:6px">${chk('hoverOnly','Hover-only row controls')}</div>
     <div class="cons">Everything scales together — rows, cells, type, icons — so the 700 px window is 0.875× of the 1200 one. Hover-only hides affordances from a touch-screen laptop: the real trade-off.</div></div>
-  <div class="dec"${dis}><h3><span class="n">5</span>Keyboard<span class="pr">14e</span></h3><p>The fixed set behind <kbd>?</kbd>. Ctrl+K and Esc exist today. Mnemonics: decided no — a menu-bar convention with no menu bar to serve.</p>
+  <div class="dec"${dis}><h3><span class="n">5</span>Keyboard<span class="pr">14e</span></h3><p>The fixed set behind <kbd>?</kbd>. Ctrl+K and Esc exist today. Mnemonics: decided no. <b>Lists (B§13.6 #8):</b> click the window, then <kbd>↓</kbd> <kbd>↑</kbd> walk the tree or the Tasks list, type <em>ca</em> to jump to <em>Call the library</em>, <kbd>↵</kbd> opens, <kbd>Esc</kbd> clears.</p>
     <div class="ctl col">${chk('mnemonics','Alt-mnemonics on the rail (Windows)')}</div>
     <div class="cons">Mnemonics cost nothing on the rail; the question is whether they matter without menus.</div></div>
   <div class="dec"${dis}><h3><span class="n">6</span>Calendar default<span class="pr">14f</span></h3><p>A Settings choice; on a wide window Tasks becomes list + detail and the Calendar opens on…</p>
@@ -675,13 +680,23 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('keydown',ev=>{
   const inField=/INPUT|TEXTAREA/.test(document.activeElement&&document.activeElement.tagName);
-  if(ev.key==='Escape'){ if(S.sheet||S.switcher||S.help||S.menu){S.sheet=null;S.switcher=false;S.help=false;S.menu=false;} else if(S.pageOpenNarrow){S.pageOpenNarrow=false;} return render(); }
+  if(ev.key==='Escape'){ if(S.sheet||S.switcher||S.help||S.menu){S.sheet=null;S.switcher=false;S.help=false;S.menu=false;} else if(S.pageOpenNarrow){S.pageOpenNarrow=false;} else {S.kb=-1;S.ta='';} return render(); }
   if(inField)return;
   if(ev.ctrlKey&&ev.key.toLowerCase()==='k'){ev.preventDefault();S.switcher=!S.switcher;return render();}
   if(ev.ctrlKey&&ev.key==='\\'){ev.preventDefault(); if(S.treeCollapse&&eff().twoPane&&eff().nav!=='sidebar'){S.treeOpen=!S.treeOpen;render();} return;}
   if(ev.key==='?'){S.help=!S.help;return render();}
-  if(!ev.ctrlKey&&!ev.altKey&&/^[1-5]$/.test(ev.key)){S.tab=TABS[+ev.key-1][0];S.pageOpenNarrow=false;return render();}
+  if(!ev.ctrlKey&&!ev.altKey&&/^[1-5]$/.test(ev.key)){S.tab=TABS[+ev.key-1][0];S.pageOpenNarrow=false;S.kb=-1;return render();}
+  // B§13.6 #8 — the keyboard in the tree and the task list: arrows move, letters jump, Enter opens
+  const rows=kbRows();
+  if(rows.length&&!S.sheet&&!S.switcher&&!S.help){
+    if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ev.preventDefault(); S.kb=Math.max(0,Math.min(rows.length-1,(S.kb<0?(ev.key==='ArrowDown'?-1:rows.length):S.kb)+(ev.key==='ArrowDown'?1:-1))); S.ta=''; return applyKb();}
+    if(ev.key==='Home'||ev.key==='End'){ev.preventDefault(); S.kb=ev.key==='Home'?0:rows.length-1; return applyKb();}
+    if(ev.key==='Enter'&&S.kb>=0){const r=rows[S.kb]; if(r.dataset.page){S.page=r.dataset.page;S.pageOpenNarrow=true;} if(r.dataset.task){S.task=r.dataset.task;} S.ta=''; return render();}
+    if(!ev.ctrlKey&&!ev.altKey&&!ev.metaKey&&/^[a-z ]$/i.test(ev.key)){ ev.preventDefault(); S.ta=(S.ta+ev.key).toLowerCase(); clearTimeout(kbT); kbT=setTimeout(()=>{S.ta='';applyKb();},900);
+      const i=rows.findIndex(r=>r.querySelector('.tt').textContent.toLowerCase().startsWith(S.ta)); if(i>=0)S.kb=i; document.querySelectorAll('.kbhint').forEach(h=>h.remove()); return applyKb(); }
+  }
 });
+let kbT;
 function toast(msg){S.toast=msg;render();clearTimeout(toast.t);toast.t=setTimeout(()=>{S.toast=null;render();},2200);}
 function bindHandle(h){
   h.addEventListener('mousedown',e=>{
