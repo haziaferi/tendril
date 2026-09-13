@@ -96,6 +96,7 @@ import com.tendril.app.data.pagedatabase.formatPeriodAsHumanInterval
 import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.OutlineBlock
 import com.tendril.app.domain.outlineOf
+import com.tendril.app.domain.references.UnlinkedMention
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
@@ -158,7 +159,9 @@ fun PageDetailScreen(
     val pendingLabel by viewModel.pendingLabel.collectAsState()
     val rowValues by viewModel.rowValues.collectAsState()
     val rowLinkedEntry by viewModel.rowLinkedEntry.collectAsState()
+    LaunchedEffect(pageId) { viewModel.onOpened() }
     val backlinks by viewModel.backlinks.collectAsState()
+    val unlinkedMentions by viewModel.unlinkedMentions.collectAsState()
     val journalToday by viewModel.journalToday.collectAsState()
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var blockActionSheetFor by remember { mutableStateOf<Block?>(null) }
@@ -172,6 +175,8 @@ fun PageDetailScreen(
     // `block.content` at insert time, which can be one async Room round-trip stale (typing '@'
     // strips it via a launched coroutine, not synchronously) and would duplicate/corrupt text.
     var mentionTarget by remember { mutableStateOf<Pair<Block, String>?>(null) }
+    /** §0.6.12 — the block a reference is being inserted after (`((` or the slash sheet). */
+    var blockReferenceAfter by remember { mutableStateOf<Block?>(null) }
     var showAddLabelDialog by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -330,6 +335,7 @@ fun PageDetailScreen(
                         viewModel = viewModel,
                         onLongPress = { blockActionSheetFor = entry.block },
                         onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
+                        onRequestBlockReference = { blockReferenceAfter = entry.block },
                         onOpenPage = onOpenPage,
                         core = core,
                         onArmCanvas = { armedCanvasPage = it },
@@ -351,7 +357,7 @@ fun PageDetailScreen(
                         }
                     }
                 }
-                item { BacklinksPanel(backlinks, onOpenPage) }
+                item { BacklinksPanel(backlinks, unlinkedMentions, onOpenPage, onLink = { viewModel.link(it) }) }
             }
         }
     }
@@ -440,6 +446,14 @@ fun PageDetailScreen(
                 viewModel.updateBlockContent(block, newContent, block.formattingSpans + span)
                 mentionTarget = null
             },
+        )
+    }
+
+    blockReferenceAfter?.let { after ->
+        BlockReferencePickerDialog(
+            viewModel = viewModel,
+            onDismiss = { blockReferenceAfter = null },
+            onPick = { source -> viewModel.insertBlockReference(after.order, source); blockReferenceAfter = null },
         )
     }
 
@@ -537,6 +551,7 @@ private fun BlockRow(
     onArmCanvas: (Long) -> Unit = {},
     onInsertCanvas: (Int) -> Unit = {},
     onRequestMention: (baseContent: String) -> Unit,
+    onRequestBlockReference: () -> Unit = {},
     onOpenPage: (Long) -> Unit,
 ) {
     // Keyed only on block.id, not block.content: every edit round-trips through Room and
@@ -596,6 +611,8 @@ private fun BlockRow(
                     if (core != null) {
                         CanvasBlockCard(core, block.mentionedPageId, fallbackTitle = block.content, onArm = { block.mentionedPageId?.let(onArmCanvas) })
                     }
+                } else if (block.type == BlockType.BLOCK_REFERENCE) {
+                    BlockReferenceCard(core, block, onOpenPage)
                 } else if (block.type != BlockType.PAGE_MENTION) {
                     // §P1 — free-form, matching `Block.codeLanguage`'s own shape (the Notion
                     // importer stores a fence tag verbatim); "Plain text" is `null`, not "".
@@ -639,6 +656,15 @@ private fun BlockRow(
                                 fieldValue = fieldValue.copy(text = stripped, selection = TextRange(stripped.length))
                                 lastWrittenContent = stripped
                                 viewModel.updateBlockContent(block, stripped, remapSpans(block.formattingSpans, block.content, stripped))
+                            } else if (text.endsWith("((")) {
+                                // §0.6.12 — Logseq's `((` opens the block-reference picker, the
+                                // way '@' opens the page picker; the two parentheses are never
+                                // stored either.
+                                val stripped = text.dropLast(2)
+                                fieldValue = fieldValue.copy(text = stripped, selection = TextRange(stripped.length))
+                                lastWrittenContent = stripped
+                                viewModel.updateBlockContent(block, stripped, remapSpans(block.formattingSpans, block.content, stripped))
+                                onRequestBlockReference()
                             } else if (text.endsWith("@")) {
                                 // Previously the only entry point to a mention was selecting
                                 // text first and tapping the toolbar's @ icon — not discoverable,
@@ -694,7 +720,11 @@ private fun BlockRow(
             onDismiss = { showSlashMenu = false },
             onPick = { type ->
                 showSlashMenu = false
-                if (type == BlockType.CANVAS) onInsertCanvas(block.order) else viewModel.addBlock(type, block.order)
+                when (type) {
+                    BlockType.CANVAS -> onInsertCanvas(block.order)
+                    BlockType.BLOCK_REFERENCE -> onRequestBlockReference()
+                    else -> viewModel.addBlock(type, block.order)
+                }
             },
         )
     }
@@ -713,7 +743,7 @@ private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit
                 BlockType.HEADING_3 to "Heading 3", BlockType.BULLETED_LIST_ITEM to "Bulleted list",
                 BlockType.NUMBERED_LIST_ITEM to "Numbered list", BlockType.TODO to "To-do", BlockType.QUOTE to "Quote",
                 BlockType.CODE to "Code", BlockType.TOGGLE to "Toggle", BlockType.CALLOUT to "Callout", BlockType.DIVIDER to "Divider",
-                BlockType.IMAGE to "Image", BlockType.CANVAS to "Canvas",
+                BlockType.IMAGE to "Image", BlockType.CANVAS to "Canvas", BlockType.BLOCK_REFERENCE to "Block reference",
             ).forEach { (type, label) ->
                 TextButton(onClick = { onPick(type) }) { Text(label) }
             }
@@ -1031,36 +1061,64 @@ private fun MentionPickerDialog(viewModel: PageDetailViewModel, onDismiss: () ->
 
 /** §3.1.5 — "a collapsed-by-default 'Linked mentions' section at the bottom of every page."
  * Nothing rendered at all when there are no backlinks, rather than an empty collapsed header
- * — no reason to advertise a section with nothing behind it. */
+ * — no reason to advertise a section with nothing behind it. §0.6.12 adds a second section,
+ * **Unlinked mentions**, same shape, each row with Obsidian's *Link*. */
 @Composable
-private fun BacklinksPanel(backlinks: List<Backlink>, onOpenPage: (Long) -> Unit) {
-    if (backlinks.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
+private fun BacklinksPanel(
+    backlinks: List<Backlink>,
+    unlinked: List<UnlinkedMention>,
+    onOpenPage: (Long) -> Unit,
+    onLink: (UnlinkedMention) -> Unit,
+) {
+    if (backlinks.isEmpty() && unlinked.isEmpty()) return
+    val contentLocked = LocalContentLocked.current
     Column(modifier = Modifier.padding(top = 16.dp)) {
         HorizontalDivider()
-        Row(
-            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { expanded = !expanded }).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(if (expanded) Icons.Filled.ExpandMore else Icons.Filled.ChevronRight, contentDescription = null)
-            Spacer(Modifier.width(4.dp))
-            Text("Linked mentions (${backlinks.size})", style = MaterialTheme.typography.labelLarge)
+        if (backlinks.isNotEmpty()) {
+            MentionSection(title = "Linked mentions (${backlinks.size})") {
+                backlinks.forEach { backlink ->
+                    MentionRow(backlink.fromPage.title, backlink.block.content, onOpen = { onOpenPage(backlink.fromPage.id) }, action = null)
+                }
+            }
         }
-        if (expanded) {
-            backlinks.forEach { backlink ->
-                Column(
-                    modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenPage(backlink.fromPage.id) }).padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    Text(backlink.fromPage.title, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        backlink.block.content,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+        if (unlinked.isNotEmpty()) {
+            MentionSection(title = "Unlinked mentions (${unlinked.size})") {
+                unlinked.forEach { mention ->
+                    MentionRow(
+                        mention.page.title, mention.block.content, onOpen = { onOpenPage(mention.page.id) },
+                        action = if (contentLocked) null else ({ TextButton(onClick = { onLink(mention) }) { Text("Link") } }),
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MentionSection(title: String, rows: @Composable () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { expanded = !expanded }).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(if (expanded) Icons.Filled.ExpandMore else Icons.Filled.ChevronRight, contentDescription = null)
+        Spacer(Modifier.width(4.dp))
+        Text(title, style = MaterialTheme.typography.labelLarge)
+    }
+    if (expanded) rows()
+}
+
+@Composable
+private fun MentionRow(pageTitle: String, blockText: String, onOpen: () -> Unit, action: (@Composable () -> Unit)?) {
+    Row(
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(pageTitle, style = MaterialTheme.typography.bodyMedium)
+            Text(blockText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+        }
+        action?.invoke()
     }
 }
 

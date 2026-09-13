@@ -93,6 +93,13 @@ class MarkdownWriterTest {
     }
 
     @Test
+    fun `a block reference is a quote of its cached words, with the source when it is exported`() {
+        val linked = MarkdownWriter.render(listOf(block(BlockType.BLOCK_REFERENCE, "pack socks\nand a hat", mentionedPageId = 7)), { null }, { if (it == 7L) "Trip.md" else null })
+        assertEquals("> pack socks\n> and a hat\n> — [source](Trip.md)", linked.trimEnd('\n'))
+        assertEquals("> gone", render(block(BlockType.BLOCK_REFERENCE, "gone", mentionedPageId = 99)))
+    }
+
+    @Test
     fun `a multi-line quote marks every line`() {
         assertEquals("> first\n> second", render(block(BlockType.QUOTE, "first\nsecond")))
     }
