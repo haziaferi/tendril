@@ -967,9 +967,23 @@ a thing.**
 | Done · Blocked | dim + struck · the error chip |
 
 A task shows two colours at most, each meaning one thing. On the calendar a task block is
-*category fill + urgency stripe*. The signal family is the register's second channel where it has
-one (Swiss's yellow, Playground's warm), else a solved orange-red at 22°; measured on every ground
-the four coloured steps hold 4.7 / 5.6 / 7.2 / 5.5:1.
+*category fill + urgency stripe*.
+
+**The ladder itself — decided later the same day, on `docs/mockups/urgency-ladder.html`.** Seven
+candidate ladders from the user were adapted to the four grounds and measured; three findings
+fixed the shape. (1) *A one-hue ladder adapted to rising contrast is a lightness ramp*, capped
+near 5–6 dE between adjacent steps on a light ground whatever hexes it starts from; hue drift
+(amber → red) makes it *worse* for colour-deficient readers, since deuteranopia folds amber,
+orange and red into one brown. (2) *The ladder is a mark, never text* — a 4 px stripe, a star, a
+dot — so its floor is WCAG's 3:1 for UI components, not 4.5:1; letting *low* sit at 3:1 and
+*urgent* reach 13:1 nearly doubles the spacing. (3) *On a dark ground the ladder runs the other
+way*: pale-and-muted → saturated, so that urgent is the deepest step, not the palest. The result,
+**R-wide+ in coral**, is **one family in every register** (hue 4–12°) — urgency looks the same
+everywhere, and a register's second channel keeps its own meaning. Light (Ink): `#B9887E ·
+#B84E3D · #9A2619 · #660C05` at 3.0 / 5.0 / 7.9 / 13.0:1; dark (Ink): `#E6D1CC · #E1A599 · #E97D6D
+· #F83F2A` at 11.5 / 8.1 / 6.1 / 4.6:1; *none* is the ground's dim. Adjacent steps ≥ 11 dE for
+everyone and ≥ 9 under colour-vision deficiency on every ground. Overdue *text* stays the error
+colour at ≥ 4.5:1.
 
 *Implementation note:* `Entry.important` is a Boolean (§0.6.4's flag). The ladder needs
 `Entry.importance: Int` 0–4 with `important = true` migrating to 3 (high) and the flag's UI becoming
