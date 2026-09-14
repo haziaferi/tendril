@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -139,7 +140,9 @@ fun main() {
                 window.minimumSize = Dimension(MIN_WINDOW.w, MIN_WINDOW.h)
                 snapshotFlow { windowState.size to windowState.position }.collectLatest { (size, position) ->
                     delay(400)
-                    if (windowState.isMinimized) return@collectLatest
+                    // Only a floating frame is worth remembering: a maximised window reports the
+                    // screen as its size, and restoring that as a floating frame overflows the screen.
+                    if (windowState.isMinimized || windowState.placement != WindowPlacement.Floating) return@collectLatest
                     val stored = if (position.isSpecified) WindowFrame(size.width.value.toInt(), size.height.value.toInt(), position.x.value.toInt(), position.y.value.toInt())
                     else WindowFrame(size.width.value.toInt(), size.height.value.toInt(), -1, -1)
                     core.keyValueStore.put(WINDOW_FRAME_KEY, stored.encode())

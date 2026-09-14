@@ -18,6 +18,16 @@ fun shellLayoutFor(widthDp: Float): ShellLayout =
     if (widthDp >= RAIL_MIN_WIDTH_DP) ShellLayout.RAIL else ShellLayout.BAR
 
 /**
+ * B§13.4 14b — a sheet's form follows the shell's: where the rail stands, a sheet is a right
+ * slide-over; where the bar does, a bottom sheet. One breakpoint, so "a wide window" means one
+ * thing in the app; the test pins that the two cannot drift apart.
+ */
+enum class SheetForm { BOTTOM, SLIDE_OVER }
+
+fun sheetFormFor(widthDp: Float): SheetForm =
+    if (shellLayoutFor(widthDp) == ShellLayout.RAIL) SheetForm.SLIDE_OVER else SheetForm.BOTTOM
+
+/**
  * The desktop window's remembered frame, kept in `KeyValueStore` under [WINDOW_FRAME_KEY] as
  * `"w,h,x,y"` (dp; a negative position means "let the OS place it"). Pure so the encoding is
  * testable without a window: every other value the store holds is encoded by its consumer the

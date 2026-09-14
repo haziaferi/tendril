@@ -179,7 +179,9 @@ fun ShellTopBar(
                     MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface),
                 ) { title() }
             }
-            actions()
+            // A nested Row, as Material's `TopAppBar` has: a `DropdownMenu` in the actions anchors
+            // to its parent node, and the parent must be the actions' own box, not the whole bar.
+            Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
     }
