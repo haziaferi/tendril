@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-14 (14b — slide-overs) | §3 *Bottom sheets* amended: on a wide window (the shell's 840 dp rule, `sheetFormFor`) `TendrilSheet` is a right slide-over as mocked (`ui/components/SlideOver.kt`: 32 % scrim, 440 dp panel, header with × unless the sheet draws its own, bounded body; scrim / Escape / Back close); signature unchanged at 33 sites; menus and dialogs stay. §0.10 item 14: 14b shipped, two 14a fixes noted. Tests 697 → 698. | §3, §0.10 |
 | 2026-09-14 (14a — the shell) | §2.2 amended: the shell drawn as the desktop mock draws it on both platforms (`ui/nav/Shell.kt` — 84 dp rail / 80 dp bottom bar with pills, 36 dp timer strip or rail foot, 52 dp top bar at twelve screens; no Material `Scaffold`/`NavigationBar`/`NavigationRail`/`TopAppBar` in the shell), the 840 dp window-width breakpoint (`ShellLayout`), the desktop window's remembered frame and *Tendril* title, desktop sync controls into Settings. §0.10 item 14: 14a shipped. Tests 691 → 697. | §2.2, §0.10 |
 | 2026-09-14 (data colour) | B§13.8: colour is assigned to a dimension, not a thing. Tasks — urgency is the colour (a five-step heat ladder, a nearing deadline moves a task up it; `Entry.important` → `importance` 0–4 when built; the ladder one coral family in every register, a mark never text, low at 3:1, dark grounds pale → saturated), deadline ⚑ and repeat ↻ are glyphs, category is the database's or first label's hue as chip and calendar fill. Databases — any hue on the wheel, icon mandatory, their dates wear it. Event/habit layers fanned from the accent; labels re-solved per ground; callouts as tints; the hardcoded blues and grey canvas edges tokenised. Third mock `docs/mockups/coloured-elements.html`. Document only. | §2.3 |
 | 2026-09-14 (themes and colour) | §2.3 amended to B§13.7's model: ground (neutral or cold, never warm) × one hue solved to 8.0/7.6:1 × mode (System default); seven registers — Ink, Console, Swiss, Playground, Blush, Chalk, Kodachrome — settled on the two mocks under `docs/mockups/`; derived tokens solved to a floor; the eye pass; OLED as a phone-only setting; data-colour capacity measured per structure (importance ladder passes everywhere, six database colours nowhere) → *colour is never the only channel*. Not yet built; lands with 14g. Document only. | §2.3 |
@@ -667,7 +668,14 @@ Genuinely undecided — distinct from §0.7.
     after the first desktop walk showed stock Material chrome and none of the mock — the plan's
     slicing had put every visible thing behind 14a. Verified on desktop (1200×800 rail; dragged
     below 840 → bar; refused below 800×600; killed and relaunched → same frame) and on the
-    OnePlus in both orientations (bar; its landscape is 804 dp).*
+    OnePlus in both orientations (bar; its landscape is 804 dp).* ***14b shipped 2026-09-14** —
+    every sheet a right slide-over on a wide window (§3, *Bottom sheets*, amended), the phone's
+    bottom sheet untouched. Verified on desktop (Calendar settings, History, New as slide-overs
+    beside a readable page; scrim click and Escape close them; below 840 dp the same sheet is a
+    bottom sheet) and on the phone (New still a bottom sheet). Two 14a leftovers fixed on the
+    way: a `···` menu anchored at the top bar's left edge (the actions now sit in their own row,
+    as `TopAppBar`'s did), and a maximised window's size stored as a floating frame (only a
+    floating placement is remembered now).*
 13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -921,7 +929,22 @@ were considered and refused: sheets rising from *above* the tab bar (a modal she
 screen — Material 3 and every benchmarked app; a visible tab bar under a scrim is a question
 with no good answer), and a decorative line along the bottom (chrome for its own sake, §0.5;
 the drag handle is the sheet's affordance). What read as "stark" was content touching the edge,
-and no two sheets alike — the frame is the fix.
+and no two sheets alike — the frame is the fix. *(**Amended 2026-09-14 — B§13.4 14b.** On a wide
+window the same frame is a **right slide-over**, drawn as `docs/mockups/desktop-shell.html`
+draws it: a scrim of the text colour at 32 % over the window, a 440 dp panel flush right and
+full height (never more than three fifths of the window), a soft shadow to its left, a header
+with the title and a close × — none when the sheet draws its own first row, as History and the
+Trash sheets do — and a body of bounded height with no scroll of its own, as the bottom sheet's
+column has none, so a sheet that is a `LazyColumn` measures against a real height. Scrim click,
+Escape and Back close it. "Wide" is the shell's own breakpoint — `sheetFormFor` is one line over
+`shellLayoutFor`, 840 dp of window width, tested so the rail and the slide-over cannot switch at
+different widths — so a phone keeps the bottom sheet and a tablet in landscape gets the panel.
+`TendrilSheet`'s signature did not change: the 33 sites that open a sheet never choose its form.
+What stays what it was, and why: `DropdownMenu`s are already anchored popovers, `DatePickerDialog`
+and `AlertDialog` already centred dialogs — the decision was against turning *sheets* into
+centred dialogs (the page stays readable beside a slide-over; a sheet's content already expects
+height), not against dialogs as such. `SlideOver` is called from `TendrilSheet` and nowhere
+else — `grep` is the check, as for `ModalBottomSheet`.)*
 
 ### 3.1 Pages (Notion-like)
 

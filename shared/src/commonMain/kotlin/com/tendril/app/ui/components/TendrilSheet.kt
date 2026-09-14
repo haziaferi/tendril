@@ -16,6 +16,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.nav.SheetForm
+import com.tendril.app.ui.nav.sheetFormFor
 
 /**
  * The one frame every bottom sheet in the app uses (2026-09-12). Before this, each of the 29
@@ -34,7 +36,12 @@ import androidx.compose.ui.unit.dp
  * content-sized, so the partial state buys nothing and is skipped everywhere. A sheet that needs a header with a control in it (the Trash
  * sheets, the reminder list) passes no [title] and draws its own first row.
  *
- * `ModalBottomSheet` is deliberately called nowhere else — `grep` is the check.
+ * **On a wide window (B§13.4 14b, 2026-09-14) the same frame is a right [SlideOver]** — the
+ * decision is the window's width at the shell's own breakpoint ([sheetFormFor], 840 dp), so
+ * the rail and the slide-over arrive together; below it the bottom sheet is exactly what it was.
+ * The 33 sites that open a sheet see one signature and never choose.
+ *
+ * `ModalBottomSheet` and [SlideOver] are deliberately called nowhere else — `grep` is the check.
  */
 @Composable
 fun TendrilSheet(
@@ -43,6 +50,10 @@ fun TendrilSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (sheetFormFor(windowWidthDp().value) == SheetForm.SLIDE_OVER) {
+        SlideOver(onDismiss = onDismiss, title = title, content = content)
+        return
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -68,3 +79,6 @@ private fun sheetBottomRoom(): Dp {
     val heightDp = with(LocalDensity.current) { heightPx.toDp() }
     return (heightDp * 0.03f).coerceIn(24.dp, 48.dp)
 }
+
+@Composable
+private fun windowWidthDp(): Dp = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }

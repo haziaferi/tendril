@@ -22,6 +22,16 @@ class ShellLayoutTest {
     fun `a width that is not a number is the bar, never a crash`() {
         assertEquals(ShellLayout.BAR, shellLayoutFor(Float.NaN))
     }
+
+    @Test
+    fun `a sheet changes form exactly where the shell does`() {
+        for (width in listOf(0f, 411f, 839.9f, 840f, 1200f, Float.NaN)) {
+            val expected = if (shellLayoutFor(width) == ShellLayout.RAIL) SheetForm.SLIDE_OVER else SheetForm.BOTTOM
+            assertEquals("at $width dp", expected, sheetFormFor(width))
+        }
+        assertEquals(SheetForm.BOTTOM, sheetFormFor(839.9f))
+        assertEquals(SheetForm.SLIDE_OVER, sheetFormFor(840f))
+    }
 }
 
 /** The window frame's encoding — a round trip, garbage, and the floor. */
