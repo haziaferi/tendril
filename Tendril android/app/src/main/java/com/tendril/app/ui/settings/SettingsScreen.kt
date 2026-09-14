@@ -43,7 +43,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -112,7 +112,7 @@ fun SettingsScreen(
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_settings)) }) },
+        topBar = { ShellTopBar(title = { Text(stringResource(R.string.nav_settings)) }) },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxWidth().padding(innerPadding).verticalScroll(rememberScrollState())) {
             AppearanceSection(themePreferences)

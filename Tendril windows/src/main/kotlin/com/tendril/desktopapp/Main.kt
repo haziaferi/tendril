@@ -32,8 +32,20 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import com.tendril.app.ui.nav.DEFAULT_WINDOW
+import com.tendril.app.ui.nav.MIN_WINDOW
+import com.tendril.app.ui.nav.WINDOW_FRAME_KEY
+import com.tendril.app.ui.nav.WindowFrame
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import java.awt.Dimension
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigationevent.NavigationEventInput
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -97,9 +109,19 @@ fun main() {
     val switcher = SwitcherState()
 
     application {
+        // B§13.4 14a — the window remembers itself: size and position from the last run, kept in
+        // the same KeyValueStore as every other device preference (§0.10 item 12), written a
+        // moment after the last change rather than on every drag frame. An unpositioned frame
+        // (the default, or a stored one the OS should place) is left to the platform.
+        val frame = remember { WindowFrame.decode(core.keyValueStore.get(WINDOW_FRAME_KEY)) ?: DEFAULT_WINDOW }
+        val windowState = rememberWindowState(
+            size = DpSize(frame.w.dp, frame.h.dp),
+            position = if (frame.positioned) WindowPosition(frame.x.dp, frame.y.dp) else WindowPosition.PlatformDefault,
+        )
         Window(
             onCloseRequest = ::exitApplication,
-            title = "Tendril (desktop preview)",
+            state = windowState,
+            title = "Tendril",
             icon = painterResource("tendril_icon.png"),
             // Preview, not consume: a text field that wants Escape for itself still gets it, and
             // an Escape nobody handles falls through to nothing, as before. On the *release*,
@@ -113,6 +135,16 @@ fun main() {
                 false
             },
         ) {
+            LaunchedEffect(Unit) {
+                window.minimumSize = Dimension(MIN_WINDOW.w, MIN_WINDOW.h)
+                snapshotFlow { windowState.size to windowState.position }.collectLatest { (size, position) ->
+                    delay(400)
+                    if (windowState.isMinimized) return@collectLatest
+                    val stored = if (position.isSpecified) WindowFrame(size.width.value.toInt(), size.height.value.toInt(), position.x.value.toInt(), position.y.value.toInt())
+                    else WindowFrame(size.width.value.toInt(), size.height.value.toInt(), -1, -1)
+                    core.keyValueStore.put(WINDOW_FRAME_KEY, stored.encode())
+                }
+            }
             TendrilTheme(colorTheme = TendrilColorTheme.INK, mode = TendrilMode.LIGHT, typeface = TendrilTypeface.SANS) {
                 App(core, orchestrator, folderManager, escapeBack, switcher)
             }
@@ -149,8 +181,6 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     val viewModelStoreOwner = remember { DesktopViewModelStoreOwner() }
     CompositionLocalProvider(LocalViewModelStoreOwner provides viewModelStoreOwner) {
         Column(modifier = Modifier.fillMaxSize()) {
-            SyncBar(orchestrator, folderManager)
-            HorizontalDivider()
             WorkbenchScaffold(
                 core = core,
                 switcher = switcher,
@@ -177,8 +207,9 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         habitTrashSheet = null,
                     )
                 },
-                // §0.6.15 — the last stand-in gone: Settings holds the Claude section.
-                settingsContent = { DesktopSettingsScreen(core) },
+                // §0.6.15 — the last stand-in gone: Settings holds the Claude section; 14a moved
+                // the sync folder controls here too, off the top of every screen.
+                settingsContent = { DesktopSettingsScreen(core, syncSection = { SyncBar(orchestrator, folderManager) }) },
             )
         }
     }
@@ -245,8 +276,13 @@ private fun pickFile(save: Boolean): File? {
 /** Allocated once rather than per recomposition of the passphrase field it decorates. */
 private val PASSPHRASE_MASK = PasswordVisualTransformation()
 
+/**
+ * The desktop's sync controls — folder, session passphrase, Sync now, the last result. Until
+ * 14a a strip across the top of every screen; now the first section of Settings, which is where
+ * Android keeps the same controls and the only place B§13.4's mock had room for them.
+ */
 @Composable
-private fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
+internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
     val folderPath by folderManager.folderPath.collectAsState()
     var passphrase by remember { mutableStateOf("") } // session-only, never persisted (§12.5/Milestone 2)
     var syncing by remember { mutableStateOf(false) }
