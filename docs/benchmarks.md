@@ -1,7 +1,7 @@
 # Benchmarks — what the bar is, per surface
 
 **Dated 2026-09-11.** Input to the objectives file's "the bar" section.
-**§13 (desktop layout) added 2026-09-13**, with its own frame of reference. Forty-eight names were
+**§13 (desktop layout) added 2026-09-13**, with its own frame of reference; **§13.7 (themes and colour) 2026-09-14.** Forty-eight names were
 put forward; this scores the ones that are products, says why the rest are not, and proposes what
 to take. It is a *decision document*: every table ends in a "Take" column and §6 turns those into
 features and screens with the decisions they need.
@@ -825,3 +825,123 @@ is the answer; where it says *folded*, the PR row in §13.4 carries the detail.
 | 8 | **Keyboard in the tree and lists** — arrows, type-ahead, Enter | Apple, Things | Rows are click-only today | cheap | **Yes — folded into 14e**; shown on the mock (↓↑, type-ahead, ↵) |
 | 9 | **Tabs** | Obsidian, Capacities | Rail + tree (+ a shelf, #4) covers it; tabs are a browser's answer | medium | **No, for now** |
 | 10 | **Cross-block selection and undo** | Notion | A real gap, but the editor's — one `BasicTextField` per block — not the layout's | high | **To scope in the per-block editor pass** — `tendril-spec.md` §0.10 item 19 |
+
+### 13.7 Themes, colour and the layout grammar — decided 2026-09-14
+
+Read against the same thirteen apps on three axes — chrome colour, where colour goes, the grammar
+that carries it — and settled over two days on two mocks (`docs/mockups/desktop-shell.html`, whose
+*Register* menu applies each candidate to the whole UI in both modes, and
+`docs/mockups/register-explorations.html`, twelve re-conceptions of four registers by other apps'
+colour structures). The numbers below were computed with `design-optimization`'s `designkit`
+(WCAG ratios, CIEDE2000, colour-vision simulation, Matsuda harmony fit), not asserted.
+
+**The trend.** (1) *Monochrome chrome; colour spent on data* — the note apps' UI is grey plus one
+accent, and every colour a person sees is something they made: a tag, a calendar, a type
+(Capacities), a priority (Todoist). The only coloured chrome on the list is the task apps' theme
+galleries, the weakest feature in the set. (2) *Light · Dark · System is universal; a palette
+gallery is not* — a note app offers one accent hue (Obsidian) or the OS's (Apple), never four fixed
+colourways. (3) *Dark is not black* — `#191919`, `#1E1E1E`, warm greys; true black only for OLED
+(Things). (4) *Typography is the theme lever* in writing apps — Notion's fonts per page, Obsidian's
+base size. (5) *The grammar is space and weight, not lines and cards* — hairlines, small radii
+(6–8), fills only for selection and hover, shadows only on popovers.
+
+**Tendril's diff (§2.3 as it stood).** Four colourways that tint the *surfaces* (`surface2` is
+`#F1E9DC` in Clay, `#F1E7EC` in Mauve) — the gallery pattern applied to a note app. Ink alone matches
+the trend (a slate accent on neutral white, dark `#1B1D21`). Data colour half there: `Label.color`
+yes; databases, views, habits, calendar sources no. Typography strong and under-used (Serif is
+global, not per page; no base-size control). The layout grammar is Material 3's defaults — 12–16 dp
+radii, tonal `primaryContainer` fills, `NavigationBar` pills — the single biggest "Android app on a
+desktop window" tell, and a `Theme.kt` change rather than a rewrite.
+
+#### 13.7.1 The model — three knobs, shared by both platforms
+
+A theme is **ground × hue × mode**, and a *register* is a named preset of the first two:
+
+- **Ground**: *neutral* (Ink's `#FFFFFF` / `#1B1D21`) or *cold* (Console's `#FBFBFA` / `#101216`).
+  Never warm. Warm grounds were built (Cozy, Kodachrome paper, Chalk sand, Playground cream) and
+  scored, and were dropped for a physical reason: an hour of writing on a cream ground strains the
+  eye — the person who will use this app said so, and the numbers agreed (§13.7.4, headroom).
+  Warmth lives in the hue, never in the surface being read.
+- **Hue**: one accent, solved to **8.0:1 (light) / 7.6:1 (dark)** against the ground — Console's
+  contrast, the reference the user chose — with saturation capped at 55 % light / 50 % dark; at most
+  one **second channel** hue where the use needs two meanings (Swiss's signal yellow, Playground's
+  warm).
+- **Mode**: System / Light / Dark, default System (§13.5 #7). Colour and register are the same on
+  the phone and the desktop; only the *screen* differs, and that is a device setting (§13.7.3).
+
+Adding a register later costs one hue and a contrast solve — no new palette, no new WCAG table —
+which leaves Obsidian's "pick any accent" a colour wheel away without committing to it now.
+
+#### 13.7.2 The seven registers
+
+| Register | Use it was imagined for | Ground | Light hue | Dark hue | Second channel | Source |
+|---|---|---|---|---|---|---|
+| **Ink** | none in particular — the default | neutral | slate `#4A5568` | `#8792A6` | — | `Palette.kt`, unchanged |
+| **Console** | coding projects, a process log | cold | violet `#4B3AA6` (8.3:1) | `#A99AF0` (7.6:1) | — | lexicon *Developer Tools · Console* |
+| **Swiss** | company project management | cold `#F4F6F8` / `#0E1018` | navy `#1D3557` | `#7FA6D9` | signal yellow `#B8960A` / `#F4D03F` (fills and marks only) | lexicon *Swiss · pair 2* |
+| **Playground** | groceries, kids' appointments | cold | teal `#1D5663` (7.9:1) | `#53B2C5` (7.6:1) | warm `#8A4523` / `#D18E61` (6.9:1) | lexicon *Kids/Education · Playground*, hue only |
+| **Blush** | a personal diary | cold | pink 339° `#86324F` (7.9:1) | `#D793AB` (7.7:1) | — | from the user's `#EAA7BF`, deepened and muted (sat 46) |
+| **Chalk** | a quieter diary | cold | sand `#574C38` (8.1:1) | `#B7A380` (7.6:1) | — | lexicon *Serene · Chalk*, hue only |
+| **Kodachrome** | a travel journal | cold | rust `#7E3925` (8.1:1) | `#D29879` (7.6:1) | — | lexicon *Nostalgic · Kodachrome*, hue only |
+
+Rejected on the way: *Cocoa* (too intensely warm), *Scholastic* (no need), the warm grounds of the
+four above (eye strain), the earlier rose at 349° (too close to rust: CIEDE2000 13 → now 18 light /
+21 dark, colour-vision worst case 13 / 17, both over the dE 10 floor). Clay, Moss and Mauve from
+§2.3 are not registers: their surfaces are tinted. Their hues could return as registers under this
+model if wanted — one solve each.
+
+#### 13.7.3 Four rules the theme engine implements
+
+1. **Derived tokens are solved to a floor, never mixed by a fixed percentage.** `dim`, `faint`,
+   `soft`, `border` come from ground and text; a fixed mix put `dim` at 3.7–3.9:1 on darker grounds
+   twice during this work. `Theme.kt` takes the smallest share of text that clears 4.5:1 (`dim`) and
+   3:1 (`faint`). Every register then passes whatever ground it is given, and the AA claim in §2.3
+   becomes a property of the code instead of a table.
+2. **The eye pass** (screen-, eye- and astigmatism-friendly): keep the temperature, cut saturation
+   and brightness inside it; body text in a **9.5–13:1 band**, not maximal (17:1 black-on-white is
+   the fatigue case); in dark mode text below its brightest (halation blooms light text on dark for
+   astigmatic readers); no thin weights — DM Sans 400/500 only — and size through 14d's scale.
+3. **OLED is a device setting, not a theme.** Astigmatism prefers a lifted dark ground (Ink's ~11 %
+   lightness) and softer text; an OLED panel prefers 3–6 % for contrast and battery. No single
+   ground serves both, and themes are shared across devices — so *Deeper blacks* is a phone-only
+   toggle, off by default, that drops the register's dark ground to 4 % and re-solves the derived
+   tokens. The desktop's LCD never shows it. Same shape as density (§13.5 #4): the theme owns the
+   hue, the device owns its screen.
+4. **Colour is never the only channel** — see §13.7.4 for why.
+
+#### 13.7.4 Data colour — what the ground can carry, measured
+
+Four structures were scored on every register: an **importance ladder** (3 colours, on
+`Entry.importance` — new), **calendar layers** (4), **databases** (6, one each), **labels** (9).
+Legibility as *headroom* (the share of hue × lightness space at saturation 50 that clears 4.6:1 on
+the ground); tolerance as the **worst-case CIEDE2000 among the set plus the register's own accent,
+across normal, deuteranopic and protanopic vision**; floor dE 10, the audit's, calibrated on
+Okabe–Ito. Harmony fit was 0.63–0.71 for every register — clashing is not where they differ,
+*disappearing* is.
+
+| | Headroom L / D | Importance (3) | Layers (4) | Databases (6) | Labels (9) |
+|---|---|---|---|---|---|
+| Cold grounds (Console and the four) | 43 % / 53 % | 12–18 / 10–18 | 10–13 / 10–12 | 6–9 / 6–10 | 4–5 / 3–6 |
+| Neutral ground (Ink) | 44 % / 50 % | 17 / 16 | 9 / 11 | 9 / 11 | 4 / 5 |
+| Warm grounds (dropped) | 35–40 % / 50 % | 10–16 / 10–16 | **7.5–7.8** / 9–11 | 3–8 / 5–9 | 3–5 / 3–6 |
+
+What it says: the **importance ladder passes everywhere**; **calendar layers** pass on cold and
+neutral grounds and missed by 2–2.5 dE on the warm ones (one more reason they went); **six database
+colours clear the floor on no ground** — six plus the accent is past what one channel carries, and
+Capacities knows it (every type has an icon); **nine label colours** sit at 3–6 on every ground —
+colour on a label is grouping, never identification, and labels carry their names. Two further
+findings: sets of four or more separate better at **two lightness levels** than one (the search
+chose "2 levels" in nearly every winning cell — solving every data colour to the same contrast puts
+them at the same luminance, which colour-vision deficiency then cannot tell apart), and adding the
+accent to the set is what pulls six under the floor, so the accent's hue is *reserved* — data hues
+are fanned away from it.
+
+Hence rule 4: layers differ by shape (a checkbox, a block, a habit mark), databases by icon, labels
+by name, importance by its ladder — colour is the second channel, never the first.
+
+**Not decided here — the next discussion:** which element carries which colour (calendar layers,
+sources, database rows and their icons, habits, the importance ladder's three steps, links and
+mentions), and the per-register data sets the engine builds under rule 4 and the two-level rule.
+§2.3's two recorded defects (the hardcoded link blue; the mode tri-state) are answered by the model
+above — links and mentions take the accent token, mode is System/Light/Dark with System default —
+and land with 14g.

@@ -144,15 +144,15 @@ kbd{font:11px/1 var(--sans);color:var(--m-faint);border:1px solid var(--m-border
 .tree .list{overflow:auto;padding:6px 0}
 .handle{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:2}
 .handle:hover::after,.handle.on::after{content:"";position:absolute;left:3px;top:0;width:2px;height:100%;background:var(--m-accent)}
-.row{display:flex;align-items:center;gap:10px;height:var(--row);padding:0 12px;min-width:0;color:var(--m-text)}
+.row{display:flex;width:100%;align-items:center;gap:10px;height:var(--row);padding:0 12px;min-width:0;color:var(--m-text);text-align:left}
 .row:hover{background:var(--m-s2)}
 .row[aria-current="true"]{background:var(--m-soft);color:var(--m-soft-text)}
 .row.kb{outline:2px solid var(--m-accent);outline-offset:-2px;border-radius:4px}
 .kbhint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:var(--m-bg);border:1px solid var(--m-border);color:var(--m-dim);padding:6px 12px;border-radius:8px;font-size:12px;z-index:7;box-shadow:0 8px 20px -12px rgba(0,0,0,.4)}
 .row .ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.75}
-.row .tt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .meta{font-size:12px;color:var(--m-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
-.row .more{width:24px;height:24px;border-radius:12px;display:grid;place-items:center;color:var(--m-faint);flex:none}
+.row .more{width:24px;height:24px;border-radius:12px;display:grid;place-items:center;color:var(--m-faint);flex:none;margin-left:auto}
 .row .more svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 .mk[data-hover="1"] .row .more{opacity:0}
 .mk[data-hover="1"] .row:hover .more,.mk[data-hover="1"] .row:focus-within .more{opacity:1}
@@ -316,6 +316,8 @@ kbd{font:11px/1 var(--sans);color:var(--m-faint);border:1px solid var(--m-border
     <div class="presets">
       <span class="lbl">Preset</span>
       <div class="seg" role="group" aria-label="Preset"><button data-preset="today">Today</button><button data-preset="proposed">Proposed</button></div>
+      <span class="lbl" style="margin-left:10px">Register</span>
+      <select id="reg" aria-label="Colour register" style="font:inherit;color:var(--h-text);background:var(--h-s2);border:1px solid var(--h-border);border-radius:8px;padding:5px 8px"></select>
       <span class="lbl" style="margin-left:10px">Width</span>
       <div class="seg" role="group" aria-label="Window width"><button data-width="1200">1200 px</button><button data-width="700">700 px</button></div>
     </div>
@@ -337,7 +339,7 @@ const S={
   preset:'proposed', width:1200,
   nav:'rail', modal:'dialog', treeResize:true, treeCollapse:true, treeOpen:true, treeW:280,
   density:'40', hoverOnly:true, mnemonics:false, calDefault:'week', theme:'system',
-  kb:-1, ta:'', tab:'pages', page:'escape', task:'call', sheet:null, menu:false, switcher:false, help:false, toast:null, calMode:null,
+  reg:'ink', kb:-1, ta:'', tab:'pages', page:'escape', task:'call', sheet:null, menu:false, switcher:false, help:false, toast:null, calMode:null,
 };
 try{const j=localStorage.getItem('tendril-shell-mock');if(j)Object.assign(S,JSON.parse(j),{sheet:null,menu:false,switcher:false,help:false,toast:null});}catch(e){}
 function save(){try{localStorage.setItem('tendril-shell-mock',JSON.stringify(S));}catch(e){}}
@@ -385,6 +387,42 @@ const I={
   chev:'<svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>',
   eye:'<svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
 };
+/* Registers — B§13.7 candidates. Each is a ground (with a temperature) + one hue, light and dark; the
+   chrome tokens the app needs are derived from those in applyRegister(). Ink is Palette.kt verbatim. */
+const REG={
+  ink:       {use:'Default — no use in particular', src:'Palette.kt (Ink)',             L:null, D:null, oledD:{bg:'#1B1D21',text:'#EDEDEF',hue:'#8792A6',second:null}},
+  console:   {use:'Coding projects · process log',   src:'Developer Tools · Console',    L:{bg:'#FBFBFA',text:'#16181B',hue:'#4B3AA6',second:null},      D:{bg:'#101216',text:'#E3E6EA',hue:'#A99AF0',second:null}},
+  playground:{use:'Groceries · kids’ appointments', src:'teal + warm second on Console grounds', L:{bg:'#FBFBFA',text:'#16181B',hue:'#1D5663',second:'#8A4523'}, D:{bg:'#101216',text:'#E3E6EA',hue:'#53B2C5',second:'#D18E61'}},
+  blush:     {use:'Personal diary', src:'pink 339° (from #EAA7BF, muted) on Console grounds', L:{bg:'#FBFBFA',text:'#16181B',hue:'#86324F',second:null}, D:{bg:'#101216',text:'#E3E6EA',hue:'#D793AB',second:null}},
+  chalk:     {use:'Personal diary (quieter)', src:'sand on Console grounds', L:{bg:'#FBFBFA',text:'#16181B',hue:'#574C38',second:null}, D:{bg:'#101216',text:'#E3E6EA',hue:'#B7A380',second:null}},
+  kodachrome:{use:'Travel journal', src:'rust on Console grounds', L:{bg:'#FBFBFA',text:'#16181B',hue:'#7E3925',second:null}, D:{bg:'#101216',text:'#E3E6EA',hue:'#D29879',second:null}},
+  swiss:     {use:'Company project management',     src:'Swiss · blue + signal',       L:{bg:'#F4F6F8',text:'#0F1018',hue:'#1D3557',second:'#B8960A'}, D:{bg:'#0E1018',text:'#E8F0F0',hue:'#7FA6D9',second:'#F4D03F'}},
+};
+const hx2=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const mixHex=(a,b,p)=>{const A=hx2(a),B=hx2(b);return '#'+A.map((x,i)=>Math.round(x*p/100+B[i]*(1-p/100)).toString(16).padStart(2,'0')).join('');};
+const lum=h=>{const [r,g,b]=hx2(h).map(c=>{c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)});return 0.2126*r+0.7152*g+0.0722*b;};
+const contrast=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);};
+/* the smallest share of `fg` mixed into `bg` that still clears `floor` — Theme.kt will derive dim/faint this way, not by a fixed percentage */
+const hex2hsl=h=>{const [r,g,b]=hx2(h).map(c=>c/255);const max=Math.max(r,g,b),min=Math.min(r,g,b);let H=0,S=0;const L=(max+min)/2;if(max!==min){const d=max-min;S=L>0.5?d/(2-max-min):d/(max+min);H=max===r?((g-b)/d+(g<b?6:0)):max===g?((b-r)/d+2):((r-g)/d+4);H*=60;}return [H,S*100,L*100];};
+const hsl2hexS=(h,s,l)=>{s/=100;l/=100;const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return '#'+[f(0),f(8),f(4)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('').toUpperCase();};
+const solve=(fg,bg,floor)=>{for(let p=30;p<=100;p+=2){const m=mixHex(fg,bg,p); if(contrast(m,bg)>=floor) return m;} return fg;};
+function applyRegister(mk, theme){
+  const r=REG[S.reg||'ink']; let v=r&&r[theme==='dark'?'D':'L']; if(!v&&theme==='dark'&&S.oled&&r.oledD) v=r.oledD;
+  const names=['--m-bg','--m-s2','--m-text','--m-dim','--m-faint','--m-accent','--m-accent-strong','--m-on-accent','--m-soft','--m-soft-text','--m-border','--m-tert','--m-tert-soft'];
+  if(!v){ names.forEach(n=>mk.style.removeProperty(n)); return; }
+  const mix=(a,b,pa)=>`color-mix(in oklab, ${a} ${pa}%, ${b})`;
+  const dark=theme==='dark';
+  const bg0=v.bg; if(dark&&S.oled){ const [h,sat]=hex2hsl(v.bg); v={...v,bg:hsl2hexS(h,sat,4)}; }
+  const t={
+    '--m-bg':v.bg, '--m-s2':mix(v.text,v.bg,dark?6:4), '--m-text':v.text,
+    '--m-dim':solve(v.text,v.bg,4.6), '--m-faint':solve(v.text,v.bg,3.05),
+    '--m-accent':v.hue, '--m-accent-strong':mix(v.hue,v.text,80), '--m-on-accent':dark?v.bg:'#FFFFFF',
+    '--m-soft':mix(v.hue,v.bg,dark?22:12), '--m-soft-text':dark?mix(v.hue,v.text,70):mix(v.hue,v.text,85),
+    '--m-border':mix(v.text,v.bg,dark?14:11),
+    '--m-tert':v.second||mix(v.hue,v.text,55), '--m-tert-soft':mix(v.second||v.hue,v.bg,dark?24:14),
+  };
+  for(const [k,x] of Object.entries(t)) mk.style.setProperty(k,x);
+}
 const TABS=[['pages','Pages',I.pages,'P'],['calendar','Calendar',I.calendar,'C'],['tasks','Tasks',I.tasks,'T'],['map','Road Map',I.map,'R'],['settings','Settings',I.settings,'S']];
 function mn(label){ if(!S.mnemonics||isToday())return label; return '<u class="mn">'+label[0]+'</u>'+label.slice(1); }
 
@@ -397,6 +435,7 @@ const PAGES=[
   {id:'library',t:'Call the library',ic:'doc',d:1},
   {id:'weeknotes',t:'Week notes',ic:'doc',d:0,meta:'Tue'},
   {id:'garden',t:'Garden plan',ic:'cvs',d:0,meta:'canvas'},
+  {id:'winter',t:'Reading list for the long winter evenings, annotated and sorted by mood',ic:'doc',d:0},
 ];
 const PAGE_TITLES=Object.fromEntries(PAGES.map(p=>[p.id,p.t]));
 
@@ -587,6 +626,7 @@ function render(){
   const mk=$('#mk'), win=$('#win');
   win.style.width=S.width+'px'; win.style.height=e.height+'px';
   mk.setAttribute('data-mock',mockTheme(e.theme));
+  applyRegister(mk, mockTheme(e.theme));
   mk.setAttribute('data-density',e.density);
   const prof={'36':0.9,'40':1,'48':1.3}[e.density], wf=isToday()?1:Math.max(.85,Math.min(1.25,Math.min(S.width,e.height)/800)), k=prof*wf;
   mk.style.setProperty('--row',Math.round(40*k)+'px'); mk.style.setProperty('--cell',Math.round(200*k)+'px'); mk.style.setProperty('--list-fs',(14*k).toFixed(1)+'px'); mk.style.setProperty('--title-fs',Math.round(26*k)+'px');
@@ -605,7 +645,7 @@ function kbRows(){ return Array.from(document.querySelectorAll(S.tab==='pages' ?
 function applyKb(){ const rows=kbRows(); rows.forEach((r,i)=>r.classList.toggle('kb',i===S.kb)); const r=rows[S.kb]; if(r){ r.scrollIntoView({block:'nearest'}); if(S.ta) { const h=document.createElement('div'); h.className='kbhint'; h.textContent='type-ahead: “'+S.ta+'”'; $('#mk').appendChild(h);} } }
 function renderNote(e){
   const n=$('#note');
-  n.innerHTML=[`<span><b>${S.width}×${e.height}</b> px</span>`,`<span>scale <b>${(+$('#mk').style.getPropertyValue('--k')).toFixed(2)}×</b> · rows <b>${$('#mk').style.getPropertyValue('--row')}</b></span>`,`<span>theme <b>${mockTheme(e.theme)}</b>${e.theme==='system'?' (system)':''}</span>`,`<span>try <b>?</b>, <b>Ctrl+K</b>, <b>1–5</b>, <b>↓↑</b> + typing in the tree, <b>Ctrl+\\</b>, <b>Esc</b>, the page ··· → History, drag the tree edge</span>`].join('');
+  n.innerHTML=[`<span><b>${S.width}×${e.height}</b> px</span>`,`<span>scale <b>${(+$('#mk').style.getPropertyValue('--k')).toFixed(2)}×</b> · rows <b>${$('#mk').style.getPropertyValue('--row')}</b></span>`,`<span>theme <b>${mockTheme(e.theme)}</b>${e.theme==='system'?' (system)':''}</span>`,`<span>register <b>${S.reg||'ink'}</b> · ${REG[S.reg||'ink'].src}${REG[S.reg||'ink'][mockTheme(e.theme)==='dark'?'D':'L']?' · ground '+REG[S.reg||'ink'][mockTheme(e.theme)==='dark'?'D':'L'].bg+' · hue '+REG[S.reg||'ink'][mockTheme(e.theme)==='dark'?'D':'L'].hue:''}</span>`,`<span>try <b>?</b>, <b>Ctrl+K</b>, <b>1–5</b>, <b>↓↑</b> + typing in the tree, <b>Ctrl+\\</b>, <b>Esc</b>, the page ··· → History, drag the tree edge</span>`].join('');
 }
 function fit(){
   const stage=$('.stage'), win=$('#win');
@@ -613,6 +653,7 @@ function fit(){
   win.style.transform=`scale(${s})`; stage.style.height=(eff().height*s)+'px';
 }
 addEventListener('resize',fit);
+(function(){ const sel=$('#reg'); for(const [k,r] of Object.entries(REG)){ const o=document.createElement('option'); o.value=k; o.textContent=k[0].toUpperCase()+k.slice(1)+' — '+r.use; sel.appendChild(o);} sel.value=S.reg||'ink'; sel.addEventListener('change',()=>{S.reg=sel.value;render();}); })();
 
 /* decisions panel */
 function opt(key,val,label,rec){return `<button class="opt${rec?' rec':''}" data-k="${key}" data-v="${val}" aria-pressed="${S[key]===val}">${label}</button>`;}
@@ -640,14 +681,16 @@ function renderPanel(){
     <div class="ctl">${opt('calDefault','week','Week',true)}${opt('calDefault','month','Month')}</div>
     <div class="cons">Week is what Fantastical, Sunsama and Akiflow open on; Month is the phone’s default and what the app does today.</div></div>
   <div class="dec"${dis}><h3><span class="n">7</span>Theme on desktop<span class="pr">14g</span></h3><p>The picker reaches the desktop Settings pane.</p>
-    <div class="ctl">${opt('theme','system','Follow system',true)}${opt('theme','light','Light')}${opt('theme','dark','Dark')}</div></div>
+    <div class="ctl">${opt('theme','system','Follow system',true)}${opt('theme','light','Light')}${opt('theme','dark','Dark')}</div>
+    <div class="ctl" style="margin-top:6px">${chk('oled','Deeper blacks (OLED) — a phone-only setting, off by default')}</div>
+    <div class="cons">Drops the dark ground to 4 % lightness and re-solves the derived tokens. Astigmatism prefers the lifted ground; OLED prefers this. Shown here on the desktop frame only to compare.</div></div>
   <div class="summary"><h3>Your answers</h3><textarea readonly id="sum"></textarea><div class="row"><button data-act="copy">Copy</button><span id="copied">paste them back in chat, by number</span></div></div>`;
   $('#sum').value=summary();
   document.querySelectorAll('[data-preset]').forEach(b=>b.setAttribute('aria-pressed',S.preset===b.dataset.preset));
   document.querySelectorAll('[data-width]').forEach(b=>b.setAttribute('aria-pressed',String(S.width)===b.dataset.width));
 }
 function summary(){
-  return [`1 nav: ${S.nav}`,`2 sheets: ${S.modal}`,`3 tree: ${S.treeResize?'resizable':'fixed'}, ${S.treeCollapse?'collapsible':'always shown'}`,`4 density: ${({'36':'compact 0.9x','40':'comfortable 1x','48':'touch 1.3x'})[S.density]} (proportional), hover-only ${S.hoverOnly?'yes':'no'}`,`5 mnemonics: ${S.mnemonics?'yes':'no'}`,`6 calendar: ${S.calDefault}`,`7 theme: ${S.theme}`].join('\n');
+  return [`1 nav: ${S.nav}`,`2 sheets: ${S.modal}`,`3 tree: ${S.treeResize?'resizable':'fixed'}, ${S.treeCollapse?'collapsible':'always shown'}`,`4 density: ${({'36':'compact 0.9x','40':'comfortable 1x','48':'touch 1.3x'})[S.density]} (proportional), hover-only ${S.hoverOnly?'yes':'no'}`,`5 mnemonics: ${S.mnemonics?'yes':'no'}`,`6 calendar: ${S.calDefault}`,`7 theme: ${S.theme}`,`register: ${S.reg||'ink'}`].join('\n');
 }
 
 /* events */
