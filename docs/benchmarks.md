@@ -1,7 +1,7 @@
 # Benchmarks — what the bar is, per surface
 
 **Dated 2026-09-11.** Input to the objectives file's "the bar" section.
-**§13 (desktop layout) added 2026-09-13**, with its own frame of reference; **§13.7 (themes and colour) 2026-09-14.** Forty-eight names were
+**§13 (desktop layout) added 2026-09-13**, with its own frame of reference; **§13.7 (themes and colour) and §13.8 (data colour) 2026-09-14.** Forty-eight names were
 put forward; this scores the ones that are products, says why the rest are not, and proposes what
 to take. It is a *decision document*: every table ends in a "Take" column and §6 turns those into
 features and screens with the decisions they need.
@@ -939,9 +939,77 @@ are fanned away from it.
 Hence rule 4: layers differ by shape (a checkbox, a block, a habit mark), databases by icon, labels
 by name, importance by its ladder — colour is the second channel, never the first.
 
-**Not decided here — the next discussion:** which element carries which colour (calendar layers,
-sources, database rows and their icons, habits, the importance ladder's three steps, links and
-mentions), and the per-register data sets the engine builds under rule 4 and the two-level rule.
+**Decided the same day in §13.8:** which element carries which colour — and the importance ladder
+turned out to have five steps, not three.
 §2.3's two recorded defects (the hardcoded link blue; the mode tri-state) are answered by the model
 above — links and mentions take the accent token, mode is System/Light/Dark with System default —
 and land with 14g.
+
+### 13.8 Data colour — the channel map, decided 2026-09-14
+
+§13.7.4 ended with "which element carries which colour" open. The survey of every coloured element
+the app has (a grep of `shared/`: Material roles used as meanings, `LabelColors`, the callout
+pastels, two hardcoded blues, three `Color.Gray` canvas edges) and a third mock —
+`docs/mockups/coloured-elements.html`, every element in each register's environment, light and
+dark, each colour derived by a printed rule — settled it. Two pushbacks shaped the answer: *one
+colour per task flattens a thing with five characteristics*, and *six colours for databases is stock
+and repeats at once*. Both point at the same principle: **colour is assigned to a dimension, not to
+a thing.**
+
+#### 13.8.1 Tasks — urgency is the colour; everything else is a glyph or the chip
+
+| Characteristic | Channel |
+|---|---|
+| **Urgency** — none / low / mid / high / urgent, *and* a nearing deadline | **colour: a five-step heat ladder** — dim → the register's signal family at three strengths → the error red. Level = max(priority, time pressure), so "increasingly urgent as time passes" is an input to the same ladder, never a second colour. Steps differ in lightness and saturation as well as hue, so colour-vision deficiency reads them. |
+| Deadline / none | the ⚑ glyph and the date; overdue turns the date error-coloured |
+| Repeating / one-time | the ↻ glyph |
+| Category — self, work, a project | **its database's hue, else its first label's**, on the chip and as the calendar block's fill; neither → the surface with only the stripe |
+| Done · Blocked | dim + struck · the error chip |
+
+A task shows two colours at most, each meaning one thing. On the calendar a task block is
+*category fill + urgency stripe*. The signal family is the register's second channel where it has
+one (Swiss's yellow, Playground's warm), else a solved orange-red at 22°; measured on every ground
+the four coloured steps hold 4.7 / 5.6 / 7.2 / 5.5:1.
+
+*Implementation note:* `Entry.important` is a Boolean (§0.6.4's flag). The ladder needs
+`Entry.importance: Int` 0–4 with `important = true` migrating to 3 (high) and the flag's UI becoming
+the ladder's; time pressure is derived from `deadline` at read time, never stored. A schema step for
+the PR that builds this.
+
+#### 13.8.2 Databases — any hue on the wheel, the icon mandatory
+
+A database takes **any hue** (a hue slider; the lightness is solved to the register's ground),
+defaulting from the title's hash over the whole circle kept ≥ 30° from the accent — not a fixed set
+of six, which was the CVD-safe *simultaneous* answer to a question databases don't pose (they are
+not all on screen at once). Because two databases may sit near each other in hue, **an icon is
+mandatory** and is the second channel. A database date on the calendar wears its database's hue —
+a database *is* a calendar (Fantastical's rule) — so the calendar has no "database date" layer
+colour of its own. Eight hashed databases measure 3–8 dE apart on a ground; the icons carry the
+rest.
+
+#### 13.8.3 The rest, by rule
+
+- **The accent is reserved**: selection, links, @mentions (the §2.3 hardcoded blues become this
+  token), the today marker and the "now" line, the running timer. Data hues keep ≥ 30–40° from it.
+- **Calendar layers**: *event* and *habit* are two hues fanned ≥ 60° from the accent (they clear
+  dE 10 against it on twelve of fourteen register-modes; Playground dark and Kodachrome light rely
+  on shape); a *task* is category fill + urgency stripe; a *database date* its database's hue; an
+  external (Google) event is the event hue with a dashed edge — a source is a shape, not a colour.
+  Month and Agenda get dots in the same hues, which they have never had (today every layer is one
+  accent-coloured line with a "◦").
+- **Habits**: the habit layer's hue on the streak mark and the calendar block; a habit may be given
+  its own hue later by the database rule (a slider) if wanted — not now.
+- **Labels**: the eight `LabelColors` hues and their *names* stay; the hues are re-solved onto each
+  ground at two lightness levels instead of being one hex in both modes; the chip is a 14 % tint with
+  the hue as text.
+- **Callouts**: tints of data hues over the ground with the register's text on them — the fixed
+  pastels (`CALLOUT_COLORS`, `PageDetailScreen.kt`) only ever worked in light mode.
+- **Block references, related edges, canvas nodes**: today's `tertiary` role → the fan's third hue;
+  **canvas edges** (`Color.Gray` ×3 in `CanvasScreen.kt`) → dim, as the Road Map's already are.
+- **Error family** unchanged for blocked, overdue, delete, formula and AI failures.
+- **Everything derived is solved to a floor** (4.6:1 read; dim 4.6; faint 3.05) — §13.7.3 rule 1.
+
+Where a colour cannot be told apart by a colour-deficient reader, the channel beside it carries the
+meaning: the checkbox, the block, the mark, the icon, the name, the glyph — §13.7.3 rule 4, now with
+its assignments. What is built when: the token changes and the ladder land with 14g; the calendar
+dots and the database hue slider are their own small PRs after it.
