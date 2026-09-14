@@ -52,7 +52,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -149,7 +149,7 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher:
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            ShellTopBar(
                 title = { Text(stringResource(Res.string.nav_pages)) },
                 actions = {
                     // §3.1.7 — the quick switcher (step 8a): pages by title or text, `>` for commands.

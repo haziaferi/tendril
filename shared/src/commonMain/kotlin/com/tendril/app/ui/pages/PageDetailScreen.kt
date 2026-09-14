@@ -60,7 +60,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -210,7 +210,7 @@ fun PageDetailScreen(
             // second, separately-padded block below it — one compact header, not two
             // stacked ones (an empty app bar followed by a large title field read as
             // "doubled" height for no visual payoff).
-            TopAppBar(
+            ShellTopBar(
                 title = {
                     BasicTextField(
                         value = titleField,

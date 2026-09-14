@@ -42,7 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -160,7 +160,7 @@ fun RoadMapScreen(
         modifier = modifier,
         topBar = {
             Column {
-                TopAppBar(
+                ShellTopBar(
                     title = { Text(stringResource(Res.string.nav_road_map)) },
                     actions = {
                         // The only control on this screen that writes anything. Hidden rather

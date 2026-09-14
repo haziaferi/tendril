@@ -8,9 +8,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -24,13 +23,17 @@ import com.tendril.app.ui.settings.AiSettingsSection
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DesktopSettingsScreen(core: WorkbenchCore, modifier: Modifier = Modifier) {
-    Scaffold(modifier = modifier, topBar = { TopAppBar(title = { Text("Settings") }) }) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).verticalScroll(rememberScrollState())) {
+fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxSize()) {
+        ShellTopBar(title = { Text("Settings") })
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Text("Sync folder", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            syncSection()
+            HorizontalDivider()
             AiSettingsSection(core.aiKeyStore, core.keyValueStore)
             HorizontalDivider()
             Text(
-                "Theme, the sync folder, backups and reminders are Android-only for now.",
+                "Theme, backups and reminders are Android-only for now.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp),

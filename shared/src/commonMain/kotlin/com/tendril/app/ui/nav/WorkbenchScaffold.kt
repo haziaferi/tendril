@@ -3,14 +3,10 @@
 package com.tendril.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -28,6 +24,7 @@ import com.tendril.app.ui.pages.PageDatabaseScreen
 import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.track.RunningTimerBar
+import com.tendril.app.ui.track.RunningTimerRailFoot
 import com.tendril.app.ui.review.ReviewScreen
 import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.switcher.QuickSwitcher
@@ -42,10 +39,13 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import org.jetbrains.compose.resources.stringResource
 
 /**
- * The Workbench nav shell (§2.1/§2.2): persistent bottom tabs across five destinations.
+ * The Workbench nav shell (§2.1/§2.2): the five destinations as a bottom bar, or — B§13.4 14a,
+ * from 840 dp of width ([shellLayoutFor]) — as a left rail with the running timer at its foot.
+ * Both drawn by [ShellRail]/[ShellBottomBar] as the desktop mock draws them, not by Material's `Scaffold`; the
+ * routes, the switcher and Back are the same in both forms; only where the five buttons stand
+ * changes.
  *
  * Milestone 3 (tendril-windows-spec.md §6 step 3) — moved here so it renders on both Android and
  * desktop. Two Android-only capabilities that have no desktop equivalent (App Lock's
@@ -99,23 +99,9 @@ fun WorkbenchScaffold(
     }
 
     CompositionLocalProvider(LocalViewOnly provides viewOnly) {
-        Scaffold(
-            // No topBar here — every destination owns its own TopAppBar and handles the
-            // top status-bar/cutout inset itself. Leaving Scaffold's default contentWindowInsets
-            // (safeDrawing, top included) would apply that same top inset a second time on top
-            // of what each screen's own TopAppBar already consumes, pushing every header down
-            // by a redundant status-bar-height gap.
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            // §3.1.2 / audit 4.3 — no bottom bar while the keyguard is being bypassed. It used
-            // to render regardless, so a tap on Settings navigated there *over the lock screen*;
-            // the LaunchedEffect above deactivates on a page change, but it runs after that frame
-            // has already been drawn, which is exactly one frame of Settings too many. Removing
-            // the control removes the path, rather than racing it.
-            // §0.6.5 / step 7c — the running timer rides above the tabs: the one place every
-            // route on both platforms shares, since no screen's own TopAppBar is.
-            bottomBar = { if (!bypassingKeyguard) Column { RunningTimerBar(core); WorkbenchBottomBar(navState) } },
-        ) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
+        // The route content, identical under either shell — only the chrome around it differs.
+        val content: @Composable () -> Unit = {
+            Box(modifier = Modifier.fillMaxSize()) {
                 when (val current = route) {
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true })
@@ -171,6 +157,29 @@ fun WorkbenchScaffold(
                 }
             }
         }
+        // No top bar here — every destination owns its own [ShellTopBar] and handles the
+        // status-bar/cutout inset itself; the content gets no inset from the shell, so nothing
+        // is applied twice.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            when (shellLayoutFor(maxWidth.value)) {
+                ShellLayout.BAR -> Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f)) { content() }
+                    // §3.1.2 / audit 4.3 — no bottom bar while the keyguard is being bypassed. It used
+                    // to render regardless, so a tap on Settings navigated there *over the lock screen*;
+                    // the LaunchedEffect above deactivates on a page change, but it runs after that frame
+                    // has already been drawn, which is exactly one frame of Settings too many. Removing
+                    // the control removes the path, rather than racing it.
+                    // §0.6.5 / step 7c — the running timer rides above the tabs: the one place every
+                    // route on both platforms shares, since no screen's own top bar is.
+                    if (!bypassingKeyguard) { RunningTimerBar(core); ShellBottomBar(navState) }
+                }
+                // 14a — the same rule for the rail: no navigation while the keyguard is bypassed.
+                ShellLayout.RAIL -> Row(modifier = Modifier.fillMaxSize()) {
+                    if (!bypassingKeyguard) ShellRail(navState, foot = { RunningTimerRailFoot(core) })
+                    Box(modifier = Modifier.weight(1f)) { content() }
+                }
+            }
+        }
     }
 }
 
@@ -213,17 +222,3 @@ private fun switcherCommands(core: WorkbenchCore, navState: WorkbenchNavState): 
     }
 }
 
-@Composable
-private fun WorkbenchBottomBar(navState: WorkbenchNavState) {
-    val currentTab = navState.currentTab
-    NavigationBar {
-        WorkbenchDestination.entries.forEach { destination ->
-            NavigationBarItem(
-                selected = currentTab == destination,
-                onClick = { navState.switchTab(destination) },
-                icon = { Icon(destination.icon, contentDescription = null) },
-                label = { Text(stringResource(destination.labelRes)) },
-            )
-        }
-    }
-}

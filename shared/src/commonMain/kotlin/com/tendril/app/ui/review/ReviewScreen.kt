@@ -23,7 +23,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,7 +69,7 @@ fun ReviewScreen(core: WorkbenchCore, onBack: () -> Unit, onOpenPage: (Long) -> 
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            ShellTopBar(
                 title = { Text("Review") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
             )
