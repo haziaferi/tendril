@@ -93,6 +93,10 @@ dependencies {
     // a JVM unit test has to install for itself. Version-less: coroutines' own BOM aligns every
     // kotlinx-coroutines-* module, so this tracks whatever `libs.versions.toml` pins for core.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+    // DatabaseFileTest opens the *real* Android database file through the production path, with
+    // the framework's own SQLiteDatabase underneath — the one place a JVM fake cannot stand in,
+    // because the failure it guards against lives inside android.database.sqlite itself.
+    testImplementation("org.robolectric:robolectric:4.16.1")
     // On-device tests for the SAF write path — the one thing JVM unit tests can't reach,
     // since DocumentFile's behaviour is what SYNC-02 turns on.
     androidTestImplementation("androidx.test:runner:1.7.0")

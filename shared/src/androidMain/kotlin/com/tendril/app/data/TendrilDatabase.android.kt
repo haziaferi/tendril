@@ -2,11 +2,11 @@ package com.tendril.app.data
 
 import android.content.Context
 import androidx.room.Room
-import androidx.sqlite.driver.AndroidSQLiteDriver
 import kotlinx.coroutines.runBlocking
 import java.io.File
 
-private const val DB_NAME = "tendril.db"
+/** The database file's name under `Context.getDatabasePath` — public so a test can corrupt the real one. */
+const val TENDRIL_DB_NAME = "tendril.db"
 
 /** Android bootstrap for the shared [TendrilDatabase] — Context-based, same file name as before. */
 fun buildTendrilDatabase(context: Context): TendrilDatabase = openTendrilDatabase(context).database
@@ -26,8 +26,8 @@ fun openTendrilDatabase(context: Context): DatabaseOpen<TendrilDatabase> {
     return openOrRecover(
         build = {
             finishBuilding(
-                Room.databaseBuilder<TendrilDatabase>(context = app, name = DB_NAME),
-                AndroidSQLiteDriver(),
+                Room.databaseBuilder<TendrilDatabase>(context = app, name = TENDRIL_DB_NAME),
+                KeepFileOnCorruptionDriver(), // not AndroidSQLiteDriver — see that class for why
             )
         },
         probe = { runBlocking { it.purgedRecordDao().getAll() } },
@@ -38,7 +38,7 @@ fun openTendrilDatabase(context: Context): DatabaseOpen<TendrilDatabase> {
             // freshly created `tendril.db` would hand SQLite a WAL belonging to a different
             // database, which is a worse failure than the one being recovered from.
             for (suffix in listOf("", "-wal", "-shm")) {
-                val from = File(app.getDatabasePath(DB_NAME).path + suffix)
+                val from = File(app.getDatabasePath(TENDRIL_DB_NAME).path + suffix)
                 if (from.exists()) from.renameTo(File(from.path + UNOPENABLE_SUFFIX + stamp))
             }
         },

@@ -98,6 +98,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7d: planned vs actual) | `domain/plan/DayTotals` (planned = blocks + untimed estimates; logged per entry/habit; the day's logged spans, midnight-clipped; the mean session; the row segment), `TimeLogDao.observeBetween` back with its caller, `minuteTicker`. Day header *Planned · Logged*; row segments on the Day view and Tasks & Habits; the logged strip along Plan mode's gutter; *About N min each* on the habit detail. §0.6.5 complete; §0.8 step 7 done bar Review. 647 tests. | §0.6.5, §0.8 |
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
+| 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix. Desktop unaffected. Tests 690 → 691. | §9.10 |
 | 2026-09-14 (data colour) | B§13.8: colour is assigned to a dimension, not a thing. Tasks — urgency is the colour (a five-step heat ladder, a nearing deadline moves a task up it; `Entry.important` → `importance` 0–4 when built; the ladder one coral family in every register, a mark never text, low at 3:1, dark grounds pale → saturated), deadline ⚑ and repeat ↻ are glyphs, category is the database's or first label's hue as chip and calendar fill. Databases — any hue on the wheel, icon mandatory, their dates wear it. Event/habit layers fanned from the accent; labels re-solved per ground; callouts as tints; the hardcoded blues and grey canvas edges tokenised. Third mock `docs/mockups/coloured-elements.html`. Document only. | §2.3 |
 | 2026-09-14 (themes and colour) | §2.3 amended to B§13.7's model: ground (neutral or cold, never warm) × one hue solved to 8.0/7.6:1 × mode (System default); seven registers — Ink, Console, Swiss, Playground, Blush, Chalk, Kodachrome — settled on the two mocks under `docs/mockups/`; derived tokens solved to a floor; the eye pass; OLED as a phone-only setting; data-colour capacity measured per structure (importance ladder passes everywhere, six database colours nowhere) → *colour is never the only channel*. Not yet built; lands with 14g. Document only. | §2.3 |
 | 2026-09-13 (§0.10 item 14: desktop layout benchmark) | `docs/benchmarks.md` §13 written: the desktop's layout today measured (bottom bar, 29 sheets + 31 dialogs, no `WindowState`, phone rows, two shortcuts, fixed theme), the bar on six layout axes (Notion, Obsidian, Things as the frame; ten more), the patterns, and a pass of seven PRs 14a–14g with every decision answered on the interactive mock `docs/mockups/desktop-shell.html` — rail, right slide-overs, resizable + collapsible tree, measurements proportional to the screen on both platforms (one `LocalDensity` scale × a Compact / Comfortable / Touch profile chosen in desktop Settings, Compact default, hover-only controls), no Alt-mnemonics, the calendar's opening view as a setting (Week default), theme System / Light / Dark (System default). B§13.6's ten further diffs answered (1, 2, 8 folded into 14d/14e; 4 → 14h; 3, 5, 6, 7 after the pass; 9 no; 10 → item 19); item 20 opened (JNA 5.6.0 found in the Gradle cache: DPAPI wrap and a global hotkey are possible offline). §0.10 item 13 folded into 14f. Document only; no code. | §0.10 |
@@ -3925,7 +3926,27 @@ app stayed up, the database was set aside with its `-wal`/`-shm` and still held 
 opened afterwards, and the next sync refilled the fresh one completely with the reminder
 tombstone intact. The folder was unchanged by the emptied device's own write pass. What this
 run does **not** cover: file-level corruption that SQLite refuses before Room's migration
-machinery runs, which `openOrRecover`'s probe would catch but which has not been exercised.)* *(**Narrowed 2026-09-09 — S1b.** The destructive fallback is no
+machinery runs, which `openOrRecover`'s probe would catch but which has not been exercised.)* *(**Corrected 2026-09-14 — the
+uncovered case, exercised, and the probe did *not* catch it on Android.** Prompted by Lunar's
+finding of the same shape (its `openOrRecover` never saw a corrupt file because Room's default
+open-helper callback inherits the framework's `DefaultDatabaseErrorHandler`, which deletes and
+reopens before any probe). Tendril has no open helper — `finishBuilding` sets a driver — but the
+Android driver, `AndroidSQLiteDriver`, opens with `SQLiteDatabase.openOrCreateDatabase(name, null)`,
+and that `null` is the same handler by another route: `SQLiteDatabase.open()` catches the
+`SQLITE_NOTADB` its setup pragmas raise, deletes the file with its `-journal`/`-wal`/`-shm`, and
+reopens empty, all before Room runs a statement of ours. The probe then found a pristine database
+and reported nothing recovered — the "set aside, never deleted" rule was true of the helper and
+false of the app. **`DatabaseFileTest`** (Robolectric, the first in the suite — it has to be the
+real `android.database.sqlite`) writes plain text to `getDatabasePath("tendril.db")`, runs
+`openTendrilDatabase`, and asserts recovery reported, a `.unopenable-` copy holding the original
+bytes, and an empty database in the file's place; it failed on (a) before the fix. **The fix is
+`KeepFileOnCorruptionDriver`** in `androidMain`: `AndroidSQLiteDriver` with a no-op
+`DatabaseErrorHandler`, so the framework's one retry throws the corruption out of `open()`, Room
+surfaces it at the probe, and `openOrRecover` closes, renames aside and rebuilds as written. The
+desktop's `BundledSQLiteDriver` has no such handler and was never affected. What this test does
+**not** cover is a device: Robolectric runs the framework's Java `SQLiteDatabase` over a host
+SQLite, and the deletion it reproduced is that Java code's, so the evidence is the right layer —
+but the OnePlus run above remains the only on-hardware exercise of the path.)* *(**Narrowed 2026-09-09 — S1b.** The destructive fallback is no
 longer blanket: `fallbackToDestructiveMigrationFrom(dropAllTables = true, 1..7)` confines it to
 the pre-release schemas, which is the "destructive pre-v1" half of this section's own policy and
 nothing more. From v9 — the first release with a declared migration — a forgotten migration, a
