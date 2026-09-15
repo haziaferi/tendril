@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package com.tendril.app.ui.pages
 
@@ -111,6 +111,9 @@ import com.tendril.app.data.pagedatabase.formatPeriodAsHumanInterval
 import com.tendril.app.domain.indentTargetFor
 import com.tendril.app.domain.OutlineBlock
 import com.tendril.app.domain.outlineOf
+import com.tendril.app.domain.find.FindMatch
+import com.tendril.app.domain.find.findMatches
+import com.tendril.app.domain.find.nextIndex
 import com.tendril.app.domain.references.UnlinkedMention
 import com.tendril.app.domain.ai.AiVerb
 import androidx.compose.material3.CircularProgressIndicator
@@ -132,6 +135,8 @@ fun PageDetailScreen(
     onShowOnRoadMap: (Long) -> Unit = {},
     /** 14c — what the workspace adds to this bar; null on the phone. */
     paneChrome: PaneChrome? = null,
+    /** §0.10 item 19 — `WorkbenchNavState.findRequested`: each bump opens the find bar (Ctrl+F). */
+    findRequest: Int = 0,
 ) {
     val viewModel: PageDetailViewModel = viewModel(
         key = "page_$pageId",
@@ -175,6 +180,27 @@ fun PageDetailScreen(
     // §3.1.1 — the drawn order, with children under their parents. Recomputed only when the
     // block list itself changes, not on every recomposition.
     val outline = remember(blocks) { outlineOf(blocks) }
+    // §0.10 item 19 — find in page: the bar's state and the matches over the drawn blocks (the
+    // mapped-away descendants excluded, as they are from the list). The query change resets the
+    // cursor to the first match; a change in the matches (an edit) clamps it.
+    var findOpen by remember { mutableStateOf(false) }
+    var findQuery by remember { mutableStateOf("") }
+    var findCurrent by remember { mutableStateOf<Int?>(null) }
+    var findFocusTick by remember { mutableStateOf(0) }
+    var lastSelection by remember { mutableStateOf("") }
+    val mappedAway = remember(outline) { mappedDescendants(outline) }
+    val shownBlocks = remember(outline, mappedAway) { outline.filter { it.block.id !in mappedAway }.map { it.block } }
+    val matches: List<FindMatch> = remember(findQuery, shownBlocks, findOpen) { if (findOpen) findMatches(shownBlocks, findQuery) else emptyList() }
+    LaunchedEffect(findQuery) { findCurrent = if (matches.isEmpty()) null else 0 }
+    LaunchedEffect(matches) { findCurrent = if (matches.isEmpty()) null else (findCurrent ?: 0).coerceIn(0, matches.lastIndex) }
+    LaunchedEffect(findRequest) {
+        if (findRequest > 0) {
+            if (!findOpen && lastSelection.isNotBlank()) findQuery = lastSelection.trim()
+            findOpen = true
+            findFocusTick++
+        }
+    }
+    androidx.compose.ui.backhandler.BackHandler(enabled = findOpen) { findOpen = false }
     val labels by viewModel.labels.collectAsState()
     val rowDatabase by viewModel.rowDatabase.collectAsState()
     val memberships by viewModel.memberships.collectAsState()
@@ -264,6 +290,7 @@ fun PageDetailScreen(
                             }
                         }
                         DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = { showMoreMenu = false; onShowOnRoadMap(pageId) })
+                        DropdownMenuItem(text = { Text("Find in page") }, onClick = { showMoreMenu = false; findOpen = true; findFocusTick++ })
                         DropdownMenuItem(text = { Text("History") }, onClick = { showMoreMenu = false; showHistory = true })
                         DropdownMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
                         DropdownMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
@@ -274,6 +301,18 @@ fun PageDetailScreen(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            if (findOpen) {
+                FindBar(
+                    query = findQuery,
+                    onQueryChange = { findQuery = it },
+                    current = findCurrent,
+                    total = matches.size,
+                    onNext = { findCurrent = nextIndex(findCurrent, matches.size, forward = true) },
+                    onPrevious = { findCurrent = nextIndex(findCurrent, matches.size, forward = false) },
+                    onClose = { findOpen = false },
+                    focusTick = findFocusTick,
+                )
+            }
             HorizontalDivider()
 
             Row(
@@ -308,6 +347,18 @@ fun PageDetailScreen(
             // keeps its first visible item where it was, so the fields a person just gained by
             // labelling the page would appear scrolled out of sight. Show them.
             val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            // §0.10 item 19 — the current match scrolls into view. The blocks are the list's last
+            // run, so their first index is the total minus what follows them (the Add block item
+            // when unlocked, the backlinks panel) minus their count — no counting of the journal
+            // strip and the membership strips above.
+            LaunchedEffect(findCurrent, findOpen) {
+                val match = findCurrent?.let { matches.getOrNull(it) } ?: return@LaunchedEffect
+                val position = shownBlocks.indexOfFirst { it.id == match.blockId }
+                if (position < 0) return@LaunchedEffect
+                val trailing = if (contentLocked) 1 else 2
+                val first = listState.layoutInfo.totalItemsCount - trailing - shownBlocks.size
+                if (first >= 0) listState.animateScrollToItem(first + position)
+            }
             var membershipCount by remember { mutableStateOf(-1) }
             LaunchedEffect(memberships.size) {
                 if (membershipCount in 0 until memberships.size) listState.scrollToItem(0)
@@ -354,14 +405,23 @@ fun PageDetailScreen(
                 // §0.6.2 — a block shown as a mind map keeps its own row and replaces its subtree
                 // with the inert card; the descendants are still in `outline`, just not drawn as
                 // rows. `mappedAway` is that set, computed once per outline.
-                val mappedAway = mappedDescendants(outline)
                 items(outline.filter { it.block.id !in mappedAway }, key = { it.block.id }) { entry ->
+                    val markColours = MaterialTheme.colorScheme
+                    val blockMatches = matches.filter { it.blockId == entry.block.id }
+                    val findMarks = if (blockMatches.isEmpty()) null else FindMarks(
+                        ranges = blockMatches.map { it.range },
+                        current = findCurrent?.let { matches.getOrNull(it) }?.takeIf { it.blockId == entry.block.id }?.range,
+                        mark = markColours.primaryContainer, onMark = markColours.onPrimaryContainer,
+                        currentMark = markColours.primary, onCurrentMark = markColours.onPrimary,
+                    )
                     BlockRow(
                         block = entry.block,
                         depth = entry.depth,
                         listPosition = entry.listPosition,
                         viewModel = viewModel,
                         onLongPress = { blockActionSheetFor = entry.block },
+                        findMarks = findMarks,
+                        onSelection = { lastSelection = it },
                         onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
                         onRequestBlockReference = { blockReferenceAfter = entry.block },
                         onOpenPage = onOpenPage,
@@ -585,6 +645,10 @@ private fun BlockRow(
     onRequestMention: (baseContent: String) -> Unit,
     onRequestBlockReference: () -> Unit = {},
     onOpenPage: (Long) -> Unit,
+    /** §0.10 item 19 — this block's find marks, null when it has none. */
+    findMarks: FindMarks? = null,
+    /** The text selected in this block, reported so Ctrl+F can seed the query with it. */
+    onSelection: (String) -> Unit = {},
 ) {
     // Keyed only on block.id, not block.content: every edit round-trips through Room and
     // re-emits this same block via the Flow, and re-keying on content would reset this
@@ -687,6 +751,7 @@ private fun BlockRow(
                         value = fieldValue,
                         onValueChange = { newValue ->
                             fieldValue = newValue
+                            if (newValue.selection.length > 0) onSelection(newValue.text.substring(newValue.selection.min, newValue.selection.max))
                             val text = newValue.text
                             // §3.1.1 — "a slash-command menu (/) to insert any block type at
                             // the cursor." Typing '/' at the end of the block's content opens
@@ -723,7 +788,7 @@ private fun BlockRow(
                             }
                         },
                         textStyle = blockTextStyle(block.type).copy(color = MaterialTheme.colorScheme.onSurface),
-                        visualTransformation = spansVisualTransformation(block.formattingSpans),
+                        visualTransformation = spansVisualTransformation(block.formattingSpans, findMarks),
                         readOnly = locked,
                         modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused },
                     )

@@ -106,7 +106,7 @@ fun shortcutRows(): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
         add(ShortcutRow("Back · close", listOf("Esc")))
     }
     val create = listOf(ShortcutAction.NEW_PAGE, ShortcutAction.NEW_TASK, ShortcutAction.JOURNAL_TODAY).map { ShortcutRow(it.label, listOf(chord(it))) }
-    val find = listOf(ShortcutAction.SWITCHER, ShortcutAction.SHORTCUTS).map { ShortcutRow(it.label, listOf(chord(it))) }
+    val find = listOf(ShortcutAction.SWITCHER, ShortcutAction.FIND_IN_PAGE, ShortcutAction.SHORTCUTS).map { ShortcutRow(it.label, listOf(chord(it))) }
     val lists = listOf(
         ShortcutRow("Move · open", listOf("↑", "↓", "↵")),
         ShortcutRow("Expand · collapse in the tree", listOf("→", "←")),

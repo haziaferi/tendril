@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (find in page) | §3.1.1 amended: the find bar (option A of `docs/mockups/find-in-page.html`), `domain/find/FindInPage.kt`, `ui/pages/FindBar.kt`, `FindMarks` on `spansVisualTransformation`, Ctrl+F in `Shortcuts.kt` and `WorkbenchNavState.findRequested`, *Find in page* in the page's `···`. §0.10 item 19 resolved; item 14's list gains the `find` token and two find notes. Critiques: `docs/critiques/find-in-page-mock.md`, `find-in-page-function.md`. Desktop verified; the phone walk pending. Tests 725 → 730. | §3.1.1, §0.10 |
 | 2026-09-16 (14e — the keyboard) | §2.2 *The keyboard* (new bullet): one binding table (`ui/nav/Shortcuts.kt`) and the F1 card generated from it (`ShortcutsOverlay.kt`); Alt+← / Alt+→ and the mouse's side buttons with a forward list on `WorkbenchNavState`; Ctrl+Shift+N's `requestQuickAdd`; `ui/components/ListKeyboard.kt` on the tree and the Tasks list. §0.10 item 14: 14e shipped; item 18 struck (resolved by 14d); item 19 (find in page) added. Critiques: `docs/critiques/keyboard-desktop.md`, `keyboard-function.md`. Tests 713 → 725. | §2.2, §0.10 |
 | 2026-09-15 (14d — under a pointer) | §2.2 *Under a pointer* (new bullet): right-click = the pointer's long-press on rows and blocks (`ui/components/Pointer.kt`, `TextContextMenuExtras` expect/actual), hover-revealed `···` at 28 dp, the toolbar floating under a pointer profile (`LocalDensityProfile`), `PagesViewModel.moveToTrash` lock-gated; §3.1.1 amended (the toolbar's two homes). Critique passes in `docs/critiques/`; their High: the RELATION branch in the row-as-page strip. `MoreHoriz` on every bar, the tree header at the page bar's height, the outlined journal book. §0.10 item 14: 14d shipped, the deferred list. Tests 711 → 713. | §2.2, §3.1.1, §0.10 |
 | 2026-09-15 (14c — two panes) | §3.1 amended: on a wide window the Pages tab is the tree beside the open page (`PagesWorkspace`, `PagesTreeState`, `PaneChrome`, `PageRoute`); chrome split per pane — option B of `docs/mockups/pages-two-panes.html`; `showPage` replaces, `openPage` pushes; `PageDao.observeChildren`/`observeParentsWithChildren`; Ctrl+\ on the desktop; the phone unchanged. §0.10 item 14: 14c shipped. Tests 703 → 711. | §3.1, §0.10 |
@@ -645,10 +646,12 @@ Genuinely undecided — distinct from §0.7.
     *Resolved 2026-09-15 (14d): `RowUnboundEditor` gained a read-only RELATION branch — the
     titles, "—" when empty — after `docs/critiques/pages-desktop.md` #1 found the uid in an
     editable field; editing stays in the Table.*
-19. **Find in page** (Ctrl+F) — decided 2026-09-15 as its own PR after 14e: a find bar over the
+19. ~~**Find in page** (Ctrl+F) — decided 2026-09-15 as its own PR after 14e: a find bar over the
     open page's blocks, a match count, next/previous, the match highlighted in the text through
     the span transformation (`spansVisualTransformation`), Esc closing it; the chord joins
-    `Shortcuts.kt`'s table and the F1 card when it ships.
+    `Shortcuts.kt`'s table and the F1 card when it ships.~~ *Resolved 2026-09-16 — §3.1.1
+    (amended): the bar, the blocks-only match set, the marks through the transformation, Ctrl+F
+    in the table. Desktop verified; the phone walk pending (testing paused).*
 16. **Database-level history** — §0.6.13 versions a page's title and blocks only. A database's
     columns, views and a row's property values have no history; if a lost column or value is ever
     missed, the record to version is the full `PageSnapshotRecord` with a restore that goes through
@@ -703,8 +706,10 @@ Genuinely undecided — distinct from §0.7.
     left this list for later PRs: type steps too close on the desktop (14g), the Table's touch
     row height beside 32 dp tree rows (14f), the canvas caption's 2.8:1 contrast and "tap"
     wording, the chip row's rhythm, "2 row(s)" with dashes, the phone card's kind line that
-    repeats its icon, a page-ground click that clears no focus (small things, to close with
-    14h).*
+    repeats its icon, a page-ground click that clears no focus, a `find` token per register so
+    a found word and a selected row stop sharing `accentSoft` (14g), find's scroll landing a
+    match already on screen at the top, a word living only inside a mapped-away subtree not
+    found (small things, to close with 14h).*
     ***14e shipped 2026-09-16** — the keyboard (§2.2 *The keyboard*): one table, the F1 card
     generated from it, Alt+arrows and the side buttons for back/forward, Ctrl+Shift+N's
     quick-add intent, ↑↓↵→← and type-ahead in the tree and the Tasks list. Two critique passes
@@ -1143,7 +1148,24 @@ the same reason (§5.6) — but it is a different interaction from the one speci
 section should say which one a reader will actually find. The formatting toolbar is not floating
 either: it renders inline, beneath the block being edited and inside that block's own column, rather
 than as a popup over the page.)* *(**Amended 2026-09-15 — 14d.** Two homes now: floating above the
-block under a pointer profile, inline under Touch — §2.2 *Under a pointer*.)*
+block under a pointer profile, inline under Touch — §2.2 *Under a pointer*.)* *(**Amended
+2026-09-16 — §0.10 item 19, find in page.** A 44 dp bar under the page's bar on both platforms —
+option A of `docs/mockups/find-in-page.html`, the browsers' and Bear's home; B's floating card
+measured as covering the first line and the `···` (`docs/critiques/find-in-page-mock.md`) — with a
+full-width field, the count (*2 of 3*, *No matches* in the count's own colour), ↑ ↓ ×. Opened
+from `···` → *Find in page* on both platforms and by **Ctrl+F** on the desktop (`Shortcuts.kt`'s
+table, the F1 card; `WorkbenchNavState.findRequested`, the third cross-tab intent and the first
+that changes no route); a selection in a block seeds the query. **The blocks' text only**
+(decided 2026-09-16): every occurrence in outline order, case-insensitive, `domain/find/
+FindInPage.kt`; not the title, which is on screen, not a row's property values, which the
+Table's filter owns; dividers, images, mention and canvas blocks skipped, a block reference's
+cached text counted. ↵ next, Shift+↵ previous, wrapping; Esc closes through a `BackHandler`
+armed only while open (the 14e rule) and leaves the page on the current match. The marks are
+drawn **inside the text** by `spansVisualTransformation` (`FindMarks`), so a match in bold is
+bold and marked and the marks follow edits; the marks wear `accentSoft` and the current one
+`accent` — a tint shared with selection until 14g's registers give find its own token. A
+Database or Canvas page ignores Ctrl+F. The phone half of the walk is pending (testing paused
+2026-09-16); `docs/critiques/find-in-page-function.md`.)*
 
 **Full-text search (confirmed necessary):** a Room FTS4/5 virtual table indexing each page's
 concatenated block plain-text, rebuilt on block write. Page-level granularity for v1, not per-block

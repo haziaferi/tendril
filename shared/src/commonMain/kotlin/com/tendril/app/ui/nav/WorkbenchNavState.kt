@@ -100,4 +100,11 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
         quickAddRequested = true
         switchTab(WorkbenchDestination.TASKS_HABITS)
     }
+
+    /** §0.10 item 19 — Ctrl+F: a counter the open page reads; each bump opens (or re-focuses)
+     * its find bar. A Database or Canvas page ignores it — their own filters. The third
+     * cross-tab intent, and the first that changes no route. */
+    var findRequested: Int by mutableStateOf(0)
+
+    fun requestFind() { findRequested++ }
 }

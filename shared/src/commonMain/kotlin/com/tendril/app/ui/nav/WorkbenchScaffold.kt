@@ -134,6 +134,7 @@ fun WorkbenchScaffold(
             ShortcutAction.FORWARD -> navState.forward()
             ShortcutAction.NEW_PAGE -> pagesViewModel.createBlankPage("") { navState.openPage(it) }
             ShortcutAction.NEW_TASK -> navState.requestQuickAdd()
+            ShortcutAction.FIND_IN_PAGE -> navState.requestFind()
             ShortcutAction.JOURNAL_TODAY -> pagesViewModel.openJournal(LocalDate.now()) { navState.openPage(it) }
             else -> action.tab()?.let { navState.switchTab(it) }
         }

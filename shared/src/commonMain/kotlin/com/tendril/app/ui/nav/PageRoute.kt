@@ -51,6 +51,7 @@ fun PageRoute(
             onShowOnRoadMap = navState::showOnRoadMap,
             onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
             paneChrome = paneChrome,
+            findRequest = navState.findRequested,
         )
     }
 }
