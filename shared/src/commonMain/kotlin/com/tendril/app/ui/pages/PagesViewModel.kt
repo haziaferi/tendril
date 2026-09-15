@@ -49,6 +49,17 @@ class PagesViewModel(
     val rootPages: StateFlow<List<Page>> =
         pageDao.observeRootPages().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 14c — the tree's chevrons: ids of pages with live children. */
+    val parentsWithChildren: StateFlow<Set<Long>> =
+        pageDao.observeParentsWithChildren().map { it.toSet() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    private val childrenFlows = mutableMapOf<Long, StateFlow<List<Page>>>()
+
+    /** 14c — one expanded row's children, shared per id so re-expanding costs nothing. */
+    fun childrenOf(pageId: Long): StateFlow<List<Page>> = childrenFlows.getOrPut(pageId) {
+        pageDao.observeChildren(pageId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }
+
     /** §3.1.3 — "the person's own saved templates," listed in "New from template." */
     val templates: StateFlow<List<Page>> =
         pageDao.observeTemplates().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

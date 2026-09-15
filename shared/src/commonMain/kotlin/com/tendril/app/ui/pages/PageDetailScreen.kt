@@ -60,6 +60,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -109,11 +110,14 @@ import com.tendril.app.domain.BindingRole
 fun PageDetailScreen(
     core: WorkbenchCore,
     pageId: Long,
-    onBack: () -> Unit,
+    /** Null when the page is the Pages workspace's right pane (14c): no back arrow, Escape closes. */
+    onBack: (() -> Unit)?,
     onOpenPage: (Long) -> Unit,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     /** §3.4 (step 8c) — "Show on Road Map" in `···`: the map, focused on this page. */
     onShowOnRoadMap: (Long) -> Unit = {},
+    /** 14c — what the workspace adds to this bar; null on the phone. */
+    paneChrome: PaneChrome? = null,
 ) {
     val viewModel: PageDetailViewModel = viewModel(
         key = "page_$pageId",
@@ -224,8 +228,9 @@ fun PageDetailScreen(
                         singleLine = true,
                     )
                 },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } else paneChrome?.leading?.invoke() },
                 actions = {
+                    paneChrome?.actions?.invoke(this)
                     // The menu trigger itself only ever respects View-Only, never
                     // checkbox-only's own contentLocked — checkbox-only mode's "turn it back
                     // off" item lives inside this same menu and must stay reachable while it's
@@ -248,6 +253,7 @@ fun PageDetailScreen(
                         DropdownMenuItem(text = { Text("History") }, onClick = { showMoreMenu = false; showHistory = true })
                         DropdownMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
                         DropdownMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
+                        paneChrome?.menuItems?.invoke(this)
                     }
                 },
             )
@@ -502,7 +508,7 @@ fun PageDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showDeleteConfirm = false; viewModel.trashPage(onBack) }) { Text("Delete") }
+                TextButton(onClick = { showDeleteConfirm = false; viewModel.trashPage(onBack ?: paneChrome?.onClosed ?: {}) }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } },
         )

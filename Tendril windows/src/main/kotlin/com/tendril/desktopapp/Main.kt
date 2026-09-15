@@ -52,6 +52,7 @@ import androidx.navigationevent.NavigationEventInput
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.ui.switcher.SwitcherState
+import com.tendril.app.ui.pages.PagesTreeState
 import androidx.compose.ui.input.key.isCtrlPressed
 import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
@@ -108,6 +109,8 @@ fun main() {
     val folderManager = DesktopSyncFolderManager()
     val escapeBack = EscapeBackInput()
     val switcher = SwitcherState()
+    // 14c — the Pages tree pane's state, here so Ctrl+\ can reach it from the window's key handler.
+    val treeState = PagesTreeState(core.keyValueStore)
 
     application {
         // B§13.4 14a — the window remembers itself: size and position from the last run, kept in
@@ -133,6 +136,8 @@ fun main() {
                 if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) escapeBack.back()
                 // §3.1.7 — Ctrl+K opens the quick switcher (step 8a); the second desktop shortcut.
                 if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.K) { switcher.open = true; return@Window true }
+                // 14c — Ctrl+\ hides or shows the Pages tree (B§13.5 #3); the third desktop shortcut.
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.Backslash) { treeState.toggle(); return@Window true }
                 false
             },
         ) {
@@ -149,7 +154,7 @@ fun main() {
                 }
             }
             TendrilTheme(colorTheme = TendrilColorTheme.INK, mode = TendrilMode.LIGHT, typeface = TendrilTypeface.SANS) {
-                App(core, orchestrator, folderManager, escapeBack, switcher)
+                App(core, orchestrator, folderManager, escapeBack, switcher, treeState)
             }
         }
     }
@@ -168,7 +173,7 @@ private class EscapeBackInput : NavigationEventInput() {
 }
 
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState, treeState: PagesTreeState) {
     // The dispatcher is a composition local of the window's content, so the key input can only be
     // attached from inside it; the key event itself arrives at the window, outside. Hence the
     // input is built in `main` and joined here.
@@ -187,6 +192,7 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
             WorkbenchScaffold(
                 core = core,
                 switcher = switcher,
+                treeState = treeState,
                 // §0.8 step 6a — the shared Calendar. Google Calendar sync is Play Services and
                 // reminders are AlarmManager, so the settings slot says so and the bell is absent.
                 calendarContent = { onOpenPage ->

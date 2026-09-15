@@ -98,34 +98,109 @@ import org.jetbrains.compose.resources.stringResource
 private const val JOURNAL_LOCKED_MESSAGE =
     "Nothing is written for that day yet, and View-Only is on — turn it off to start it."
 
+/**
+ * The Pages tab on a phone (and on any window below 840 dp): the list, the FAB, a page pushed
+ * full-screen. On a wide window the same tab is [PagesWorkspace] — the tree beside the page —
+ * and both are built on [PagesHost], which owns the ViewModel, the New sheet, the journal date
+ * picker, the Trash sheet and the snackbar, so the two shapes share one set of actions.
+ */
 @Composable
 fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher: () -> Unit, modifier: Modifier = Modifier) {
-    val viewModel: PagesViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer {
-                PagesViewModel(
-                    core.database.pageDao(),
-                    core.database.pageDatabaseDao(),
-                    core.database.propertyDao(),
-                    core.database.pageFtsDao(),
-                    core.database.labelDao(),
-                    core.purgeRegistry,
-                    core.databaseSyncManager,
-                    core.templateManager,
-                    core.viewLockState,
-                    core.pageContentRepository,
+    PagesHost(core, onOpenPage) { vm, actions, snackbarHostState ->
+        val pages by vm.filteredPages.collectAsState()
+        val viewOnly = actions.viewOnly
+        Scaffold(
+            modifier = modifier,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                ShellTopBar(
+                    title = { Text(stringResource(Res.string.nav_pages)) },
+                    actions = {
+                        IconButton(onClick = onOpenSwitcher) {
+                            Icon(Icons.Filled.Search, contentDescription = "Search pages")
+                        }
+                        JournalButton(actions)
+                        ViewOnlyButton(actions)
+                        IconButton(onClick = actions.openTrash) {
+                            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
+                        }
+                    },
                 )
+            },
+            floatingActionButton = {
+                if (!viewOnly) {
+                    FloatingActionButton(onClick = actions.newPage) {
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.empty_pages_cta))
+                    }
+                }
+            },
+        ) { innerPadding ->
+            Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                LabelFilterRow(vm)
+                if (pages.isEmpty()) {
+                    EmptyState(
+                        icon = Icons.Outlined.Description,
+                        message = stringResource(Res.string.empty_pages_message),
+                        ctaLabel = if (viewOnly) null else stringResource(Res.string.empty_pages_cta),
+                        onCta = if (viewOnly) null else actions.newPage,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+                        items(pages, key = { it.id }) { page ->
+                            PageCard(page = page, onClick = { onOpenPage(page.id) })
+                        }
+                    }
+                }
             }
         }
-    )
-    val pages by viewModel.filteredPages.collectAsState()
-    val allLabels by viewModel.allLabels.collectAsState()
-    val selectedLabelIds by viewModel.selectedLabelIds.collectAsState()
-    val boundLabelIds by viewModel.boundLabelIds.collectAsState()
+    }
+}
+
+/** The tab's verbs, handed to whichever shape draws the tab. [viewOnly] is read so a control can hide or grey itself. */
+class PagesActions(
+    val viewOnly: Boolean,
+    val newPage: () -> Unit,
+    val openJournalToday: () -> Unit,
+    val pickJournalDate: () -> Unit,
+    val toggleViewOnly: () -> Unit,
+    val openTrash: () -> Unit,
+)
+
+@Composable
+internal fun rememberPagesViewModel(core: WorkbenchCore): PagesViewModel = viewModel(
+    factory = viewModelFactory {
+        initializer {
+            PagesViewModel(
+                core.database.pageDao(),
+                core.database.pageDatabaseDao(),
+                core.database.propertyDao(),
+                core.database.pageFtsDao(),
+                core.database.labelDao(),
+                core.purgeRegistry,
+                core.databaseSyncManager,
+                core.templateManager,
+                core.viewLockState,
+                core.pageContentRepository,
+            )
+        }
+    }
+)
+
+/**
+ * Owns what both shapes of the tab share: the ViewModel, the New sheet, the journal date
+ * picker, the Trash sheet, the snackbar the lock speaks through. [content] draws the tab.
+ */
+@Composable
+internal fun PagesHost(
+    core: WorkbenchCore,
+    onOpenPage: (Long) -> Unit,
+    content: @Composable (PagesViewModel, PagesActions, SnackbarHostState) -> Unit,
+) {
+    val viewModel = rememberPagesViewModel(core)
     val viewOnly by viewModel.viewOnly.collectAsState()
     var showNewSheet by remember { mutableStateOf(false) }
     var showTrash by remember { mutableStateOf(false) }
-    var showJournalMenu by remember { mutableStateOf(false) }
     var showJournalDatePicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -144,102 +219,18 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher:
             onOpen = onOpenPage,
         )
     }
-
-    Scaffold(
-        modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            ShellTopBar(
-                title = { Text(stringResource(Res.string.nav_pages)) },
-                actions = {
-                    // §3.1.7 — the quick switcher (step 8a): pages by title or text, `>` for commands.
-                    IconButton(onClick = onOpenSwitcher) {
-                        Icon(Icons.Filled.Search, contentDescription = "Search pages")
-                    }
-                    Box {
-                        // §3.1.2 — deliberately *not* `enabled = !viewOnly`, and grouped with the
-                        // Trash button below rather than the FAB. [PagesViewModel.openJournal] was
-                        // restructured to keep navigating to a day that already exists while the
-                        // lock is on, because View-Only "makes pages read-only", it does not hide
-                        // them — and disabling the only way in made that read path unreachable
-                        // from the screen, so the guard and the affordance contradicted each other
-                        // inside one change. The guard is what makes the write safe; this button
-                        // withholds nothing. The refusal it can now produce is spoken instead —
-                        // see [openJournalDay].
-                        IconButton(onClick = { showJournalMenu = true }) {
-                            Icon(Icons.Filled.Book, contentDescription = "Journal")
-                        }
-                        DropdownMenu(expanded = showJournalMenu, onDismissRequest = { showJournalMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Today's journal") },
-                                onClick = { showJournalMenu = false; openJournalDay(java.time.LocalDate.now()) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Pick a date…") },
-                                onClick = { showJournalMenu = false; showJournalDatePicker = true },
-                            )
-                        }
-                    }
-                    IconButton(onClick = { viewModel.setViewOnly(!viewOnly) }) {
-                        Icon(
-                            imageVector = if (viewOnly) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                            contentDescription = if (viewOnly) "Turn off View-Only" else "Turn on View-Only",
-                        )
-                    }
-                    // §3.1.2 — deliberately *outside* the `if (!viewOnly)` that hides the FAB.
-                    // The Trash is a list of pages; looking at one is reading, and View-Only
-                    // makes pages read-only rather than invisible. The two destructive actions
-                    // reachable from inside it go unavailable instead — see [TrashSheet].
-                    IconButton(onClick = { showTrash = true }) {
-                        Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
-                    }
-                },
-            )
-        },
-        floatingActionButton = {
-            if (!viewOnly) {
-                FloatingActionButton(onClick = { showNewSheet = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.empty_pages_cta))
-                }
-            }
-        },
-    ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (allLabels.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    allLabels.forEach { label ->
-                        FilterChip(
-                            selected = label.id in selectedLabelIds,
-                            onClick = { viewModel.toggleLabelFilter(label.id) },
-                            label = { Text(label.name, maxLines = 1) },
-                            // §0.6.8 / B§12.0 — the small mark on a label that brings fields.
-                            leadingIcon = if (label.id in boundLabelIds) {
-                                { Icon(Icons.Filled.TableChart, contentDescription = "Brings a database's fields", modifier = Modifier.size(14.dp)) }
-                            } else null,
-                        )
-                    }
-                }
-            }
-            if (pages.isEmpty()) {
-                EmptyState(
-                    icon = Icons.Outlined.Description,
-                    message = stringResource(Res.string.empty_pages_message),
-                    ctaLabel = if (viewOnly) null else stringResource(Res.string.empty_pages_cta),
-                    onCta = if (viewOnly) null else { { showNewSheet = true } },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
-                    items(pages, key = { it.id }) { page ->
-                        PageCard(page = page, onClick = { onOpenPage(page.id) })
-                    }
-                }
-            }
-        }
+    val actions = remember(viewOnly) {
+        PagesActions(
+            viewOnly = viewOnly,
+            newPage = { showNewSheet = true },
+            openJournalToday = { openJournalDay(java.time.LocalDate.now()) },
+            pickJournalDate = { showJournalDatePicker = true },
+            toggleViewOnly = { viewModel.setViewOnly(!viewOnly) },
+            openTrash = { showTrash = true },
+        )
     }
+
+    content(viewModel, actions, snackbarHostState)
 
     if (showJournalDatePicker) {
         val state = rememberDatePickerState()
@@ -270,9 +261,65 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher:
         )
     }
 
-
     if (showTrash) {
         TrashSheet(core = core, viewModel = viewModel, onDismiss = { showTrash = false })
+    }
+}
+
+/** The journal button and its two-item menu — today, or a picked date. */
+@Composable
+internal fun JournalButton(actions: PagesActions, modifier: Modifier = Modifier) {
+    var showJournalMenu by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { showJournalMenu = true }, modifier = modifier) {
+            Icon(Icons.Filled.Book, contentDescription = "Journal")
+        }
+        DropdownMenu(expanded = showJournalMenu, onDismissRequest = { showJournalMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Today's journal") },
+                onClick = { showJournalMenu = false; actions.openJournalToday() },
+            )
+            DropdownMenuItem(
+                text = { Text("Pick a date…") },
+                onClick = { showJournalMenu = false; actions.pickJournalDate() },
+            )
+        }
+    }
+}
+
+/** The View-Only eye (§3.1.2) — the one control that stays reachable while the lock is on. */
+@Composable
+internal fun ViewOnlyButton(actions: PagesActions, modifier: Modifier = Modifier) {
+    IconButton(onClick = actions.toggleViewOnly, modifier = modifier) {
+        Icon(
+            imageVector = if (actions.viewOnly) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+            contentDescription = if (actions.viewOnly) "Turn off View-Only" else "Turn on View-Only",
+        )
+    }
+}
+
+/** The label filter chips, when there are labels; a horizontal row on the phone and in the tree alike. */
+@Composable
+internal fun LabelFilterRow(viewModel: PagesViewModel, horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp) {
+    val allLabels by viewModel.allLabels.collectAsState()
+    val selectedLabelIds by viewModel.selectedLabelIds.collectAsState()
+    val boundLabelIds by viewModel.boundLabelIds.collectAsState()
+    if (allLabels.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = horizontalPadding, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            allLabels.forEach { label ->
+                FilterChip(
+                    selected = label.id in selectedLabelIds,
+                    onClick = { viewModel.toggleLabelFilter(label.id) },
+                    label = { Text(label.name, maxLines = 1) },
+                    leadingIcon = if (label.id in boundLabelIds) {
+                        { Icon(Icons.Filled.TableChart, contentDescription = "Brings a database's fields", modifier = Modifier.size(14.dp)) }
+                    } else null,
+                )
+            }
+        }
     }
 }
 

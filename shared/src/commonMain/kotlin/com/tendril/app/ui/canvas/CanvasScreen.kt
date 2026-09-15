@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -47,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -93,7 +95,7 @@ private const val MAX_SCALE = 2.5f
  * and edges always stay aligned to each other regardless of zoom level.
  */
 @Composable
-fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, onOpenPage: (Long) -> Unit) {
+fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpenPage: (Long) -> Unit, paneChrome: PaneChrome? = null) {
     val viewModel: CanvasViewModel = viewModel(
         key = "canvas_$pageId",
         factory = viewModelFactory {
@@ -140,7 +142,18 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, onOpenPa
                         singleLine = true,
                     )
                 },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } else paneChrome?.leading?.invoke() },
+                actions = {
+                    // The canvas has no menu of its own; as a pane it gains the workspace's (View-Only, Trash…).
+                    if (paneChrome != null) {
+                        var showPaneMenu by remember { mutableStateOf(false) }
+                        paneChrome.actions(this)
+                        Box {
+                            IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                            DropdownMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) }
+                        }
+                    }
+                },
             )
         },
         floatingActionButton = {

@@ -176,6 +176,8 @@ class FakePageDao(private val store: FakePageStore) : PageDao {
         store.pages.values.filter { it.parentId == null && !it.isTemplate && it.databaseId == null && it.deletedAt == null }
     )
     override fun observeTemplates(): Flow<List<Page>> = flowOf(store.pages.values.filter { it.isTemplate && it.deletedAt == null })
+    override fun observeChildren(parentId: Long): Flow<List<Page>> = flowOf(store.pages.values.filter { it.parentId == parentId && it.deletedAt == null }.sortedBy { it.title })
+    override fun observeParentsWithChildren(): Flow<List<Long>> = flowOf(store.pages.values.filter { it.deletedAt == null }.mapNotNull { it.parentId }.distinct())
     override fun observeTrash(): Flow<List<Page>> = flowOf(store.pages.values.filter { it.deletedAt != null })
 }
 

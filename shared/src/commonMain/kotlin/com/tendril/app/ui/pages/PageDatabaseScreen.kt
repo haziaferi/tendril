@@ -42,6 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -83,7 +84,7 @@ import java.time.LocalDate
 private val CELL_WIDTH = 160.dp
 
 @Composable
-fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, onOpenPage: (Long) -> Unit) {
+fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpenPage: (Long) -> Unit, paneChrome: PaneChrome? = null) {
     val viewModel: PageDatabaseViewModel = viewModel(
         key = "database_$pageId",
         factory = viewModelFactory {
@@ -154,8 +155,9 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                         singleLine = true,
                     )
                 },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } else paneChrome?.leading?.invoke() },
                 actions = {
+                    paneChrome?.actions?.invoke(this)
                     IconButton(onClick = { showMenu = true }, enabled = !viewOnly) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         val syncOn = database?.syncToTasks == true
@@ -176,6 +178,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: () -> Unit, on
                         // §0.6.14 — which relation column means "blocked by".
                         DropdownMenuItem(text = { Text("Blocked by…") }, onClick = { showMenu = false; showBlockedBy = true })
                         DropdownMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
+                        paneChrome?.menuItems?.invoke(this)
                     }
                 },
             )

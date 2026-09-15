@@ -19,13 +19,11 @@ import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Density
-import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
-import com.tendril.app.ui.canvas.CanvasScreen
-import com.tendril.app.ui.pages.PageDatabaseScreen
-import com.tendril.app.ui.pages.PageDetailScreen
 import com.tendril.app.ui.pages.PagesScreen
+import com.tendril.app.ui.pages.PagesTreeState
+import com.tendril.app.ui.pages.PagesWorkspace
 import com.tendril.app.ui.track.RunningTimerBar
 import com.tendril.app.ui.track.RunningTimerRailFoot
 import com.tendril.app.ui.review.ReviewScreen
@@ -65,6 +63,8 @@ fun WorkbenchScaffold(
     navState: WorkbenchNavState = remember { WorkbenchNavState() },
     /** §3.1.7 — the quick switcher's open flag; the desktop's Ctrl+K toggles it from `Main.kt`. */
     switcher: SwitcherState = remember { SwitcherState() },
+    /** 14c — the tree pane's width, collapsed flag and expansions; the desktop's Ctrl+\ toggles it from `Main.kt`. */
+    treeState: PagesTreeState = remember { PagesTreeState(core.keyValueStore) },
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     /** B§13.5 #4 — the density profile; a platform that fixes it (the phone: Touch) passes it,
@@ -117,9 +117,19 @@ fun WorkbenchScaffold(
 
     CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity) {
         // The route content, identical under either shell — only the chrome around it differs.
-        val content: @Composable () -> Unit = {
+        // 14c: on a wide window the Pages tab, root or page, is the workspace (tree + page).
+        val content: @Composable (wide: Boolean) -> Unit = { wide ->
             Box(modifier = Modifier.fillMaxSize()) {
                 when (val current = route) {
+                    is WorkbenchRoute.TabRoot, is WorkbenchRoute.PageDetail -> if (wide && current.tab == WorkbenchDestination.PAGES) {
+                        PagesWorkspace(
+                            core = core,
+                            navState = navState,
+                            treeState = treeState,
+                            onOpenSwitcher = { switcher.open = true },
+                            onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
+                        )
+                    } else when (current) {
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true })
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
@@ -133,35 +143,16 @@ fun WorkbenchScaffold(
                         )
                         WorkbenchDestination.SETTINGS -> settingsContent()
                     }
-                    is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
-                    is WorkbenchRoute.PageDetail -> {
-                        // A Database page (§5.1) gets the Table view; every other page (including a
-                        // Database's own Row, which is `kind = PAGE` with `databaseId` set) gets the
-                        // ordinary block editor — routing branches on `kind` alone, not `databaseId`.
-                        val page by core.database.pageDao().observeById(current.pageId).collectAsState(initial = null)
-                        when (page?.kind) {
-                            PageKind.DATABASE -> PageDatabaseScreen(
-                                core = core,
-                                pageId = current.pageId,
-                                onBack = { navState.back() },
-                                onOpenPage = navState::openPage,
-                            )
-                            PageKind.CANVAS -> CanvasScreen(
-                                core = core,
-                                pageId = current.pageId,
-                                onBack = { navState.back() },
-                                onOpenPage = navState::openPage,
-                            )
-                            else -> PageDetailScreen(
-                                core = core,
-                                pageId = current.pageId,
-                                onBack = { navState.back() },
-                                onOpenPage = navState::openPage,
-                                onShowOnRoadMap = navState::showOnRoadMap,
-                                onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
-                            )
-                        }
+                        is WorkbenchRoute.PageDetail -> PageRoute(
+                            core = core,
+                            pageId = current.pageId,
+                            onBack = { navState.back() },
+                            navState = navState,
+                            onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
+                        )
+                        else -> {}
                     }
+                    is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
                 }
                 if (switcher.open) {
                     // Over everything, on every route — the switcher is how you get anywhere.
@@ -180,7 +171,7 @@ fun WorkbenchScaffold(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             when (shellLayoutFor(maxWidth.value)) {
                 ShellLayout.BAR -> Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) { content() }
+                    Box(modifier = Modifier.weight(1f)) { content(false) }
                     // §3.1.2 / audit 4.3 — no bottom bar while the keyguard is being bypassed. It used
                     // to render regardless, so a tap on Settings navigated there *over the lock screen*;
                     // the LaunchedEffect above deactivates on a page change, but it runs after that frame
@@ -193,7 +184,7 @@ fun WorkbenchScaffold(
                 // 14a — the same rule for the rail: no navigation while the keyguard is bypassed.
                 ShellLayout.RAIL -> Row(modifier = Modifier.fillMaxSize()) {
                     if (!bypassingKeyguard) ShellRail(navState, foot = { RunningTimerRailFoot(core) })
-                    Box(modifier = Modifier.weight(1f)) { content() }
+                    Box(modifier = Modifier.weight(1f)) { content(true) }
                 }
             }
         }
