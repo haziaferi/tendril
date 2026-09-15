@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.tendril.app.ui.pages
 
 import androidx.compose.foundation.background
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -69,6 +72,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.border
+import androidx.compose.ui.backhandler.BackHandler
+import com.tendril.app.ui.components.ListKeyState
+import com.tendril.app.ui.components.TypeAheadReset
+import com.tendril.app.ui.components.keyedTitle
+import com.tendril.app.ui.components.keyboardCursorShown
+import com.tendril.app.ui.components.listKeyboard
 import com.tendril.app.ui.nav.ShellTopBar
 import com.tendril.app.ui.nav.WorkbenchNavState
 import com.tendril.app.ui.nav.WorkbenchRoute
@@ -184,27 +194,47 @@ private fun PagesTreePane(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             LabelFilterRow(viewModel, horizontalPadding = 12.dp)
-            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp)) {
-                pages.forEach { page ->
-                    val hasChildren = page.id in parentsWithChildren
-                    val expanded = page.id in treeState.expanded
-                    item(key = page.id) {
-                        TreeRow(page, depth = 0, current = page.id == openPageId, hasChildren = hasChildren, expanded = expanded,
-                            onClick = { onOpen(page.id) }, onToggle = { treeState.toggleExpanded(page.id) },
-                            onShowOnRoadMap = { onShowOnRoadMap(page.id) }, onMoveToTrash = if (actions.viewOnly) null else ({ onMoveToTrash(page.id) }))
+            // 14e (B§13.6 #8) — the visible rows as one list, in drawn order: a root, then its
+            // children while it is expanded. The keyboard walks this list; ↵ shows the page, → and
+            // ← expand and collapse a parent (← on a child climbs to its parent).
+            val flat = ArrayList<TreeEntry>()
+            pages.forEach { page ->
+                val hasChildren = page.id in parentsWithChildren
+                val expanded = page.id in treeState.expanded
+                flat.add(TreeEntry(page, depth = 0, hasChildren = hasChildren, expanded = expanded, parentIndex = -1))
+                if (hasChildren && expanded) {
+                    val parentIndex = flat.lastIndex
+                    val children by viewModel.childrenOf(page.id).collectAsState()
+                    children.forEach { child ->
+                        flat.add(TreeEntry(child, depth = 1, hasChildren = child.id in parentsWithChildren, expanded = false, parentIndex = parentIndex))
                     }
-                    if (hasChildren && expanded) {
-                        item(key = "children_" + page.id) {
-                            val children by viewModel.childrenOf(page.id).collectAsState()
-                            Column {
-                                children.forEach { child ->
-                                    TreeRow(child, depth = 1, current = child.id == openPageId, hasChildren = child.id in parentsWithChildren,
-                                        expanded = false, onClick = { onOpen(child.id) }, onToggle = {},
-                                        onShowOnRoadMap = { onShowOnRoadMap(child.id) }, onMoveToTrash = if (actions.viewOnly) null else ({ onMoveToTrash(child.id) }))
-                                }
-                            }
+                }
+            }
+            val keyState = remember { ListKeyState() }
+            TypeAheadReset(keyState)
+            BackHandler(enabled = keyState.hasSomethingToClear) { keyState.clear() }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().listKeyboard(
+                    state = keyState,
+                    count = { flat.size },
+                    titles = { flat.map { it.page.title } },
+                    onOpen = { i -> flat.getOrNull(i)?.let { onOpen(it.page.id) } },
+                    onExpand = { i, expand ->
+                        val entry = flat.getOrNull(i) ?: return@listKeyboard
+                        when {
+                            expand && entry.hasChildren && !entry.expanded -> treeState.toggleExpanded(entry.page.id)
+                            !expand && entry.expanded -> treeState.toggleExpanded(entry.page.id)
+                            !expand && entry.parentIndex >= 0 -> keyState.focused = entry.parentIndex
                         }
-                    }
+                    },
+                ),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
+            ) {
+                itemsIndexed(flat, key = { _, it -> it.page.id }) { index, entry ->
+                    TreeRow(entry.page, depth = entry.depth, current = entry.page.id == openPageId, hasChildren = entry.hasChildren, expanded = entry.expanded,
+                        onClick = { keyState.clickedRow(index); onOpen(entry.page.id) }, onToggle = { if (entry.hasChildren) treeState.toggleExpanded(entry.page.id) },
+                        onShowOnRoadMap = { onShowOnRoadMap(entry.page.id) }, onMoveToTrash = if (actions.viewOnly) null else ({ onMoveToTrash(entry.page.id) }),
+                        keyFocused = keyState.focused == index && keyboardCursorShown(), typed = keyState.typed)
                 }
             }
         }
@@ -249,6 +279,9 @@ private fun TreeRow(
     onToggle: () -> Unit,
     onShowOnRoadMap: () -> Unit,
     onMoveToTrash: (() -> Unit)?,
+    /** 14e — this row is the keyboard cursor: a 2 dp ring, the typed prefix underlined. */
+    keyFocused: Boolean = false,
+    typed: String = "",
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
@@ -268,6 +301,7 @@ private fun TreeRow(
             .padding(horizontal = 6.dp)
             .height(TREE_ROW_HEIGHT)
             .background(background, RoundedCornerShape(6.dp))
+            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier)
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .padding(start = 12.dp + (TREE_INDENT * depth), end = 2.dp),
@@ -299,7 +333,7 @@ private fun TreeRow(
                 modifier = Modifier.size(18.dp),
             )
         }
-        Text(page.title, fontSize = 13.5.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(keyedTitle(page.title, typed, keyFocused), fontSize = 13.5.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconButton(
             onClick = { menuAt = null; menuOpen = true },
             modifier = Modifier.size(TREE_MORE_TARGET).alpha(if (hovered || menuOpen) 1f else 0f),
@@ -345,6 +379,9 @@ private fun EmptyDetail(paneChrome: PaneChrome, onOpenTrash: () -> Unit) {
 
 /** The page bar's height, so the one hairline runs across both panes (critique pass 1, #3). */
 private val TREE_HEADER_HEIGHT = TOP_BAR_HEIGHT
+
+/** One visible row of the tree, as the keyboard and the list both see it. */
+private class TreeEntry(val page: Page, val depth: Int, val hasChildren: Boolean, val expanded: Boolean, val parentIndex: Int)
 private val TREE_ROW_HEIGHT = 32.dp
 private val TREE_INDENT = 18.dp
 private val TREE_ICON_BUTTON = 28.dp

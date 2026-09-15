@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package com.tendril.app.ui.taskshabits
 
@@ -6,6 +6,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.backhandler.BackHandler
+import com.tendril.app.ui.components.ListKeyState
+import com.tendril.app.ui.components.TypeAheadReset
+import com.tendril.app.ui.components.listKeyboard
+import com.tendril.app.ui.components.keyedTitle
+import com.tendril.app.ui.components.keyboardCursorShown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -110,6 +119,9 @@ fun TasksHabitsScreen(
     entryTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
     habitTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
     modifier: Modifier = Modifier,
+    /** 14e — Ctrl+Shift+N's intent (`WorkbenchNavState.requestQuickAdd`): the Tasks tab with its Add sheet open. */
+    quickAddRequested: Boolean = false,
+    onQuickAddConsumed: () -> Unit = {},
 ) {
     val viewModel: TasksHabitsViewModel = viewModel(
         factory = viewModelFactory {
@@ -133,6 +145,7 @@ fun TasksHabitsScreen(
         TasksHabitsBody(
             viewModel, core, onOpenReview, showImportance, showStreaks, reminderSheet, entryTrashSheet, habitTrashSheet, modifier,
             tab, { tab = it }, filter, { filter = it },
+            quickAddRequested, onQuickAddConsumed,
         )
     }
 }
@@ -155,9 +168,14 @@ private fun TasksHabitsBody(
     setTab: (TabSelection) -> Unit,
     filter: TimeFilter,
     setFilter: (TimeFilter) -> Unit,
+    quickAddRequested: Boolean,
+    onQuickAddConsumed: () -> Unit,
 ) {
     var showUndated by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(quickAddRequested) {
+        if (quickAddRequested) { setTab(TabSelection.TASKS); showAddDialog = true; onQuickAddConsumed() }
+    }
     // §5.4 — the reminder list opens over whichever Entry was tapped; null means closed.
     var reminderTarget by remember { mutableStateOf<Entry?>(null) }
     // §5.5.1 — Entry Trash, the counterpart to Pages' own Trash sheet.
@@ -336,6 +354,21 @@ private fun TasksList(
     val grouped = tasks.withSubtasks()
     val dated = grouped.filter { it.task.startDate != null && inFilterRange(it.task.startDate, filter) }
     val undated = grouped.filter { it.task.startDate == null }
+    // 14e (B§13.6 #8) — the rows as the keyboard sees them, in the order drawn: undated (when
+    // shown) then dated, each task followed by its steps. ↵ opens the row's menu — what its
+    // `···` does; a task has no detail screen to open.
+    val keyState = remember { ListKeyState() }
+    val flat: List<Entry> = remember(undated, dated, showUndated) {
+        buildList {
+            if (showUndated) undated.forEach { add(it.task); addAll(it.subtasks) }
+            dated.forEach { add(it.task); addAll(it.subtasks) }
+        }
+    }
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    TypeAheadReset(keyState)
+    BackHandler(enabled = keyState.hasSomethingToClear) { keyState.clear() }
+    val indexOf: (Entry) -> Int = { e -> flat.indexOfFirst { it.id == e.id } }
+    val rowKeys = RowKeys(keyState, indexOf, menuFor, { menuFor = null })
 
     if (tasks.isEmpty()) {
         EmptyState(
@@ -351,7 +384,15 @@ private fun TasksList(
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().listKeyboard(
+            state = keyState,
+            count = { flat.size },
+            titles = { flat.map { it.title } },
+            onOpen = { i -> flat.getOrNull(i)?.let { menuFor = it.id } },
+        ),
+        contentPadding = PaddingValues(bottom = 96.dp),
+    ) {
         if (undated.isNotEmpty()) {
             item {
                 Row(
@@ -364,12 +405,20 @@ private fun TasksList(
                 }
             }
             if (showUndated) {
-                items(undated, key = { it.task.id }) { TaskWithSteps(it, viewModel, actions, onOpenReminders) }
+                items(undated, key = { it.task.id }) { TaskWithSteps(it, viewModel, actions, onOpenReminders, rowKeys) }
             }
         }
-        items(dated, key = { it.task.id }) { TaskWithSteps(it, viewModel, actions, onOpenReminders) }
+        items(dated, key = { it.task.id }) { TaskWithSteps(it, viewModel, actions, onOpenReminders, rowKeys) }
     }
 }
+
+/** 14e — what a row needs to draw its keyboard state and answer ↵: the cursor, its own index, the pending menu request. */
+internal class RowKeys(
+    val state: ListKeyState,
+    val indexOf: (Entry) -> Int,
+    val menuFor: Long?,
+    val onMenuShown: () -> Unit,
+)
 
 /** What a task row can open, handed down once rather than threaded as four lambdas. */
 internal class TaskRowActions(
@@ -390,10 +439,11 @@ private fun TaskWithSteps(
     viewModel: TasksHabitsViewModel,
     actions: TaskRowActions,
     onOpenReminders: (Entry) -> Unit,
+    rowKeys: RowKeys? = null,
 ) {
     Column {
-        TaskRow(group.task, viewModel, actions, onOpenReminders, stepsDone = group.done, stepsTotal = group.subtasks.size)
-        group.subtasks.forEach { step -> TaskRow(step, viewModel, actions, onOpenReminders, isStep = true) }
+        TaskRow(group.task, viewModel, actions, onOpenReminders, stepsDone = group.done, stepsTotal = group.subtasks.size, rowKeys = rowKeys)
+        group.subtasks.forEach { step -> TaskRow(step, viewModel, actions, onOpenReminders, isStep = true, rowKeys = rowKeys) }
     }
 }
 
@@ -406,10 +456,22 @@ private fun TaskRow(
     isStep: Boolean = false,
     stepsDone: Int = 0,
     stepsTotal: Int = 0,
+    rowKeys: RowKeys? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    // 14e — the keyboard cursor: a 2 dp ring inside the row, distinct from any selection tint;
+    // ↵ on the cursor opens this row's menu, and a click puts the cursor here.
+    val index = rowKeys?.indexOf?.invoke(entry) ?: -1
+    val keyFocused = rowKeys != null && index >= 0 && rowKeys.state.focused == index && keyboardCursorShown()
+    LaunchedEffect(rowKeys?.menuFor) {
+        if (rowKeys != null && rowKeys.menuFor == entry.id) { menuOpen = true; rowKeys.onMenuShown() }
+    }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = if (isStep) 40.dp else 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (rowKeys != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { rowKeys.state.clickedRow(index) } else Modifier)
+            .padding(start = if (isStep) 40.dp else 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(
@@ -421,7 +483,7 @@ private fun TaskRow(
                 if (actions.showImportance && entry.important) {
                     Icon(Icons.Filled.Star, contentDescription = "Important", modifier = Modifier.padding(end = 4.dp), tint = MaterialTheme.colorScheme.primary)
                 }
-                Text(entry.title, style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge)
+                Text(keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused), style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge)
             }
             // The When, the Deadline and the steps, in that order and in one colour: a deadline
             // that has passed is information, not an alarm (§0.5.2).

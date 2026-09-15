@@ -43,4 +43,45 @@ class WorkbenchNavStateTest {
         assertEquals(WorkbenchRoute.TabRoot(WorkbenchDestination.TASKS_HABITS), nav.current)
         assertFalse(nav.canGoBack)
     }
+
+    // ------------------------------------------------------------- 14e — forward (B§13.6 #2)
+
+    @Test
+    fun `forward restores what back popped`() {
+        val nav = WorkbenchNavState()
+        nav.showPage(1); nav.openPage(2)
+        assertTrue(nav.back())
+        assertTrue(nav.canGoForward)
+        assertTrue(nav.forward())
+        assertEquals(WorkbenchRoute.PageDetail(2, WorkbenchDestination.PAGES), nav.current)
+        assertFalse("at the tip, forward has nothing", nav.forward())
+    }
+
+    @Test
+    fun `a new move after back forgets the old future`() {
+        val nav = WorkbenchNavState()
+        nav.showPage(1); nav.openPage(2)
+        nav.back()
+        nav.openPage(3)
+        assertFalse(nav.canGoForward)
+        assertFalse(nav.forward())
+        assertEquals(WorkbenchRoute.PageDetail(3, WorkbenchDestination.PAGES), nav.current)
+    }
+
+    @Test
+    fun `switching tabs clears forward too`() {
+        val nav = WorkbenchNavState()
+        nav.openPage(1); nav.back()
+        nav.switchTab(WorkbenchDestination.CALENDAR)
+        assertFalse(nav.canGoForward)
+    }
+
+    @Test
+    fun `quick add lands on Tasks with the request raised`() {
+        val nav = WorkbenchNavState()
+        nav.openPage(1)
+        nav.requestQuickAdd()
+        assertEquals(WorkbenchRoute.TabRoot(WorkbenchDestination.TASKS_HABITS), nav.current)
+        assertTrue(nav.quickAddRequested)
+    }
 }
