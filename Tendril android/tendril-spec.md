@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-15 (14d — under a pointer) | §2.2 *Under a pointer* (new bullet): right-click = the pointer's long-press on rows and blocks (`ui/components/Pointer.kt`, `TextContextMenuExtras` expect/actual), hover-revealed `···` at 28 dp, the toolbar floating under a pointer profile (`LocalDensityProfile`), `PagesViewModel.moveToTrash` lock-gated; §3.1.1 amended (the toolbar's two homes). Critique passes in `docs/critiques/`; their High: the RELATION branch in the row-as-page strip. `MoreHoriz` on every bar, the tree header at the page bar's height, the outlined journal book. §0.10 item 14: 14d shipped, the deferred list. Tests 711 → 713. | §2.2, §3.1.1, §0.10 |
 | 2026-09-15 (14c — two panes) | §3.1 amended: on a wide window the Pages tab is the tree beside the open page (`PagesWorkspace`, `PagesTreeState`, `PaneChrome`, `PageRoute`); chrome split per pane — option B of `docs/mockups/pages-two-panes.html`; `showPage` replaces, `openPage` pushes; `PageDao.observeChildren`/`observeParentsWithChildren`; Ctrl+\ on the desktop; the phone unchanged. §0.10 item 14: 14c shipped. Tests 703 → 711. | §3.1, §0.10 |
 | 2026-09-15 (14c·0 — the scale) | §2.2: every measurement proportional to the screen on both platforms — `LocalDensity` × `shellScaleFor` (shorter side ÷ 800 dp clamped 0.85…1.25, × Compact 0.9 / Comfortable 1.0 / Touch 1.3); the phone fixed Touch, the desktop's profile in Settings (`density_profile`). Measured on both devices. §0.10 item 14: 14c·0 shipped. Tests 698 → 703. | §2.2, §0.10 |
 | 2026-09-14 (14b — slide-overs) | §3 *Bottom sheets* amended: on a wide window (the shell's 840 dp rule, `sheetFormFor`) `TendrilSheet` is a right slide-over as mocked (`ui/components/SlideOver.kt`: 32 % scrim, 440 dp panel, header with × unless the sheet draws its own, bounded body; scrim / Escape / Back close); signature unchanged at 33 sites; menus and dialogs stay. §0.10 item 14: 14b shipped, two 14a fixes noted. Tests 697 → 698. | §3, §0.10 |
@@ -687,6 +688,15 @@ Genuinely undecided — distinct from §0.7.
     handle drags and the width survives a relaunch) and on the phone (unchanged). Three fixes on
     the walk: the workspace painted no ground; a `LazyColumn` sheet's crash lesson reapplied; the
     handle's 8 dp target was a 5 px strip under the scale — now 12 dp astride the divider.*
+    ***14d shipped 2026-09-15** — density under a pointer (§2.2 *Under a pointer*): hover `···`,
+    right-click as the pointer's long-press, the floating toolbar; three `design-critique-plus`
+    passes around it (`docs/critiques/pages-desktop.md`, `pages-phone.md`, `pages-function.md`),
+    which also found a RELATION value shown as a raw uid in the row-as-page strip (fixed) and
+    left this list for later PRs: type steps too close on the desktop (14g), the Table's touch
+    row height beside 32 dp tree rows (14f), the canvas caption's 2.8:1 contrast and "tap"
+    wording, the chip row's rhythm, "2 row(s)" with dashes, the phone card's kind line that
+    repeats its icon, a page-ground click that clears no focus (small things, to close with
+    14h).*
 13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -789,6 +799,29 @@ navigation-paradigm question later.
   top of every screen for a *Sync folder* section at the head of Settings, where Android keeps
   them and the only place the mock has room. Exempt: the widget-configure Activity, outside the
   shell.)*
+- **Under a pointer** *(**Amended 2026-09-15 — B§13.4 14d, B§13.6 #1.** Three behaviours that
+  exist only where there is a pointer, on both platforms' code (`ui/components/Pointer.kt`; a
+  mouse on an Android tablet gets them). **Right-click is the pointer's long-press, everywhere
+  a long-press exists:** a page row (the tree's, the phone's card) opens *Open · Show on Road
+  Map · Move to Trash* — at the pointer after a right-click, hanging off the row after a
+  long-press or a click on its `···`; a block opens its action sheet. Inside a block's *text*
+  the field's own menu wins on both platforms (the desktop's cut/copy/paste, the phone's
+  selection handles), and on the desktop the block's actions are one item appended to it,
+  *Block actions…* (`TextContextMenuExtras`, an expect/actual: `ContextMenuDataProvider` there,
+  the content unchanged on Android). **Hover reveals the row's `···`** — drawn at alpha 0 and
+  never laid out away, so a title's width does not change when the pointer arrives; a 28 dp
+  target with an 18 dp glyph, which is 23.8 px at the scale's 0.85 floor (`docs/critiques/pages-desktop.md`
+  measured the mock's 16 dp against the 24 px pointer floor); absent, not disabled, on touch.
+  **The formatting toolbar floats above the selected block** under a pointer profile — a popup
+  on `surface` with a hairline and a soft shadow, 26 dp buttons, flipped below when the window
+  has no room above, following the field's focus — and sits inline exactly as before under
+  Touch. `LocalDensityProfile`, provided by the scaffold beside the scaled density, is how a
+  surface asks "pointer or finger?" without a platform check; Touch when nothing provides it.
+  *Move to Trash* from a row is `PagesViewModel.moveToTrash` — the same write the page's own
+  menu makes, a row-linked task going with its row — refused under View-Only, the item greyed
+  so the lock is visible. Three critique passes around this PR live in `docs/critiques/`
+  (desktop, phone, the function walk); their High findings are fixed here, the rest listed in
+  §0.10 item 14.)*
 - **Page cards** (Pages tab): horizontal row layout (icon, title, meta stacked to the right of the
   icon) rather than the original stacked/vertical card — roughly half the height of the first
   version, so more pages/databases are visible without scrolling, while keeping icon and font size
@@ -1069,7 +1102,8 @@ the text-selection gesture for the same long-press, and it is the same call the 
 the same reason (§5.6) — but it is a different interaction from the one specified here, and this
 section should say which one a reader will actually find. The formatting toolbar is not floating
 either: it renders inline, beneath the block being edited and inside that block's own column, rather
-than as a popup over the page.)*
+than as a popup over the page.)* *(**Amended 2026-09-15 — 14d.** Two homes now: floating above the
+block under a pointer profile, inline under Touch — §2.2 *Under a pointer*.)*
 
 **Full-text search (confirmed necessary):** a Room FTS4/5 virtual table indexing each page's
 concatenated block plain-text, rebuilt on block write. Page-level granularity for v1, not per-block

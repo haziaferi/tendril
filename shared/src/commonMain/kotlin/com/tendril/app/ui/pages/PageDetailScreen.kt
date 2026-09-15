@@ -42,7 +42,21 @@ import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalDensity
+import com.tendril.app.ui.nav.DensityProfile
+import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.ui.components.onSecondaryClick
+import com.tendril.app.ui.components.ContextMenuExtra
+import com.tendril.app.ui.components.TextContextMenuExtras
+import androidx.compose.ui.focus.onFocusChanged
+import com.tendril.app.data.pagedatabase.parseRelationValue
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
@@ -236,7 +250,7 @@ fun PageDetailScreen(
                     // off" item lives inside this same menu and must stay reachable while it's
                     // active, the same way the Pages hub's own eye toggle stays reachable while
                     // View-Only is on.
-                    IconButton(onClick = { showMoreMenu = true }, enabled = !viewOnly) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                    IconButton(onClick = { showMoreMenu = true }, enabled = !viewOnly) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                     DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
                         if (hasCheckboxes) {
                             if (checkboxOnlyActive) {
@@ -600,7 +614,14 @@ private fun BlockRow(
     // shape already and needs only to see that the line is deeper still.
     val indent = (24 * minOf(depth, 6) + 8 * maxOf(depth - 6, 0)).dp
     val locked = LocalContentLocked.current
+    // 14d — the floating toolbar follows focus: a selection left in an unfocused field keeps
+    // the inline toolbar (unchanged on the phone) but not a popup over the line above.
+    var fieldFocused by remember { mutableStateOf(false) }
 
+    // 14d — inside the text the field's own right-click menu wins (as its long-press wins on
+    // the phone); the block's actions ride on it as one appended item. Outside the text —
+    // the margin, the prefix — the row's right-click opens the sheet directly.
+    TextContextMenuExtras(items = if (locked) emptyList() else listOf(ContextMenuExtra("Block actions…", onLongPress))) {
     Column {
         Row(
             modifier = Modifier
@@ -617,7 +638,9 @@ private fun BlockRow(
                         Modifier
                     },
                 )
-                .combinedClickable(onClick = {}, onLongClick = if (locked) null else onLongPress),
+                .combinedClickable(onClick = {}, onLongClick = if (locked) null else onLongPress)
+                // B§13.4 14d — right-click is the pointer's long-press: the same block action sheet.
+                .onSecondaryClick { if (!locked) onLongPress() },
             verticalAlignment = Alignment.Top,
         ) {
             BlockPrefix(block, listPosition, viewModel)
@@ -702,7 +725,7 @@ private fun BlockRow(
                         textStyle = blockTextStyle(block.type).copy(color = MaterialTheme.colorScheme.onSurface),
                         visualTransformation = spansVisualTransformation(block.formattingSpans),
                         readOnly = locked,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused },
                     )
                 } else {
                     Surface(
@@ -728,16 +751,39 @@ private fun BlockRow(
                     viewModel.runVerb(verb, fieldValue.text.substring(aiRange.min, aiRange.max)) { aiResult = it }
                 }
                 if (!locked && fieldValue.selection.length > 0) {
-                    FormattingToolbar(
-                        onApply = { style ->
-                            val range = fieldValue.selection
-                            val span = FormattingSpan(range.min, range.max, style)
-                            viewModel.updateBlockContent(block, fieldValue.text, block.formattingSpans + span)
-                        },
-                        onMention = { onRequestMention(fieldValue.text) },
-                        verbs = if (aiAvailable) ::askClaude else null,
-                        busy = aiBusy,
-                    )
+                    val toolbar: @Composable (compact: Boolean) -> Unit = { compact ->
+                        FormattingToolbar(
+                            onApply = { style ->
+                                val range = fieldValue.selection
+                                val span = FormattingSpan(range.min, range.max, style)
+                                viewModel.updateBlockContent(block, fieldValue.text, block.formattingSpans + span)
+                            },
+                            onMention = { onRequestMention(fieldValue.text) },
+                            verbs = if (aiAvailable) ::askClaude else null,
+                            busy = aiBusy,
+                            compact = compact,
+                        )
+                    }
+                    // B§13.4 14d — under a pointer profile the toolbar floats above the block
+                    // (the mock's `.ftb`: a hairline, a soft shadow, 26 dp buttons); under Touch
+                    // it sits inline below the text exactly as before, where a thumb expects it.
+                    if (LocalDensityProfile.current != DensityProfile.TOUCH) {
+                        if (fieldFocused) {
+                        val gapPx = with(LocalDensity.current) { 6.dp.roundToPx() }
+                        Popup(popupPositionProvider = remember(gapPx) { AboveAnchor(gapPx) }) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 6.dp,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            ) {
+                                Box(modifier = Modifier.padding(horizontal = 6.dp)) { toolbar(true) }
+                            }
+                        }
+                        }
+                    } else {
+                        toolbar(false)
+                    }
                 }
                 aiVerb?.let { verb ->
                     AiResultSheet(
@@ -762,6 +808,7 @@ private fun BlockRow(
 
             }
         }
+    }
     }
 
     if (showSlashMenu) {
@@ -898,23 +945,27 @@ private fun FormattingToolbar(
     /** §0.6.15 — the verb row, present only while a key is set (null otherwise). */
     verbs: ((AiVerb) -> Unit)? = null,
     busy: Boolean = false,
+    /** 14d — the floating form's 26 dp buttons; 32 dp inline, where a thumb presses them. */
+    compact: Boolean = false,
 ) {
+    val button = if (compact) 26.dp else 32.dp
+    val glyph = if (compact) 16.dp else 18.dp
     Column {
     Row(modifier = Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        IconButton(onClick = { onApply(SpanStyle.Bold) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.FormatBold, contentDescription = "Bold", modifier = Modifier.size(18.dp))
+        IconButton(onClick = { onApply(SpanStyle.Bold) }, modifier = Modifier.size(button)) {
+            Icon(Icons.Filled.FormatBold, contentDescription = "Bold", modifier = Modifier.size(glyph))
         }
-        IconButton(onClick = { onApply(SpanStyle.Italic) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.FormatItalic, contentDescription = "Italic", modifier = Modifier.size(18.dp))
+        IconButton(onClick = { onApply(SpanStyle.Italic) }, modifier = Modifier.size(button)) {
+            Icon(Icons.Filled.FormatItalic, contentDescription = "Italic", modifier = Modifier.size(glyph))
         }
-        IconButton(onClick = { onApply(SpanStyle.Strikethrough) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.FormatStrikethrough, contentDescription = "Strikethrough", modifier = Modifier.size(18.dp))
+        IconButton(onClick = { onApply(SpanStyle.Strikethrough) }, modifier = Modifier.size(button)) {
+            Icon(Icons.Filled.FormatStrikethrough, contentDescription = "Strikethrough", modifier = Modifier.size(glyph))
         }
-        IconButton(onClick = { onApply(SpanStyle.InlineCode) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.Code, contentDescription = "Inline code", modifier = Modifier.size(18.dp))
+        IconButton(onClick = { onApply(SpanStyle.InlineCode) }, modifier = Modifier.size(button)) {
+            Icon(Icons.Filled.Code, contentDescription = "Inline code", modifier = Modifier.size(glyph))
         }
-        IconButton(onClick = onMention, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.AlternateEmail, contentDescription = "Mention a page", modifier = Modifier.size(18.dp))
+        IconButton(onClick = onMention, modifier = Modifier.size(button)) {
+            Icon(Icons.Filled.AlternateEmail, contentDescription = "Mention a page", modifier = Modifier.size(glyph))
         }
     }
     if (verbs != null) {
@@ -925,6 +976,20 @@ private fun FormattingToolbar(
             if (busy) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
         }
     }
+    }
+}
+
+/**
+ * 14d — places the floating toolbar's popup above its anchor (the block's text column), left
+ * edges aligned, [gapPx] between; below the anchor when the window has no room above, so a
+ * selection on the first line of a page still gets a toolbar rather than a clipped one.
+ */
+private class AboveAnchor(private val gapPx: Int) : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val above = anchorBounds.top - popupContentSize.height - gapPx
+        val y = if (above >= 0) above else anchorBounds.bottom + gapPx
+        val x = anchorBounds.left.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        return IntOffset(x, y)
     }
 }
 
@@ -1344,6 +1409,20 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
                     }
                 }
             }
+        }
+        PropertyType.RELATION -> {
+            // Critique pass 1 #1 (`docs/critiques/pages-desktop.md`) — the related rows' titles,
+            // read-only, as `PageDatabaseScreen`'s `RelationCell` shows them; before this the
+            // value fell into the text branch and a raw uid sat in an editable field. Editing
+            // stays in the Table, where the picker lives.
+            val uids = parseRelationValue(storedValue)
+            var titles by remember(property.id) { mutableStateOf<List<String>>(emptyList()) }
+            LaunchedEffect(uids) { titles = viewModel.resolveRelatedTitles(uids) }
+            Text(
+                if (titles.isEmpty()) "—" else titles.joinToString(", "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
         else -> {
             // §B3 — same `lastWrittenValue` guard as the sibling fix in

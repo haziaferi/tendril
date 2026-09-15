@@ -26,7 +26,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import com.tendril.app.ui.components.PointerMenu
+import com.tendril.app.ui.components.onSecondaryClick
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Search
@@ -105,7 +112,7 @@ private const val JOURNAL_LOCKED_MESSAGE =
  * picker, the Trash sheet and the snackbar, so the two shapes share one set of actions.
  */
 @Composable
-fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher: () -> Unit, modifier: Modifier = Modifier) {
+fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher: () -> Unit, onShowOnRoadMap: (Long) -> Unit, modifier: Modifier = Modifier) {
     PagesHost(core, onOpenPage) { vm, actions, snackbarHostState ->
         val pages by vm.filteredPages.collectAsState()
         val viewOnly = actions.viewOnly
@@ -148,7 +155,12 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher:
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
                         items(pages, key = { it.id }) { page ->
-                            PageCard(page = page, onClick = { onOpenPage(page.id) })
+                            PageCard(
+                                page = page,
+                                onClick = { onOpenPage(page.id) },
+                                onShowOnRoadMap = { onShowOnRoadMap(page.id) },
+                                onMoveToTrash = if (viewOnly) null else ({ vm.moveToTrash(page.id) }),
+                            )
                         }
                     }
                 }
@@ -182,6 +194,8 @@ internal fun rememberPagesViewModel(core: WorkbenchCore): PagesViewModel = viewM
                 core.templateManager,
                 core.viewLockState,
                 core.pageContentRepository,
+                core.database.entryDao(),
+                core.resolveEntryUseCase,
             )
         }
     }
@@ -272,7 +286,7 @@ internal fun JournalButton(actions: PagesActions, modifier: Modifier = Modifier)
     var showJournalMenu by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { showJournalMenu = true }, modifier = modifier) {
-            Icon(Icons.Filled.Book, contentDescription = "Journal")
+            Icon(Icons.Outlined.MenuBook, contentDescription = "Journal")
         }
         DropdownMenu(expanded = showJournalMenu, onDismissRequest = { showJournalMenu = false }) {
             DropdownMenuItem(
@@ -325,10 +339,21 @@ internal fun LabelFilterRow(viewModel: PagesViewModel, horizontalPadding: androi
 
 /** Horizontal row layout — icon, title, meta stacked to the right (§2.2), roughly half the
  * height of a stacked card so more pages are visible without scrolling. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PageCard(page: Page, onClick: () -> Unit) {
+private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?) {
+    // B§13.4 14d — the row's menu, on long-press (the finger) or right-click (a mouse on the
+    // phone gets it too); no hover `···` here, hover is the tree's.
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var rowHeightPx by remember { mutableStateOf(0) }
+    Box(modifier = Modifier.fillMaxWidth().onSizeChanged { rowHeightPx = it.height }) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
+            .onSecondaryClick { menuAt = it; menuOpen = true }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Local val, not `page.icon` directly: a nullable property declared in a different
@@ -361,6 +386,23 @@ private fun PageCard(page: Page, onClick: () -> Unit) {
             )
         }
     }
+    PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(0, rowHeightPx), onDismiss = { menuOpen = false }) {
+        PageRowMenuItems(onOpen = { menuOpen = false; onClick() }, onShowOnRoadMap = { menuOpen = false; onShowOnRoadMap() },
+            onMoveToTrash = onMoveToTrash?.let { f -> { menuOpen = false; f() } })
+    }
+    }
+}
+
+/**
+ * B§13.4 14d — the three things a row's menu offers, the same on the tree (hover `···`,
+ * right-click) and the phone's list (long-press): open it, see it on the Road Map, trash it.
+ * [onMoveToTrash] null under View-Only — the item is greyed, not gone, so the lock is visible.
+ */
+@Composable
+internal fun PageRowMenuItems(onOpen: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?) {
+    DropdownMenuItem(text = { Text("Open") }, onClick = onOpen)
+    DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = onShowOnRoadMap)
+    DropdownMenuItem(text = { Text("Move to Trash") }, onClick = onMoveToTrash ?: {}, enabled = onMoveToTrash != null)
 }
 
 @Composable

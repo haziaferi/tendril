@@ -162,7 +162,7 @@ class ViewOnlyPagesGuardTest {
          */
         fun pages() = PagesViewModel(
             pageDao, pageDatabaseDao, propertyDao, ftsDao, labelDao, purgeRegistry, databaseSyncManager,
-            templateManager, viewLockState, contentRepository,
+            templateManager, viewLockState, contentRepository, entryDao, resolveEntryUseCase,
         )
 
         fun lock() = viewLockState.setViewOnly(true)
@@ -296,6 +296,29 @@ class ViewOnlyPagesGuardTest {
         a.pages().restore(listOf(page.id))
 
         assertNull("unlocked, Restore must still bring the page back out of the Trash", a.pageDao.getById(page.id)?.deletedAt)
+    }
+
+    // ------------------------------------------------------------- move to trash (B§13.4 14d)
+
+    /** A row's menu (hover `···`, right-click, the phone's long-press) trashes through
+     * [PagesViewModel.moveToTrash], a write the lock must stand in front of like the page's own. */
+    @Test
+    fun `move to trash from a row menu is refused while View-Only is on`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Kept")
+        a.lock()
+
+        a.pages().moveToTrash(page.id)
+
+        assertNull("View-Only is on, so the row menu's Move to Trash must not soft-delete", a.pageDao.getById(page.id)?.deletedAt)
+    }
+
+    @Test
+    fun `move to trash from a row menu soft-deletes when View-Only is off`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Gone")
+
+        a.pages().moveToTrash(page.id)
+
+        assertNotNull("unlocked, the row menu's Move to Trash must land the page in the Trash", a.pageDao.getById(page.id)?.deletedAt)
     }
 
     // ------------------------------------------------------------------------- creates (§3.1.3)
