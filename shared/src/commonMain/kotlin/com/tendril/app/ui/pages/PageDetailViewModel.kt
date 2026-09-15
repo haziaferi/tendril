@@ -217,6 +217,10 @@ class PageDetailViewModel(
     /** §0.6.8 — a database's title for its membership strip. */
     suspend fun pageTitle(id: Long): String = pageDao.getById(id)?.title.orEmpty()
 
+    /** 14d — a RELATION property's rows by title for the row-as-page strip; a uid this device
+     * cannot resolve (deleted, quarantined §9.4) is absent, as `PageDatabaseViewModel.resolveRelatedTitles`. */
+    suspend fun resolveRelatedTitles(uids: Set<String>): List<String> = uids.mapNotNull { pageDao.getByUid(it)?.title }
+
     /** §0.6.8 / B§12.0 — which of this page's labels are doorways, for the chip's small mark. */
     val boundLabelIds: StateFlow<Set<Long>> = pageDatabaseDao.observeBoundLabelIds().map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())

@@ -1,5 +1,7 @@
 package com.tendril.app.ui.nav
 
+import androidx.compose.runtime.staticCompositionLocalOf
+
 /**
  * B§13.5 #4 (decided 2026-09-13) — every measurement in the app is proportional to the screen,
  * on both platforms, through **one** number: the shell multiplies `LocalDensity` by
@@ -26,6 +28,14 @@ enum class DensityProfile(val factor: Float, val key: String, val label: String)
 }
 
 const val DENSITY_PROFILE_KEY = "density_profile"
+
+/**
+ * B§13.4 14d — the profile in force, for a surface that must ask "pointer or finger?" without
+ * a platform check: the block toolbar floats above the selection under a pointer profile and
+ * sits inline under Touch. Provided by the scaffold beside the scaled density; Touch when
+ * nothing provides it, so a surface drawn outside the shell errs toward the finger.
+ */
+val LocalDensityProfile = staticCompositionLocalOf { DensityProfile.TOUCH }
 
 /** The side length that scores 1.0 before the profile — a small laptop window, a large tablet. */
 const val SCALE_REFERENCE_DP = 800f

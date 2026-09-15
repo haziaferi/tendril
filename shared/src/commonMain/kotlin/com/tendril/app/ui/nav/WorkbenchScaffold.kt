@@ -115,7 +115,7 @@ fun WorkbenchScaffold(
     val scale = shellScaleFor(shorterSideDp, profile)
     val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
 
-    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity) {
+    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile) {
         // The route content, identical under either shell — only the chrome around it differs.
         // 14c: on a wide window the Pages tab, root or page, is the workspace (tree + page).
         val content: @Composable (wide: Boolean) -> Unit = { wide ->
@@ -131,7 +131,7 @@ fun WorkbenchScaffold(
                         )
                     } else when (current) {
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
-                        WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true })
+                        WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true }, onShowOnRoadMap = navState::showOnRoadMap)
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
                         WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview)
                         // §0.8 step 8c — shared; the slot it used to fill is gone.
@@ -205,7 +205,7 @@ private fun switcherCommands(core: WorkbenchCore, navState: WorkbenchNavState): 
                 PagesViewModel(
                     core.database.pageDao(), core.database.pageDatabaseDao(), core.database.propertyDao(), core.database.pageFtsDao(),
                     core.database.labelDao(), core.purgeRegistry, core.databaseSyncManager, core.templateManager, core.viewLockState,
-                    core.pageContentRepository,
+                    core.pageContentRepository, core.database.entryDao(), core.resolveEntryUseCase,
                 )
             }
         }

@@ -8,6 +8,8 @@ import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.searchPrefix
+import com.tendril.app.data.entry.EntryDao
+import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageSearchHit
 import com.tendril.app.data.page.Label
@@ -45,6 +47,8 @@ class PagesViewModel(
     private val templateManager: TemplateManager,
     private val viewLockState: ViewLockState,
     private val pageContentRepository: PageContentRepository,
+    private val entryDao: EntryDao,
+    private val resolveEntryUseCase: ResolveEntryUseCase,
 ) : ViewModel() {
     val rootPages: StateFlow<List<Page>> =
         pageDao.observeRootPages().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -115,6 +119,19 @@ class PagesViewModel(
      * undo; and Restore rewrites `pages.updatedAt`, so it wins the next last-write-wins merge
      * everywhere too. None of them is a local-only mistake. */
     private fun locked() = viewLockState.viewOnly.value
+
+    /** B§13.4 14d — *Move to Trash* from a row's menu (hover `···`, right-click, or the phone's
+     * long-press): the same write as [PageDetailViewModel.trashPage] made from inside the page —
+     * a row-linked task goes with its row — gated by the lock the same way. Restore is the
+     * Trash sheet's. */
+    fun moveToTrash(pageId: Long) {
+        if (locked()) return
+        viewModelScope.launch {
+            val now = Instant.now()
+            entryDao.getBySourceRowId(pageId)?.let { resolveEntryUseCase.trash(it.id, now) }
+            pageDao.softDelete(pageId, now)
+        }
+    }
 
     /** §5.5.1.1 "Delete forever", from the Trash — through [PurgeRegistry], which records the
      * tombstone and drops the row as one operation so a purge both sticks here and propagates. */

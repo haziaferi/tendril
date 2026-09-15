@@ -26,7 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
@@ -158,7 +158,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                 navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } else paneChrome?.leading?.invoke() },
                 actions = {
                     paneChrome?.actions?.invoke(this)
-                    IconButton(onClick = { showMenu = true }, enabled = !viewOnly) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                    IconButton(onClick = { showMenu = true }, enabled = !viewOnly) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         val syncOn = database?.syncToTasks == true
                         DropdownMenuItem(
@@ -920,7 +920,7 @@ private fun RowMenu(viaLabel: Boolean, onDelete: () -> Unit, onRemove: () -> Uni
     var showMenu by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "Row options")
+            Icon(Icons.Outlined.MoreHoriz, contentDescription = "Row options")
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             if (viaLabel) DropdownMenuItem(text = { Text("Remove label from this page") }, onClick = { showMenu = false; onRemove() })

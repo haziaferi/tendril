@@ -34,7 +34,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -149,7 +149,7 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                         var showPaneMenu by remember { mutableStateOf(false) }
                         paneChrome.actions(this)
                         Box {
-                            IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                            IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                             DropdownMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) }
                         }
                     }

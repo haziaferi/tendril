@@ -174,7 +174,7 @@ class WritePathSyncTest {
          */
         fun pages() = PagesViewModel(
             pageDao, pageDatabaseDao, propertyDao, ftsDao, labelDao, purgeRegistry, databaseSyncManager,
-            templateManager, viewLockState, contentRepository,
+            templateManager, viewLockState, contentRepository, entryDao, resolveEntryUseCase,
         )
 
         /**
