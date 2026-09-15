@@ -29,6 +29,8 @@ import com.tendril.app.ui.track.RunningTimerRailFoot
 import com.tendril.app.ui.review.ReviewScreen
 import com.tendril.app.ui.roadmap.RoadMapScreen
 import com.tendril.app.ui.switcher.QuickSwitcher
+import com.tendril.app.ui.pages.rememberPagesViewModel
+import com.tendril.app.ui.components.onPointerNavigation
 import com.tendril.app.ui.switcher.SwitcherState
 import com.tendril.app.domain.SwitcherCommand
 import com.tendril.app.domain.track.TrackTarget
@@ -65,6 +67,10 @@ fun WorkbenchScaffold(
     switcher: SwitcherState = remember { SwitcherState() },
     /** 14c — the tree pane's width, collapsed flag and expansions; the desktop's Ctrl+\ toggles it from `Main.kt`. */
     treeState: PagesTreeState = remember { PagesTreeState(core.keyValueStore) },
+    /** 14e — the shortcuts overlay's open flag (Ctrl+/ and Settings open it) and the actions the
+     * desktop's key table runs; the scaffold fills [shortcutActions] because it owns what they move. */
+    shortcuts: ShortcutsState = remember { ShortcutsState() },
+    shortcutActions: ShortcutActions? = null,
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
     /** B§13.5 #4 — the density profile; a platform that fixes it (the phone: Touch) passes it,
@@ -72,7 +78,8 @@ fun WorkbenchScaffold(
      * `density_profile` is read. */
     fixedDensityProfile: DensityProfile? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
-    tasksHabitsContent: @Composable (onOpenReview: () -> Unit) -> Unit,
+    /** 14e — [quickAddRequested] is Ctrl+Shift+N's intent; the screen opens its Add sheet and calls [onQuickAddConsumed]. */
+    tasksHabitsContent: @Composable (onOpenReview: () -> Unit, quickAddRequested: Boolean, onQuickAddConsumed: () -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
 ) {
     // Back pops the stack on both platforms: Android's gesture and desktop's Escape reach the
@@ -115,11 +122,29 @@ fun WorkbenchScaffold(
     val scale = shellScaleFor(shorterSideDp, profile)
     val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
 
+    // 14e — the desktop's key table runs through here; Android has no fixed set yet, so its
+    // scaffold passes no actions and nothing is filled.
+    val pagesViewModel = rememberPagesViewModel(core)
+    shortcutActions?.run = { action ->
+        when (action) {
+            ShortcutAction.SWITCHER -> switcher.open = true
+            ShortcutAction.SHORTCUTS -> shortcuts.open = true
+            ShortcutAction.TOGGLE_TREE -> treeState.toggle()
+            ShortcutAction.BACK -> navState.back()
+            ShortcutAction.FORWARD -> navState.forward()
+            ShortcutAction.NEW_PAGE -> pagesViewModel.createBlankPage("") { navState.openPage(it) }
+            ShortcutAction.NEW_TASK -> navState.requestQuickAdd()
+            ShortcutAction.JOURNAL_TODAY -> pagesViewModel.openJournal(LocalDate.now()) { navState.openPage(it) }
+            else -> action.tab()?.let { navState.switchTab(it) }
+        }
+    }
+
     CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile) {
         // The route content, identical under either shell — only the chrome around it differs.
         // 14c: on a wide window the Pages tab, root or page, is the workspace (tree + page).
         val content: @Composable (wide: Boolean) -> Unit = { wide ->
-            Box(modifier = Modifier.fillMaxSize()) {
+            // 14e — the mouse's side buttons are Back and Forward on every route.
+            Box(modifier = Modifier.fillMaxSize().onPointerNavigation(onBack = { navState.back() }, onForward = { navState.forward() })) {
                 when (val current = route) {
                     is WorkbenchRoute.TabRoot, is WorkbenchRoute.PageDetail -> if (wide && current.tab == WorkbenchDestination.PAGES) {
                         PagesWorkspace(
@@ -133,7 +158,7 @@ fun WorkbenchScaffold(
                     is WorkbenchRoute.TabRoot -> when (current.tab) {
                         WorkbenchDestination.PAGES -> PagesScreen(core = core, onOpenPage = navState::openPage, onOpenSwitcher = { switcher.open = true }, onShowOnRoadMap = navState::showOnRoadMap)
                         WorkbenchDestination.CALENDAR -> calendarContent(navState::openPage)
-                        WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview)
+                        WorkbenchDestination.TASKS_HABITS -> tasksHabitsContent(navState::openReview, navState.quickAddRequested) { navState.quickAddRequested = false }
                         // §0.8 step 8c — shared; the slot it used to fill is gone.
                         WorkbenchDestination.ROAD_MAP -> RoadMapScreen(
                             core = core,
@@ -154,6 +179,7 @@ fun WorkbenchScaffold(
                     }
                     is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
                 }
+                if (shortcuts.open) ShortcutsOverlay(onDismiss = { shortcuts.open = false })
                 if (switcher.open) {
                     // Over everything, on every route — the switcher is how you get anywhere.
                     QuickSwitcher(

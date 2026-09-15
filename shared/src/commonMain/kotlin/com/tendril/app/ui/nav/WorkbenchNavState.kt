@@ -31,18 +31,23 @@ sealed interface WorkbenchRoute {
  */
 class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PAGES) {
     private val backStack = mutableStateListOf<WorkbenchRoute>(WorkbenchRoute.TabRoot(startTab))
+    /** 14e (B§13.6 #2) — what Back popped, so Forward can put it back; emptied by any new move. */
+    private val forwardStack = mutableStateListOf<WorkbenchRoute>()
 
     val current: WorkbenchRoute get() = backStack.last()
     val currentTab: WorkbenchDestination get() = current.tab
     val canGoBack: Boolean get() = backStack.size > 1
+    val canGoForward: Boolean get() = forwardStack.isNotEmpty()
 
     fun switchTab(tab: WorkbenchDestination) {
         if (backStack.size == 1 && backStack[0].tab == tab) return
+        forwardStack.clear()
         backStack.clear()
         backStack.add(WorkbenchRoute.TabRoot(tab))
     }
 
     fun openPage(pageId: Long) {
+        forwardStack.clear()
         backStack.add(WorkbenchRoute.PageDetail(pageId, currentTab))
     }
 
@@ -50,6 +55,7 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
      * it, so clicking through the tree never grows the stack and Escape closes to the tab root.
      * A link inside a page uses [openPage] and still pushes, so Back returns where it came from. */
     fun showPage(pageId: Long) {
+        forwardStack.clear()
         val top = current
         if (top is WorkbenchRoute.PageDetail) backStack[backStack.lastIndex] = WorkbenchRoute.PageDetail(pageId, top.tab)
         else backStack.add(WorkbenchRoute.PageDetail(pageId, currentTab))
@@ -65,6 +71,7 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
     }
 
     fun openReview() {
+        forwardStack.clear()
         backStack.add(WorkbenchRoute.Review(currentTab))
     }
 
@@ -73,7 +80,24 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
      * falls through to whatever the platform normally does (exit the app, on Android). */
     fun back(): Boolean {
         if (backStack.size <= 1) return false
-        backStack.removeAt(backStack.lastIndex)
+        forwardStack.add(backStack.removeAt(backStack.lastIndex))
         return true
+    }
+
+    /** 14e — the route Back left, restored; false at the tip. A new push in between forgets
+     * it (the browsers' rule: a new branch has no old future). */
+    fun forward(): Boolean {
+        if (forwardStack.isEmpty()) return false
+        backStack.add(forwardStack.removeAt(forwardStack.lastIndex))
+        return true
+    }
+
+    /** 14e — Ctrl+Shift+N from anywhere: Tasks opens with its Add sheet. Set here, read and
+     * cleared by the Tasks tab — the second cross-tab intent after [roadMapFocusRequest]. */
+    var quickAddRequested: Boolean by mutableStateOf(false)
+
+    fun requestQuickAdd() {
+        quickAddRequested = true
+        switchTab(WorkbenchDestination.TASKS_HABITS)
     }
 }

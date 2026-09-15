@@ -67,10 +67,12 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
             )
         },
         // §0.8 step 7a — Tasks & Habits is shared; Android supplies the switches and its sheets.
-        tasksHabitsContent = { onOpenReview ->
+        tasksHabitsContent = { onOpenReview, quickAddRequested, onQuickAddConsumed ->
             TasksHabitsScreen(
                 core = container.workbenchCore,
                 onOpenReview = onOpenReview,
+                quickAddRequested = quickAddRequested,
+                onQuickAddConsumed = onQuickAddConsumed,
                 showImportance = container.taskPreferences.showImportance.collectAsState().value,
                 showStreaks = container.taskPreferences.showHabitStreaks.collectAsState().value,
                 reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },

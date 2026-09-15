@@ -31,7 +31,7 @@ import com.tendril.app.ui.settings.AiSettingsSection
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Unit, modifier: Modifier = Modifier) {
+fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Unit, onShowShortcuts: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize()) {
         ShellTopBar(title = { Text("Settings") })
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -41,6 +41,10 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             AiSettingsSection(core.aiKeyStore, core.keyValueStore)
             HorizontalDivider()
             DensitySection(core.keyValueStore)
+            HorizontalDivider()
+            // 14e — the overlay's second door, so the chord is not the only way to learn the chords.
+            Text("Keyboard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            androidx.compose.material3.TextButton(onClick = onShowShortcuts, modifier = Modifier.padding(start = 8.dp)) { Text("Keyboard shortcuts… (F1)") }
             HorizontalDivider()
             Text(
                 "Theme, backups and reminders are Android-only for now.",

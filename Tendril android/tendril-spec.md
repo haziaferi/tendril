@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14e — the keyboard) | §2.2 *The keyboard* (new bullet): one binding table (`ui/nav/Shortcuts.kt`) and the F1 card generated from it (`ShortcutsOverlay.kt`); Alt+← / Alt+→ and the mouse's side buttons with a forward list on `WorkbenchNavState`; Ctrl+Shift+N's `requestQuickAdd`; `ui/components/ListKeyboard.kt` on the tree and the Tasks list. §0.10 item 14: 14e shipped; item 18 struck (resolved by 14d); item 19 (find in page) added. Critiques: `docs/critiques/keyboard-desktop.md`, `keyboard-function.md`. Tests 713 → 725. | §2.2, §0.10 |
 | 2026-09-15 (14d — under a pointer) | §2.2 *Under a pointer* (new bullet): right-click = the pointer's long-press on rows and blocks (`ui/components/Pointer.kt`, `TextContextMenuExtras` expect/actual), hover-revealed `···` at 28 dp, the toolbar floating under a pointer profile (`LocalDensityProfile`), `PagesViewModel.moveToTrash` lock-gated; §3.1.1 amended (the toolbar's two homes). Critique passes in `docs/critiques/`; their High: the RELATION branch in the row-as-page strip. `MoreHoriz` on every bar, the tree header at the page bar's height, the outlined journal book. §0.10 item 14: 14d shipped, the deferred list. Tests 711 → 713. | §2.2, §3.1.1, §0.10 |
 | 2026-09-15 (14c — two panes) | §3.1 amended: on a wide window the Pages tab is the tree beside the open page (`PagesWorkspace`, `PagesTreeState`, `PaneChrome`, `PageRoute`); chrome split per pane — option B of `docs/mockups/pages-two-panes.html`; `showPage` replaces, `openPage` pushes; `PageDao.observeChildren`/`observeParentsWithChildren`; Ctrl+\ on the desktop; the phone unchanged. §0.10 item 14: 14c shipped. Tests 703 → 711. | §3.1, §0.10 |
 | 2026-09-15 (14c·0 — the scale) | §2.2: every measurement proportional to the screen on both platforms — `LocalDensity` × `shellScaleFor` (shorter side ÷ 800 dp clamped 0.85…1.25, × Compact 0.9 / Comfortable 1.0 / Touch 1.3); the phone fixed Touch, the desktop's profile in Settings (`density_profile`). Measured on both devices. §0.10 item 14: 14c·0 shipped. Tests 698 → 703. | §2.2, §0.10 |
@@ -638,9 +639,16 @@ Genuinely undecided — distinct from §0.7.
     §0.6.15 on purpose: the Markdown export (§7) is the honest interface for an agent (it reads
     files, not the app), and a local model would need a runtime the offline build cannot fetch.
     Neither is precluded by the verbs; neither is planned.
-18. **A relation cell on a row's own page shows raw uids** — the row-as-page property strip
+18. ~~**A relation cell on a row's own page shows raw uids** — the row-as-page property strip
     (`RowPropertyEditor`) renders a RELATION value as its comma-joined page uids; the Table's
-    cell resolves them to titles. Seen 2026-09-13 on *Escape test* after step 8f bound "Blocked by".
+    cell resolves them to titles. Seen 2026-09-13 on *Escape test* after step 8f bound "Blocked by".~~
+    *Resolved 2026-09-15 (14d): `RowUnboundEditor` gained a read-only RELATION branch — the
+    titles, "—" when empty — after `docs/critiques/pages-desktop.md` #1 found the uid in an
+    editable field; editing stays in the Table.*
+19. **Find in page** (Ctrl+F) — decided 2026-09-15 as its own PR after 14e: a find bar over the
+    open page's blocks, a match count, next/previous, the match highlighted in the text through
+    the span transformation (`spansVisualTransformation`), Esc closing it; the chord joins
+    `Shortcuts.kt`'s table and the F1 card when it ships.
 16. **Database-level history** — §0.6.13 versions a page's title and blocks only. A database's
     columns, views and a row's property values have no history; if a lost column or value is ever
     missed, the record to version is the full `PageSnapshotRecord` with a restore that goes through
@@ -697,6 +705,13 @@ Genuinely undecided — distinct from §0.7.
     wording, the chip row's rhythm, "2 row(s)" with dashes, the phone card's kind line that
     repeats its icon, a page-ground click that clears no focus (small things, to close with
     14h).*
+    ***14e shipped 2026-09-16** — the keyboard (§2.2 *The keyboard*): one table, the F1 card
+    generated from it, Alt+arrows and the side buttons for back/forward, Ctrl+Shift+N's
+    quick-add intent, ↑↓↵→← and type-ahead in the tree and the Tasks list. Two critique passes
+    (`docs/critiques/keyboard-desktop.md` on the mock, `keyboard-function.md` on the build); the
+    build pass replaced the benchmark's layout-bound chords. Added to the small-things list: a
+    page opened by Ctrl+N or Ctrl+T from another tab stacks over that tab rather than landing in
+    the Pages workspace.*
 13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -822,6 +837,31 @@ navigation-paradigm question later.
   so the lock is visible. Three critique passes around this PR live in `docs/critiques/`
   (desktop, phone, the function walk); their High findings are fixed here, the rest listed in
   §0.10 item 14.)*
+- **The keyboard** *(**Amended 2026-09-16 — B§13.4 14e, B§13.6 #2 and #8.** The desktop's
+  fixed set is **one table** (`ui/nav/Shortcuts.kt`), and the shortcuts card (F1, or *Keyboard
+  shortcuts…* in Settings) is generated from it, so what is listed is what is bound — a test
+  holds every action to one unique chord. The table: **Ctrl+1…5** the tabs · **Alt+← / Alt+→**
+  back and forward (also the mouse's side buttons) · **Ctrl+\** the tree · **Ctrl+N** new page ·
+  **Ctrl+Shift+N** new task (Tasks opens with its Add sheet — a cross-tab intent like *Show on
+  Road Map*) · **Ctrl+T** today's Journal · **Ctrl+K** the switcher · **F1** the card; Esc is
+  back. Every key is one a person can press on any layout without AltGr or Shift: the
+  benchmark's Ctrl+[ ] and Ctrl+/ are AltGr+è and Shift+7 on an Italian keyboard, the one this
+  app is written on, so the browsers' Alt+arrows and Windows' F1 stand in
+  (`docs/critiques/keyboard-function.md` #1). No menu bar, no Alt-mnemonics (2026-09-13).
+  **Back has a forward**: `WorkbenchNavState` keeps what Back popped until any new move
+  (browsers' rule). **Lists** (`ui/components/ListKeyboard.kt`, shared — a hardware keyboard on
+  the phone runs it): the Pages tree and the Tasks list take ↑ ↓ (clamped), Home/End, ↵ (the
+  tree shows the page; a task opens its `···` menu, having no detail screen), → / ← (expand,
+  collapse or climb to the parent — the Finder's), letters as type-ahead with a one-second reset
+  and the matched prefix **underlined in the row** (not a caption elsewhere —
+  `docs/critiques/keyboard-desktop.md` #3), Esc clearing the cursor before it goes back (a
+  `BackHandler` armed only while there is something to clear). The cursor is a 2 dp `outline`
+  ring inside the row, distinct from the current row's tint and the hover's, drawn only while
+  the input mode is the keyboard's — a finger sets the cursor but sees no ring, as Android
+  draws none for touch. The rest of the lists (the phone's Pages list, Calendar, the Trash
+  sheets) take the same modifier when 14f redraws them. Android has no fixed set yet; the table
+  is shared and its Activity could adopt it. Find in page (Ctrl+F) is §0.10 item 19, its own
+  PR.)*
 - **Page cards** (Pages tab): horizontal row layout (icon, title, meta stacked to the right of the
   icon) rather than the original stacked/vertical card — roughly half the height of the first
   version, so more pages/databases are visible without scrolling, while keeping icon and font size

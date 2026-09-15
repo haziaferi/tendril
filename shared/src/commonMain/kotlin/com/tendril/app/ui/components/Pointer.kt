@@ -12,6 +12,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isBackPressed
+import androidx.compose.ui.input.pointer.isForwardPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -56,5 +58,24 @@ fun PointerMenu(
     val anchor = at?.let { IntOffset(it.x.roundToInt(), it.y.roundToInt()) } ?: fallback
     Box(modifier = Modifier.offset { anchor }.size(1.dp)) {
         DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, content = items)
+    }
+}
+
+/**
+ * 14e (B§13.6 #2) — the mouse's side buttons as Back and Forward, on the scaffold's content so
+ * every route has them. Initial pass: a side button is nobody else's, so nothing below needs
+ * a look first. A mouse on Android reaches this too.
+ */
+fun Modifier.onPointerNavigation(onBack: () -> Unit, onForward: () -> Unit): Modifier = pointerInput(onBack, onForward) {
+    awaitEachGesture {
+        val event = awaitPointerEvent(PointerEventPass.Initial)
+        if (event.type != PointerEventType.Press) return@awaitEachGesture
+        val handler = when {
+            event.buttons.isBackPressed -> onBack
+            event.buttons.isForwardPressed -> onForward
+            else -> return@awaitEachGesture
+        }
+        event.changes.forEach { it.consume() }
+        handler()
     }
 }
