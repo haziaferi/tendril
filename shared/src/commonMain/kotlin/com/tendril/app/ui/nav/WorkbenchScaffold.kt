@@ -16,6 +16,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Density
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
@@ -64,6 +67,10 @@ fun WorkbenchScaffold(
     switcher: SwitcherState = remember { SwitcherState() },
     onCheckboxOnlyWindowFlags: ((active: Boolean) -> Unit)? = null,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)? = null,
+    /** B§13.5 #4 — the density profile; a platform that fixes it (the phone: Touch) passes it,
+     * one that lets the person choose (the desktop, in Settings) passes null and the store's
+     * `density_profile` is read. */
+    fixedDensityProfile: DensityProfile? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     tasksHabitsContent: @Composable (onOpenReview: () -> Unit) -> Unit,
     settingsContent: @Composable () -> Unit,
@@ -98,7 +105,17 @@ fun WorkbenchScaffold(
         onDispose { onCheckboxOnlyWindowFlags?.invoke(false) }
     }
 
-    CompositionLocalProvider(LocalViewOnly provides viewOnly) {
+    // B§13.5 #4 — one scale for every measurement below this point (see ShellScale.kt). The
+    // shorter side is read in the platform's own density, before the override.
+    val baseDensity = LocalDensity.current
+    val containerSize = LocalWindowInfo.current.containerSize
+    val storedProfile by core.keyValueStore.observe(DENSITY_PROFILE_KEY).collectAsState(initial = core.keyValueStore.get(DENSITY_PROFILE_KEY))
+    val profile = fixedDensityProfile ?: DensityProfile.fromKey(storedProfile)
+    val shorterSideDp = minOf(containerSize.width, containerSize.height) / baseDensity.density
+    val scale = shellScaleFor(shorterSideDp, profile)
+    val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
+
+    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity) {
         // The route content, identical under either shell — only the chrome around it differs.
         val content: @Composable () -> Unit = {
             Box(modifier = Modifier.fillMaxSize()) {
