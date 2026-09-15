@@ -1,5 +1,7 @@
 package com.tendril.app.ui.nav
 
+import androidx.compose.runtime.staticCompositionLocalOf
+
 /**
  * B§13.4 14a / §2.2 — the shell's two forms, chosen by the *window*, not the platform.
  *
@@ -57,3 +59,10 @@ val DEFAULT_WINDOW = WindowFrame(1200, 800, -1, -1)
 
 /** The smallest frame the window accepts — the bar layout still fits with room for a sheet. */
 val MIN_WINDOW = WindowFrame(800, 600, -1, -1)
+
+/**
+ * 14f·1 — the shell's layout as the scaffold decided it, for a tab that splits itself on a wide
+ * window (Tasks: list beside the pane) without re-measuring — the scaffold's rule is the one
+ * rule. `BAR` when nothing provides it, so a surface drawn outside the shell keeps its phone form.
+ */
+val LocalShellLayout = staticCompositionLocalOf { ShellLayout.BAR }

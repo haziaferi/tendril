@@ -64,6 +64,8 @@ import com.tendril.app.ui.calendar.CalendarScreen
 import com.tendril.app.ui.taskshabits.TasksHabitsScreen
 import com.tendril.app.domain.ics.IcsWriter
 import com.tendril.app.ui.nav.WorkbenchScaffold
+import com.tendril.app.ui.trash.EntryTrashSheet
+import com.tendril.app.ui.trash.HabitTrashSheet
 import com.tendril.app.ui.nav.ShortcutActions
 import com.tendril.app.ui.nav.ShortcutsState
 import com.tendril.app.ui.nav.shortcutFor
@@ -214,8 +216,7 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         reminderSheet = null,
                     )
                 },
-                // §0.8 step 7a — shared. No alarms and no Settings here yet, so no bell, the
-                // switches off, and no Trash button until those sheets move too.
+                // §0.8 step 7a — shared. No alarms here, so no bell; the switches off.
                 tasksHabitsContent = { onOpenReview, quickAddRequested, onQuickAddConsumed ->
                     TasksHabitsScreen(
                         core = core,
@@ -225,8 +226,10 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         showImportance = false,
                         showStreaks = false,
                         reminderSheet = null,
-                        entryTrashSheet = null,
-                        habitTrashSheet = null,
+                        // 14f·1 (§0.10 item 13) — the Trash sheets are shared now, so the desktop
+                        // has its Trash button; the bell stays absent: no alarms here (§12.1).
+                        entryTrashSheet = { onDismiss -> EntryTrashSheet(core = core, onDismiss = onDismiss) },
+                        habitTrashSheet = { onDismiss -> HabitTrashSheet(core = core, onDismiss = onDismiss) },
                     )
                 },
                 // §0.6.15 — the last stand-in gone: Settings holds the Claude section; 14a moved

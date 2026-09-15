@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package com.tendril.app.ui.pages
 
@@ -34,6 +34,15 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import com.tendril.app.ui.components.PointerMenu
 import com.tendril.app.ui.components.onSecondaryClick
+import com.tendril.app.ui.components.ListKeyState
+import com.tendril.app.ui.components.TypeAheadReset
+import com.tendril.app.ui.components.keyboardCursorShown
+import com.tendril.app.ui.components.keyedTitle
+import com.tendril.app.ui.components.listKeyboard
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Search
@@ -153,13 +162,27 @@ fun PagesScreen(core: WorkbenchCore, onOpenPage: (Long) -> Unit, onOpenSwitcher:
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
-                        items(pages, key = { it.id }) { page ->
+                    // 14f·1 (B§13.6 #8) — the phone's list answers a hardware keyboard too: ↑ ↓ ↵ opens, type-ahead.
+                    val keyState = remember { ListKeyState() }
+                    TypeAheadReset(keyState)
+                    BackHandler(enabled = keyState.hasSomethingToClear) { keyState.clear() }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().listKeyboard(
+                            state = keyState,
+                            count = { pages.size },
+                            titles = { pages.map { it.title } },
+                            onOpen = { i -> pages.getOrNull(i)?.let { onOpenPage(it.id) } },
+                        ),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                    ) {
+                        itemsIndexed(pages, key = { _, it -> it.id }) { index, page ->
                             PageCard(
                                 page = page,
-                                onClick = { onOpenPage(page.id) },
+                                onClick = { keyState.clickedRow(index); onOpenPage(page.id) },
                                 onShowOnRoadMap = { onShowOnRoadMap(page.id) },
                                 onMoveToTrash = if (viewOnly) null else ({ vm.moveToTrash(page.id) }),
+                                keyFocused = keyState.focused == index && keyboardCursorShown(),
+                                typed = keyState.typed,
                             )
                         }
                     }
@@ -341,7 +364,7 @@ internal fun LabelFilterRow(viewModel: PagesViewModel, horizontalPadding: androi
  * height of a stacked card so more pages are visible without scrolling. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?) {
+private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?, keyFocused: Boolean = false, typed: String = "") {
     // B§13.4 14d — the row's menu, on long-press (the finger) or right-click (a mouse on the
     // phone gets it too); no hover `···` here, hover is the tree's.
     var menuAt by remember { mutableStateOf<Offset?>(null) }
@@ -353,7 +376,8 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Local val, not `page.icon` directly: a nullable property declared in a different
@@ -374,7 +398,7 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
         }
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(page.title, style = MaterialTheme.typography.bodyLarge)
+            Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.bodyLarge)
             Text(
                 when (page.kind) {
                     PageKind.DATABASE -> "Database"

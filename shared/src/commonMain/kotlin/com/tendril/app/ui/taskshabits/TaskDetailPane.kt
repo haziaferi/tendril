@@ -1,0 +1,165 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
+package com.tendril.app.ui.taskshabits
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.tendril.app.data.entry.EntryStatus
+import com.tendril.app.data.entry.RecurrenceRule
+import com.tendril.app.data.habit.Habit
+import com.tendril.app.domain.TaskWithSubtasks
+import com.tendril.app.domain.plan.loggedSegment
+import com.tendril.app.domain.track.TrackTarget
+import java.time.Period
+import com.tendril.app.ui.track.TrackButton
+
+/**
+ * B§13.4 14f·1 — the right pane of the Tasks tab on a wide window: a task read in full, with
+ * **the row's verbs as chips, by name** (`docs/critiques/tasks-calendar-mock.md` #4: the mock's
+ * *Someday* and *Flag* were verbs the app does not have). Nothing is edited inline (decided
+ * 2026-09-16): each chip opens the sheet the row's `···` opens — a slide-over on a wide window —
+ * so the phone's sheets and the desktop's pane are one set of controls in two homes. Labels and
+ * unset values are `onSurfaceVariant` (the mock's `faint` measured 3.08:1, #1).
+ */
+@Composable
+internal fun TaskDetailPane(
+    group: TaskWithSubtasks,
+    viewModel: TasksHabitsViewModel,
+    actions: TaskRowActions,
+    onOpenReminders: (() -> Unit)?,
+    onTrash: () -> Unit,
+) {
+    val entry = group.task
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = entry.status == EntryStatus.DONE, onCheckedChange = { viewModel.setDone(entry.id, it) })
+            Text(entry.title, fontSize = 24.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f).padding(start = 4.dp))
+        }
+        Spacer(Modifier.height(10.dp))
+        DetailRow("When", listOfNotNull(entry.startDate?.toString(), entry.startTime?.toString()).joinToString(" · ").ifEmpty { null })
+        DetailRow("Deadline", entry.dueDate?.toString())
+        DetailRow("Repeat", (entry.recurrenceRule as? RecurrenceRule.Elastic)?.period?.let(::periodWords))
+        if (actions.showImportance) DetailRow("Importance", if (entry.important) "Important" else null, unsetWord = "not marked")
+        DetailRow("Tracked today", loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate), unsetWord = "nothing yet")
+        Spacer(Modifier.height(14.dp))
+        // The chips: the menu's items by name, plus the row's ▶ and its bell, and the Trash.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistChip(onClick = { actions.onPostpone(entry) }, label = { Text("Postpone…") })
+            AssistChip(onClick = { actions.onSetDeadline(entry) }, label = { Text(if (entry.dueDate == null) "Set deadline…" else "Change deadline…") })
+            if (actions.showImportance) AssistChip(
+                onClick = { viewModel.setImportant(entry.id, !entry.important) },
+                label = { Text(if (entry.important) "Not important" else "Important") },
+                leadingIcon = { Icon(if (entry.important) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null) },
+            )
+            val running = actions.runningTarget == TrackTarget.Entry(entry.id)
+            AssistChip(
+                onClick = { viewModel.toggleTracking(TrackTarget.Entry(entry.id)) },
+                label = { Text(if (running) "Stop timer" else "Start timer") },
+                leadingIcon = { Icon(if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null) },
+            )
+            if (onOpenReminders != null) AssistChip(onClick = onOpenReminders, label = { Text("Reminders…") }, leadingIcon = { Icon(Icons.Filled.Notifications, contentDescription = null) })
+            AssistChip(onClick = onTrash, label = { Text("Move to Trash") })
+        }
+        Spacer(Modifier.height(18.dp))
+        HorizontalDivider()
+        Text("Steps", fontSize = 11.sp, letterSpacing = 0.7.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+        group.subtasks.forEach { step ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Checkbox(checked = step.status == EntryStatus.DONE, onCheckedChange = { viewModel.setDone(step.id, it) })
+                Text(step.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                TrackButton(TrackTarget.Entry(step.id), actions.runningTarget, viewModel::toggleTracking)
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clickable { actions.onAddSubtask(entry) }.padding(vertical = 8.dp),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp))
+            Text("Add a step", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (entry.sourceRowId != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "This task is a database row's — its When and Done are the row's cells (§0.6.14); a \"Blocked by\" relation, where the database has one, lives on the row.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** A habit read in full: the presence sentences and the month of dots the sheet shows, inline. */
+@Composable
+internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onTrash: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 18.dp)) {
+        Text(habit.title, fontSize = 24.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(10.dp))
+        HabitDetailContent(habit, viewModel, showStreak)
+        Spacer(Modifier.height(14.dp))
+        AssistChip(onClick = onTrash, label = { Text("Move to Trash") })
+    }
+}
+
+/** The pane at the tab root, before anything is chosen — the Pages workspace's quiet line. */
+@Composable
+internal fun EmptyTaskPane() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            "Choose a task or a habit — or press Ctrl+Shift+N for a new task.",
+            fontSize = 13.5.sp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.padding(24.dp),
+        )
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String?, unsetWord: String = "none") {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
+        if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium)
+        else Text(unsetWord, style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** "Every day", "Every 2 weeks" — the Add sheet's vocabulary for a task's repeat. */
+private fun periodWords(p: Period): String {
+    val (n, unit) = when {
+        p.months > 0 -> p.months to "month"
+        p.days > 0 && p.days % 7 == 0 -> p.days / 7 to "week"
+        else -> p.days to "day"
+    }
+    return if (n == 1) "Every $unit" else "Every $n ${unit}s"
+}

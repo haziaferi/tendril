@@ -28,11 +28,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.components.TendrilSheet
-import com.tendril.app.AppContainer
-import com.tendril.app.R
+import com.tendril.app.ui.WorkbenchCore
+import com.tendril.app.generated.resources.Res
+import com.tendril.app.generated.resources.empty_trash_message
+import com.tendril.app.generated.resources.trash_entries_title
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.ui.components.EmptyState
@@ -50,14 +52,14 @@ import kotlinx.coroutines.launch
  * would bring the row back silently unscheduled.
  */
 @Composable
-fun EntryTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
-    val entries by container.database.entryDao().observeTrash().collectAsState(initial = emptyList())
+fun EntryTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
+    val entries by core.database.entryDao().observeTrash().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteForever by remember { mutableStateOf<List<Entry>?>(null) }
 
     fun restore(ids: Collection<Long>) {
-        scope.launch { ids.forEach { container.resolveEntryUseCase.restore(it) } }
+        scope.launch { ids.forEach { core.resolveEntryUseCase.restore(it) } }
     }
 
     TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
@@ -65,7 +67,7 @@ fun EntryTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    stringResource(R.string.trash_entries_title),
+                    stringResource(Res.string.trash_entries_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -96,7 +98,7 @@ fun EntryTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
             if (entries.isEmpty()) {
                 EmptyState(
                     icon = Icons.Filled.Close,
-                    message = stringResource(R.string.empty_trash_message),
+                    message = stringResource(Res.string.empty_trash_message),
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -142,7 +144,7 @@ fun EntryTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
                         // §5.5.1.1 — the registry records the tombstone that makes this purge
                         // stick on the other devices too, and tears the schedule down on the way
                         // (which this call site used to have to remember to do itself).
-                        targets.forEach { container.purgeRegistry.purgeEntry(it.id) }
+                        targets.forEach { core.purgeRegistry.purgeEntry(it.id) }
                     }
                     selectedIds = selectedIds - targets.map { it.id }.toSet()
                     pendingDeleteForever = null
