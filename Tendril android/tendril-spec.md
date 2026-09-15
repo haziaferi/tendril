@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-15 (14c — two panes) | §3.1 amended: on a wide window the Pages tab is the tree beside the open page (`PagesWorkspace`, `PagesTreeState`, `PaneChrome`, `PageRoute`); chrome split per pane — option B of `docs/mockups/pages-two-panes.html`; `showPage` replaces, `openPage` pushes; `PageDao.observeChildren`/`observeParentsWithChildren`; Ctrl+\ on the desktop; the phone unchanged. §0.10 item 14: 14c shipped. Tests 703 → 711. | §3.1, §0.10 |
 | 2026-09-15 (14c·0 — the scale) | §2.2: every measurement proportional to the screen on both platforms — `LocalDensity` × `shellScaleFor` (shorter side ÷ 800 dp clamped 0.85…1.25, × Compact 0.9 / Comfortable 1.0 / Touch 1.3); the phone fixed Touch, the desktop's profile in Settings (`density_profile`). Measured on both devices. §0.10 item 14: 14c·0 shipped. Tests 698 → 703. | §2.2, §0.10 |
 | 2026-09-14 (14b — slide-overs) | §3 *Bottom sheets* amended: on a wide window (the shell's 840 dp rule, `sheetFormFor`) `TendrilSheet` is a right slide-over as mocked (`ui/components/SlideOver.kt`: 32 % scrim, 440 dp panel, header with × unless the sheet draws its own, bounded body; scrim / Escape / Back close); signature unchanged at 33 sites; menus and dialogs stay. §0.10 item 14: 14b shipped, two 14a fixes noted. Tests 697 → 698. | §3, §0.10 |
 | 2026-09-14 (14a — the shell) | §2.2 amended: the shell drawn as the desktop mock draws it on both platforms (`ui/nav/Shell.kt` — 84 dp rail / 80 dp bottom bar with pills, 36 dp timer strip or rail foot, 52 dp top bar at twelve screens; no Material `Scaffold`/`NavigationBar`/`NavigationRail`/`TopAppBar` in the shell), the 840 dp window-width breakpoint (`ShellLayout`), the desktop window's remembered frame and *Tendril* title, desktop sync controls into Settings. §0.10 item 14: 14a shipped. Tests 691 → 697. | §2.2, §0.10 |
@@ -678,7 +679,14 @@ Genuinely undecided — distinct from §0.7.
     as `TopAppBar`'s did), and a maximised window's size stored as a floating frame (only a
     floating placement is remembered now).* ***14c·0 shipped 2026-09-15** — B§13.5 #4's scale,
     pulled ahead of 14c so the tree pane is proportional from its first line (§2.2, *Every
-    measurement is proportional*); the desktop's Density setting.*
+    measurement is proportional*); the desktop's Density setting.* ***14c shipped 2026-09-15** — Pages as two panes on a wide window (§3.1,
+    amended): the tree beside the page, chrome split per pane (option B on
+    `docs/mockups/pages-two-panes.html`), resizable and collapsible (Ctrl+\), `showPage` vs
+    `openPage`. Verified on desktop (tree + empty state; a page, a database, a journal day in the
+    pane; Journal expands; a block reference pushes and Escape returns; Ctrl+\ both ways; the
+    handle drags and the width survives a relaunch) and on the phone (unchanged). Three fixes on
+    the walk: the workspace painted no ground; a `LazyColumn` sheet's crash lesson reapplied; the
+    handle's 8 dp target was a 5 px strip under the scale — now 12 dp astride the divider.*
 13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -967,6 +975,28 @@ else — `grep` is the check, as for `ModalBottomSheet`.)*
 Capable of creating many pages, projects, and databases without burying quick settings, save/sync
 status, or import/export behind menus. Must handle a large personal knowledge base without becoming
 visually noisy.
+
+*(**Amended 2026-09-15 — B§13.4 14c, the tab on a wide window.** From 840 dp (the shell's own
+rule) the Pages tab is two panes: the **tree** at 280 dp beside the **open page**. The chrome is
+split the way Obsidian and Bear split it, chosen on `docs/mockups/pages-two-panes.html` (option B
+of three; A was Apple Notes' single segmented bar, C Things' sidebar footer): what acts on *pages*
+— the name, New, search, the journal, the collapse chevron — sits on the tree's 44 dp header; what
+acts on *this page* — its title, View-Only, its `···` with *Trash…* appended — sits on the page's
+own bar, which loses its back arrow because the tree is beside it (`PaneChrome`, handed to the
+three detail screens; null on the phone). No tab bar over the page, so the "Pages" title over a
+"PAGES" header that the first mock had is gone. Collapsed — the chevron or **Ctrl+\** — the
+page bar's leading slot takes the expand chevron and the tree's search and journal. The tree: 32 dp
+rows, the current page on `accentSoft`, a chevron on any page with live children
+(`PageDao.observeParentsWithChildren`; today Journal's days) expanding one level per click, the
+label chips above; a 12 dp handle astride the divider resizes it, 200…480 dp, kept in
+`pages_tree_width`, the collapsed flag in `pages_tree_collapsed`, expansions for the session only
+(`PagesTreeState`). A tree click *replaces* the open page (`WorkbenchNavState.showPage`), so the
+stack never grows by browsing and Escape closes to the tab root; a link inside a page still
+*pushes* (`openPage`), so Escape returns where it came from. At the tab root the right pane is a
+quiet line, never a stale page; it still wears View-Only and the Trash. The phone's tab —
+`PagesScreen` over the same `PagesHost` — is what it was, to the pixel (0.06 % of sampled pixels
+differ against the previous build, the clock). Not yet: `···` on a row and hover-revealed
+controls (14d), keyboard movement in the tree (14e).)*
 
 - Import from Notion (Markdown & CSV export format — see §7 for the full fidelity spec)
 - Full import/export of pages and projects

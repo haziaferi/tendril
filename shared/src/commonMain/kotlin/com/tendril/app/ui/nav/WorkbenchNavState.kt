@@ -46,6 +46,15 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
         backStack.add(WorkbenchRoute.PageDetail(pageId, currentTab))
     }
 
+    /** 14c — the tree's way of opening: the page *replaces* an open page rather than piling on
+     * it, so clicking through the tree never grows the stack and Escape closes to the tab root.
+     * A link inside a page uses [openPage] and still pushes, so Back returns where it came from. */
+    fun showPage(pageId: Long) {
+        val top = current
+        if (top is WorkbenchRoute.PageDetail) backStack[backStack.lastIndex] = WorkbenchRoute.PageDetail(pageId, top.tab)
+        else backStack.add(WorkbenchRoute.PageDetail(pageId, currentTab))
+    }
+
     /** §3.4 (step 8c) — a page's "Show on Road Map": the map opens focused on it. Set here,
      * read by the Road Map tab, cleared by it once applied — the one cross-tab intent. */
     var roadMapFocusRequest: Long? by mutableStateOf(null)

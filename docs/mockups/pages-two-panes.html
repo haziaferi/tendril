@@ -1,0 +1,275 @@
+<title>Pages Two Panes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Source+Serif+4:wght@600&display=swap">
+<style>
+:root{
+  --bg:#FFFFFF; --s2:#F3F4F6; --text:#1B1B18; --dim:#6B6A63; --faint:#959389; --border:#E3E4E8;
+  --accent:#4A5568; --soft:#E7EAEE; --soft-text:#3D4759; --scrim:rgba(27,27,24,.32);
+  --page-bg:#F7F7F5; --note:#F3F4F6;
+  --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --serif:"Source Serif 4",Georgia,serif;
+  --s:0.9;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#1B1D21; --s2:#23262C; --text:#EDEDEF; --dim:#A6A9B0; --faint:#7E828A; --border:#33363D;
+  --accent:#8792A6; --soft:#2F3541; --soft-text:#D6DBE5; --scrim:rgba(0,0,0,.45); --page-bg:#141518; --note:#23262C; } }
+:root[data-theme="dark"]{
+  --bg:#1B1D21; --s2:#23262C; --text:#EDEDEF; --dim:#A6A9B0; --faint:#7E828A; --border:#33363D;
+  --accent:#8792A6; --soft:#2F3541; --soft-text:#D6DBE5; --scrim:rgba(0,0,0,.45); --page-bg:#141518; --note:#23262C; }
+
+body{margin:0;background:var(--page-bg);color:var(--text);font:14px/1.5 var(--sans);padding:20px 16px 40px}
+h1{font:600 22px var(--serif);margin:0 0 2px}
+.lead{color:var(--dim);max-width:78ch;margin:0 0 14px}
+.ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:12px;font-size:13px}
+.ctl .g{display:flex;gap:4px;align-items:center}
+.ctl .g b{font-weight:500;color:var(--dim);margin-right:2px}
+.ctl button{font:12.5px var(--sans);padding:4px 10px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:14px;cursor:pointer}
+.ctl button[aria-pressed="true"]{background:var(--soft);color:var(--soft-text);border-color:transparent}
+.ctl .scale{color:var(--faint);font-variant-numeric:tabular-nums;font-size:12px}
+.stage{overflow-x:auto;padding-bottom:6px}
+.win{position:relative;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;box-shadow:0 20px 50px -30px rgba(0,0,0,.5);display:flex;overflow:hidden;font-size:calc(14px * var(--s))}
+.win *{box-sizing:border-box}
+svg{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* rail / bottom bar (14a) */
+.rail{flex:none;width:calc(84px * var(--s));background:var(--s2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:calc(8px * var(--s)) 0}
+.rail .it{display:flex;flex-direction:column;align-items:center;gap:calc(3px * var(--s));padding:calc(10px * var(--s)) 0;color:var(--dim);font-size:calc(11.5px * var(--s))}
+.rail .it svg{width:calc(22px * var(--s));height:calc(22px * var(--s))}
+.rail .it .pill{width:calc(52px * var(--s));height:calc(30px * var(--s));border-radius:999px;display:grid;place-items:center}
+.rail .it[aria-current="true"]{color:var(--text)} .rail .it[aria-current="true"] .pill{background:var(--soft)}
+.bottombar{flex:none;height:calc(80px * var(--s));border-top:1px solid var(--border);background:var(--s2);display:flex;justify-content:space-around;align-items:center}
+.bottombar .it{display:flex;flex-direction:column;align-items:center;gap:calc(4px * var(--s));color:var(--dim);font-size:calc(12px * var(--s));flex:1}
+.bottombar .it svg{width:calc(24px * var(--s));height:calc(24px * var(--s))}
+.bottombar .it .pill{width:calc(64px * var(--s));height:calc(32px * var(--s));border-radius:999px;display:grid;place-items:center}
+.bottombar .it[aria-current="true"]{color:var(--text)} .bottombar .it[aria-current="true"] .pill{background:var(--soft)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+/* top bar (14a) */
+.topbar{height:calc(52px * var(--s));flex:none;display:flex;align-items:center;gap:calc(8px * var(--s));padding:0 calc(8px * var(--s)) 0 calc(16px * var(--s));border-bottom:1px solid var(--border)}
+.topbar h2{margin:0;font:500 calc(17px * var(--s)) var(--sans);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .ttl{flex:1;font:500 calc(17px * var(--s)) var(--sans);border-bottom:1px dashed transparent}
+.topbar .ttl:hover{border-bottom-color:var(--border)}
+.ib{width:calc(34px * var(--s));height:calc(34px * var(--s));border-radius:50%;display:grid;place-items:center;color:var(--dim);background:none;border:0;cursor:pointer;padding:0;flex:none}
+.ib svg{width:calc(20px * var(--s));height:calc(20px * var(--s))}
+.ib:hover{background:var(--soft);color:var(--text)}
+.ib.sm{width:calc(28px * var(--s));height:calc(28px * var(--s))} .ib.sm svg{width:calc(18px * var(--s));height:calc(18px * var(--s))}
+/* option A: segmented bar */
+.topbar .seg{display:flex;align-items:center;gap:calc(4px * var(--s));height:100%;flex:none;width:calc(var(--treew) - 16px * var(--s));margin-left:calc(-8px * var(--s));padding-left:calc(8px * var(--s));border-right:1px solid var(--border)}
+.topbar .seg h2{flex:1}
+.topbar .seg.free{width:auto;border-right:0;padding-right:calc(8px * var(--s))}
+.topbar .spacer{flex:1}
+.page h1{font:500 calc(24px * var(--s))/1.25 var(--sans);margin:calc(4px * var(--s)) 0 calc(12px * var(--s))}
+/* option B: pane headers */
+.tree .hd.b{text-transform:none;letter-spacing:0;font:500 calc(13.5px * var(--s)) var(--sans);color:var(--text)}
+/* option C: sidebar footer */
+.tree .ft{flex:none;height:calc(44px * var(--s));border-top:1px solid var(--border);display:flex;align-items:center;gap:calc(2px * var(--s));padding:0 calc(6px * var(--s)) 0 calc(8px * var(--s))}
+.tree .ft .new{display:flex;align-items:center;gap:calc(6px * var(--s));font-size:calc(13px * var(--s));color:var(--dim);padding:0 calc(6px * var(--s));height:calc(28px * var(--s));border-radius:calc(6px * var(--s));cursor:pointer;flex:1}
+.tree .ft .new:hover{background:var(--s2);color:var(--text)}
+.tree .ft .new svg{width:calc(16px * var(--s));height:calc(16px * var(--s))}
+/* split */
+.split{flex:1;min-height:0;display:flex}
+.tree{flex:none;width:var(--treew);border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0;position:relative}
+.tree .hd{height:calc(44px * var(--s));flex:none;display:flex;align-items:center;gap:calc(4px * var(--s));padding:0 calc(6px * var(--s)) 0 calc(14px * var(--s));border-bottom:1px solid var(--border);font-size:calc(12px * var(--s));letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.tree .hd span{flex:1}
+.tree .chips{display:flex;flex-wrap:wrap;gap:calc(6px * var(--s));padding:calc(8px * var(--s)) calc(12px * var(--s)) 0}
+.chip{font-size:calc(12px * var(--s));padding:calc(3px * var(--s)) calc(9px * var(--s));border:1px solid var(--border);border-radius:999px;color:var(--dim);display:inline-flex;gap:4px;align-items:center}
+.chip[aria-pressed="true"]{background:var(--soft);color:var(--soft-text);border-color:transparent}
+.tree .list{overflow:auto;padding:calc(6px * var(--s)) 0;flex:1}
+.row{display:flex;align-items:center;gap:calc(8px * var(--s));height:calc(32px * var(--s));padding:0 calc(10px * var(--s)) 0 calc(12px * var(--s));margin:0 calc(6px * var(--s));border-radius:calc(6px * var(--s));color:var(--text);font-size:calc(13.5px * var(--s));cursor:pointer;white-space:nowrap;border:0;background:none;width:calc(100% - 12px * var(--s));text-align:left;font-family:inherit}
+.row .cv{width:calc(16px * var(--s));display:grid;place-items:center;color:var(--faint);flex:none}
+.row .cv svg{transition:transform .12s} .row[aria-expanded="true"] .cv svg{transform:rotate(90deg)}
+.row .ic{width:calc(18px * var(--s));height:calc(18px * var(--s));color:var(--dim)}
+.row .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.row .meta{font-size:calc(11.5px * var(--s));color:var(--faint);font-variant-numeric:tabular-nums}
+.row .more{opacity:0;color:var(--faint)} .row:hover .more{opacity:1} .row .more svg{width:calc(16px * var(--s));height:calc(16px * var(--s))}
+.row:hover{background:var(--s2)}
+.row[aria-current="true"]{background:var(--soft);color:var(--soft-text)} .row[aria-current="true"] .ic{color:var(--soft-text)}
+.row.d1{padding-left:calc(30px * var(--s))}
+.handle{position:absolute;top:0;right:calc(-4px * var(--s));width:calc(8px * var(--s));height:100%;cursor:col-resize;z-index:2}
+.handle:hover::after,.handle.on::after{content:"";position:absolute;left:calc(3px * var(--s));top:0;width:2px;height:100%;background:var(--accent)}
+.detail{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.empty{flex:1;display:grid;place-items:center;color:var(--faint);font-size:calc(13.5px * var(--s));text-align:center;padding:calc(24px * var(--s))}
+.empty kbd{font:inherit;border:1px solid var(--border);border-radius:4px;padding:0 5px;color:var(--dim)}
+.page{padding:calc(16px * var(--s)) calc(20px * var(--s));overflow:auto;flex:1;font-size:calc(14px * var(--s));line-height:1.5}
+.page .props{display:grid;grid-template-columns:calc(96px * var(--s)) 1fr;gap:calc(6px * var(--s)) calc(12px * var(--s));font-size:calc(13px * var(--s));margin:calc(10px * var(--s)) 0 calc(16px * var(--s))}
+.page .props b{font-weight:400;color:var(--dim)}
+.page .blk{padding:calc(2px * var(--s)) 0}
+.page .cnv{border:1px solid var(--border);border-radius:calc(10px * var(--s));height:calc(120px * var(--s));margin:calc(10px * var(--s)) 0;position:relative;background:var(--s2)}
+.page .cnv i{position:absolute;left:calc(24px * var(--s));top:calc(22px * var(--s));font-style:normal;background:var(--soft);color:var(--soft-text);border-radius:calc(8px * var(--s));padding:calc(6px * var(--s)) calc(12px * var(--s));font-size:calc(12.5px * var(--s))}
+.page .cnv small{position:absolute;right:calc(10px * var(--s));bottom:calc(6px * var(--s));font-size:calc(10.5px * var(--s));color:var(--faint)}
+.page .add{color:var(--dim);font-size:calc(13px * var(--s));display:flex;gap:6px;align-items:center;margin-top:calc(8px * var(--s))}
+.page .sec{border-top:1px solid var(--border);margin-top:calc(16px * var(--s));padding-top:calc(10px * var(--s));color:var(--dim);font-size:calc(13px * var(--s))}
+table{border-collapse:collapse;font-size:calc(13px * var(--s));min-width:100%}
+th,td{border:1px solid var(--border);padding:calc(6px * var(--s)) calc(10px * var(--s));text-align:left;white-space:nowrap}
+th{font-weight:500;color:var(--dim);background:var(--s2)}
+.chk{width:calc(14px * var(--s));height:calc(14px * var(--s));border:1.5px solid var(--dim);border-radius:3px;display:inline-block;vertical-align:middle}
+.views{display:flex;gap:calc(6px * var(--s));margin-bottom:calc(10px * var(--s))}
+/* phone shape (< 840) */
+.cards .card{display:flex;align-items:center;gap:calc(12px * var(--s));padding:calc(10px * var(--s)) calc(16px * var(--s));cursor:pointer}
+.cards .card .ic{width:calc(24px * var(--s));height:calc(24px * var(--s));color:var(--dim)}
+.cards .card b{font-weight:400;display:block;font-size:calc(15px * var(--s))} .cards .card small{color:var(--dim);font-size:calc(12px * var(--s))}
+.fab{position:absolute;right:calc(20px * var(--s));bottom:calc(100px * var(--s));width:calc(56px * var(--s));height:calc(56px * var(--s));border-radius:calc(16px * var(--s));background:var(--soft);color:var(--soft-text);display:grid;place-items:center;box-shadow:0 8px 20px -10px rgba(0,0,0,.4)}
+.fab svg{width:calc(22px * var(--s));height:calc(22px * var(--s))}
+/* notes */
+.notes{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;max-width:1200px}
+.note{background:var(--note);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.45}
+.note h3{margin:0 0 4px;font:500 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.note p{margin:0;color:var(--text)} .note p+p{margin-top:6px}
+.note code{font-size:12px;background:var(--bg);padding:0 4px;border-radius:3px}
+.toast{position:absolute;left:50%;bottom:calc(16px * var(--s));transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:calc(12.5px * var(--s));padding:calc(6px * var(--s)) calc(12px * var(--s));border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+
+<h1>Pages Two Panes</h1>
+<p class="lead">14c on a wide window: the tree at 280 dp beside the open page, and three ways to organise its chrome — the tab's name, the tree's own controls (new page, collapse) and the four actions (search, journal, view-only, more) — each borrowed from a desktop notes app that already solved it. Click rows, expand <em>Journal</em>, drag the handle, collapse with the chevron or <kbd>Ctrl+\</kbd>, close a page with <kbd>Esc</kbd>. Drawn at the scale the app will use — every size below is <code>dp × scale</code>.</p>
+
+<div class="ctl">
+  <div class="g"><b>Window</b><button data-w="1200" aria-pressed="true">1200 × 800</button><button data-w="900">900 × 800</button><button data-w="700">700 × 800</button></div>
+  <div class="g"><b>Chrome</b><button data-opt="A" aria-pressed="true">A · one bar, segmented</button><button data-opt="B">B · each pane its own</button><button data-opt="C">C · sidebar with a footer</button></div>
+  <div class="g"><b>Show</b><button data-st="empty">nothing open</button><button data-st="page" aria-pressed="true">a page</button><button data-st="db">a database</button><button data-st="collapsed">tree collapsed</button></div>
+  <div class="scale" id="scale"></div>
+</div>
+
+<div class="stage"><div class="win" id="win" style="width:1200px;height:800px"></div></div>
+
+<div class="notes">
+  <div class="note"><h3>A · one bar, segmented — Apple Notes, Ulysses</h3><p>One 52 dp bar; the left segment is exactly the tree's width and holds what acts on the tree — the collapse chevron at the far left, the name <b>Pages</b>, <b>+</b> — the right cluster holds the four tab actions over the page. No pane header, no second bar: the page's title is an h1 in the content, its menu folds into <b>more</b>. Cleanest, and the one that costs the most: the three detail screens give up their bar (the title becomes an inline field, the page menu merges with the tab's).</p></div>
+  <div class="note"><h3>B · each pane its own — Obsidian, Bear</h3><p>No global bar. The tree's 44 dp header carries what acts on pages — <b>Pages</b>, <b>+</b>, search, journal — and the chevron at its edge, next to the divider it collapses. The page's bar carries what acts on the page — its title, view-only, more (page menu + Trash). Collapsed, the page bar's leading slot takes the chevron and search/journal, so nothing is lost. Cheapest: the detail screens keep their bar; two of their actions move.</p></div>
+  <div class="note"><h3>C · sidebar with a footer — Things, Craft</h3><p>The tree has no header at all: chips, then rows, then a 44 dp footer with <b>+ New page</b> as a word, search, journal and the chevron. The page's bar as in B. The sidebar reads as a list first; creation and finding sit where the hand rests at the end of a scroll, as Things puts "+ New List". Same cost as B.</p></div>
+  <div class="note"><h3>What all three drop</h3><p>The doubled label — a "Pages" title over a "PAGES" header — and the tab bar over the page bar. Each control has one owner: the tree's controls sit on the tree, the page's on the page. <kbd>Ctrl+\</kbd> and Esc work the same in all three.</p></div>
+</div>
+<div class="toast" id="toast" style="position:fixed"></div>
+
+<script>
+(function(){
+'use strict';
+const $=(s,r=document)=>r.querySelector(s);
+const I={
+  pages:'<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>',
+  calendar:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  tasks:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 5-5"/></svg>',
+  map:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="5" rx="1"/><rect x="15" y="3" width="6" height="5" rx="1"/><rect x="9" y="16" width="6" height="5" rx="1"/><path d="M6 8v4h12V8M12 12v4"/></svg>',
+  settings:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  search:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  book:'<svg viewBox="0 0 24 24"><path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h7z"/></svg>',
+  eye:'<svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  more:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
+  plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  chev:'<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+  chevL:'<svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>',
+  doc:'<svg class="ic" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>',
+  db:'<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/></svg>',
+  canvas:'<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/></svg>',
+};
+const PAGES=[
+  {id:'books',t:'Books v12',kind:'db',ic:'db'},
+  {id:'call',t:'Call the library',kind:'page',ic:'doc'},
+  {id:'escape',t:'Escape test',kind:'page',ic:'doc'},
+  {id:'journal',t:'Journal',kind:'page',ic:'doc',children:[
+    {id:'j14',t:'journal/2026-09-14',ic:'doc',meta:'today'},
+    {id:'j13',t:'journal/2026-09-13',ic:'doc'},
+    {id:'j09',t:'journal/2026-09-09',ic:'doc'},
+  ]},
+  {id:'trip',t:'Trip',kind:'page',ic:'doc'},
+];
+const TITLE={books:'Books v12',call:'Call the library',escape:'Escape test',journal:'Journal',j14:'journal/2026-09-14',j13:'journal/2026-09-13',j09:'journal/2026-09-09',trip:'Trip'};
+const S={w:1200,h:800,page:'escape',collapsed:false,treeW:280,expanded:new Set(),opt:'A'};
+function scaleFor(w,h){const short=Math.min(w,h);return Math.min(1.25,Math.max(0.85,short/800))*0.9;}
+function twoPane(){return S.w>=840;}
+
+function navItems(cls){
+  return [['pages','Pages'],['calendar','Calendar'],['tasks','Tasks'],['map','Road Map'],['settings','Settings']]
+    .map(([k,l])=>`<div class="it" aria-current="${k==='pages'}"><span class="pill">${I[k]}</span><span>${l}</span></div>`).join('');
+}
+function treeRows(){
+  const chevBtn=(p)=>p.children?`<span class="cv">${I.chev}</span>`:`<span class="cv"></span>`;
+  let out='';
+  for(const p of PAGES){
+    out+=`<button class="row" data-page="${p.id}" aria-current="${S.page===p.id}" aria-expanded="${S.expanded.has(p.id)}">${chevBtn(p)}${I[p.ic]}<span class="tt">${p.t}</span><span class="more">${I.more}</span></button>`;
+    if(p.children&&S.expanded.has(p.id)) for(const c of p.children)
+      out+=`<button class="row d1" data-page="${c.id}" aria-current="${S.page===c.id}"><span class="cv"></span>${I[c.ic]}<span class="tt">${c.t}</span>${c.meta?`<span class="meta">${c.meta}</span>`:''}</button>`;
+  }
+  return out;
+}
+function detailBar(title,leading){
+  if(S.opt==='A') return '';
+  const right=`<button class="ib" title="View-only">${I.eye}</button><button class="ib" title="Page menu · Trash">${I.more}</button>`;
+  return `<div class="topbar">${leading||''}<span class="ttl">${title}</span>${right}</div>`;
+}
+function h1(title){ return S.opt==='A' ? `<h1>${title}</h1>` : ''; }
+function pageBody(id,leading){
+  if(id==='books') return `${detailBar('Books v12',leading)}<div class="page">${h1('Books v12')}
+    <div class="views"><span class="chip" aria-pressed="true">Table</span><span class="chip">Board</span><span class="chip">Calendar</span><span class="chip">Timeline</span></div>
+    <div style="overflow:auto"><table><tr><th>Title</th><th>Author</th><th>Read on</th><th>Done</th><th>Blocked by</th></tr>
+    <tr><td>Escape test</td><td>Herbert</td><td>2026-09-19</td><td><span class="chk"></span></td><td>Call the library</td></tr>
+    <tr><td>Call the library</td><td>—</td><td>—</td><td><span class="chk"></span></td><td></td></tr>
+    <tr><td>Read chapter 3</td><td>Woolf</td><td>2026-09-21</td><td><span class="chk"></span></td><td></td></tr></table></div>
+    <div class="add">${I.plus} New row</div></div>`;
+  const t=TITLE[id]||id;
+  if(id.startsWith('j')) return `${detailBar(t,leading)}<div class="page">${h1(t)}
+    <div class="sec" style="border:0;margin:0;padding:0"><b style="font-weight:500;color:var(--text)">Today</b></div>
+    <div class="blk"><span class="chk"></span> Call the library · 14:00</div><div class="blk"><span class="chk"></span> Read chapter 3</div>
+    <div class="sec">— habits — <span class="chk"></span> Water · <span class="chk"></span> Studio</div>
+    <div class="blk" style="margin-top:12px">must <span style="color:var(--accent)">call the library</span> about the fines</div><div class="add">${I.plus} Add block</div></div>`;
+  return `${detailBar(t,leading)}<div class="page">${h1(t)}
+    <div><span class="chip" aria-pressed="true">${I.db} book</span> <span class="chip">${I.plus} Add label</span></div>
+    <div class="props"><b>Books v12</b><span>#book</span><b>Author</b><span>Herbert</span><b>Done</b><span class="chk"></span><b>Read on</b><span>2026-09-19</span><b>Blocked by</b><span style="color:var(--accent)">Call the library</span></div>
+    <div class="blk">Root edited</div><div class="blk">Child one!</div><div class="blk">Child two</div>
+    <div class="cnv"><i>Root edited<br>Child one!</i><small>Mind map · tap to open</small></div>
+    <div class="add">${I.plus} Add block</div>
+    <div class="sec">› Linked mentions (2)</div></div>`;
+}
+function render(){
+  const s=scaleFor(S.w,S.h); document.documentElement.style.setProperty('--s',s);
+  $('#scale').textContent=`${S.w}×${S.h} · shorter side ${Math.min(S.w,S.h)} ÷ 800 → ${Math.min(1.25,Math.max(0.85,Math.min(S.w,S.h)/800)).toFixed(3)} × Compact 0.9 = scale ${s.toFixed(3)} · tree ${Math.round(S.treeW*s)} px = ${S.treeW} dp`;
+  const win=$('#win'); win.style.width=S.w+'px'; win.style.height=S.h+'px';
+  const bar=(leading)=>`<div class="topbar">${leading||''}<h2>${leading?'':'Pages'}</h2><button class="ib" title="Search (Ctrl+K)">${I.search}</button><button class="ib" title="Journal">${I.book}</button><button class="ib" title="View-only">${I.eye}</button><button class="ib" title="More">${I.more}</button></div>`;
+  if(!twoPane()){
+    win.innerHTML=`<div class="main">${bar()}<div class="cards" style="flex:1;overflow:auto;padding:calc(6px * var(--s)) 0">${PAGES.map(p=>`<div class="card" data-page="${p.id}">${I[p.ic]}<div><b>${p.t}</b><small>${p.kind==='db'?'Database':'Page'}</small></div></div>`).join('')}</div>
+      <div class="fab">${I.plus}</div><div class="bottombar">${navItems()}</div></div>`;
+    return;
+  }
+  const acts=(which)=>({search:`<button class="ib" title="Search (Ctrl+K)">${I.search}</button>`,journal:`<button class="ib" title="Journal">${I.book}</button>`,eye:`<button class="ib" title="View-only">${I.eye}</button>`,more:`<button class="ib" title="More">${I.more}</button>`,plus:`<button class="ib" title="New page">${I.plus}</button>`,
+    collapse:`<button class="ib" data-act="collapse" title="Hide tree (Ctrl+\\)">${I.chevL}</button>`,expand:`<button class="ib" data-act="expand" title="Show tree (Ctrl+\\)">${I.chev}</button>`}[which]);
+  const chips=`<div class="chips"><span class="chip" aria-pressed="true">${I.db} book</span><span class="chip">errand</span></div>`;
+  const list=`<div class="list">${treeRows()}</div>`;
+  const handle=`<div class="handle" id="handle" title="Drag to resize"></div>`;
+  const tw=`--treew:calc(${S.treeW}px * var(--s))`;
+  let top='', tree='', detailLeading='';
+  if(S.opt==='A'){
+    // Apple Notes / Ulysses: one bar, each column's controls over its own column; the toggle far left; no pane headers.
+    top=`<div class="topbar" style="padding-left:calc(8px * var(--s))"><div class="seg${S.collapsed?' free':''}" style="${tw}">${S.collapsed?acts('expand'):acts('collapse')}<h2>Pages</h2>${acts('plus')}</div><span class="spacer"></span>${acts('search')}${acts('journal')}${acts('eye')}${acts('more')}</div>`;
+    tree=S.collapsed?'':`<div class="tree" style="${tw}">${chips}${list}${handle}</div>`;
+  } else if(S.opt==='B'){
+    // Obsidian / Bear: no global bar; the tree's header holds what acts on pages, the page's bar holds what acts on the page.
+    tree=S.collapsed?'':`<div class="tree" style="${tw}"><div class="hd b"><span>Pages</span>${acts('plus')}${acts('search')}${acts('journal')}${acts('collapse')}</div>${chips}${list}${handle}</div>`;
+    detailLeading=S.collapsed?`${acts('expand')}${acts('search')}${acts('journal')}`:'';
+  } else {
+    // Things / Craft: the sidebar has no header; its actions live in a footer; the page bar carries the rest.
+    tree=S.collapsed?'':`<div class="tree" style="${tw}">${chips}${list}<div class="ft"><span class="new">${I.plus} New page</span>${acts('search')}${acts('journal')}${acts('collapse')}</div>${handle}</div>`;
+    detailLeading=S.collapsed?`${acts('expand')}${acts('search')}${acts('journal')}`:'';
+  }
+  const detail=S.page?pageBody(S.page,detailLeading):`${S.opt==='A'?'':detailBar('',detailLeading)}<div class="empty">Choose a page from the tree —<br>or press <kbd>Ctrl+K</kbd> to find one.</div>`;
+  win.innerHTML=`<div class="rail">${navItems()}</div><div class="main">${top}<div class="split">${tree}<div class="detail">${detail}</div></div></div>`;
+  const h=$('#handle'); if(h) h.addEventListener('pointerdown',startDrag);
+}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._k);t._k=setTimeout(()=>t.classList.remove('on'),1400);}
+function startDrag(e){
+  e.preventDefault(); const s=scaleFor(S.w,S.h); const x0=e.clientX, w0=S.treeW; const h=e.currentTarget; h.classList.add('on'); h.setPointerCapture(e.pointerId);
+  const mv=ev=>{S.treeW=Math.max(200,Math.min(480,Math.round(w0+(ev.clientX-x0)/s))); $('.tree').style.setProperty('--treew',`calc(${S.treeW}px * var(--s))`); $('#scale').textContent=$('#scale').textContent.replace(/tree \d+ px = \d+ dp/,`tree ${Math.round(S.treeW*s)} px = ${S.treeW} dp`);};
+  const up=()=>{h.classList.remove('on');h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);toast(`pages_tree_width = ${S.treeW}`);};
+  h.addEventListener('pointermove',mv); h.addEventListener('pointerup',up);
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-w]'); if(b){S.w=+b.dataset.w;document.querySelectorAll('[data-w]').forEach(x=>x.setAttribute('aria-pressed',x===b));render();return;}
+  const ob=e.target.closest('[data-opt]'); if(ob){S.opt=ob.dataset.opt;document.querySelectorAll('[data-opt]').forEach(x=>x.setAttribute('aria-pressed',x===ob));render();return;}
+  const st=e.target.closest('[data-st]'); if(st){document.querySelectorAll('[data-st]').forEach(x=>x.setAttribute('aria-pressed',x===st));
+    const k=st.dataset.st; S.collapsed=(k==='collapsed'); if(k==='empty')S.page=null; else if(k==='page')S.page='escape'; else if(k==='db')S.page='books'; render();return;}
+  const cv=e.target.closest('.row .cv'); if(cv){const id=cv.parentElement.dataset.page; if(PAGES.find(p=>p.id===id&&p.children)){S.expanded.has(id)?S.expanded.delete(id):S.expanded.add(id);render();return;}}
+  const row=e.target.closest('[data-page]'); if(row){S.page=row.dataset.page; render(); toast(twoPane()?'showPage — replaced, stack unchanged':'openPage — pushed'); return;}
+  const act=e.target.closest('[data-act]'); if(act){S.collapsed=act.dataset.act==='collapse'; render(); return;}
+});
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey&&e.key==='\\'){e.preventDefault();S.collapsed=!S.collapsed;render();toast(S.collapsed?'Ctrl+\\ — tree hidden':'Ctrl+\\ — tree shown');}
+  if(e.key==='Escape'&&twoPane()&&S.page){S.page=null;render();toast('Esc — page closed, back at the tab root');}
+});
+render();
+})();
+</script>

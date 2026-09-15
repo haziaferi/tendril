@@ -43,6 +43,14 @@ interface PageDao {
     @Query("SELECT * FROM pages WHERE parentId IS NULL AND isTemplate = 0 AND databaseId IS NULL AND deletedAt IS NULL ORDER BY title")
     fun observeRootPages(): Flow<List<Page>>
 
+    /** 14c — one level of the tree: a page's live children, by title (Journal's days sort as dates). */
+    @Query("SELECT * FROM pages WHERE parentId = :parentId AND deletedAt IS NULL ORDER BY title")
+    fun observeChildren(parentId: Long): Flow<List<Page>>
+
+    /** 14c — which pages have live children, so the tree shows a chevron without loading them. */
+    @Query("SELECT DISTINCT parentId FROM pages WHERE parentId IS NOT NULL AND deletedAt IS NULL")
+    fun observeParentsWithChildren(): Flow<List<Long>>
+
     /** *Native* rows of a Database (§5.1) — a Page with `databaseId` set, its home. Since
      * §0.6.8 a database's members are more than its native rows; views and bindings read
      * [observeMembersOf]/[getMembersOf], and this one is for the Notion importer, which only
