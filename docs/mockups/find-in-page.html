@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Find in Page</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#FFFFFF; --s2:#F3F4F6; --text:#1B1B18; --dim:#6B6A63; --faint:#959389; --border:#E3E4E8;
+  --accent:#4A5568; --soft:#E7EAEE; --soft-text:#3D4759; --page-bg:#F6F6F4; --note:#F3F4F6;
+  --sans:"DM Sans",system-ui,sans-serif; --s:0.9;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#1B1D21; --s2:#23262C; --text:#EDEDEF; --dim:#A6A9B0; --faint:#7E828A; --border:#33363D;
+  --accent:#8792A6; --soft:#2F3541; --soft-text:#D6DBE5; --page-bg:#141518; --note:#23262C; } }
+:root[data-theme="dark"]{
+  --bg:#1B1D21; --s2:#23262C; --text:#EDEDEF; --dim:#A6A9B0; --faint:#7E828A; --border:#33363D;
+  --accent:#8792A6; --soft:#2F3541; --soft-text:#D6DBE5; --page-bg:#141518; --note:#23262C; }
+body{margin:0;background:var(--page-bg);color:var(--text);font:14px/1.5 var(--sans);padding:24px 16px}
+h1{font:500 22px var(--sans);margin:0 0 6px}
+p.lead{max-width:68ch;color:var(--dim);margin:0 0 18px}
+.stage{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.frame{background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 20px 50px -30px rgba(0,0,0,.5);position:relative;font-size:calc(14px * var(--s))}
+.frame.desk{width:640px;height:420px}
+.frame.phone{width:360px;height:520px}
+.cap{font-size:12px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px}
+.bar{height:calc(52px * var(--s));display:flex;align-items:center;gap:calc(8px * var(--s));padding:0 calc(16px * var(--s));border-bottom:1px solid var(--border)}
+.bar .t{font:500 calc(17px * var(--s)) var(--sans);flex:1}
+.ib{width:calc(28px * var(--s));height:calc(28px * var(--s));display:grid;place-items:center;color:var(--dim);border-radius:6px}
+.body{padding:calc(12px * var(--s)) calc(16px * var(--s))}
+.blk{margin:0 0 calc(6px * var(--s));font-size:calc(14px * var(--s))}
+.h2{font:500 calc(18px * var(--s)) var(--sans);margin:calc(10px * var(--s)) 0 calc(6px * var(--s))}
+mark{background:var(--soft);color:var(--soft-text);border-radius:2px;padding:0 1px}
+mark.cur{background:var(--accent);color:var(--bg)}
+/* A — a bar under the page bar */
+.find{height:calc(44px * var(--s));display:flex;align-items:center;gap:calc(6px * var(--s));padding:0 calc(12px * var(--s));border-bottom:1px solid var(--border);background:var(--s2)}
+.find input{flex:1;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font:calc(13.5px * var(--s)) var(--sans);padding:calc(5px * var(--s)) calc(8px * var(--s));min-width:0}
+.find .n{font-size:calc(12.5px * var(--s));color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.find .n.none{color:var(--faint)}
+/* B — a floating card, top-right */
+.float{position:absolute;top:calc(58px * var(--s));right:calc(16px * var(--s));display:flex;align-items:center;gap:calc(6px * var(--s));padding:calc(6px * var(--s)) calc(8px * var(--s));background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 30px -14px rgba(0,0,0,.45)}
+.float input{width:180px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font:calc(13.5px * var(--s)) var(--sans);padding:calc(5px * var(--s)) calc(8px * var(--s))}
+.float .n{font-size:calc(12.5px * var(--s));color:var(--dim);font-variant-numeric:tabular-nums}
+kbd{font:11px var(--sans);background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:0 5px;color:var(--text)}
+.notes{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;max-width:1000px}
+.note{background:var(--note);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.45}
+.note h3{margin:0 0 4px;font:500 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.note p{margin:0}
+svg{width:calc(18px * var(--s));height:calc(18px * var(--s));stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+</style></head><body>
+<h1>Find in Page</h1>
+<p class="lead">§0.10 item 19: Ctrl+F over the open page. Two homes for the bar on a wide window — under the page bar (browsers, Bear) or floating at the top-right (VS Code, Obsidian) — and the phone's, which is the bar. Matches are marked in the text itself through the span transformation; the current one takes the accent. Drawn at the desktop's Compact scale.</p>
+<div class="stage">
+<div>
+<p class="cap">A · a bar under the page bar (desktop)</p>
+<div class="frame desk">
+  <div class="bar"><span class="t">Escape test</span><span class="ib"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="ib">···</span></div>
+  <div class="find"><svg viewBox="0 0 24 24" style="color:var(--dim)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="qa" value="child" aria-label="Find in page"><span class="n">2 of 3</span><span class="ib" title="Previous (Shift+Enter)">↑</span><span class="ib" title="Next (Enter)">↓</span><span class="ib" title="Close (Esc)">×</span></div>
+  <div class="body">
+    <div class="blk">Root edited</div>
+    <div class="blk"><mark>Child</mark> one!</div>
+    <div class="blk"><mark class="cur">Child</mark> two</div>
+    <div class="h2">Notes</div>
+    <div class="blk">The <mark>child</mark>ren's section closes at six; the fines are per book, not per visit.</div>
+    <div class="blk">must call the library about the fines</div>
+  </div>
+</div>
+</div>
+<div>
+<p class="cap">B · a floating card, top-right (desktop)</p>
+<div class="frame desk">
+  <div class="bar"><span class="t">Escape test</span><span class="ib"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="ib">···</span></div>
+  <div class="float"><input id="qb" value="child" aria-label="Find in page"><span class="n">2 of 3</span><span class="ib">↑</span><span class="ib">↓</span><span class="ib">×</span></div>
+  <div class="body">
+    <div class="blk">Root edited</div>
+    <div class="blk"><mark>Child</mark> one!</div>
+    <div class="blk"><mark class="cur">Child</mark> two</div>
+    <div class="h2">Notes</div>
+    <div class="blk">The <mark>child</mark>ren's section closes at six; the fines are per book, not per visit.</div>
+    <div class="blk">must call the library about the fines</div>
+  </div>
+</div>
+</div>
+<div>
+<p class="cap">The phone · the bar, from ··· → Find in page</p>
+<div class="frame phone" style="--s:1.105">
+  <div class="bar"><span class="ib">←</span><span class="t">Escape test</span><span class="ib">···</span></div>
+  <div class="find"><input id="qp" value="child" aria-label="Find in page"><span class="n">2 of 3</span><span class="ib">↑</span><span class="ib">↓</span><span class="ib">×</span></div>
+  <div class="body">
+    <div class="blk">Root edited</div>
+    <div class="blk"><mark>Child</mark> one!</div>
+    <div class="blk"><mark class="cur">Child</mark> two</div>
+    <div class="h2">Notes</div>
+    <div class="blk">The <mark>child</mark>ren's section closes at six.</div>
+  </div>
+</div>
+</div>
+</div>
+<div class="notes">
+  <div class="note"><h3>A · bar</h3><p>The page shifts down by 44 dp while the bar is open; the field is full-width, so a long query is readable; the count sits beside it. The phone's form for free. Browsers, Bear, Apple Notes.</p></div>
+  <div class="note"><h3>B · floating</h3><p>Nothing moves; the card covers the top-right of the first lines — the eye and `···` under it. Familiar from editors. Needs a second form on the phone (the keyboard would push a floating card around).</p></div>
+  <div class="note"><h3>What both do</h3><p><kbd>Ctrl+F</kbd> opens with the field focused and the selection as the query; <kbd>↵</kbd> next, <kbd>Shift+↵</kbd> previous, wrapping; <kbd>Esc</kbd> closes and leaves the cursor on the current match. Matches are marks inside the text (the span transformation), so they survive editing; the count says <b>2 of 3</b>, or <b>No matches</b>. Ordinary pages only — a Table has its filter, a canvas its search.</p></div>
+</div>
+</body></html>

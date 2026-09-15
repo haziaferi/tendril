@@ -29,6 +29,7 @@ enum class ShortcutAction(val group: ShortcutGroup, val label: String) {
     NEW_TASK(ShortcutGroup.CREATE, "New task"),
     JOURNAL_TODAY(ShortcutGroup.CREATE, "Today's Journal"),
     SWITCHER(ShortcutGroup.FIND, "Quick switcher"),
+    FIND_IN_PAGE(ShortcutGroup.FIND, "Find in page"),
     SHORTCUTS(ShortcutGroup.FIND, "This list"),
 }
 
@@ -51,7 +52,7 @@ data class Chord(val key: Key, val ctrl: Boolean = true, val shift: Boolean = fa
 }
 
 private val KEY_NAMES: Map<Key, String> = mapOf(
-    Key.K to "K", Key.N to "N", Key.T to "T", Key.Backslash to "\\", Key.F1 to "F1",
+    Key.K to "K", Key.N to "N", Key.T to "T", Key.F to "F", Key.Backslash to "\\", Key.F1 to "F1",
     Key.DirectionLeft to "←", Key.DirectionRight to "→",
     Key.One to "1", Key.Two to "2", Key.Three to "3", Key.Four to "4", Key.Five to "5",
 )
@@ -70,6 +71,7 @@ val SHORTCUTS: List<Pair<ShortcutAction, Chord>> = listOf(
     ShortcutAction.NEW_TASK to Chord(Key.N, shift = true),
     ShortcutAction.JOURNAL_TODAY to Chord(Key.T),
     ShortcutAction.SWITCHER to Chord(Key.K),
+    ShortcutAction.FIND_IN_PAGE to Chord(Key.F),
     ShortcutAction.SHORTCUTS to Chord(Key.F1, ctrl = false),
 )
 
