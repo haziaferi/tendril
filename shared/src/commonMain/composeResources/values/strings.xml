@@ -25,6 +25,9 @@
     <string name="calendar_view_agenda">Agenda</string>
     <string name="calendar_quick_add_hint">Quick add…</string>
     <string name="reminders_open">Reminders</string>
+    <string name="reminders_title">Reminders</string>
+    <string name="reminders_empty">No reminders yet</string>
+    <string name="reminders_add">Add reminder</string>
     <string name="track_start">Start timer</string>
     <string name="review_open">Review</string>
     <string name="track_stop">Stop timer</string>

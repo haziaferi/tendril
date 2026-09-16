@@ -32,4 +32,13 @@ interface EntryScheduleCoordinator {
      * a no-op for the same reason as [onHabitRemoved]; §0.8 step 7a moved the Tasks & Habits
      * screen to `shared/`, and this is the seam that lets it stop knowing `AlarmScheduler`. */
     suspend fun onHabitChanged(habit: com.tendril.app.data.habit.Habit) {}
+
+    /**
+     * One reminder is about to be soft-deleted (§5.4). Called *before* the row goes: the
+     * platform's reschedule derives what to cancel by re-reading the reminder rows, so a row
+     * already gone leaves its alarm armed with nothing left to describe it. B§13.6 #7 added this
+     * so the reminder sheet could move to `shared/` without holding Android's `AlarmScheduler`
+     * — the asterisk the sheet's ViewModel used to carry. Defaulted to a no-op as the others are.
+     */
+    suspend fun onReminderRemoved(entryId: Long, reminderId: Long) {}
 }

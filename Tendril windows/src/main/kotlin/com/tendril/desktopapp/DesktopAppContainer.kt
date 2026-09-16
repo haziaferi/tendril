@@ -6,6 +6,7 @@ import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.PageContentRepository
 import com.tendril.app.domain.PurgeRegistry
+import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
@@ -16,19 +17,19 @@ import com.tendril.app.ui.WorkbenchCore
 /**
  * Desktop's counterpart to Android's `AppContainer` (Milestone 3, tendril-windows-spec.md §6
  * step 3) — builds only the pieces the ported Workbench UI needs, from desktop's own database.
- * `entryScheduleCoordinator` is [NoOpEntryScheduleCoordinator]: alarms/Calendar Provider sync
- * are Android platform APIs with no desktop analog (§1), and nothing ported this pass needs a
- * real one — Row deadline/recurrence edits still persist to the database either way.
+ * [scheduler] is the [EntryScheduleCoordinator] every write reports to: since B§13.6 #7 the
+ * [DesktopReminderScheduler] (Windows toasts from the notification-area icon), which replaced a
+ * no-op — Calendar Provider sync stays Android's (§1).
  */
-class DesktopAppContainer(database: TendrilDatabase) {
+class DesktopAppContainer(database: TendrilDatabase, scheduler: EntryScheduleCoordinator) {
     val workbenchCore: WorkbenchCore
     val purgeRegistry = PurgeRegistry(
         database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
-        database.propertyDao(), NoOpEntryScheduleCoordinator,
+        database.propertyDao(), scheduler,
     )
 
     init {
-        val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), NoOpEntryScheduleCoordinator)
+        val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), scheduler)
         val pageContentRepository = PageContentRepository(database.pageDao(), database.blockDao(), database.pageFtsDao())
         val databaseSyncManager = DatabaseSyncManager(
             database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
@@ -37,7 +38,7 @@ class DesktopAppContainer(database: TendrilDatabase) {
         val templateManager = TemplateManager(database.pageDao(), database.blockDao(), database.pageDatabaseDao(), database.propertyDao())
         workbenchCore = WorkbenchCore(
             database, databaseSyncManager, templateManager, ViewLockState(), CheckboxOnlyState(),
-            resolveEntryUseCase, NoOpEntryScheduleCoordinator, pageContentRepository, purgeRegistry,
+            resolveEntryUseCase, scheduler, pageContentRepository, purgeRegistry,
             DesktopLocalImageStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/images")),
             // §0.10 item 12 — one flat file beside the database.
             PropertiesKeyValueStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/prefs.properties")),

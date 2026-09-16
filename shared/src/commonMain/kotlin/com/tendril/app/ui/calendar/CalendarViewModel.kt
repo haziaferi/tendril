@@ -14,7 +14,7 @@ import com.tendril.app.domain.EntryEditor
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.MoveScope
 import com.tendril.app.domain.ParsedEntry
-import com.tendril.app.domain.toEntry
+import com.tendril.app.domain.quickAddEntry
 import com.tendril.app.domain.ResolveEntryUseCase
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -136,10 +136,7 @@ class CalendarViewModel(
      * when the line named none. */
     fun quickAdd(parsed: ParsedEntry, date: LocalDate) {
         if (parsed.title.isBlank()) return
-        viewModelScope.launch {
-            val id = entryDao.insert(parsed.toEntry(fallbackDate = date, now = Instant.now()))
-            entryDao.getById(id)?.let { entryScheduleCoordinator.onEntryChanged(it) }
-        }
+        viewModelScope.launch { quickAddEntry(entryDao, entryScheduleCoordinator, parsed, date) }
     }
 
     /** §9.8 R1 — the checked/unchecked decision lives in [ResolveEntryUseCase.setDone], not in

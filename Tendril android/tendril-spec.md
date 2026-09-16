@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (the tray) | §2.2 gains *The notification area* (B§13.6 #7): the icon and its three verbs, × hides (`close_to_tray`), Windows toasts from `DesktopReminderScheduler` over the shared `domain/reminders/ReminderFirings.kt` (Android's `AlarmScheduler` reads it too; `ReminderFiringsTest`), the bell on both platforms (`ui/reminders/` shared, `EntryScheduleCoordinator.onReminderRemoved`), the global chord (`GlobalHotkey.kt`, `ui/nav/QuickAddChord.kt`, Win+Alt+N default — Win+Alt+T is Game Bar's) and the popup (`QuickAddWindow.kt`, `ui/entries/QuickAddField.kt`, `domain/QuickAdd.kt`), Settings › Notification area (`ui/settings/NotificationAreaSection.kt`); §0.10 item 21 resolved, item 20's hotkey half done. **Rows measured beside Notion** (the user's mid-walk brief): task/habit rows one line under a pointer, `rowHeightDp` Compact 29 / Comfortable 36, the tree 29 — 65 → 30 px against Notion's 30. §3.2, §3.3 one line each. Critiques: `docs/critiques/tray-mock.md`, `tray-function.md`. Desktop verified (the toast itself behind this machine's Do-not-disturb; the icon behind the taskbar's overflow — the user's check); the phone pending. Tests 795 → 805. | §2.2, §3.2, §3.3, §0.10 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -667,16 +668,18 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
-21. **The desktop dies on a clipboard failure.** Seen 2026-09-16 (14f·2's walk): a paste into a
+21. ~~**The desktop dies on a clipboard failure.** Seen 2026-09-16 (14f·2's walk): a paste into a
     text field raised `IllegalStateException: cannot open system clipboard` from Compose's
-    `TextFieldSelectionManager.paste` on the AWT thread — uncaught, so the window closed. Not the
-    app's code, but one `Thread.setDefaultUncaughtExceptionHandler` (log and keep the window) in
-    `Main.kt` would keep a clipboard hiccup from ending a session. Not started.
+    `TextFieldSelectionManager.paste` on the AWT thread — uncaught, so the window closed.~~
+    *Resolved 2026-09-16 (the tray PR): `Main.kt` installs `Thread.setDefaultUncaughtExceptionHandler`
+    and a `WindowExceptionHandlerFactory` — the trace to `~/.tendril-desktop-dev/crash.log`, the
+    window kept; Compose's default handler was the dialog-and-exit. Untested by a real fault.*
 20. **The desktop key file could be DPAPI-wrapped after all.** §0.6.15 and the windows spec say a
     DPAPI wrap needs JNA, which the offline build cannot fetch — but `net.java.dev.jna:jna` and
     `jna-platform` 5.6.0 are in the Gradle cache (found 2026-09-13, B§13.6 #7): a direct dependency
     resolves offline. `Crypt32.CryptProtectData` would replace the NTFS-ACL caveat; the same jar gives
-    the desktop a global quick-add hotkey. Not started.
+    the desktop a global quick-add hotkey. *The hotkey half shipped 2026-09-16 (the tray PR, §2.2
+    *The notification area*: `jna-platform` is a direct dependency now); the DPAPI wrap stays open.*
 19. **Cross-block selection and undo** (B§13.6 #10): the editor is one `BasicTextField` per block,
     so a selection cannot span blocks and undo is the platform's per field. To scope in the per-block
     editor pass, not the desktop layout pass. Raised 2026-09-13.
@@ -966,6 +969,50 @@ navigation-paradigm question later.
   sheets) take the same modifier when 14f redraws them. Android has no fixed set yet; the table
   is shared and its Activity could adopt it. Find in page (Ctrl+F) is §0.10 item 19, its own
   PR.)*
+- **The notification area** *(**Amended 2026-09-16 — B§13.6 #7, the tray;** `docs/mockups/tray.html`,
+  `docs/critiques/tray-mock.md`, `tray-function.md`.)* The desktop lives in Windows' notification
+  area: an icon (the colour mark) with three verbs — *Open Tendril · Quick add…  〈chord〉 · Quit*
+  — drawn by the OS (a Win32 `PopupMenu`, AWT's), a tooltip, and `onAction` (a toast's click, a
+  double-click) bringing the window back on the tab the last firing belongs to. **The window's ×
+  hides it there** when *Keep Tendril running in the notification area when the window closes*
+  is on (`close_to_tray`, default on; the tray's *Quit* exits) and quits when it is off —
+  Slack's, Telegram's, Todoist-Windows' convention; Microsoft's Win32 UX guide prefers Minimize
+  for this and is recorded, not followed: a reminder needs the process alive. **Reminders on the
+  desktop** are Windows toasts (`TrayState.sendNotification`): `DesktopReminderScheduler` keeps
+  one sleeping coroutine for the earliest firing owed and re-plans on every
+  `EntryScheduleCoordinator` callback (it *is* the desktop's coordinator, replacing the no-op),
+  with a fifteen-minute ceiling through a laptop's sleep; the arithmetic — the gates, a recurring
+  EVENT's next occurrence, the overdue firing at start + time or midnight, each reminder at base −
+  offset with the anchor rule, nothing in the past — is **`domain/reminders/ReminderFirings.kt`**,
+  shared with Android's `AlarmScheduler` (which now only owns request codes and receivers) and
+  tested for the first time (`ReminderFiringsTest`). A toast's title leads with the moment (*Due
+  now · 〈title〉*, *In 10 min · 〈title〉*, *Habit · 〈title〉*). Nothing is queued for a moment that
+  passed while the app was not running (the phone's boot sweep has no desktop twin). **The bell
+  is on both platforms**: `ui/reminders/ReminderSheet.kt` moved to `shared/`, and
+  `EntryScheduleCoordinator.onReminderRemoved` (default no-op; Android cancels the alarm) closes
+  the asterisk its ViewModel carried. **A global quick-add chord** — `User32.RegisterHotKey` on a
+  message-loop thread (`GlobalHotkey.kt`, JNA 5.6.0 from the cache) — opens **the popup**
+  (`QuickAddWindow.kt`): 560 dp at 22 % of the screen's height, always on top, undecorated, the
+  hover card's radius, the same line and chips as the Calendar's strip (`ui/entries/QuickAddField.kt`,
+  the strip's field extracted; `domain/QuickAdd.kt` the one write) behind the accent's `+`; a line
+  with no kind token is a **TASK** here (the strip's is an EVENT); Enter writes once and shows
+  *Added · 〈title〉 · 〈when〉* for 700 ms, Esc closes, focus lost with the line blank closes and
+  with text keeps it. The chord is **a pick list in Settings** (`ui/nav/QuickAddChord.kt`,
+  `quick_add_chord`; a registration failure shows beside it): **Win+Alt+N** the default —
+  Win+Alt+T, the planned one, is Windows' Game Bar's (found on the walk) — then Win+Alt+Q
+  (Todoist's), Ctrl+Shift+Space, Shift+Alt+A (TickTick's), Ctrl+Alt+Space; no Ctrl+Alt+letter
+  (AltGr on Icelandic and most European layouts), no Ctrl+Space (an IDE's completion). The F1
+  card lists the stored chord as a static row. **§0.10 item 21** in the same PR: uncaught
+  exceptions on any thread and inside a window's composition are appended to
+  `~/.tendril-desktop-dev/crash.log` and the window kept (Compose's default handler showed a
+  dialog and exited). **Rows, measured beside Notion on the walk** (the user's mid-walk brief):
+  a task row was 65 px against Notion's one-line 30 and the tree's 33 — under a pointer task and
+  habit rows are **one line** (the meta a `caption` at the title's right — Things' date tag,
+  Notion's list view), the buttons 28 dp, the list's interactive minimum 28, and every one-line
+  row takes Notion's measure: `DensityProfile.rowHeightDp` Compact **29** / Comfortable 36 /
+  Touch 56, the tree 29 dp, the tray chip the profile's row; measured after: task rows 30, the
+  tree 30, Notion 30. Under Touch the rows keep their second line. The Table's rows (50 px) are
+  the audit's.
 - **Page cards** (Pages tab): horizontal row layout (icon, title, meta stacked to the right of the
   icon) rather than the original stacked/vertical card — roughly half the height of the first
   version, so more pages/databases are visible without scrolling, while keeping icon and font size
@@ -1731,6 +1778,8 @@ composable ("No pages match '…'").
 
 ### 3.2 Calendar
 
+*(**Amended 2026-09-16 — B§13.6 #7.** The bell is on the desktop too — reminders are Windows toasts (§2.2 *The notification area*); quick add has a third home, the chord's popup.)*
+
 *(**Amended 2026-09-16 — B§13.6 #5, drag between panes.** The Calendar gains a **task tray** —
 the Day view's Plan rail grown into a pane beside the week (Sunsama's, Akiflow's backlog; decided
 2026-09-16 on `docs/mockups/drag-between-panes.html` and `docs/critiques/drag-between-panes-mock.md`):
@@ -1893,6 +1942,8 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
 
 Three views: **Tasks**, **Habits**, **Merged** — one page, kept from losing clarity despite covering
 two different concerns.
+
+*(**Amended 2026-09-16 — B§13.6 #7.** The bell on the desktop's rows (§2.2 *The notification area*); under a pointer the task and habit rows are one line at the profile's height, the meta at the title's right — measured beside Notion, 65 → 30 px.)*
 
 *(**Amended 2026-09-16 — B§13.4 14f·1, the tab on a wide window.** From 840 dp (the shell's own
 rule, read through `LocalShellLayout`) the tab is two panes: the list at 420 dp (resizable

@@ -487,7 +487,8 @@ private val TREE_HEADER_HEIGHT = TOP_BAR_HEIGHT
 
 /** One visible row of the tree, as the keyboard and the list both see it. */
 private class TreeEntry(val page: Page, val depth: Int, val hasChildren: Boolean, val expanded: Boolean, val parentIndex: Int)
-private val TREE_ROW_HEIGHT = 32.dp
+/** 29 since the tray PR (2026-09-16): the 32 dp row measured 33 px against Notion's 30 at the same window. */
+private val TREE_ROW_HEIGHT = 29.dp
 private val TREE_INDENT = 18.dp
 private val TREE_ICON_BUTTON = 28.dp
 private val TREE_MORE_TARGET = 28.dp

@@ -23,6 +23,10 @@ dependencies {
     // NavigationEventInput, which shared's ui-backhandler pulls in only transitively; the compiler
     // wants it named. Same version the transitive edge resolves to.
     implementation("org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0")
+    // B§13.6 #7 (tendril-spec.md §0.10 item 20) — the global quick-add chord is `User32.RegisterHotKey`
+    // on a message-loop thread (`GlobalHotkey.kt`). 5.6.0 is what the Gradle cache holds, so the
+    // offline build resolves it; nothing else here is Windows-only by dependency.
+    implementation("net.java.dev.jna:jna-platform:5.6.0")
 }
 
 compose.desktop {

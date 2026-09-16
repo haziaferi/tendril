@@ -61,7 +61,7 @@ import com.tendril.app.ui.theme.label
 /**
  * B§13.6 #5 — the Calendar's task tray: the Plan rail grown into a pane beside the week
  * (Sunsama's, Akiflow's backlog; decided 2026-09-16 on `docs/mockups/drag-between-panes.html`).
- * Two sections, *Unscheduled* and *Overdue* (`trayTasks`), 36 dp chips wearing the urgency
+ * Two sections, *Unscheduled* and *Overdue* (`trayTasks`), one-line chips (the profile's row height) wearing the urgency
  * stripe, a hint at the foot. A chip dragged out is the screen's drag ([onDragStart] with the
  * chip's root position); the chip stays, faded, until the drop lands. The tray is also a
  * target — a grid block over it lights the ground ([dropHere]) and a drop clears its When.
@@ -105,13 +105,13 @@ internal fun TaskTray(
                 Text("Nothing unscheduled", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
             }
             tasks.unscheduled.forEach { entry ->
-                TrayChip(entry, today, showUrgency, dragging = entry.id == draggingId, dueLabel = null, onDragStart, onDrag, onDragEnd, onDragCancel, onOpen, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp))
+                TrayChip(entry, today, showUrgency, dragging = entry.id == draggingId, dueLabel = null, onDragStart, onDrag, onDragEnd, onDragCancel, onOpen, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp))
             }
             if (tasks.overdue.isNotEmpty()) {
                 SectionLabel("Overdue · ${tasks.overdue.size}")
                 tasks.overdue.forEach { entry ->
                     // The date in the dim colour: the stripe already says how urgent (14g·3).
-                    TrayChip(entry, today, showUrgency, dragging = entry.id == draggingId, dueLabel = "due " + entry.startDate!!.format(DAY_FORMAT), onDragStart, onDrag, onDragEnd, onDragCancel, onOpen, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp))
+                    TrayChip(entry, today, showUrgency, dragging = entry.id == draggingId, dueLabel = "due " + entry.startDate!!.format(DAY_FORMAT), onDragStart, onDrag, onDragEnd, onDragCancel, onOpen, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp))
                 }
             }
         }
@@ -194,7 +194,8 @@ private fun TrayChip(
     onDragCancel: () -> Unit,
     onOpen: (Entry) -> Unit,
     modifier: Modifier = Modifier,
-    height: androidx.compose.ui.unit.Dp = 36.dp,
+    // The profile's one-line row (Compact 32) since the tray PR; the Touch strip passes its own 40.
+    height: androidx.compose.ui.unit.Dp = LocalDensityProfile.current.rowHeightDp.dp,
 ) {
     val pointer = LocalDensityProfile.current.pointer
     var origin by remember(entry.id) { mutableStateOf(Offset.Zero) }
