@@ -84,4 +84,16 @@ class WorkbenchNavStateTest {
         assertEquals(WorkbenchRoute.TabRoot(WorkbenchDestination.TASKS_HABITS), nav.current)
         assertTrue(nav.quickAddRequested)
     }
+
+    @Test
+    fun `depth counts the root, so a pop-out seeded with one page sits at two`() {
+        val nav = WorkbenchNavState()
+        assertEquals(1, nav.depth)
+        nav.openPage(7)
+        assertEquals(2, nav.depth)
+        nav.openPage(8)
+        assertEquals(3, nav.depth)
+        nav.back()
+        assertEquals(2, nav.depth)
+    }
 }

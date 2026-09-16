@@ -104,6 +104,8 @@ fun shortcutRows(): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
         add(ShortcutRow("Back · forward · the mouse's side buttons", listOf(chord(ShortcutAction.BACK), chord(ShortcutAction.FORWARD))))
         add(ShortcutRow(ShortcutAction.TOGGLE_TREE.label, listOf(chord(ShortcutAction.TOGGLE_TREE))))
         add(ShortcutRow("Back · close", listOf("Esc")))
+        // B§13.6 #6 — a pop-out window's own key; the table above is the main window's.
+        add(ShortcutRow("Close a pop-out window", listOf("Ctrl+W")))
     }
     val create = listOf(ShortcutAction.NEW_PAGE, ShortcutAction.NEW_TASK, ShortcutAction.JOURNAL_TODAY).map { ShortcutRow(it.label, listOf(chord(it))) }
     val find = listOf(ShortcutAction.SWITCHER, ShortcutAction.FIND_IN_PAGE, ShortcutAction.SHORTCUTS).map { ShortcutRow(it.label, listOf(chord(it))) }

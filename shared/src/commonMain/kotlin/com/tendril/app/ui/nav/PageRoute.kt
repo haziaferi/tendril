@@ -30,6 +30,8 @@ fun PageRoute(
     paneChrome: PaneChrome? = null,
     onOpenPage: ((Long) -> Unit)? = null,
     findRequest: Int? = null,
+    /** A pop-out window routes *Show on Road Map* to the main window and fronts it. */
+    onShowOnRoadMap: ((Long) -> Unit)? = null,
 ) {
     val page by core.database.pageDao().observeById(pageId).collectAsState(initial = null)
     val open = onOpenPage ?: navState::openPage
@@ -53,7 +55,7 @@ fun PageRoute(
             pageId = pageId,
             onBack = onBack,
             onOpenPage = open,
-            onShowOnRoadMap = navState::showOnRoadMap,
+            onShowOnRoadMap = onShowOnRoadMap ?: navState::showOnRoadMap,
             onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
             paneChrome = paneChrome,
             findRequest = findRequest ?: navState.findRequested,

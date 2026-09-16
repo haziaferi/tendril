@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (pop-out windows) | §3.1 amended (B§13.6 #6): a page in its own OS window on the desktop — `ui/nav/WorkbenchEnvironment.kt` (the scaffold's four locals, extracted; a pop-out takes the main window's scale), `ui/nav/PopOuts.kt` (`PopOutHost`, `PopOutRegistry`), `PageRoute.onShowOnRoadMap`, `WorkbenchNavState.depth`, `WindowFrame.decode(min)`, the openers in the workspace chrome and tree rows (Shift+click), the tree's ⧉; the desktop's `PopOutWindows.kt`. §2.2 the keyboard row. §0.10 item 14's after-the-pass list: #6 done. The shelf now closes on a trashed page. Critiques: `docs/critiques/pop-out-mock.md`, `pop-out-function.md` (and the dev-database wipe by the installed preview exe, recovered). Desktop verified; the phone untouched by construction. Tests 773 → 778. | §3.1, §2.2, §0.10 |
 | 2026-09-16 (14h·2 — the small things) | Thirteen items, each at its home: §2.3 the type scale (`TypeScale`, six sizes on 1.125; `tools/audit.py` rule 12); §2.2 *Submenus and captions* (`ui/components/Submenu.kt`, `openVerb()`, `DensityProfile.rowHeightDp` / `listInteractiveMinDp`); §3.1.1 find over the whole outline with folded matches counted and unfolded on ↵ (`domain/MindMapFold.kt`), the scroll only off-screen, the mention on `accentSoft`, the ground click; §3.1 the tree's second mark, the chip row, the card's *edited* line (`domain/time/RelativeTime.kt`, `rowsLabel`); §3.4 the map's self-refresh (`PageRelationDao.observeAll`); §5.6 the Table's rows and footer. **§0.10 item 14 closed — the desktop pass is done.** Critiques: `docs/critiques/small-things-measured.md`, `small-things-function.md`. Desktop verified; the phone walk pending. Tests 765 → 773. | §2.2, §2.3, §3.1, §3.1.1, §3.4, §5.6, §0.10 |
 | 2026-09-16 (14h·1 — the shelf) | §3.1 amended: a third pane on a wide window (`ui/pages/ShelfState.kt`, `ShelfPane.kt`; `ui/roadmap/RoadMapNeighbourhood.kt` over the shared `RoadMapCanvas`); *Show beside ▸* in the workspace chrome (`PaneChrome.menuItems` gains `close`, `compact`), *Open beside* and Ctrl+click on tree rows, `PageRoute` takes `onOpenPage`/`findRequest`; `TOGGLE_SHELF` = Ctrl+Shift+\ in the keyboard table; `pages_shelf`, `pages_shelf_last`, `pages_shelf_width`. §0.10 item 14: 14h·1 shipped. Critiques: `docs/critiques/shelf-mock.md`, `shelf-function.md`. Desktop verified; the phone walk pending. Tests 759 → 765. | §3.1, §2.2, §0.10 |
 | 2026-09-16 (14g·3 — the urgency ladder) | §0.6.4 amended: `Entry.importance` 0–4 replaces the flag, **schema v20** (`MIGRATION_19_20` rebuilds `entries`, `important = 1 → 3`; `20.json`), `domain/urgency/Urgency.kt` (`timePressure`, `urgencyOf`), the ladder in the engine (`Ladder`, `solveToTarget`, `TendrilPalette.ladder`), `ui/components/UrgencyMarks.kt` (stripe, dot, picker), rows, timed blocks and all-day chips striped, the pane's row and chip, the row menu's *Urgency ▸*, the edit sheet's picker, quick add `!` / `!!`, ICS `PRIORITY`, the snapshot's two fields; `ui/settings/TaskSettings.kt` shared (`show_urgency` on by default, `show_habit_streaks`; Android's `TaskPreferences` migrated once and deleted; the desktop pane's Tasks section). §0.5.2's clause; §2.3's ladder row; §3.2, §3.3, §4 amended; §0.10 item 14: 14g done. `tools/audit.py`'s stripper now skips char literals (`'"'` had swallowed the rest of `Ics.kt`). Critiques: `docs/critiques/urgency-ladder-mock.md`, `urgency-ladder-function.md` (the stripe/text overlap seen by the user, fixed). Desktop verified on the real DB; the phone walk pending. Tests 753 → 759. | §0.6.4, §0.5.2, §2.3, §3.2, §3.3, §4, §0.10 |
@@ -708,7 +709,8 @@ Genuinely undecided — distinct from §0.7.
     the profile — Compact / Comfortable / Touch — and the calendar's opening view as desktop
     settings, Compact and Week by default; no mnemonics; System / Light / Dark, default System).
     B§13.6's ten further diffs answered the same day: right-click, back/forward and list keyboard
-    folded into 14d/14e; a shelf pane as 14h; pop-out windows, drag between panes (phone too), hover
+    folded into 14d/14e; a shelf pane as 14h; pop-out windows *(done 2026-09-16, §3.1)*, drag
+    between panes (phone too), hover
     previews, and the tray with a global hotkey (JNA is in the cache, item 20) after the pass; tabs
     no; cross-block undo to item 19. The item closes when 14h ships.* ***14a shipped 2026-09-14**
     — the shell as mocked on both platforms (§2.2), the remembered window, the title, the sync
@@ -927,7 +929,8 @@ navigation-paradigm question later.
   shortcuts…* in Settings) is generated from it, so what is listed is what is bound — a test
   holds every action to one unique chord. The table: **Ctrl+1…5** the tabs · **Alt+← / Alt+→**
   back and forward (also the mouse's side buttons) · **Ctrl+\** the tree · **Ctrl+Shift+\** the
-  shelf (14h·1) · **Ctrl+N** new page ·
+  shelf (14h·1) · **Ctrl+W** closes a pop-out window and **Shift+click** on a tree row opens one
+  (B§13.6 #6; Ctrl+W is a pop-out's key, a static row on the card) · **Ctrl+N** new page ·
   **Ctrl+Shift+N** new task (Tasks opens with its Add sheet — a cross-tab intent like *Show on
   Road Map*) · **Ctrl+T** today's Journal · **Ctrl+K** the switcher · **F1** the card; Esc is
   back. Every key is one a person can press on any layout without AltGr or Shift: the
@@ -1239,6 +1242,29 @@ build.)* *(14h·2: the tree marks the shelf's page too — a 1 dp ring and the s
 row's end, no fill; the chip row above the tree sits with 12 dp of visible air above and below
 and starts on the row's content edge. The phone's card says *edited 2 h ago* — `domain/time/
 RelativeTime.kt`, shared with the History sheet — instead of the kind its icon already shows.)*
+
+*(**Amended 2026-09-16 — B§13.6 #6, pop-out windows.** On the desktop a page can be **its own OS
+window** (decided 2026-09-16 on `docs/mockups/pop-out.html`, drawn for the pass, and
+`docs/critiques/pop-out-mock.md`): the same `PageRoute` — a page, a database's Table, a canvas —
+with its own back stack, its own `···`, the theme, and **the main window's scale** (`shellScaleFor`
+of the main window's shorter side, not its own, so 14 sp means the same in both). No rail, tree,
+timer, switcher or shortcuts card: a second window holds one thing beside the first. **Opened**
+from the page's `···` → *Open in a window* (the workspace chrome's, so every kind has it and the
+phone never does), the tree row's menu, or **Shift+click** on a row (Ctrl+click is the shelf's);
+the page stays open in the main window. **Inside it** a link pushes, Escape pops and **stops at
+the seed** (a placed window is never closed by a stray key); Ctrl+F is its own find; Ctrl+W and
+the OS × close it; Alt+← / → walk its stack; every other chord is the main window's (the F1 card
+lists Ctrl+W as a static row). Its `···` ends with *Open in the main window* and *Close window*;
+that verb and *Show on Road Map* act in the main window, **front it**, and close the pop-out. The
+OS title mirrors the page on top of its stack as it is typed. A page trashed anywhere closes its
+window. **Remembered**: `popout_pages` (ids, in order) and `popout_frame_<id>`; a relaunch reopens
+them where they were, dropping ids whose pages are gone; a new one opens 720 × 600 (minimum
+480 × 400 — the editor's floor) cascaded 32 dp from the last. Two windows on one page are two
+ViewModels over one database (`WorkbenchEnvironment`, `PopOutHost`, `PopOuts.kt` shared;
+`PopOutWindows.kt` on the desktop). The tree marks a popped-out page with ⧉.
+`docs/critiques/pop-out-function.md` walked the build — and records the day's process finding:
+an installed 2026-09-08 preview `Tendril.exe` shares the dev data directory and wiped it to its
+v8 schema when launched by name (recovered from the last checkpoint).)*
 
 - Import from Notion (Markdown & CSV export format — see §7 for the full fidelity spec)
 - Full import/export of pages and projects

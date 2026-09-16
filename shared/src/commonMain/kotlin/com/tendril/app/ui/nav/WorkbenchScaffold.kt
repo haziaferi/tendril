@@ -18,11 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Density
 import com.tendril.app.ui.WorkbenchCore
-import com.tendril.app.ui.pages.LocalViewOnly
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.pages.PagesTreeState
 import com.tendril.app.ui.pages.ShelfState
@@ -82,6 +79,8 @@ fun WorkbenchScaffold(
      * one that lets the person choose (the desktop, in Settings) passes null and the store's
      * `density_profile` is read. */
     fixedDensityProfile: DensityProfile? = null,
+    /** B§13.6 #6 — pop-out windows; null where there are no windows (the phone): no opener is composed. */
+    popOuts: PopOutHost? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
     /** 14e — [quickAddRequested] is Ctrl+Shift+N's intent; the screen opens its Add sheet and calls [onQuickAddConsumed]. */
     tasksHabitsContent: @Composable (onOpenReview: () -> Unit, quickAddRequested: Boolean, onQuickAddConsumed: () -> Unit) -> Unit,
@@ -117,16 +116,6 @@ fun WorkbenchScaffold(
         onDispose { onCheckboxOnlyWindowFlags?.invoke(false) }
     }
 
-    // B§13.5 #4 — one scale for every measurement below this point (see ShellScale.kt). The
-    // shorter side is read in the platform's own density, before the override.
-    val baseDensity = LocalDensity.current
-    val containerSize = LocalWindowInfo.current.containerSize
-    val storedProfile by core.keyValueStore.observe(DENSITY_PROFILE_KEY).collectAsState(initial = core.keyValueStore.get(DENSITY_PROFILE_KEY))
-    val profile = fixedDensityProfile ?: DensityProfile.fromKey(storedProfile)
-    val shorterSideDp = minOf(containerSize.width, containerSize.height) / baseDensity.density
-    val scale = shellScaleFor(shorterSideDp, profile)
-    val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
-
     // 14e — the desktop's key table runs through here; Android has no fixed set yet, so its
     // scaffold passes no actions and nothing is filled.
     val pagesViewModel = rememberPagesViewModel(core)
@@ -146,7 +135,9 @@ fun WorkbenchScaffold(
         }
     }
 
-    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile) {
+    // B§13.5 #4 — one scale for every measurement below this point (`WorkbenchEnvironment`,
+    // shared with the pop-out windows, which take this window's scale rather than their own).
+    WorkbenchEnvironment(core, fixedDensityProfile) {
         // The route content, identical under either shell — only the chrome around it differs.
         // 14c: on a wide window the Pages tab, root or page, is the workspace (tree + page).
         val content: @Composable (wide: Boolean) -> Unit = { wide ->
@@ -164,6 +155,7 @@ fun WorkbenchScaffold(
                             navState = navState,
                             treeState = treeState,
                             shelfState = shelfState,
+                            popOuts = popOuts,
                             onOpenSwitcher = { switcher.open = true },
                             onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
                         )
