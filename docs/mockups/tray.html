@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Tray</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+*{box-sizing:border-box}body{margin:0;background:#EEF0F3;color:#1B1B18;font:13.5px/1.45 Inter,system-ui,sans-serif;padding:24px}
+h1{font:600 22px/1.2 Inter,sans-serif;margin:0 0 4px}.lead{color:#5B5B58;max-width:92ch;margin:0 0 14px}.note{color:#5B5B58;max-width:92ch;margin:-4px 0 8px;font-size:12.5px}
+h3{font:600 11px/1 Inter,system-ui;letter-spacing:.06em;text-transform:uppercase;color:#5B5B58;margin:18px 0 8px}
+.win{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+/* --- the OS's parts: Windows 11 taskbar corner, a Win32 popup menu (what AWT draws), a Windows toast --- */
+.os{position:relative;width:420px;height:150px;background:#2b2f36;border-radius:8px;overflow:hidden}
+.tb{position:absolute;left:0;right:0;bottom:0;height:48px;background:#202225;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 12px;color:#d6d8dc;font:12px Segoe UI,Inter,sans-serif}
+.tbi{font-size:14px;opacity:.85}.tbi.tendril{width:20px;height:20px;border-radius:5px;background:#465163;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;opacity:1}
+.clock{text-align:center;line-height:1.2}
+.menu{position:absolute;right:132px;bottom:52px;width:200px;background:#f9f9f9;border:1px solid #a0a0a0;box-shadow:2px 2px 6px rgba(0,0,0,.35);padding:2px;font:12px Segoe UI,Inter,sans-serif;color:#000}
+.mi{padding:5px 28px 5px 30px;display:flex}.mk{margin-left:auto;color:#555}.msep{height:1px;background:#d0d0d0;margin:3px 2px}
+.toast{width:364px;background:#2b2b2b;color:#fff;border-radius:8px;padding:14px 16px;font:14px Segoe UI,Inter,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.tapp{display:flex;align-items:center;gap:8px;font-size:12px;color:#bdbdbd;margin-bottom:6px}.tico{width:16px;height:16px;border-radius:4px;background:#465163;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center}.tnow{margin-left:auto}
+.ttitle{font-weight:600}.tbody{color:#d0d0d0}
+/* --- Tendril's own: the popup and the Settings section, at the seven styles --- */
+.popup{width:560px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;box-shadow:0 24px 48px rgba(0,0,0,.35);padding:12px 16px 10px}
+.field{height:44px;gap:10px;border:1px solid var(--border);border-radius:8px;background:var(--s2);display:flex;align-items:center;padding:0 12px;font-size:16px}
+.plus{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);font-size:15px;line-height:17px;text-align:center;flex:none}.ph{color:var(--dim)}.q{color:var(--text)}.dimq{color:var(--dim)}.caret{width:1px;height:20px;background:var(--text);margin-left:1px}
+.chips{display:flex;gap:6px;margin:8px 0 0}.chip{padding:4px 10px;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12.5px;font-weight:500;line-height:17px}.chip.on{background:var(--soft);border-color:var(--soft)}.chip.urgent{border-left:4px solid #D9553F}
+.foot{margin-top:10px}.added .ok{color:var(--accent);font-weight:600}
+.pane{width:520px;background:var(--bg);color:var(--text);border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.bar{height:44px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border)}
+.body{padding:8px 16px 16px}
+.swrow{display:flex;align-items:center;gap:16px;padding:8px 0 4px}.switch{flex:none;width:36px;height:20px;border-radius:10px;background:var(--border);position:relative}.switch.on{background:var(--accent)}.switch i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--bg)}.switch.on i{left:18px}
+.errline{color:var(--err)}.link{color:var(--accent);padding:6px 0}
+.t-page{font-size:18px;font-weight:600}.t-section{font-size:14px;font-weight:600;margin:12px 0 2px}.t-label{font-size:12.5px;font-weight:500;margin-top:10px}.t-body{font-size:14px}.t-desc{font-size:12.5px;color:var(--dim);margin:2px 0 4px}.t-caption{font-size:11px;color:var(--dim)}
+.popup .chips{margin-top:8px}.popup .t-desc{margin:0}
+</style></head><body>
+<h1>The Tray</h1><p class="lead">B§13.6 #7 — the notification-area icon with its menu, desktop reminder toasts, a global quick-add chord and its popup, and the Settings section that owns the two choices. Two of the four frames are the OS's (the menu is a Win32 <code>PopupMenu</code> as AWT draws it, the toast is Windows 11's own card); the popup and the section are Tendril's, on the seven styles. Grounded on Todoist (a global quick add, customisable — Ctrl+Space or Win+Alt+Q on Windows), TickTick (Shift+Alt+A), Things (Ctrl+Space Quick Entry — a small floating window; Enter saves, Esc discards) and Microsoft's notification-area guidance.</p>
+<section class="frame" style="--bg:#1B1D21;--s2:#272A2E;--text:#D8D8DA;--dim:#9B9DA3;--border:#33363B;--accent:#A7AFBE;--soft:#353A44;--err:#E08A80"><h3>A — the icon and its menu (Win32, drawn by the OS) · B — a reminder toast (Windows 11's card)</h3><p class="note">The menu and the toast take the system's font and colours; only their words are Tendril's. Under <code>gradlew run</code> the toast's app line reads <i>Java(TM) Platform SE binary</i> — the packaged exe gives it the app's name.</p><div class="win"><div class="os">
+<div class="menu"><div class="mi">Open Tendril</div><div class="mi">Quick add…<span class="mk">Win+Alt+T</span></div><div class="msep"></div><div class="mi">Quit</div></div>
+<div class="tb"><span class="tbi">﹀</span><span class="tbi">☁</span><span class="tbi tendril" title="Tendril">✦</span><span class="tbi">🔊</span><span class="tbi">🔋</span><span class="clock">14:20<br>Fri 18 Sep</span></div>
+</div><div class="toast">
+<div class="tapp"><span class="tico">✦</span><span>Tendril</span><span class="tnow">now</span></div>
+<div class="ttitle">In 10 min · Dentist</div>
+<div class="tbody">Friday 14:30 · task</div>
+</div></div></section>
+<section class="frame" style="--bg:#1B1D21;--s2:#272A2E;--text:#D8D8DA;--dim:#9B9DA3;--border:#33363B;--accent:#A7AFBE;--soft:#353A44;--err:#E08A80"><h3>C — the quick-add popup: empty · typed · added (Ink dark)</h3><p class="note">560 dp at 22 % of the screen's height, always on top, no title bar, radius 10 (the hover card's); the accent's + glyph is the Calendar bar's quick-add sign. After the critique: the foot names two verbs, the chord lives in the tray item, Settings and F1. The field is the Calendar strip's (<code>QuickAddField</code>); the chips are <code>QuickAddPreview</code>'s. Enter writes and shows <i>Added</i> for 700 ms; Esc closes; focus lost with the field blank closes, with text keeps it.</p><div class="win"><div class="popup"><div class="field"><span class="plus">+</span><span class="ph">Dentist fri 14:30 !</span><span class="caret"></span></div><div class="foot t-caption">Enter adds · Esc closes</div></div><div class="popup"><div class="field"><span class="plus">+</span><span class="q">Dentist fri 14:30 !!</span><span class="caret"></span></div><div class="chips"><span class="chip">Fri 18 Sep</span><span class="chip">14:30</span><span class="chip">Task ⇄</span><span class="chip urgent">Urgent</span></div><div class="foot t-caption">Enter adds · Esc closes</div></div><div class="popup"><div class="field"><span class="plus">+</span><span class="q dimq">Dentist fri 14:30 !!</span></div><div class="chips"><span class="chip">Fri 18 Sep</span><span class="chip">14:30</span><span class="chip">Task ⇄</span><span class="chip urgent">Urgent</span></div><div class="foot t-desc added"><span class="ok">✓</span> Added · Dentist · Fri 14:30</div></div></div></section>
+<section class="frame" style="--bg:#1B1D21;--s2:#272A2E;--text:#D8D8DA;--dim:#9B9DA3;--border:#33363B;--accent:#A7AFBE;--soft:#353A44;--err:#E08A80"><h3>D — Settings › Notification area (Ink dark, with the registration failure)</h3><div class="win"><div class="pane">
+<div class="bar"><span class="t-page">Settings</span></div>
+<div class="body">
+<div class="t-section">Notification area</div>
+<div class="swrow"><div><div class="t-body">Keep Tendril running in the notification area when the window closes</div><div class="t-desc">Reminders arrive as Windows notifications while it runs; the icon may sit behind the taskbar's ^ until you drag it out. Quit from the icon's menu.</div></div><span class="switch on"><i></i></span></div>
+<div class="t-label">Quick add from anywhere</div>
+<div class="chips"><span class="chip on">Win+Alt+T</span><span class="chip">Ctrl+Shift+Space</span><span class="chip">Shift+Alt+A</span><span class="chip">Ctrl+Alt+Space</span></div>
+<div class="t-desc errline">Win+Alt+T is taken by another app — choose another chord.</div>
+<div class="t-section">Keyboard</div>
+<div class="t-body link">Keyboard shortcuts… (F1)</div>
+</div></div></div></section>
+<section class="frame" style="--bg:#FFFFFF;--s2:#F5F5F5;--text:#1B1B18;--dim:#727270;--border:#E6E6E4;--accent:#465163;--soft:#E9EBED;--err:#A63D2F"><h3>C + D on Chalk light</h3><div class="win"><div class="popup"><div class="field"><span class="plus">+</span><span class="q">Dentist fri 14:30 !!</span><span class="caret"></span></div><div class="chips"><span class="chip">Fri 18 Sep</span><span class="chip">14:30</span><span class="chip">Task ⇄</span><span class="chip urgent">Urgent</span></div><div class="foot t-caption">Enter adds · Esc closes</div></div><div class="pane">
+<div class="bar"><span class="t-page">Settings</span></div>
+<div class="body">
+<div class="t-section">Notification area</div>
+<div class="swrow"><div><div class="t-body">Keep Tendril running in the notification area when the window closes</div><div class="t-desc">Reminders arrive as Windows notifications while it runs; the icon may sit behind the taskbar's ^ until you drag it out. Quit from the icon's menu.</div></div><span class="switch on"><i></i></span></div>
+<div class="t-label">Quick add from anywhere</div>
+<div class="chips"><span class="chip on">Win+Alt+T</span><span class="chip">Ctrl+Shift+Space</span><span class="chip">Shift+Alt+A</span><span class="chip">Ctrl+Alt+Space</span></div>
+
+<div class="t-section">Keyboard</div>
+<div class="t-body link">Keyboard shortcuts… (F1)</div>
+</div></div></div></section>
+</body></html>
