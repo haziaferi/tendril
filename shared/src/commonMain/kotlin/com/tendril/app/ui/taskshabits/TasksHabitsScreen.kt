@@ -65,6 +65,7 @@ import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.domain.urgency.Urgency
 import com.tendril.app.domain.urgency.urgencyOf
 import com.tendril.app.ui.components.UrgencyDot
+import com.tendril.app.ui.components.SubmenuItem
 import com.tendril.app.ui.components.UrgencyStripe
 import com.tendril.app.domain.track.formatMinutes
 import com.tendril.app.domain.plan.loggedSegment
@@ -635,21 +636,14 @@ private fun TaskMenuItems(entry: Entry, isStep: Boolean, actions: TaskRowActions
     }
     if (actions.showUrgency) {
         // 14g·3 — the level as a second menu anchored to the item: five rows, a dot each.
-        var levels by remember { mutableStateOf(false) }
         val set = Urgency.fromLevel(entry.importance)
-        DropdownMenuItem(
-            text = { Text("Urgency: " + set.label) },
-            leadingIcon = { UrgencyDot(set) },
-            trailingIcon = { Icon(Icons.Filled.ArrowRight, contentDescription = null) },
-            onClick = { levels = true },
-        )
-        DropdownMenu(expanded = levels, onDismissRequest = { levels = false }) {
+        SubmenuItem(text = { Text("Urgency: " + set.label) }, leadingIcon = { UrgencyDot(set) }) { closeLevels ->
             Urgency.entries.forEach { u ->
                 DropdownMenuItem(
                     text = { Text(u.label) },
                     leadingIcon = { UrgencyDot(u) },
                     trailingIcon = if (u == set) ({ Icon(Icons.Filled.Check, contentDescription = null) }) else null,
-                    onClick = { levels = false; close(); viewModel.setImportance(entry.id, u.level) },
+                    onClick = { closeLevels(); close(); viewModel.setImportance(entry.id, u.level) },
                 )
             }
         }

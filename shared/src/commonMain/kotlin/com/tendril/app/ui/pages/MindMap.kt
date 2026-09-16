@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.components.openVerb
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -95,7 +96,7 @@ internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
             MapLayer(layout, scale = fit, pan = Offset(pad, pad), selectedId = null, onTapNode = null, interactive = false)
         }
         Text(
-            "Mind map · tap to open",
+            "Mind map · " + openVerb(),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),

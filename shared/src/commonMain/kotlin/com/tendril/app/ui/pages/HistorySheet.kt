@@ -39,13 +39,10 @@ import com.tendril.app.ui.components.TendrilSheet
 import androidx.compose.material.icons.outlined.History
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import java.time.Duration
+import com.tendril.app.domain.time.relativeTime
 import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 private val json = Json { ignoreUnknownKeys = true }
-private val dayTime: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
 
 /**
  * §0.6.13 — the page's kept bodies, newest first; a row opens a read-only preview with
@@ -144,15 +141,5 @@ private fun describe(revision: PageRevision): String {
         RevisionReason.MERGE -> "replaced by a sync"
         RevisionReason.RESTORE -> "before a restore"
     }
-    return ago(revision.takenAt) + " · " + reason
-}
-
-private fun ago(at: Instant): String {
-    val d = Duration.between(at, Instant.now())
-    return when {
-        d.toMinutes() < 1 -> "just now"
-        d.toMinutes() < 60 -> d.toMinutes().toString() + " min ago"
-        d.toHours() < 24 -> d.toHours().toString() + " h ago"
-        else -> at.atZone(ZoneId.systemDefault()).format(dayTime)
-    }
+    return relativeTime(revision.takenAt) + " · " + reason
 }

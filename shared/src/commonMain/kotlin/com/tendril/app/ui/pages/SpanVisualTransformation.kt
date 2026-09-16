@@ -28,6 +28,8 @@ fun spansVisualTransformation(
     marks: FindMarks? = null,
     link: Color = Color.Unspecified,
     mention: Color = Color.Unspecified,
+    /** 14h·2 — the tint behind a mention (`accentSoft`); unspecified draws none. */
+    mentionBackground: Color = Color.Unspecified,
 ): VisualTransformation = VisualTransformation { text ->
     val builder = AnnotatedString.Builder(text.text)
     spans.forEach { span ->
@@ -39,7 +41,7 @@ fun spansVisualTransformation(
             is SpanStyle.Strikethrough -> ComposeSpanStyle(textDecoration = TextDecoration.LineThrough)
             is SpanStyle.InlineCode -> ComposeSpanStyle(fontFamily = FontFamily.Monospace)
             is SpanStyle.Link -> ComposeSpanStyle(textDecoration = TextDecoration.Underline, color = link)
-            is SpanStyle.PageMention -> ComposeSpanStyle(fontWeight = FontWeight.Medium, color = mention)
+            is SpanStyle.PageMention -> ComposeSpanStyle(fontWeight = FontWeight.Medium, color = mention, background = mentionBackground)
         }
         builder.addStyle(style, start, end)
     }

@@ -176,7 +176,7 @@ fun ShellTopBar(
             navigationIcon()
             Box(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 ProvideTextStyle(
-                    MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface),
+                    MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface),
                 ) { title() }
             }
             // A nested Row, as Material's `TopAppBar` has: a `DropdownMenu` in the actions anchors

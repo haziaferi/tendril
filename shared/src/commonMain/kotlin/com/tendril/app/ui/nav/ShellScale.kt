@@ -16,10 +16,19 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * breakpoint is then read in the *scaled* dp, since "room for a rail" is a question about
  * scaled things.
  */
-enum class DensityProfile(val factor: Float, val key: String, val label: String) {
-    COMPACT(0.9f, "compact", "Compact"),
-    COMFORTABLE(1.0f, "comfortable", "Comfortable"),
-    TOUCH(1.3f, "touch", "Touch");
+enum class DensityProfile(val factor: Float, val key: String, val label: String,
+    /** 14h·2 — a list row's minimum height (the Table's, measured 58–60 px against the tree's 27:
+     * the `Checkbox`'s 48 dp interactive minimum was the floor, not the padding). */
+    val rowHeightDp: Int,
+    /** The minimum interactive size a control keeps inside a dense list: 28 dp under a pointer, Material's 48 under a finger. */
+    val listInteractiveMinDp: Int,
+) {
+    COMPACT(0.9f, "compact", "Compact", rowHeightDp = 36, listInteractiveMinDp = 28),
+    COMFORTABLE(1.0f, "comfortable", "Comfortable", rowHeightDp = 44, listInteractiveMinDp = 28),
+    TOUCH(1.3f, "touch", "Touch", rowHeightDp = 56, listInteractiveMinDp = 48);
+
+    /** "Pointer or finger?" for copy and affordances: *· open* under a pointer, *· tap to open* on Touch (14h·2 #3). */
+    val pointer: Boolean get() = this != TOUCH
 
     companion object {
         /** The stored key, else the desktop's default. */

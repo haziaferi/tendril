@@ -174,7 +174,7 @@ internal fun WeekGridView(
                                 ) {
                                     // 14g·3 — an all-day task chip wears its urgency stripe like a timed block.
                                     Text(
-                                        o.entry.title, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        o.entry.title, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier
                                             .drawBehind { chipStripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
                                             .padding(start = if (chipStripe != null) 12.dp else 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
@@ -182,7 +182,7 @@ internal fun WeekGridView(
                                 }
                             }
                             if (more > 0) {
-                                Text("+$more", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clickable { onSelectDate(col.day) }.padding(horizontal = 6.dp))
+                                Text("+$more", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clickable { onSelectDate(col.day) }.padding(horizontal = 6.dp))
                             }
                         }
                     }

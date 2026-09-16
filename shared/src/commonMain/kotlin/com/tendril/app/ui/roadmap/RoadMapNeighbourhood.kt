@@ -111,7 +111,7 @@ fun DepthChips(depth: Int, onDepthChange: (Int) -> Unit) {
             ) {
                 Text(
                     "$d",
-                    fontSize = 12.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                     color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 )

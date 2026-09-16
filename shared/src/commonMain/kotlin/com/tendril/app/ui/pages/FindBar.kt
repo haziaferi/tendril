@@ -58,6 +58,8 @@ fun FindBar(
     onClose: () -> Unit,
     /** Bumped by the opener so a second Ctrl+F while open re-focuses the field. */
     focusTick: Int,
+    /** 14h·2 — matches inside a folded mind map: counted apart, reached by ↵ past the last visible one. */
+    hidden: Int = 0,
 ) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusTick) { runCatching { focus.requestFocus() } }
@@ -78,12 +80,12 @@ fun FindBar(
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 5.dp),
         ) {
-            if (query.isEmpty()) Text("Find in page", fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (query.isEmpty()) Text("Find in page", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                textStyle = TextStyle(fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface),
+                textStyle = TextStyle(fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focus)
@@ -99,7 +101,9 @@ fun FindBar(
         Text(
             when {
                 query.isEmpty() -> ""
-                total == 0 -> "No matches"
+                total == 0 && hidden == 0 -> "No matches"
+                total == 0 -> "$hidden inside a mind map"
+                hidden > 0 -> "${(current ?: 0) + 1} of $total · $hidden inside a mind map"
                 else -> "${(current ?: 0) + 1} of $total"
             },
             fontSize = 12.5.sp,
@@ -109,7 +113,7 @@ fun FindBar(
         IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(FIND_BUTTON)) {
             Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous (Shift+Enter)", modifier = Modifier.size(18.dp))
         }
-        IconButton(onClick = onNext, enabled = total > 0, modifier = Modifier.size(FIND_BUTTON)) {
+        IconButton(onClick = onNext, enabled = total > 0 || hidden > 0, modifier = Modifier.size(FIND_BUTTON)) {
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Next (Enter)", modifier = Modifier.size(18.dp))
         }
         IconButton(onClick = onClose, modifier = Modifier.size(FIND_BUTTON)) {

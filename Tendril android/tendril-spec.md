@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14h·2 — the small things) | Thirteen items, each at its home: §2.3 the type scale (`TypeScale`, six sizes on 1.125; `tools/audit.py` rule 12); §2.2 *Submenus and captions* (`ui/components/Submenu.kt`, `openVerb()`, `DensityProfile.rowHeightDp` / `listInteractiveMinDp`); §3.1.1 find over the whole outline with folded matches counted and unfolded on ↵ (`domain/MindMapFold.kt`), the scroll only off-screen, the mention on `accentSoft`, the ground click; §3.1 the tree's second mark, the chip row, the card's *edited* line (`domain/time/RelativeTime.kt`, `rowsLabel`); §3.4 the map's self-refresh (`PageRelationDao.observeAll`); §5.6 the Table's rows and footer. **§0.10 item 14 closed — the desktop pass is done.** Critiques: `docs/critiques/small-things-measured.md`, `small-things-function.md`. Desktop verified; the phone walk pending. Tests 765 → 773. | §2.2, §2.3, §3.1, §3.1.1, §3.4, §5.6, §0.10 |
 | 2026-09-16 (14h·1 — the shelf) | §3.1 amended: a third pane on a wide window (`ui/pages/ShelfState.kt`, `ShelfPane.kt`; `ui/roadmap/RoadMapNeighbourhood.kt` over the shared `RoadMapCanvas`); *Show beside ▸* in the workspace chrome (`PaneChrome.menuItems` gains `close`, `compact`), *Open beside* and Ctrl+click on tree rows, `PageRoute` takes `onOpenPage`/`findRequest`; `TOGGLE_SHELF` = Ctrl+Shift+\ in the keyboard table; `pages_shelf`, `pages_shelf_last`, `pages_shelf_width`. §0.10 item 14: 14h·1 shipped. Critiques: `docs/critiques/shelf-mock.md`, `shelf-function.md`. Desktop verified; the phone walk pending. Tests 759 → 765. | §3.1, §2.2, §0.10 |
 | 2026-09-16 (14g·3 — the urgency ladder) | §0.6.4 amended: `Entry.importance` 0–4 replaces the flag, **schema v20** (`MIGRATION_19_20` rebuilds `entries`, `important = 1 → 3`; `20.json`), `domain/urgency/Urgency.kt` (`timePressure`, `urgencyOf`), the ladder in the engine (`Ladder`, `solveToTarget`, `TendrilPalette.ladder`), `ui/components/UrgencyMarks.kt` (stripe, dot, picker), rows, timed blocks and all-day chips striped, the pane's row and chip, the row menu's *Urgency ▸*, the edit sheet's picker, quick add `!` / `!!`, ICS `PRIORITY`, the snapshot's two fields; `ui/settings/TaskSettings.kt` shared (`show_urgency` on by default, `show_habit_streaks`; Android's `TaskPreferences` migrated once and deleted; the desktop pane's Tasks section). §0.5.2's clause; §2.3's ladder row; §3.2, §3.3, §4 amended; §0.10 item 14: 14g done. `tools/audit.py`'s stripper now skips char literals (`'"'` had swallowed the rest of `Ics.kt`). Critiques: `docs/critiques/urgency-ladder-mock.md`, `urgency-ladder-function.md` (the stripe/text overlap seen by the user, fixed). Desktop verified on the real DB; the phone walk pending. Tests 753 → 759. | §0.6.4, §0.5.2, §2.3, §3.2, §3.3, §4, §0.10 |
 | 2026-09-16 (14g·2 — the token map) | §2.3 gains *The token map*: `fanHue` (event −120°, habit +60°, the third 180°, the second channel taking the third slot), the error family solved on its soft, `findSoft`, `TendrilPalette` +9 tokens and `dark`, `ui/theme/DataColours.kt` (`labelColours`, `calloutColours`, `CALLOUT_COLORS`; `solveHue`'s `tintShare`), `Theme.kt` maps `tertiary*`/`error*`/`secondaryContainer`; `spansVisualTransformation` takes the link and mention colours (the two hardcoded blues gone), canvas edges dim, `ui/calendar/LayerColours.kt`, the Road Map's node kinds, the Timeline's blocker and today, callouts as bar + tint, label chips coloured (§3.1.6, §3.1.1 amended). `tools/audit.py` rule 11 *hardcoded colour*. §0.10 item 14: 14g·2 shipped; the small-things list closes the `find` token and gains two. Critiques: `docs/critiques/coloured-elements-mock.md`, `coloured-elements-function.md`. Desktop verified; the phone walk pending. Tests 748 → 753. | §2.3, §3.1.1, §3.1.6, §0.10 |
@@ -736,16 +737,16 @@ Genuinely undecided — distinct from §0.7.
     right-click as the pointer's long-press, the floating toolbar; three `design-critique-plus`
     passes around it (`docs/critiques/pages-desktop.md`, `pages-phone.md`, `pages-function.md`),
     which also found a RELATION value shown as a raw uid in the row-as-page strip (fixed) and
-    left this list for later PRs: type steps too close on the desktop (14g), the Table's touch
+    left this list for later PRs: ~~type steps too close on the desktop (14g), the Table's touch
     row height beside 32 dp tree rows (14f), the canvas caption's 2.8:1 contrast and "tap"
     wording, the chip row's rhythm, "2 row(s)" with dashes, the phone card's kind line that
-    repeats its icon, a page-ground click that clears no focus, ~~a `find` token per register so
-    a found word and a selected row stop sharing `accentSoft` (14g)~~ *(done, 14g·2)*, an
+    repeats its icon, a page-ground click that clears no focus,~~ ~~a `find` token per register so
+    a found word and a selected row stop sharing `accentSoft` (14g)~~ *(done, 14g·2)*, ~~an
     `@mention` in Ink told from body text by weight alone (a faint underline?), the Road Map's
     ↻ needed before a new page appears, the row menu's *Urgency ▸* list opening over the parent
     menu rather than beside it, find's scroll landing a
     match already on screen at the top, a word living only inside a mapped-away subtree not
-    found (small things, to close with 14h).*
+    found (small things, to close with 14h)~~ *(all done, 14h·2)*.*
     ***14e shipped 2026-09-16** — the keyboard (§2.2 *The keyboard*): one table, the F1 card
     generated from it, Alt+arrows and the side buttons for back/forward, Ctrl+Shift+N's
     quick-add intent, ↑↓↵→← and type-ahead in the tree and the Tasks list. Two critique passes
@@ -781,7 +782,13 @@ Genuinely undecided — distinct from §0.7.
     Map neighbourhood or today's Journal; the openers, the one-header rule, the swap, the 45 %
     clamp, the chord; remembered. `docs/critiques/shelf-mock.md` (the pass on the mock drawn for
     it) and `shelf-function.md` (the build: the depth control and the title size fixed).
-    **14h·2 (the small things) closes the item.***
+    **14h·2 (the small things) closes the item.*** ***14h·2 shipped 2026-09-16 — the item is
+    closed.** The thirteen small things above (struck through below), each at its home: the type
+    scale (§2.3), the Table's rows and the submenus (§2.2), the captions, the chip row and the
+    tree's second mark (§3.1), the mention's tint, the ground click and find's two rules
+    (§3.1.1), the map's refresh (§3.4), the footer's words (§5.6), the phone card's *edited*
+    line. `docs/critiques/small-things-measured.md` (before) and `small-things-function.md`
+    (after). **The desktop pass is done: 14a…14h, B§13.4.***
 13. ~~**Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*~~ *Resolved 2026-09-16 (14f·1): the two Trash sheets are shared and the desktop has the button; the bell stays Android's, as the reason stands.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -884,6 +891,14 @@ navigation-paradigm question later.
   top of every screen for a *Sync folder* section at the head of Settings, where Android keeps
   them and the only place the mock has room. Exempt: the widget-configure Activity, outside the
   shell.)*
+- **Submenus and captions** *(14h·2.)* A menu item with a `▸` (*Urgency ▸*, *Show beside ▸*)
+  opens its list **beside** the item, level with it at the menu's right edge (`ui/components/
+  Submenu.kt` — the platforms' placement; a nested `DropdownMenu` lands under the parent). A
+  caption that says how to open something says *· open* under a pointer profile and *· tap to
+  open* under Touch (`openVerb()`, from `LocalDensityProfile`). A list under a pointer profile
+  keeps its rows at the profile's height — `DensityProfile.rowHeightDp` 36 / 44 / 56 — with its
+  controls in 28 dp targets (`listInteractiveMinDp`; Material's 48 under Touch): the Table's rows
+  measured 58–60 px against the tree's 27 because a `Checkbox` alone is 48 dp.
 - **Under a pointer** *(**Amended 2026-09-15 — B§13.4 14d, B§13.6 #1.** Three behaviours that
   exist only where there is a pointer, on both platforms' code (`ui/components/Pointer.kt`; a
   mouse on an Android tablet gets them). **Right-click is the pointer's long-press, everywhere
@@ -963,6 +978,17 @@ navigation-paradigm question later.
 **Rewritten 2026-09-16 (14g·1, B§13.7) — the model is built.** The eight hand-typed palettes that
 stood here from 2026-08 to 2026-09-16 are in git history (`Palette.kt` at `854ba1b`); nothing in
 the app reads a typed hex any more.
+
+**The type scale (Amended 2026-09-16 — 14h·2, `docs/critiques/small-things-measured.md` #1).**
+Material's default scale put nine roles on five sizes, seven of them inside 11…16 sp, `titleMedium`
+and `bodyLarge` both 16, and 27 literal `sp` sizes in eleven files had drifted onto eight values
+inside 10.5…14. `Type.kt`'s `TypeScale` is now **six sizes a 1.125 step apart** — 11 · 12.5 · 14 ·
+16 · 18 · 22 (headlineSmall 24; titleLarge skips one step) — each with its line height; labelSmall
+11, labelMedium and bodySmall 12.5, labelLarge, bodyMedium and titleSmall 14, bodyLarge 16,
+titleMedium 18, titleLarge 22. Every literal `fontSize` in shared UI takes one of them —
+`tools/audit.py` rule 12 *off-scale font size* fails the run otherwise, the colour rule's shape.
+The density profile still multiplies (B§13.7.3 rule 2). `docs/critiques/small-things-function.md`
+measured the result.
 
 **A theme is ground × hue × mode; a register is a named preset of the first two.** Shared by both
 platforms through `KeyValueStore` (`theme_register`, `theme_mode`, `theme_typeface`, `theme_oled` —
@@ -1209,7 +1235,10 @@ under View-Only on a day with no page: the button's message, the shelf closes). 
 of the workspace** at draw time so the main pane keeps ≥ 360 dp (the critique's #3). **Remembered**:
 `pages_shelf` (`page:<id>` · `graph` · `journal`), `pages_shelf_last`; hidden at the tab root
 (`ShelfState.shown`). The phone keeps its stack. `docs/critiques/shelf-function.md` walked the
-build.)*
+build.)* *(14h·2: the tree marks the shelf's page too — a 1 dp ring and the split glyph at the
+row's end, no fill; the chip row above the tree sits with 12 dp of visible air above and below
+and starts on the row's content edge. The phone's card says *edited 2 h ago* — `domain/time/
+RelativeTime.kt`, shared with the History sheet — instead of the kind its icon already shows.)*
 
 - Import from Notion (Markdown & CSV export format — see §7 for the full fidelity spec)
 - Full import/export of pages and projects
@@ -1303,7 +1332,14 @@ drawn **inside the text** by `spansVisualTransformation` (`FindMarks`), so a mat
 bold and marked and the marks follow edits; the marks wear `accentSoft` and the current one
 `accent` — a tint shared with selection until 14g's registers give find its own token. A
 Database or Canvas page ignores Ctrl+F. The phone half of the walk is pending (testing paused
-2026-09-16); `docs/critiques/find-in-page-function.md`.)*
+2026-09-16); `docs/critiques/find-in-page-function.md`.)* *(**Amended 2026-09-16 — 14h·2.** The
+matches run over the **whole outline**; the ones inside a folded mind map are counted apart —
+*1 of 3 · 2 inside a mind map* — and ↵ past the last visible match **unfolds that map for the
+session** (`domain/MindMapFold.kt`: `mappedDescendants(outline, opened)`, `owningMap`; state in
+the screen, never a write), so the next ↵ lands on it. The bar scrolls only when the match's row
+is not wholly on screen. An `@mention` takes `accentSoft` behind its accent text (decided
+2026-09-16 — the find mark is the third hue's tint now, so nothing collides; 14g·2's #7 reversed).
+A click on the page's ground — beside or below the blocks — clears the block focus.)*
 
 **Full-text search (confirmed necessary):** a Room FTS4/5 virtual table indexing each page's
 concatenated block plain-text, rebuilt on block write. Page-level granularity for v1, not per-block
@@ -1816,6 +1852,10 @@ on its chip, and the row menu's *Urgency ▸* lists the five levels — §0.6.4 
   "everything today".
 
 ### 3.4 Road Map
+
+*(14h·2: the map refreshes itself when a page or a relation changes — `PageDao.observeRootPages`
+and `PageRelationDao.observeAll`, debounced 300 ms in the ViewModel; ↻ stays for mention edges,
+which live in block text that no page flow announces.)*
 
 Originally scoped as "Mind Map" — **renamed to Road Map** specifically to avoid collision with a
 *separate* feature: a user-drawn mind-map surface inside Pages. Road Map and that surface must never
@@ -2767,6 +2807,11 @@ is a few dozen bytes per deleted item; if it ever matters, the bound is "older t
 device's last sync", which this app has no way to know today.
 
 ### 5.6 Database views (Decided 2026-08-08 — reopens and reverses the §10 "decided out of scope" table-only-database limitation)
+
+*(14h·2: the Table's rows take the density profile's height (§2.2 *Submenus and captions*); the
+footer counts *1 row* / *2 rows* (`rowsLabel`, also in the five conversion warnings) and leaves an
+empty column blank rather than `—`. A date cell's `TextButton` keeps Material's 40 dp, so a row
+at Compact sits at 45 dp, not 36 — `docs/critiques/small-things-function.md`.)*
 
 **Correction, stated plainly** (same practice as the Task/Event and Editing/Viewing corrections
 elsewhere in this doc): an earlier pass scoped Databases to a single table view, reasoning that

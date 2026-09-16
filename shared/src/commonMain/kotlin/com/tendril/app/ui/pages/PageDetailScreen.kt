@@ -122,6 +122,10 @@ import com.tendril.app.domain.outlineOf
 import com.tendril.app.domain.find.FindMatch
 import com.tendril.app.domain.find.findMatches
 import com.tendril.app.domain.find.nextIndex
+import com.tendril.app.domain.mappedDescendants
+import com.tendril.app.domain.owningMap
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.tendril.app.domain.references.UnlinkedMention
 import com.tendril.app.domain.ai.AiVerb
 import androidx.compose.material3.CircularProgressIndicator
@@ -196,11 +200,34 @@ fun PageDetailScreen(
     var findCurrent by remember { mutableStateOf<Int?>(null) }
     var findFocusTick by remember { mutableStateOf(0) }
     var lastSelection by remember { mutableStateOf("") }
-    val mappedAway = remember(outline) { mappedDescendants(outline) }
+    // 14h·2 — maps unfolded for this sitting so a find match inside one can be reached
+    // (`domain/MindMapFold.kt`); session state, never written.
+    var openedMaps by remember { mutableStateOf(emptySet<Long>()) }
+    val mappedAway = remember(outline, openedMaps) { mappedDescendants(outline, openedMaps) }
     val shownBlocks = remember(outline, mappedAway) { outline.filter { it.block.id !in mappedAway }.map { it.block } }
-    val matches: List<FindMatch> = remember(findQuery, shownBlocks, findOpen) { if (findOpen) findMatches(shownBlocks, findQuery) else emptyList() }
+    // The matches run over the whole outline; the ones inside a folded map are counted apart —
+    // the bar says *2 inside a mind map* — and ↵ past the last visible one unfolds that map.
+    val allMatches: List<FindMatch> = remember(findQuery, outline, findOpen) { if (findOpen) findMatches(outline.map { it.block }, findQuery) else emptyList() }
+    val matches: List<FindMatch> = remember(allMatches, mappedAway) { allMatches.filter { it.blockId !in mappedAway } }
+    val hiddenMatches: List<FindMatch> = remember(allMatches, mappedAway) { allMatches.filter { it.blockId in mappedAway } }
+    var findTarget by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(findQuery) { findCurrent = if (matches.isEmpty()) null else 0 }
-    LaunchedEffect(matches) { findCurrent = if (matches.isEmpty()) null else (findCurrent ?: 0).coerceIn(0, matches.lastIndex) }
+    LaunchedEffect(matches) {
+        val target = findTarget
+        val landed = target?.let { t -> matches.indexOfFirst { it.blockId == t }.takeIf { it >= 0 } }
+        findTarget = null
+        findCurrent = landed ?: if (matches.isEmpty()) null else (findCurrent ?: 0).coerceIn(0, matches.lastIndex)
+    }
+    val findStep: (Boolean) -> Unit = { forward ->
+        val atEnd = forward && (matches.isEmpty() || findCurrent == matches.lastIndex)
+        val next = hiddenMatches.firstOrNull()
+        if (atEnd && next != null) {
+            val map = owningMap(outline, next.blockId, openedMaps)
+            if (map != null) { findTarget = next.blockId; openedMaps = openedMaps + map } else findCurrent = nextIndex(findCurrent, matches.size, forward)
+        } else {
+            findCurrent = nextIndex(findCurrent, matches.size, forward)
+        }
+    }
     LaunchedEffect(findRequest) {
         if (findRequest > 0) {
             if (!findOpen && lastSelection.isNotBlank()) findQuery = lastSelection.trim()
@@ -315,8 +342,9 @@ fun PageDetailScreen(
                     onQueryChange = { findQuery = it },
                     current = findCurrent,
                     total = matches.size,
-                    onNext = { findCurrent = nextIndex(findCurrent, matches.size, forward = true) },
-                    onPrevious = { findCurrent = nextIndex(findCurrent, matches.size, forward = false) },
+                    hidden = hiddenMatches.size,
+                    onNext = { findStep(true) },
+                    onPrevious = { findStep(false) },
                     onClose = { findOpen = false },
                     focusTick = findFocusTick,
                 )
@@ -374,14 +402,23 @@ fun PageDetailScreen(
                 if (position < 0) return@LaunchedEffect
                 val trailing = if (contentLocked) 1 else 2
                 val first = listState.layoutInfo.totalItemsCount - trailing - shownBlocks.size
-                if (first >= 0) listState.animateScrollToItem(first + position)
+                if (first < 0) return@LaunchedEffect
+                val index = first + position
+                // 14h·2 — only when the match's row is not already wholly on screen (find-function).
+                val info = listState.layoutInfo
+                val onScreen = info.visibleItemsInfo.any { it.index == index && it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset }
+                if (!onScreen) listState.animateScrollToItem(index)
             }
             var membershipCount by remember { mutableStateOf(-1) }
             LaunchedEffect(memberships.size) {
                 if (membershipCount in 0 until memberships.size) listState.scrollToItem(0)
                 membershipCount = memberships.size
             }
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            // 14h·2 — a click on the page's ground (beside or below the blocks) ends editing; the
+            // blocks' own fields take their clicks first, so only the ground reaches this.
+            val focusManager = LocalFocusManager.current
+            val groundInteraction = remember { MutableInteractionSource() }
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().clickable(interactionSource = groundInteraction, indication = null) { focusManager.clearFocus() }) {
                 // §3.1.4 (amended, step 8b) — today's Journal page opens with the day: its tasks
                 // and due habits, checkable, above everything else. Null on every other page.
                 journalToday?.let { (date, today) -> journalTodayItems(today, date, viewModel) }
@@ -448,7 +485,7 @@ fun PageDetailScreen(
                         onArmCanvas = { armedCanvasPage = it },
                         onInsertCanvas = { afterOrder -> canvasPickerAfterOrder = afterOrder },
                     )
-                    if (entry.block.mindMap) {
+                    if (entry.block.mindMap && entry.block.id !in openedMaps) {
                         MindMapCard(subtree = subtreeOf(outline, entry.block.id), onArm = { armedMapRoot = entry.block.id })
                     }
                 }
@@ -816,6 +853,7 @@ private fun BlockRow(
                         visualTransformation = spansVisualTransformation(
                             block.formattingSpans, findMarks,
                             link = MaterialTheme.colorScheme.primary, mention = MaterialTheme.colorScheme.primary,
+                            mentionBackground = MaterialTheme.colorScheme.primaryContainer,
                         ),
                         readOnly = locked,
                         modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused },
@@ -1524,22 +1562,6 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             )
         }
     }
-}
-
-/** §0.6.2 — the ids of every block hidden behind a mind-map card: the descendants of any block
- * whose `mindMap` is on. A mapped block inside a mapped subtree is simply part of the outer map. */
-private fun mappedDescendants(outline: List<OutlineBlock>): Set<Long> {
-    val hidden = mutableSetOf<Long>()
-    var i = 0
-    while (i < outline.size) {
-        val entry = outline[i]
-        if (entry.block.mindMap && entry.block.id !in hidden) {
-            var j = i + 1
-            while (j < outline.size && outline[j].depth > entry.depth) { hidden += outline[j].block.id; j++ }
-        }
-        i++
-    }
-    return hidden
 }
 
 /** The root and its descendants, in outline order — what the map draws. */

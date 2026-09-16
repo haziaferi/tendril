@@ -8,6 +8,7 @@ import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import java.time.Instant
+import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
 /**
@@ -41,6 +42,10 @@ interface PageRelationDao {
 
     @Query("SELECT * FROM page_relations")
     suspend fun getAll(): List<PageRelation>
+
+    /** 14h·2 — the map refreshes itself on a change (with `PageDao.observeRootPages`). */
+    @Query("SELECT * FROM page_relations")
+    fun observeAll(): Flow<List<PageRelation>>
 
     @Query(
         "SELECT COUNT(*) FROM page_relations WHERE (fromPageId = :pageIdA AND toPageId = :pageIdB) " +
