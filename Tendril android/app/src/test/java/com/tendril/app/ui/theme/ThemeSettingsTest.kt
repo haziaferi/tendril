@@ -11,10 +11,10 @@ import org.junit.Test
 class ThemeSettingsTest {
 
     @Test
-    fun `defaults are Ink, System, Sans, no OLED, and a write reads back`() {
+    fun `defaults are Ink, System, Inter, no OLED, and a write reads back`() {
         val store = MapKeyValueStore()
         val settings = ThemeSettings(store)
-        assertEquals(ThemeChoice(Register.INK, TendrilMode.SYSTEM, TendrilTypeface.SANS, false), settings.current())
+        assertEquals(ThemeChoice(Register.INK, TendrilMode.SYSTEM, TendrilTypeface.INTER, false), settings.current())
         var pushed = 0
         settings.onColourChanged = { pushed++ }
         settings.setRegister(Register.CONSOLE)
@@ -31,7 +31,7 @@ class ThemeSettingsTest {
     @Test
     fun `a garbage value is the default, not a crash`() {
         val store = MapKeyValueStore(mapOf(THEME_REGISTER_KEY to "cocoa", THEME_MODE_KEY to "auto", THEME_OLED_KEY to "yes"))
-        assertEquals(ThemeChoice(Register.INK, TendrilMode.SYSTEM, TendrilTypeface.SANS, false), ThemeSettings(store).current())
+        assertEquals(ThemeChoice(Register.INK, TendrilMode.SYSTEM, TendrilTypeface.INTER, false), ThemeSettings(store).current())
     }
 
     @Test
@@ -40,7 +40,9 @@ class ThemeSettingsTest {
         assertEquals(mapOf(THEME_REGISTER_KEY to "clay", THEME_MODE_KEY to "dark", THEME_TYPEFACE_KEY to "serif"), explicit)
 
         val implicit = legacyThemeKeys(storedRegister = null, oldColorTheme = "MOSS", oldMode = null, oldModeIsExplicit = false, oldTypeface = null)
-        assertEquals(mapOf(THEME_REGISTER_KEY to "moss", THEME_MODE_KEY to "system", THEME_TYPEFACE_KEY to "sans"), implicit)
+        // The type PR: a phone that never chose a typeface takes the new default (Inter); a stored `sans` keeps DM Sans.
+        assertEquals(mapOf(THEME_REGISTER_KEY to "moss", THEME_MODE_KEY to "system", THEME_TYPEFACE_KEY to "inter"), implicit)
+        assertEquals("sans", legacyThemeKeys(null, "INK", null, false, "SANS")[THEME_TYPEFACE_KEY])
 
         // A stored mode that was never explicit is the old tri-state's "follow the system", whatever the file says.
         val stale = legacyThemeKeys(storedRegister = null, oldColorTheme = "INK", oldMode = "LIGHT", oldModeIsExplicit = false, oldTypeface = "SANS")
@@ -52,13 +54,13 @@ class ThemeSettingsTest {
     }
 
     @Test
-    fun `the type scale carries 400 and 500 only`() {
+    fun `the type scale carries 400, 500 and 600 only`() {
         assertEquals(FontWeight.Normal, eyePassWeight(FontWeight.Light))
         assertEquals(FontWeight.Normal, eyePassWeight(FontWeight.Thin))
         assertEquals(FontWeight.Normal, eyePassWeight(null))
         assertEquals(FontWeight.Medium, eyePassWeight(FontWeight.Medium))
-        assertEquals(FontWeight.Medium, eyePassWeight(FontWeight.SemiBold))
-        assertEquals(FontWeight.Medium, eyePassWeight(FontWeight.Bold))
+        assertEquals(FontWeight.SemiBold, eyePassWeight(FontWeight.SemiBold))
+        assertEquals(FontWeight.SemiBold, eyePassWeight(FontWeight.Bold))
         assertFalse(eyePassWeight(FontWeight.W100).weight < 400)
     }
 

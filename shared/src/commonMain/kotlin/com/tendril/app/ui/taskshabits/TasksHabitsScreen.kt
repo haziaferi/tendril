@@ -125,6 +125,7 @@ import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
 import androidx.compose.material3.DropdownMenuItem
+import com.tendril.app.ui.theme.body
 
 private enum class TabSelection { TASKS, HABITS, MERGED }
 private enum class TimeFilter { TODAY, WEEK, MONTH }
@@ -587,7 +588,7 @@ private fun TaskRow(
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused), style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge)
+                Text(keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused), style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.body)
             }
             // The When, the Deadline and the steps, in that order and in one colour: a deadline
             // that has passed is information, not an alarm (§0.5.2).
@@ -746,7 +747,7 @@ private fun HabitRow(
             },
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.bodyLarge)
+            Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.body)
             Text(
                 // §3.3 — time and duration are what distinguish a habit that sits at an
                 // hour from one that just needs doing sometime today, so both show when

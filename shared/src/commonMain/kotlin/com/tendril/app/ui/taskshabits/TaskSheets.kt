@@ -47,6 +47,7 @@ import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+import com.tendril.app.ui.theme.body
 
 /**
  * §0.6.4's Postpone — the presets from [PostponeAmount.PRESETS] as one tap each, then a
@@ -172,7 +173,7 @@ internal fun HabitDetailContent(habit: Habit, viewModel: TasksHabitsViewModel, s
             if (p == null || (p.lastDate == null && p.timesThisMonth == 0 && loggedMinutes == 0)) {
                 Text(
                     "Here whenever you want it.",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.body,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
@@ -186,7 +187,7 @@ internal fun HabitDetailContent(habit: Habit, viewModel: TasksHabitsViewModel, s
                     if (loggedMinutes > 0) add("${formatMinutes(loggedMinutes)} logged this month")
                     perSession?.let { add("About ${formatMinutes(it)} each") }
                 }
-                lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
+                lines.forEach { Text(it, style = MaterialTheme.typography.body) }
                 Spacer(Modifier.height(16.dp))
                 MonthOfDots(days = p.daysThisMonth, month = p.month)
             }

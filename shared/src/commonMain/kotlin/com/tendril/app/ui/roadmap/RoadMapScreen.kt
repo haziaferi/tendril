@@ -106,6 +106,7 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import com.tendril.app.ui.theme.body
 
 internal val NODE_WIDTH = 132.dp
 private val NODE_HEIGHT = 44.dp
@@ -690,7 +691,7 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(page.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1)
+                            Text(page.title, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f), maxLines = 1)
                             AssistChip(
                                 onClick = { onFocus(page.id) },
                                 label = { Text("Focus") },
@@ -755,7 +756,7 @@ private fun PagePickerSheet(title: String, viewModel: RoadMapViewModel, excludeP
                     Text(
                         candidate.title,
                         modifier = Modifier.fillMaxWidth().clickable { onPick(candidate) }.padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.body,
                     )
                 }
             }

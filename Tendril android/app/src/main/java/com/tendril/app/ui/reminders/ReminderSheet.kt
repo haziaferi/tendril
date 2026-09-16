@@ -49,6 +49,7 @@ import com.tendril.app.data.reminder.AllDayAnchorPreset
 import com.tendril.app.data.reminder.ReminderOffset
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import com.tendril.app.ui.theme.body
 
 private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
@@ -108,7 +109,7 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
                 reminders.forEach { reminder ->
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(reminder.offset.label(), style = MaterialTheme.typography.bodyLarge)
+                            Text(reminder.offset.label(), style = MaterialTheme.typography.body)
                             // Only meaningful on an all-day Entry; on a timed one the Entry's
                             // own start time is what the offset counts back from.
                             if (needsAnchor) {

@@ -9,6 +9,12 @@ import androidx.compose.ui.geometry.Size
 import com.tendril.app.ui.theme.CALLOUT_COLORS
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.theme.calloutColours
+import com.tendril.app.ui.theme.editorBody
+import com.tendril.app.ui.theme.editorCode
+import com.tendril.app.ui.theme.editorH1
+import com.tendril.app.ui.theme.editorH2
+import com.tendril.app.ui.theme.editorH3
+import com.tendril.app.ui.theme.editorQuote
 import com.tendril.app.ui.theme.labelColours
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -156,6 +162,7 @@ import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
 import com.tendril.app.domain.BindingRole
+import com.tendril.app.ui.theme.body
 
 @Composable
 fun PageDetailScreen(
@@ -1056,13 +1063,14 @@ private fun BlockPrefix(block: Block, listPosition: Int, viewModel: PageDetailVi
 @Composable
 private fun blockTextStyle(type: BlockType): androidx.compose.ui.text.TextStyle {
     val typography = MaterialTheme.typography
+    // The type PR — the editor's content is not chrome: body 16, H1 24 / H2 20 / H3 16 SemiBold.
     return when (type) {
-        BlockType.HEADING_1 -> typography.headlineMedium
-        BlockType.HEADING_2 -> typography.headlineSmall
-        BlockType.HEADING_3 -> typography.titleLarge
-        BlockType.QUOTE -> typography.bodyLarge.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-        BlockType.CODE -> typography.bodyMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-        else -> typography.bodyLarge
+        BlockType.HEADING_1 -> typography.editorH1
+        BlockType.HEADING_2 -> typography.editorH2
+        BlockType.HEADING_3 -> typography.editorH3
+        BlockType.QUOTE -> typography.editorQuote
+        BlockType.CODE -> typography.editorCode
+        else -> typography.editorBody
     }
 }
 
@@ -1285,7 +1293,7 @@ private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit
                 value = query,
                 onValueChange = { query = it; viewModel.searchLabelCandidates(it) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 singleLine = true,
                 // A bare field was invisible until typed into — on desktop, where no keyboard
                 // rises to say "type here", there was nothing to aim a click at.
@@ -1302,7 +1310,7 @@ private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit
                     Text(
                         candidate.name,
                         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onPick(candidate.name) }).padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.body,
                     )
                 }
             }
@@ -1327,14 +1335,14 @@ private fun MentionPickerDialog(viewModel: PageDetailViewModel, onDismiss: () ->
                 value = query,
                 onValueChange = { query = it; viewModel.searchForMention(it) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
             )
             LazyColumn {
                 items(candidates, key = { it.id }) { candidate ->
                     Text(
                         candidate.title,
                         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onPick(candidate) }).padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.body,
                     )
                 }
             }
@@ -1489,7 +1497,7 @@ private fun RowRecurrenceEditor(entry: Entry?, viewModel: PageDetailViewModel) {
                     BasicTextField(
                         value = countText,
                         onValueChange = { countText = it.filter(Char::isDigit) },
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                         modifier = Modifier.width(48.dp),
                     )
                     Spacer(Modifier.width(12.dp))

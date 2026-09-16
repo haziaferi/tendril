@@ -39,6 +39,7 @@ import com.tendril.app.data.habit.Habit
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
 import java.time.Instant
+import com.tendril.app.ui.theme.body
 
 /**
  * §5.5.1 — Trash for Habits, the third of the three and the last one still missing a *there*.
@@ -119,7 +120,7 @@ fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
                                 },
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(habit.title, style = MaterialTheme.typography.bodyLarge)
+                                Text(habit.title, style = MaterialTheme.typography.body)
                                 Text(
                                     habit.trashSubtitle(),
                                     style = MaterialTheme.typography.bodySmall,

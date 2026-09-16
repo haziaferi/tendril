@@ -114,6 +114,7 @@ import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import com.tendril.app.ui.theme.body
 
 /** §3.1.2 — what a refused `openJournal` says out loud. Names the lock (so the tap does not read
  * as a fault), names what was refused (creating the day, not opening it), and names the way out,
@@ -425,7 +426,7 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
         }
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.bodyLarge)
+            Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.body)
             // 14h·2 — when it was last edited; the kind is the icon's (`pages-phone.md` #1).
             Text(
                 "edited " + relativeTime(page.updatedAt),
@@ -505,7 +506,7 @@ private fun NewOptionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, 
     ) {
         Icon(icon, contentDescription = null)
         Spacer(Modifier.width(12.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(label, style = MaterialTheme.typography.body)
     }
 }
 
@@ -572,7 +573,7 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
                                 onCheckedChange = { checked -> selectedIds = if (checked) selectedIds + page.id else selectedIds - page.id },
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(page.title, style = MaterialTheme.typography.bodyLarge)
+                                Text(page.title, style = MaterialTheme.typography.body)
                                 Text(
                                     trashLocation(core, page),
                                     style = MaterialTheme.typography.bodySmall,

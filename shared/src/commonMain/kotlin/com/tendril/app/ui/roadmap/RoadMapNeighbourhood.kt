@@ -11,8 +11,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -33,6 +31,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.EmptyState
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * 14h·1 — the Road Map's local graph around one page, drawn in the shelf: [RoadMapCanvas] with a
@@ -111,8 +111,7 @@ fun DepthChips(depth: Int, onDepthChange: (Int) -> Unit) {
             ) {
                 Text(
                     "$d",
-                    fontSize = 12.5.sp,
-                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                    style = if (selected) MaterialTheme.typography.label else MaterialTheme.typography.description,
                     color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

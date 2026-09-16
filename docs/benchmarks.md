@@ -911,7 +911,7 @@ measured 5.4 where the model asks 7.6, so "`Palette.kt`, unchanged" is withdrawn
    the fatigue case) — *amended 2026-09-16: the engine solves the text itself into the band
    (~12:1), since the mock derived everything from a seed it never solved and every register
    measured 15–17.5;* in dark mode text below its brightest (halation blooms light text on dark for
-   astigmatic readers); no thin weights — DM Sans 400/500 only — and size through 14d's scale.
+   astigmatic readers); no thin weights — 400/500 only, **amended 2026-09-16 (the type PR): Inter the default at true 400/500/600, headers bold not large, seven styles (`tendril-spec.md` §2.3)** — and size through 14d's scale.
 3. **OLED is a device setting, not a theme.** Astigmatism prefers a lifted dark ground (Ink's ~11 %
    lightness) and softer text; an OLED panel prefers 3–6 % for contrast and battery. No single
    ground serves both, and themes are shared across devices — so *Deeper blacks* is a phone-only

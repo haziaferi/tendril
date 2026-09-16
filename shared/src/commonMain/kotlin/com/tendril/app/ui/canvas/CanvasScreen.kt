@@ -81,6 +81,7 @@ import com.tendril.app.data.page.Page
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.pages.LocalViewOnly
 import kotlin.math.roundToInt
+import com.tendril.app.ui.theme.body
 
 private const val NODE_W = 180f
 private const val NODE_H = 90f
@@ -617,7 +618,7 @@ private fun CanvasPagePickerSheet(viewModel: CanvasViewModel, onDismiss: () -> U
                     Text(
                         candidate.title,
                         modifier = Modifier.fillMaxWidth().clickable { onPick(candidate) }.padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.body,
                     )
                 }
             }

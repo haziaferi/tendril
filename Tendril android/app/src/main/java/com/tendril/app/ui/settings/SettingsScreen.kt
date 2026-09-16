@@ -79,6 +79,7 @@ import com.tendril.app.ui.pages.LocalViewOnly
 import com.tendril.app.ui.settings.AiSettingsSection
 import com.tendril.app.ui.settings.ThemeSection
 import com.tendril.app.ui.theme.ThemeSettings
+import com.tendril.app.ui.theme.body
 
 @Composable
 fun SettingsScreen(
@@ -160,7 +161,7 @@ private fun AppearanceSection(settings: ThemeSettings) {
                 Icon(Icons.Outlined.Palette, contentDescription = null)
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(stringResource(R.string.settings_appearance), style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_appearance), style = MaterialTheme.typography.body)
                     Text(
                         text = stringResource(
                             R.string.settings_appearance_summary_template,
@@ -218,7 +219,7 @@ private fun SyncFolderSection(
             Icon(Icons.Outlined.FolderOpen, contentDescription = null)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_sync_folder), style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_sync_folder), style = MaterialTheme.typography.body)
                 val summary = folderUri?.let {
                     stringResource(R.string.settings_sync_folder_summary_set, manager.displayNameFor(it))
                 } ?: stringResource(R.string.settings_sync_folder_summary_unset)
@@ -282,7 +283,7 @@ private fun AtRestEncryptionSection(secretStore: SecretStore, coordinator: SyncC
             Icon(Icons.Outlined.Lock, contentDescription = null)
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("Sync folder encryption", style = MaterialTheme.typography.bodyLarge)
+                Text("Sync folder encryption", style = MaterialTheme.typography.body)
                 Text(
                     text = if (stored != null) "On — snapshots are encrypted at rest" else "Off — snapshots are plain JSON",
                     style = MaterialTheme.typography.bodySmall,
@@ -524,7 +525,7 @@ private fun PortableBackupSection(
     )
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Text("Full data import/export", style = MaterialTheme.typography.bodyLarge)
+        Text("Full data import/export", style = MaterialTheme.typography.body)
         Text(
             "A portable .tendril package — a one-off file, separate from the continuous sync above",
             style = MaterialTheme.typography.bodySmall,
@@ -537,7 +538,7 @@ private fun PortableBackupSection(
             Button(enabled = !viewOnly, onClick = { restoreLauncher.launch(arrayOf("*/*")) }) { Text("Restore backup") }
         }
         Spacer(Modifier.height(12.dp))
-        Text("Export as Markdown", style = MaterialTheme.typography.bodyLarge)
+        Text("Export as Markdown", style = MaterialTheme.typography.body)
         Text(
             "A zip of .md files any editor can open — for keeping your notes readable without " +
                 "this app. Databases and canvases export their pages, not their layout.",
@@ -550,7 +551,7 @@ private fun PortableBackupSection(
         // to protect.
         Button(onClick = { markdownLauncher.launch("tendril-markdown.zip") }) { Text("Export Markdown") }
         Spacer(Modifier.height(12.dp))
-        Text("Calendar (.ics)", style = MaterialTheme.typography.bodyLarge)
+        Text("Calendar (.ics)", style = MaterialTheme.typography.body)
         Text(
             "Every task and event as an iCalendar file any calendar app opens; importing one brings " +
                 "its events and to-dos in, updating what came from Tendril before.",
@@ -632,7 +633,7 @@ private fun NotionImportLockedSection() {
             Icon(Icons.Outlined.UploadFile, contentDescription = null)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Import from Notion", style = MaterialTheme.typography.bodyLarge)
+                Text("Import from Notion", style = MaterialTheme.typography.body)
                 ViewOnlyReason("Importing a Notion export is")
             }
         }
@@ -657,7 +658,7 @@ private fun AppLockSection(prefs: AppLockPreferences) {
             Icon(Icons.Outlined.Lock, contentDescription = null)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("App Lock", style = MaterialTheme.typography.bodyLarge)
+                Text("App Lock", style = MaterialTheme.typography.body)
                 Text(
                     text = "Require your fingerprint, face, or device PIN to open Tendril",
                     style = MaterialTheme.typography.bodySmall,
@@ -692,7 +693,7 @@ private fun AppLockSection(prefs: AppLockPreferences) {
 @Composable
 private fun TasksHabitsSection(settings: TaskSettings) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Text("Tasks & Habits", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        Text("Tasks & Habits", style = MaterialTheme.typography.body, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         // 14g·3 — the shared section (the desktop pane renders the same one).
         TaskSettingsSection(settings)
     }

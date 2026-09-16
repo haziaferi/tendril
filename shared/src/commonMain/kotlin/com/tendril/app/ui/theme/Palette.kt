@@ -74,10 +74,13 @@ enum class TendrilMode(val key: String, val label: String) {
 }
 
 enum class TendrilTypeface(val key: String, val label: String) {
-    SANS("sans", "Sans"),
+    /** The type PR (2026-09-16): Inter, the default — what Notion looks like on macOS; loaded at true 400/500/600. */
+    INTER("inter", "Inter"),
+    /** DM Sans, the default until the type PR; a stored `sans` keeps it. */
+    SANS("sans", "DM Sans"),
     SERIF("serif", "Serif");
 
     companion object {
-        fun fromKey(key: String?): TendrilTypeface = entries.firstOrNull { it.key == key?.lowercase() } ?: SANS
+        fun fromKey(key: String?): TendrilTypeface = entries.firstOrNull { it.key == key?.lowercase() } ?: INTER
     }
 }

@@ -31,9 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.habit.Habit
@@ -52,6 +50,9 @@ import androidx.compose.runtime.setValue
 import java.time.LocalDate
 import java.time.Period
 import com.tendril.app.ui.track.TrackButton
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.ui.theme.pageTitle
 
 /**
  * B§13.4 14f·1 — the right pane of the Tasks tab on a wide window: a task read in full, with
@@ -73,7 +74,7 @@ internal fun TaskDetailPane(
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = entry.status == EntryStatus.DONE, onCheckedChange = { viewModel.setDone(entry.id, it) })
-            Text(entry.title, fontSize = 24.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Text(entry.title, style = MaterialTheme.typography.pageTitle, modifier = Modifier.weight(1f).padding(start = 4.dp))
         }
         Spacer(Modifier.height(10.dp))
         DetailRow("When", listOfNotNull(entry.startDate?.toString(), entry.startTime?.toString()).joinToString(" · ").ifEmpty { null })
@@ -120,7 +121,7 @@ internal fun TaskDetailPane(
         }
         Spacer(Modifier.height(18.dp))
         HorizontalDivider()
-        Text("Steps", fontSize = 11.sp, letterSpacing = 0.7.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+        Text("Steps".uppercase(), style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
         group.subtasks.forEach { step ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Checkbox(checked = step.status == EntryStatus.DONE, onCheckedChange = { viewModel.setDone(step.id, it) })
@@ -150,7 +151,7 @@ internal fun TaskDetailPane(
 @Composable
 internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onTrash: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 18.dp)) {
-        Text(habit.title, fontSize = 24.sp, fontWeight = FontWeight.Medium)
+        Text(habit.title, style = MaterialTheme.typography.pageTitle)
         Spacer(Modifier.height(10.dp))
         HabitDetailContent(habit, viewModel, showStreak)
         Spacer(Modifier.height(14.dp))
@@ -164,7 +165,7 @@ internal fun EmptyTaskPane() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             "Choose a task or a habit — or press Ctrl+Shift+N for a new task.",
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.body,
             color = MaterialTheme.colorScheme.outlineVariant,
             modifier = Modifier.padding(24.dp),
         )

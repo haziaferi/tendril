@@ -54,6 +54,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+import com.tendril.app.ui.theme.body
 
 private val DAY_WIDTH = 36.dp
 private val LANE_HEIGHT = 40.dp
@@ -172,7 +173,7 @@ internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewMod
                 var origin by remember(row.page.id) { mutableStateOf(Offset.Zero) }
                 val target = rememberUpdatedState(targetDay)
                 Text(
-                    row.page.title, style = MaterialTheme.typography.bodyLarge,
+                    row.page.title, style = MaterialTheme.typography.body,
                     modifier = Modifier.fillMaxWidth()
                         .alpha(if (rowDrag?.row?.page?.id == row.page.id) 0.35f else 1f)
                         .onGloballyPositioned { origin = it.boundsInRoot().topLeft }

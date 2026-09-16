@@ -41,6 +41,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import com.tendril.app.domain.time.relativeTime
 import java.time.Instant
+import com.tendril.app.ui.theme.body
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -79,7 +80,7 @@ internal fun HistorySheet(viewModel: PageDetailViewModel, contentLocked: Boolean
                     LazyColumn {
                         items(revisions, key = { it.id }) { revision ->
                             Column(modifier = Modifier.fillMaxWidth().clickable { open = revision }.padding(vertical = 10.dp)) {
-                                Text(describe(revision), style = MaterialTheme.typography.bodyLarge)
+                                Text(describe(revision), style = MaterialTheme.typography.body)
                                 Text(
                                     revision.title.ifBlank { "Untitled" } + " · " + revision.blockCount + " block(s)",
                                     style = MaterialTheme.typography.bodySmall,

@@ -67,10 +67,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.input.pointer.isCtrlPressed
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
@@ -96,6 +94,8 @@ import com.tendril.app.ui.components.listKeyboard
 import com.tendril.app.ui.nav.ShellTopBar
 import com.tendril.app.ui.nav.WorkbenchNavState
 import com.tendril.app.ui.nav.WorkbenchRoute
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.heading
 
 /**
  * B§13.4 14c — the Pages tab on a wide window: the tree beside the open page, the chrome split
@@ -257,7 +257,7 @@ private fun PagesTreePane(
                 modifier = Modifier.fillMaxWidth().height(TREE_HEADER_HEIGHT).padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Pages", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Text("Pages", style = MaterialTheme.typography.heading, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                 if (!actions.viewOnly) {
                     IconButton(onClick = actions.newPage, modifier = Modifier.size(TREE_ICON_BUTTON)) { Icon(Icons.Filled.Add, contentDescription = "New page", modifier = Modifier.size(18.dp)) }
                 }
@@ -418,7 +418,7 @@ private fun TreeRow(
         }
         val pageIcon = page.icon
         if (pageIcon != null) {
-            Text(pageIcon, fontSize = 14.sp)
+            Text(pageIcon, style = MaterialTheme.typography.body)
         } else {
             Icon(
                 when (page.kind) {
@@ -431,7 +431,7 @@ private fun TreeRow(
                 modifier = Modifier.size(18.dp),
             )
         }
-        Text(keyedTitle(page.title, typed, keyFocused), fontSize = 14.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.body, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (inShelf) {
             Icon(Icons.Outlined.VerticalSplit, contentDescription = "In the shelf", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
         }
@@ -474,7 +474,7 @@ private fun EmptyDetail(paneChrome: PaneChrome, onOpenTrash: () -> Unit) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 "Choose a page from the tree — or press Ctrl+K to find one.",
-                fontSize = 14.sp,
+                style = MaterialTheme.typography.body,
                 color = MaterialTheme.colorScheme.outlineVariant,
                 modifier = Modifier.padding(24.dp),
             )

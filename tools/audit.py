@@ -24,8 +24,10 @@ Checks
                                imported *function* of that name, never a parameter or local
  11. hardcoded colour          `Color(0x…)` or `Color.Gray`/`Blue`/… in shared UI outside the
                                theme package — every colour is a solved token (B§13.8.3, 14g·2)
- 12. off-scale font size       `fontSize = N.sp` in shared UI outside the theme package where N
-                               is not one of the type scale's six sizes (or 24) — 14h·2
+ 12. literal type              a literal `fontSize = N.sp`, `N.sp` or `fontWeight = FontWeight.X`
+                               in shared UI outside the theme package — every text takes one of
+                               the seven styles of `ui/theme/TendrilType.kt` (the type PR,
+                               2026-09-16); the editor's span transformation is content and exempt
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -40,8 +42,8 @@ SKIP_DIRS = {".git", "build", ".gradle", ".idea", ".claude"}
 TEST_PATH = re.compile(r"/(test|androidTest)/")
 HARD_COLOUR = re.compile(r"\bColor\s*\(\s*0x|\bColor\.(?:Gray|LightGray|DarkGray|Blue|Red|Green|Yellow|Magenta|Cyan|Black|White)\b")
 # 14h·2 — `TypeScale.SIZES` in `ui/theme/Type.kt`, kept in step by hand (the audit cannot run Kotlin).
-TYPE_SIZES = {"11", "12.5", "14", "16", "18", "22", "24"}
-FONT_SIZE = re.compile(r"\bfontSize\s*=\s*(\d+(?:\.\d+)?)\.sp\b")
+LITERAL_TYPE = re.compile(r"\bfontSize\s*=\s*\d|\b\d+(?:\.\d+)?\.sp\b|\bfontWeight\s*=\s*FontWeight\.")
+TYPE_EXEMPT = ("SpanVisualTransformation.kt",)
 
 
 def rel(p: str) -> str:
@@ -397,11 +399,11 @@ def main() -> int:
         for i, line in enumerate(src.splitlines(), 1):
             if HARD_COLOUR.search(line):
                 rep.add("hardcoded colour", f"{r}:{i}  {line.strip()[:90]}")
-            # 14h·2 — 27 literal sizes in 11 files had drifted onto eight values inside
-            # 10.5…14 sp (`docs/critiques/small-things-measured.md` #1); the scale is six.
-            for m in FONT_SIZE.finditer(line):
-                if m.group(1) not in TYPE_SIZES:
-                    rep.add("off-scale font size", f"{r}:{i}  {line.strip()[:90]}")
+            # The type PR — 45 literal sizes and 31 weights in 14 files were the same things
+            # spelled differently per file (`docs/critiques/type-vocabulary-mock.md`); every
+            # text takes a style now, and a style's weight is read from the style, never typed.
+            if LITERAL_TYPE.search(line) and not r.endswith(TYPE_EXEMPT) and not line.lstrip().startswith(("//", "*", "/*")):
+                rep.add("literal type", f"{r}:{i}  {line.strip()[:90]}")
 
     return rep.emit()
 

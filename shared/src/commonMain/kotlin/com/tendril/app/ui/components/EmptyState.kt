@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.theme.body
 
 /**
  * The single reusable empty-state composable decided in §2.5 — every list-shaped screen in
@@ -44,7 +45,7 @@ fun EmptyState(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
-        Text(text = message, style = MaterialTheme.typography.bodyLarge)
+        Text(text = message, style = MaterialTheme.typography.body)
         if (ctaLabel != null && onCta != null) {
             Spacer(Modifier.height(16.dp))
             Button(onClick = onCta) {

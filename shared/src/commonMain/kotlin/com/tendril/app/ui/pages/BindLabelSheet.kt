@@ -34,6 +34,7 @@ import com.tendril.app.ui.components.LabelDot
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.theme.labelColours
 import com.tendril.app.data.page.Label
+import com.tendril.app.ui.theme.body
 
 /**
  * §0.6.8 — a database's "Bind a label…". The same type-to-search-or-create the page's label
@@ -90,7 +91,7 @@ internal fun BindLabelSheet(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 singleLine = true,
                 decorationBox = { inner ->
                     if (query.isEmpty()) Text("Label name", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -109,7 +110,7 @@ internal fun BindLabelSheet(
                     ) {
                         LabelDot(labelColours(candidate.color, palette).hue)
                         Spacer(Modifier.width(10.dp))
-                        Text(candidate.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(candidate.name, style = MaterialTheme.typography.body)
                     }
                 }
             }

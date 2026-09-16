@@ -5,106 +5,127 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.dm_sans_italic_variable
 import com.tendril.app.generated.resources.dm_sans_variable
+import com.tendril.app.generated.resources.inter_italic_variable
+import com.tendril.app.generated.resources.inter_variable
 import com.tendril.app.generated.resources.source_serif4_italic_variable
 import com.tendril.app.generated.resources.source_serif4_variable
 import org.jetbrains.compose.resources.Font as ResFont
+import org.jetbrains.compose.resources.FontResource
 
 /**
- * Milestone 3 — Compose Multiplatform resource-based font loading (`Res.font.*`), the only
- * portable equivalent to Android's `R.font` + `FontVariation` weight-axis loading this file used
- * before the move: the multiplatform resources `Font()` API has no `variationSettings`
- * parameter, so each bundled variable font is loaded once (its default instance) plus its
- * dedicated italic file — Compose's own synthetic bold/italic fills in weights the font file
- * itself doesn't expose a named instance for. Visually close, not pixel-identical to the
- * Android build's true variable-weight rendering; revisit if that gap turns out to matter.
+ * The type PR (2026-09-16) — every bundled variable font is loaded at **three true instances**,
+ * 400 / 500 / 600, through the resources `Font()` overload that takes `variationSettings` (both
+ * platforms, Compose Multiplatform 1.12). Until then each family was loaded at its default
+ * instance only and Compose synthesised the rest — which it does for bold, not for Medium, so on
+ * the desktop every `FontWeight.Medium` in the app rendered as Regular and the hierarchy had only
+ * size to lean on. That is the finding behind "headers bold, not large" (`docs/critiques/type-vocabulary-mock.md` #2).
  */
-@Composable
-private fun dmSansFamily(): FontFamily = FontFamily(
-    ResFont(Res.font.dm_sans_variable, weight = FontWeight.Normal),
-    ResFont(Res.font.dm_sans_italic_variable, weight = FontWeight.Normal, style = FontStyle.Italic),
-)
+private val WEIGHTS = listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold)
 
 @Composable
-private fun sourceSerif4Family(): FontFamily = FontFamily(
-    ResFont(Res.font.source_serif4_variable, weight = FontWeight.Normal),
-    ResFont(Res.font.source_serif4_italic_variable, weight = FontWeight.Normal, style = FontStyle.Italic),
+private fun variableFamily(upright: FontResource, italic: FontResource): FontFamily = FontFamily(
+    WEIGHTS.flatMap { w ->
+        val axis = FontVariation.Settings(FontVariation.weight(w.weight))
+        listOf(
+            ResFont(upright, weight = w, style = FontStyle.Normal, variationSettings = axis),
+            ResFont(italic, weight = w, style = FontStyle.Italic, variationSettings = axis),
+        )
+    },
 )
 
 @Composable
 fun fontFamilyFor(typeface: TendrilTypeface): FontFamily = when (typeface) {
-    TendrilTypeface.SANS -> dmSansFamily()
-    TendrilTypeface.SERIF -> sourceSerif4Family()
+    TendrilTypeface.INTER -> variableFamily(Res.font.inter_variable, Res.font.inter_italic_variable)
+    TendrilTypeface.SANS -> variableFamily(Res.font.dm_sans_variable, Res.font.dm_sans_italic_variable)
+    TendrilTypeface.SERIF -> variableFamily(Res.font.source_serif4_variable, Res.font.source_serif4_italic_variable)
 }
 
 /**
- * B§13.7.3 rule 2 (14g·1) — no thin weights: the scale uses DM Sans 400 and 500 only. Anything
- * lighter reads as 400, anything at or over 450 as 500; a site that asks for bold gets its own
- * emphasis, but the *scale* never does. (No base-size control either — density is the size lever.)
+ * B§13.7.3 rule 2, amended by the type PR — three weights and no others: 400, 500, **600**. No
+ * thin (anything lighter reads as 400), no bold (anything at or over 550 reads as SemiBold — the
+ * eye-pass never shouts). The editor's `Bold` span is content, not chrome, and does not pass
+ * through here.
  */
-fun eyePassWeight(weight: FontWeight?): FontWeight =
-    if ((weight ?: FontWeight.Normal).weight >= 450) FontWeight.Medium else FontWeight.Normal
+fun eyePassWeight(weight: FontWeight?): FontWeight {
+    val w = (weight ?: FontWeight.Normal).weight
+    return when {
+        w >= 550 -> FontWeight.SemiBold
+        w >= 450 -> FontWeight.Medium
+        else -> FontWeight.Normal
+    }
+}
 
 /**
- * The scale — B§13.4 14h·2, from `docs/critiques/small-things-measured.md` #1: Material's
- * defaults put nine roles on five sizes, seven of them inside 11…16 sp, with `titleMedium` and
- * `bodyLarge` both at 16. The roles now sit on **six sizes a 1.125 step apart** (titleLarge
- * skipping one), and every literal `fontSize` in shared UI takes one of them (`tools/audit.py`
- * rule 12): 11 · 12.5 · 14 · 16 · 18 · 22, plus 24 for `headlineSmall`. The density profile's
- * scale multiplies as before (B§13.7.3 rule 2 — density is the size lever, not a base size).
+ * The scale — B§13.4 14h·2 put the roles on six sizes a 1.125 step apart; the type PR (2026-09-16,
+ * `docs/critiques/type-vocabulary-mock.md`) steps the titles **down** and lets weight carry the
+ * hierarchy: 11 · 12.5 · 14 · 16 · 18, plus 20 and 24 for the editor's H2 and H1 only. Nothing in
+ * the chrome is above 18. Every text in shared UI takes one of `TendrilType.kt`'s styles — the audit
+ * (`tools/audit.py` rule 12, *literal type*) refuses a literal `fontSize` or `fontWeight`
+ * outside this package. The density profile's scale multiplies as before (density is the size
+ * lever, not a base size).
  */
 object TypeScale {
-    val LABEL_SMALL = 11f
-    val BODY_SMALL = 12.5f
-    val BODY_MEDIUM = 14f
-    val BODY_LARGE = 16f
-    val TITLE_MEDIUM = 18f
-    val TITLE_LARGE = 22f
-    val HEADLINE_SMALL = 24f
-    /** Every size a literal `fontSize` in shared UI may take. */
-    val SIZES: List<Float> = listOf(LABEL_SMALL, BODY_SMALL, BODY_MEDIUM, BODY_LARGE, TITLE_MEDIUM, TITLE_LARGE, HEADLINE_SMALL)
-    /** The line height a size takes — read by [typographyFor], and by the audit's doc. */
+    val CAPTION = 11f
+    val LABEL = 12.5f
+    val BODY = 14f
+    val EDITOR_BODY = 16f
+    val PAGE_TITLE = 18f
+    val EDITOR_H2 = 20f
+    val EDITOR_H1 = 24f
+    val SIZES: List<Float> = listOf(CAPTION, LABEL, BODY, EDITOR_BODY, PAGE_TITLE, EDITOR_H2, EDITOR_H1)
+    /** The line height a size takes — read by [typographyFor] and `TendrilType.kt`. */
     fun lineHeightFor(size: Float): Float = when (size) {
-        LABEL_SMALL -> 16f
-        BODY_SMALL -> 17f
-        BODY_MEDIUM -> 20f
-        BODY_LARGE -> 24f
-        TITLE_MEDIUM -> 24f
-        TITLE_LARGE -> 28f
+        CAPTION -> 16f
+        LABEL -> 17f
+        BODY -> 20f
+        EDITOR_BODY -> 24f
+        PAGE_TITLE -> 24f
+        EDITOR_H2 -> 26f
         else -> 32f
     }
 }
 
 /**
- * One family for both headings and body (§2.3 — deliberately not a display+body split); the
- * sizes are [TypeScale]'s, the display and headline roles above `headlineSmall` keep Material's;
- * every style's weight is clamped by [eyePassWeight].
+ * One family for both headings and body (§2.3 — deliberately not a display+body split). The
+ * Material roles are set so that `TendrilType.kt`'s seven styles read straight off them — every
+ * chip, dialog and Material component then inherits the same vocabulary without being told:
+ *
+ *  - `titleLarge` = pageTitle 18/600 · `titleMedium` = heading 14/600 · `titleSmall` = label
+ *  - `bodyLarge` = the editor's body 16 · `bodyMedium` = body 14 · `bodySmall` = description 12.5
+ *  - `labelLarge` = label 12.5/500 (chips and buttons) · `labelMedium` = caption 11 · `labelSmall` = eyebrow 11/500
+ *  - `headlineSmall` = the editor's H1 24/600 · `headlineMedium` = its H2 20/600
+ *
+ * The display roles keep Material's sizes (nothing draws them).
  */
 @Composable
 fun typographyFor(typeface: TendrilTypeface): Typography {
     val family = fontFamilyFor(typeface)
     val base = Typography()
+    fun style(size: Float, weight: FontWeight = FontWeight.Normal, letterSpacing: Float = 0f) =
+        TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp, letterSpacing = letterSpacing.em)
     fun TextStyle.withFamily() = copy(fontFamily = family, fontWeight = eyePassWeight(fontWeight))
-    fun TextStyle.at(size: Float) = withFamily().copy(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
     return Typography(
         displayLarge = base.displayLarge.withFamily(),
         displayMedium = base.displayMedium.withFamily(),
         displaySmall = base.displaySmall.withFamily(),
         headlineLarge = base.headlineLarge.withFamily(),
-        headlineMedium = base.headlineMedium.withFamily(),
-        headlineSmall = base.headlineSmall.at(TypeScale.HEADLINE_SMALL),
-        titleLarge = base.titleLarge.at(TypeScale.TITLE_LARGE),
-        titleMedium = base.titleMedium.at(TypeScale.TITLE_MEDIUM),
-        titleSmall = base.titleSmall.at(TypeScale.BODY_MEDIUM),
-        bodyLarge = base.bodyLarge.at(TypeScale.BODY_LARGE),
-        bodyMedium = base.bodyMedium.at(TypeScale.BODY_MEDIUM),
-        bodySmall = base.bodySmall.at(TypeScale.BODY_SMALL),
-        labelLarge = base.labelLarge.at(TypeScale.BODY_MEDIUM),
-        labelMedium = base.labelMedium.at(TypeScale.BODY_SMALL),
-        labelSmall = base.labelSmall.at(TypeScale.LABEL_SMALL),
+        headlineMedium = style(TypeScale.EDITOR_H2, FontWeight.SemiBold),
+        headlineSmall = style(TypeScale.EDITOR_H1, FontWeight.SemiBold),
+        titleLarge = style(TypeScale.PAGE_TITLE, FontWeight.SemiBold),
+        titleMedium = style(TypeScale.BODY, FontWeight.SemiBold),
+        titleSmall = style(TypeScale.LABEL, FontWeight.Medium),
+        bodyLarge = style(TypeScale.EDITOR_BODY),
+        bodyMedium = style(TypeScale.BODY),
+        bodySmall = style(TypeScale.LABEL),
+        labelLarge = style(TypeScale.LABEL, FontWeight.Medium),
+        labelMedium = style(TypeScale.CAPTION),
+        labelSmall = style(TypeScale.CAPTION, FontWeight.Medium, letterSpacing = 0.06f),
     )
 }
