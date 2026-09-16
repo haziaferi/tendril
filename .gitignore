@@ -60,3 +60,4 @@ desktop.ini
 # --- Tool session state. --------------------------------------------------------
 # The Semgrep plugin writes its login session here; it is per machine and not content.
 .semgrep/
+__pycache__/
