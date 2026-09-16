@@ -6,6 +6,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.dm_sans_italic_variable
 import com.tendril.app.generated.resources.dm_sans_variable
@@ -49,30 +50,61 @@ fun eyePassWeight(weight: FontWeight?): FontWeight =
     if ((weight ?: FontWeight.Normal).weight >= 450) FontWeight.Medium else FontWeight.Normal
 
 /**
- * One family for both headings and body (§2.3 — deliberately not a display+body split).
- * Sizes/line-heights follow Material3's default type scale; only the family swaps per theme,
- * and every style's weight is clamped by [eyePassWeight].
+ * The scale — B§13.4 14h·2, from `docs/critiques/small-things-measured.md` #1: Material's
+ * defaults put nine roles on five sizes, seven of them inside 11…16 sp, with `titleMedium` and
+ * `bodyLarge` both at 16. The roles now sit on **six sizes a 1.125 step apart** (titleLarge
+ * skipping one), and every literal `fontSize` in shared UI takes one of them (`tools/audit.py`
+ * rule 12): 11 · 12.5 · 14 · 16 · 18 · 22, plus 24 for `headlineSmall`. The density profile's
+ * scale multiplies as before (B§13.7.3 rule 2 — density is the size lever, not a base size).
+ */
+object TypeScale {
+    val LABEL_SMALL = 11f
+    val BODY_SMALL = 12.5f
+    val BODY_MEDIUM = 14f
+    val BODY_LARGE = 16f
+    val TITLE_MEDIUM = 18f
+    val TITLE_LARGE = 22f
+    val HEADLINE_SMALL = 24f
+    /** Every size a literal `fontSize` in shared UI may take. */
+    val SIZES: List<Float> = listOf(LABEL_SMALL, BODY_SMALL, BODY_MEDIUM, BODY_LARGE, TITLE_MEDIUM, TITLE_LARGE, HEADLINE_SMALL)
+    /** The line height a size takes — read by [typographyFor], and by the audit's doc. */
+    fun lineHeightFor(size: Float): Float = when (size) {
+        LABEL_SMALL -> 16f
+        BODY_SMALL -> 17f
+        BODY_MEDIUM -> 20f
+        BODY_LARGE -> 24f
+        TITLE_MEDIUM -> 24f
+        TITLE_LARGE -> 28f
+        else -> 32f
+    }
+}
+
+/**
+ * One family for both headings and body (§2.3 — deliberately not a display+body split); the
+ * sizes are [TypeScale]'s, the display and headline roles above `headlineSmall` keep Material's;
+ * every style's weight is clamped by [eyePassWeight].
  */
 @Composable
 fun typographyFor(typeface: TendrilTypeface): Typography {
     val family = fontFamilyFor(typeface)
     val base = Typography()
     fun TextStyle.withFamily() = copy(fontFamily = family, fontWeight = eyePassWeight(fontWeight))
+    fun TextStyle.at(size: Float) = withFamily().copy(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
     return Typography(
         displayLarge = base.displayLarge.withFamily(),
         displayMedium = base.displayMedium.withFamily(),
         displaySmall = base.displaySmall.withFamily(),
         headlineLarge = base.headlineLarge.withFamily(),
         headlineMedium = base.headlineMedium.withFamily(),
-        headlineSmall = base.headlineSmall.withFamily(),
-        titleLarge = base.titleLarge.withFamily(),
-        titleMedium = base.titleMedium.withFamily(),
-        titleSmall = base.titleSmall.withFamily(),
-        bodyLarge = base.bodyLarge.withFamily(),
-        bodyMedium = base.bodyMedium.withFamily(),
-        bodySmall = base.bodySmall.withFamily(),
-        labelLarge = base.labelLarge.withFamily(),
-        labelMedium = base.labelMedium.withFamily(),
-        labelSmall = base.labelSmall.withFamily(),
+        headlineSmall = base.headlineSmall.at(TypeScale.HEADLINE_SMALL),
+        titleLarge = base.titleLarge.at(TypeScale.TITLE_LARGE),
+        titleMedium = base.titleMedium.at(TypeScale.TITLE_MEDIUM),
+        titleSmall = base.titleSmall.at(TypeScale.BODY_MEDIUM),
+        bodyLarge = base.bodyLarge.at(TypeScale.BODY_LARGE),
+        bodyMedium = base.bodyMedium.at(TypeScale.BODY_MEDIUM),
+        bodySmall = base.bodySmall.at(TypeScale.BODY_SMALL),
+        labelLarge = base.labelLarge.at(TypeScale.BODY_MEDIUM),
+        labelMedium = base.labelMedium.at(TypeScale.BODY_SMALL),
+        labelSmall = base.labelSmall.at(TypeScale.LABEL_SMALL),
     )
 }

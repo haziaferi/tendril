@@ -122,7 +122,7 @@ private fun GroupBlock(group: Pair<ShortcutGroup, List<ShortcutRow>>) {
         Text(group.first.label.uppercase(), fontSize = 11.sp, letterSpacing = 0.7.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
         group.second.forEach { row ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(row.label, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Text(row.label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { row.keys.forEach { KeyChip(it) } }
             }
@@ -138,7 +138,7 @@ private fun KeyChip(text: String) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(text, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

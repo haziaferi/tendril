@@ -29,6 +29,15 @@ class SpanTransformationTest {
         val mentionStyle = styles.first { it.start == 20 }.item
         assertEquals(mention, mentionStyle.color)
         assertEquals(FontWeight.Medium, mentionStyle.fontWeight)
+        assertEquals(Color.Unspecified, mentionStyle.background)
+    }
+
+    @Test
+    fun `a mention carries the given background`() {
+        val tint = Color(0xFFEEEEEE)
+        val styles = spansVisualTransformation(listOf(FormattingSpan(20, 26, SpanStyle.PageMention(7))), null, link = link, mention = mention, mentionBackground = tint)
+            .filter(AnnotatedString("see reading log and Escape")).text.spanStyles
+        assertEquals(tint, styles.first { it.start == 20 }.item.background)
     }
 
     @Test

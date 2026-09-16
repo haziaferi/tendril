@@ -19,6 +19,9 @@ import com.tendril.app.domain.roadmap.RoadMapGraph
 import com.tendril.app.domain.roadmap.filtered
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +45,7 @@ import kotlinx.coroutines.launch
  * few pieces of filter *state*. Node positions/physics are deliberately NOT owned here —
  * they're ephemeral animation state scoped to the Composable's own lifecycle.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class RoadMapViewModel(
     private val pageDao: PageDao,
     private val relationDao: PageRelationDao,
@@ -112,7 +115,16 @@ class RoadMapViewModel(
             if (focus == null || shown.nodes.none { it.id == focus }) shown else shown.around(focus, depth)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RoadMapGraph.EMPTY)
 
-    init { refresh() }
+    init {
+        refresh()
+        // 14h·2 (coloured-elements-function #2) — a new page, a rename, a trash or a relation
+        // redraws the map without ↻; mention edges live in block text, which no page flow
+        // announces, so the button stays for those.
+        viewModelScope.launch {
+            combine(pageDao.observeRootPages(), relationDao.observeAll()) { _, _ -> Unit }
+                .drop(1).debounce(300).collect { refresh() }
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {

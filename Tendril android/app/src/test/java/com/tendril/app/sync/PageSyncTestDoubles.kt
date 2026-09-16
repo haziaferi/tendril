@@ -428,6 +428,7 @@ class FakePageRelationDao(private val store: FakePageStore) : PageRelationDao {
     }
 
     override suspend fun getAll(): List<PageRelation> = store.relations.values.toList()
+    override fun observeAll(): Flow<List<PageRelation>> = flowOf(store.relations.values.toList())
 
     override suspend fun countBetween(pageIdA: Long, pageIdB: Long): Int = store.relations.values.count {
         (it.fromPageId == pageIdA && it.toPageId == pageIdB) || (it.fromPageId == pageIdB && it.toPageId == pageIdA)

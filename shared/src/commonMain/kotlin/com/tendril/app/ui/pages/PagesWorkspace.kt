@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +75,7 @@ import com.tendril.app.ui.nav.PageRoute
 import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.TOP_BAR_HEIGHT
 import com.tendril.app.ui.components.PointerMenu
+import com.tendril.app.ui.components.SubmenuItem
 import com.tendril.app.ui.components.onSecondaryClick
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -139,6 +141,8 @@ fun PagesWorkspace(
             )
         }
         val shelfShown = shelfState.shown(openPageId, journalPageId)
+        // 14h·2 — the tree marks the shelf's page too (a ring and a glyph; the graph marks nothing).
+        val shelfPageId: Long? = when (val c = shelfShown) { is Shelf.Page -> c.pageId; Shelf.Journal -> journalPageId; else -> null }
         val paneChrome = remember(treeState.collapsed, actions) {
             PaneChrome(
                 leading = {
@@ -152,15 +156,9 @@ fun PagesWorkspace(
                 menuItems = { close ->
                     // 14h·1 — the two things that can sit beside this page, as a submenu (the
                     // 14g·3 pattern); on every kind of page, since the chrome is the workspace's.
-                    var beside by remember { mutableStateOf(false) }
-                    DropdownMenuItem(
-                        text = { Text("Show beside") },
-                        trailingIcon = { Icon(Icons.Filled.ArrowRight, contentDescription = null) },
-                        onClick = { beside = true },
-                    )
-                    DropdownMenu(expanded = beside, onDismissRequest = { beside = false }) {
-                        DropdownMenuItem(text = { Text("Road Map around this page") }, onClick = { beside = false; close(); shelfState.open(Shelf.Graph) })
-                        DropdownMenuItem(text = { Text("Today's Journal") }, onClick = { beside = false; close(); shelfState.open(Shelf.Journal) })
+                    SubmenuItem(text = { Text("Show beside") }) { closeBeside ->
+                        DropdownMenuItem(text = { Text("Road Map around this page") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Graph) })
+                        DropdownMenuItem(text = { Text("Today's Journal") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Journal) })
                     }
                     HorizontalDivider()
                     DropdownMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
@@ -175,7 +173,7 @@ fun PagesWorkspace(
             Row(modifier = Modifier.fillMaxSize()) {
                 if (!treeState.collapsed) {
                     PagesTreePane(
-                        vm, actions, treeState, openPageId, onOpenSwitcher,
+                        vm, actions, treeState, openPageId, shelfPageId, onOpenSwitcher,
                         onOpen = navState::showPage,
                         onOpenBeside = { shelfState.open(Shelf.Page(it)) },
                         onShowOnRoadMap = navState::showOnRoadMap,
@@ -222,6 +220,7 @@ private fun PagesTreePane(
     actions: PagesActions,
     treeState: PagesTreeState,
     openPageId: Long?,
+    shelfPageId: Long?,
     onOpenSwitcher: () -> Unit,
     onOpen: (Long) -> Unit,
     onOpenBeside: (Long) -> Unit,
@@ -245,7 +244,7 @@ private fun PagesTreePane(
                 modifier = Modifier.fillMaxWidth().height(TREE_HEADER_HEIGHT).padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Pages", fontSize = 13.5.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Text("Pages", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                 if (!actions.viewOnly) {
                     IconButton(onClick = actions.newPage, modifier = Modifier.size(TREE_ICON_BUTTON)) { Icon(Icons.Filled.Add, contentDescription = "New page", modifier = Modifier.size(18.dp)) }
                 }
@@ -254,7 +253,7 @@ private fun PagesTreePane(
                 IconButton(onClick = treeState::toggle, modifier = Modifier.size(TREE_ICON_BUTTON)) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Hide tree (Ctrl+\\)", modifier = Modifier.size(18.dp)) }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            LabelFilterRow(viewModel, horizontalPadding = 12.dp)
+            LabelFilterRow(viewModel, horizontalPadding = 18.dp, listTopPadding = 6.dp)   // the row's content start: 6 dp margin + 12 dp padding
             // 14e (B§13.6 #8) — the visible rows as one list, in drawn order: a root, then its
             // children while it is expanded. The keyboard walks this list; ↵ shows the page, → and
             // ← expand and collapse a parent (← on a child climbs to its parent).
@@ -292,7 +291,7 @@ private fun PagesTreePane(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
             ) {
                 itemsIndexed(flat, key = { _, it -> it.page.id }) { index, entry ->
-                    TreeRow(entry.page, depth = entry.depth, current = entry.page.id == openPageId, hasChildren = entry.hasChildren, expanded = entry.expanded,
+                    TreeRow(entry.page, depth = entry.depth, current = entry.page.id == openPageId, inShelf = entry.page.id == shelfPageId, hasChildren = entry.hasChildren, expanded = entry.expanded,
                         onClick = { keyState.clickedRow(index); if (windowInfo.keyboardModifiers.isCtrlPressed) onOpenBeside(entry.page.id) else onOpen(entry.page.id) },
                         onToggle = { if (entry.hasChildren) treeState.toggleExpanded(entry.page.id) },
                         onOpenBeside = { onOpenBeside(entry.page.id) },
@@ -336,6 +335,8 @@ private fun TreeRow(
     page: Page,
     depth: Int,
     current: Boolean,
+    /** 14h·2 — the page is in the shelf: a 1 dp ring and the shelf's glyph, no fill. */
+    inShelf: Boolean = false,
     hasChildren: Boolean,
     expanded: Boolean,
     onClick: () -> Unit,
@@ -365,7 +366,13 @@ private fun TreeRow(
             .padding(horizontal = 6.dp)
             .height(TREE_ROW_HEIGHT)
             .background(background, RoundedCornerShape(6.dp))
-            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier)
+            .then(
+                when {
+                    keyFocused -> Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
+                    inShelf -> Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
+                    else -> Modifier
+                }
+            )
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .padding(start = 12.dp + (TREE_INDENT * depth), end = 2.dp),
@@ -397,7 +404,10 @@ private fun TreeRow(
                 modifier = Modifier.size(18.dp),
             )
         }
-        Text(keyedTitle(page.title, typed, keyFocused), fontSize = 13.5.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(keyedTitle(page.title, typed, keyFocused), fontSize = 14.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (inShelf) {
+            Icon(Icons.Outlined.VerticalSplit, contentDescription = "In the shelf", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+        }
         IconButton(
             onClick = { menuAt = null; menuOpen = true },
             modifier = Modifier.size(TREE_MORE_TARGET).alpha(if (hovered || menuOpen) 1f else 0f),
@@ -433,7 +443,7 @@ private fun EmptyDetail(paneChrome: PaneChrome, onOpenTrash: () -> Unit) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 "Choose a page from the tree — or press Ctrl+K to find one.",
-                fontSize = 13.5.sp,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.outlineVariant,
                 modifier = Modifier.padding(24.dp),
             )

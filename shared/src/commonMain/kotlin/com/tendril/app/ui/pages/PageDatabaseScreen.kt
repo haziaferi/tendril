@@ -41,6 +41,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.heightIn
+import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.domain.time.rowsLabel
 import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.ShellTopBar
@@ -347,6 +352,11 @@ private fun TableBody(
     LaunchedEffect(properties, rows) {
         footerSummaries = properties.associate { it.id to viewModel.computeColumnSummary(it, rows) }
     }
+    // 14h·2 — the row at the profile's height (`docs/critiques/small-things-measured.md` #2):
+    // the checkbox and the row menu keep a 28 dp target under a pointer, 48 under a finger.
+    val profile = LocalDensityProfile.current
+    val rowPadding = if (profile.pointer) 4.dp else 10.dp
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides profile.listInteractiveMinDp.dp) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             Row(modifier = Modifier.horizontalScroll(hScroll).padding(top = 8.dp)) {
@@ -367,7 +377,7 @@ private fun TableBody(
         item { HorizontalDivider() }
         items(rows, key = { it.page.id }) { tableRow ->
             Row(
-                modifier = Modifier.horizontalScroll(hScroll).fillMaxWidth().padding(vertical = 10.dp),
+                modifier = Modifier.horizontalScroll(hScroll).fillMaxWidth().heightIn(min = profile.rowHeightDp.dp).padding(vertical = rowPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
@@ -404,16 +414,17 @@ private fun TableBody(
         item {
             Row(modifier = Modifier.horizontalScroll(hScroll).padding(vertical = 6.dp)) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                    Text("${rows.size} row(s)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(rowsLabel(rows.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 properties.forEach { property ->
                     Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                        Text(footerSummaries[property.id] ?: "—", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(footerSummaries[property.id] ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Box(modifier = Modifier.width(40.dp))
             }
         }
+    }
     }
 }
 
@@ -1007,16 +1018,16 @@ private fun typeChangePreview(oldType: PropertyType, newType: PropertyType, coun
     if (count == 0) return "No rows currently have a value here — safe to convert."
     return when {
         oldType == PropertyType.MULTI_SELECT ->
-            "$count row(s) will lose their multi-select tags, collapsed into plain text that won't cleanly re-split."
+            "${rowsLabel(count)} will lose their multi-select tags, collapsed into plain text that won't cleanly re-split."
         oldType == PropertyType.SELECT && newType != PropertyType.MULTI_SELECT ->
-            "$count row(s) will keep their current text but lose the Select option list."
+            "${rowsLabel(count)} will keep their current text but lose the Select option list."
         oldType == PropertyType.DATE ->
-            "$count row(s) will lose their date semantics — the value becomes plain text."
+            "${rowsLabel(count)} will lose their date semantics — the value becomes plain text."
         newType == PropertyType.CHECKBOX ->
-            "$count row(s) will collapse to checked/unchecked — anything other than \"true\" becomes unchecked."
+            "${rowsLabel(count)} will collapse to checked/unchecked — anything other than \"true\" becomes unchecked."
         newType == PropertyType.DATE ->
-            "$count row(s) will keep their text, but it may not parse as a valid date."
-        else -> "$count row(s) currently have a value here — converting may change how it displays."
+            "${rowsLabel(count)} will keep their text, but it may not parse as a valid date."
+        else -> "${rowsLabel(count)} currently have a value here — converting may change how it displays."
     }
 }
 

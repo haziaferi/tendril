@@ -164,7 +164,7 @@ internal fun EmptyTaskPane() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             "Choose a task or a habit — or press Ctrl+Shift+N for a new task.",
-            fontSize = 13.5.sp,
+            fontSize = 14.sp,
             color = MaterialTheme.colorScheme.outlineVariant,
             modifier = Modifier.padding(24.dp),
         )

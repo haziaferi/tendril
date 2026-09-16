@@ -74,6 +74,10 @@ import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.domain.time.relativeTime
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -340,13 +344,23 @@ internal fun ViewOnlyButton(actions: PagesActions, modifier: Modifier = Modifier
 
 /** The label filter chips, when there are labels; a horizontal row on the phone and in the tree alike. */
 @Composable
-internal fun LabelFilterRow(viewModel: PagesViewModel, horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp) {
+internal fun LabelFilterRow(
+    viewModel: PagesViewModel,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp,
+    /** What the list below already pads at its top, so the visible gap under the chips is 12 dp too. */
+    listTopPadding: androidx.compose.ui.unit.Dp = 8.dp,
+) {
     val allLabels by viewModel.allLabels.collectAsState()
     val selectedLabelIds by viewModel.selectedLabelIds.collectAsState()
     val boundLabelIds by viewModel.boundLabelIds.collectAsState()
     if (allLabels.isNotEmpty()) {
+        // 14h·2 — 12 dp of *visible* air above and below (measured 14 / 20 px before: the chip's
+        // invisible 48 dp target inset made the two unequal); under a pointer the chip is its
+        // 32 dp, on Touch it keeps the target. The caller's padding is the row's content start.
+        val profile = LocalDensityProfile.current
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (profile.pointer) 32.dp else 48.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = horizontalPadding, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = horizontalPadding, end = horizontalPadding, top = if (profile.pointer) 12.dp else 4.dp, bottom = (if (profile.pointer) 12.dp else 4.dp) - listTopPadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             allLabels.forEach { label ->
@@ -368,6 +382,7 @@ internal fun LabelFilterRow(viewModel: PagesViewModel, horizontalPadding: androi
                     } else null,
                 )
             }
+        }
         }
     }
 }
@@ -411,12 +426,9 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
         Spacer(Modifier.width(12.dp))
         Column {
             Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.bodyLarge)
+            // 14h·2 — when it was last edited; the kind is the icon's (`pages-phone.md` #1).
             Text(
-                when (page.kind) {
-                    PageKind.DATABASE -> "Database"
-                    PageKind.CANVAS -> "Canvas"
-                    PageKind.PAGE -> "Page"
-                },
+                "edited " + relativeTime(page.updatedAt),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

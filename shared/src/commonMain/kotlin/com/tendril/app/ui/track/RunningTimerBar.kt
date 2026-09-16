@@ -66,13 +66,13 @@ fun RunningTimerBar(core: WorkbenchCore, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             val colour = MaterialTheme.colorScheme.onPrimaryContainer
-            Text("▶", fontSize = 13.sp, color = colour)
-            Text(timer.title ?: "…", fontSize = 13.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Text(formatElapsed(timer.log, timer.now), style = CLOCK, fontSize = 13.sp, color = colour)
+            Text("▶", fontSize = 14.sp, color = colour)
+            Text(timer.title ?: "…", fontSize = 14.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(formatElapsed(timer.log, timer.now), style = CLOCK, fontSize = 14.sp, color = colour)
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 stringResource(Res.string.track_stop),
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
                 color = colour,
                 modifier = Modifier.clickable { scope.launch { core.timeTracker.stop() } }.padding(vertical = 8.dp),
             )
@@ -98,18 +98,18 @@ fun RunningTimerRailFoot(core: WorkbenchCore, modifier: Modifier = Modifier) {
         ) {
             Text(
                 "▶ " + (timer.title ?: "…"),
-                fontSize = 10.5.sp, lineHeight = 14.sp,
+                fontSize = 11.sp, lineHeight = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
                 formatElapsed(timer.log, timer.now),
-                style = CLOCK, fontSize = 10.5.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium,
+                style = CLOCK, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 stringResource(Res.string.track_stop),
-                fontSize = 10.5.sp, lineHeight = 14.sp,
+                fontSize = 11.sp, lineHeight = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable { scope.launch { core.timeTracker.stop() } }.padding(horizontal = 8.dp, vertical = 2.dp),
             )
