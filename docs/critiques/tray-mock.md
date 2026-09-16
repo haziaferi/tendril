@@ -112,7 +112,8 @@ plan.
   notification centre is expected; the balloon's click-through to `onAction` is documented for
   Windows) — the build's walk.
 - Whether `RegisterHotKey` with `MOD_WIN | MOD_ALT` on `T` is free on this machine — the picker's
-  failure line is the fallback.
+  failure line is the fallback. *(It was not: Windows' Game Bar holds Win+Alt+T — the build's
+  default is Win+Alt+N, `tray-function.md` #1; the mock was regenerated with the final list.)*
 - The popup's transparency + undecorated corners on Windows (a `transparent = true` window with
   a rounded `Surface`): Compose Desktop supports it; the shadow's edge is what the walk checks.
 

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package com.tendril.desktopapp
 
@@ -38,6 +38,26 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
+import androidx.compose.ui.window.Notification
+import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.TrayState
+import androidx.compose.ui.window.WindowExceptionHandler
+import androidx.compose.ui.window.WindowExceptionHandlerFactory
+import androidx.compose.ui.window.isTraySupported
+import com.tendril.app.ui.nav.CLOSE_TO_TRAY_KEY
+import com.tendril.app.ui.nav.QUICK_ADD_CHORD_KEY
+import com.tendril.app.ui.nav.QuickAddChord
+import com.tendril.app.ui.nav.WorkbenchDestination
+import com.tendril.app.domain.reminders.Firing
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.time.Instant
+import javax.swing.SwingUtilities
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import com.tendril.app.ui.nav.DEFAULT_WINDOW
@@ -67,6 +87,7 @@ import com.tendril.app.domain.ics.IcsWriter
 import com.tendril.app.ui.nav.WorkbenchScaffold
 import com.tendril.app.ui.trash.EntryTrashSheet
 import com.tendril.app.ui.trash.HabitTrashSheet
+import com.tendril.app.ui.reminders.ReminderSheet
 import com.tendril.app.ui.nav.ShortcutActions
 import com.tendril.app.ui.nav.ShortcutsState
 import com.tendril.app.ui.nav.shortcutFor
@@ -94,12 +115,31 @@ import javax.swing.JFileChooser
  * 14g·1 — the theme is the shared setting (`ThemeSettings`, `prefs.properties`): a register, a
  * mode whose System follows Windows through `isSystemInDarkTheme()`, a typeface; the phone's
  * OLED toggle never applies here.
+ *
+ * B§13.6 #7 — the notification area: an icon with *Open Tendril · Quick add… · Quit*, the
+ * window's × hiding it there (`close_to_tray`, a Settings switch), reminder toasts from
+ * [DesktopReminderScheduler], a global quick-add chord ([GlobalHotkey], `quick_add_chord`)
+ * opening [QuickAddWindow]. §0.10 item 21 — uncaught exceptions are logged to
+ * `~/.tendril-desktop-dev/crash.log` and the window kept (Compose's default handler showed a
+ * dialog and exited; a clipboard hiccup closed the app on 2026-09-16).
  */
 fun main() {
-    val dbFile = File(File(System.getProperty("user.home"), ".tendril-desktop-dev"), "tendril.db")
+    val home = File(System.getProperty("user.home"), ".tendril-desktop-dev")
+    installCrashLog(File(home, "crash.log"))
+    val dbFile = File(home, "tendril.db")
     val database = buildTendrilDatabase(dbFile)
-    val container = DesktopAppContainer(database)
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The tray's state lives outside the composition so the scheduler (no composition) can toast.
+    val trayState = TrayState()
+    val scheduler = DesktopReminderScheduler(database, appScope) { firing ->
+        System.err.println("Tendril: toast ${DesktopReminderScheduler.title(firing)} — ${DesktopReminderScheduler.message(firing)}")
+        SwingUtilities.invokeLater {
+            trayState.sendNotification(Notification(DesktopReminderScheduler.title(firing), DesktopReminderScheduler.message(firing), Notification.Type.Info))
+        }
+    }
+    val container = DesktopAppContainer(database, scheduler)
     val core = container.workbenchCore
+    scheduler.replan()
     // §3.1.1 — index any page without an FTS row (all of them, once, after v16 emptied the table).
     kotlinx.coroutines.runBlocking(Dispatchers.IO) { core.pageContentRepository.healIndex() }
 
@@ -128,8 +168,27 @@ fun main() {
     // 14e — the key table's actions (filled by the scaffold) and the overlay's open flag.
     val shortcutActions = ShortcutActions()
     val shortcuts = ShortcutsState()
+    // B§13.6 #7 — the chord's popup, the chord itself (rebound when Settings changes it), and
+    // whether the main window is showing (the × hides it when `close_to_tray` is on).
+    val quickAdd = QuickAddState()
+    val hotkey = GlobalHotkey { quickAdd.open = true }
+    appScope.launch {
+        core.keyValueStore.observe(QUICK_ADD_CHORD_KEY).map { QuickAddChord.fromKey(it) }.distinctUntilChanged().collect { chord ->
+            hotkey.bind(chord)
+            shortcuts.quickAddChordLabel = chord.label
+        }
+    }
+    val mainVisible = mutableStateOf(true)
 
     application {
+        val showMain = {
+            mainVisible.value = true
+            mainWindow.front()
+        }
+        val exceptionHandlers = remember {
+            WindowExceptionHandlerFactory { _ -> WindowExceptionHandler { e -> logCrash(File(home, "crash.log"), Thread.currentThread(), e) } }
+        }
+        CompositionLocalProvider(LocalWindowExceptionHandlerFactory provides exceptionHandlers) {
         // B§13.4 14a — the window remembers itself: size and position from the last run, kept in
         // the same KeyValueStore as every other device preference (§0.10 item 12), written a
         // moment after the last change rather than on every drag frame. An unpositioned frame
@@ -140,7 +199,12 @@ fun main() {
             position = if (frame.positioned) WindowPosition(frame.x.dp, frame.y.dp) else WindowPosition.PlatformDefault,
         )
         Window(
-            onCloseRequest = ::exitApplication,
+            // The × hides to the notification area when the switch is on and the OS has one (the
+            // tray's *Quit* exits); otherwise it quits, as before.
+            onCloseRequest = {
+                if (core.keyValueStore.getBoolean(CLOSE_TO_TRAY_KEY, true) && isTraySupported) mainVisible.value = false else exitApplication()
+            },
+            visible = mainVisible.value,
             state = windowState,
             title = "Tendril",
             icon = painterResource("tendril_icon.png"),
@@ -174,16 +238,54 @@ fun main() {
             }
             val theme = core.themeSettings.observe()
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
-                App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow)
+                App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
             }
         }
         // B§13.6 #6 — one window per popped-out page, after the main one.
         PopOutWindows(core, popOuts, popOutRegistry, mainWindow)
+        // B§13.6 #7 — the icon, its three verbs, and the toasts' home. A click on a toast (or a
+        // double-click on the icon) is `onAction`: the window comes back on the tab the last
+        // firing belongs to.
+        if (isTraySupported) {
+            val chordLabel = shortcuts.quickAddChordLabel
+            Tray(
+                icon = painterResource("tendril_tray.png"),
+                state = trayState,
+                tooltip = "Tendril",
+                onAction = {
+                    showMain()
+                    scheduler.lastFired?.let { f -> navState.switchTab(if (f.isEvent) WorkbenchDestination.CALENDAR else WorkbenchDestination.TASKS_HABITS) }
+                },
+                menu = {
+                    Item("Open Tendril", onClick = showMain)
+                    // Two spaces, not a `MenuShortcut`: AWT's would register a second accelerator.
+                    Item("Quick add…  $chordLabel", onClick = { quickAdd.open = true })
+                    Separator()
+                    Item("Quit", onClick = { hotkey.unbind(); exitApplication() })
+                },
+            )
+        }
+        QuickAddWindow(core, quickAdd, mainWindow)
+        }
     }
 }
 
+/** §0.10 item 21 — every thread's last resort: append the trace, keep running. */
+private fun installCrashLog(file: File) {
+    Thread.setDefaultUncaughtExceptionHandler { t, e -> logCrash(file, t, e) }
+}
+
+private fun logCrash(file: File, thread: Thread, e: Throwable) {
+    runCatching {
+        val trace = StringWriter().also { e.printStackTrace(PrintWriter(it)) }.toString()
+        file.parentFile?.mkdirs()
+        file.appendText("${Instant.now()} [${thread.name}] $trace\n", Charsets.UTF_8)
+    }
+    System.err.println("Tendril: uncaught ${e::class.simpleName} on ${thread.name} — logged to ${file.path}")
+}
+
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions, hotkey: GlobalHotkey) {
     // B§13.6 #6 — the pop-outs draw at this window's scale: its shorter side, in the platform's dp.
     val mainDensity = androidx.compose.ui.platform.LocalDensity.current
     val mainSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
@@ -211,14 +313,14 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                 treeState = treeState,
                 shortcuts = shortcuts,
                 shortcutActions = shortcutActions,
-                // §0.8 step 6a — the shared Calendar. Google Calendar sync is Play Services and
-                // reminders are AlarmManager, so the settings slot says so and the bell is absent.
+                // §0.8 step 6a — the shared Calendar. Google Calendar sync is Play Services, so the
+                // settings slot says so; B§13.6 #7 — the bell is here now: reminders are toasts.
                 calendarContent = { onOpenPage ->
                     CalendarScreen(
                         core = core,
                         onOpenPage = onOpenPage,
                         settingsSheet = { onDismiss -> DesktopCalendarSettingsSheet(core, onDismiss) },
-                        reminderSheet = null,
+                        reminderSheet = { entry, onDismiss -> ReminderSheet(core = core, entry = entry, onDismiss = onDismiss) },
                     )
                 },
                 // §0.8 step 7a — shared. No alarms here, so no bell. 14g·3 — the switches are the
@@ -231,16 +333,17 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         onQuickAddConsumed = onQuickAddConsumed,
                         showUrgency = core.taskSettings.observeShowUrgency(),
                         showStreaks = core.taskSettings.observeShowHabitStreaks(),
-                        reminderSheet = null,
+                        // B§13.6 #7 — the shared sheet; the desktop fires them as Windows toasts.
+                        reminderSheet = { entry, onDismiss -> ReminderSheet(core = core, entry = entry, onDismiss = onDismiss) },
                         // 14f·1 (§0.10 item 13) — the Trash sheets are shared now, so the desktop
-                        // has its Trash button; the bell stays absent: no alarms here (§12.1).
+                        // has its Trash button.
                         entryTrashSheet = { onDismiss -> EntryTrashSheet(core = core, onDismiss = onDismiss) },
                         habitTrashSheet = { onDismiss -> HabitTrashSheet(core = core, onDismiss = onDismiss) },
                     )
                 },
                 // §0.6.15 — the last stand-in gone: Settings holds the Claude section; 14a moved
                 // the sync folder controls here too, off the top of every screen.
-                settingsContent = { DesktopSettingsScreen(core, syncSection = { SyncBar(orchestrator, folderManager) }, onShowShortcuts = { shortcuts.open = true }) },
+                settingsContent = { DesktopSettingsScreen(core, syncSection = { SyncBar(orchestrator, folderManager) }, onShowShortcuts = { shortcuts.open = true }, hotkeyError = hotkey.error) },
             )
         }
     }
@@ -257,7 +360,7 @@ private fun DesktopCalendarSettingsSheet(core: WorkbenchCore, onDismiss: () -> U
     TendrilSheet(title = "Calendar settings", onDismiss = onDismiss) {
         Column {
             Text(
-                "Google Calendar sync and reminders are Android-only for now — they need Play Services and the alarm manager (tendril-windows-spec.md §1).",
+                "Google Calendar sync is Android-only (Play Services, tendril-windows-spec.md §1). Reminders arrive as Windows notifications from the notification-area icon.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )

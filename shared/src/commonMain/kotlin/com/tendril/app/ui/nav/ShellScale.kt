@@ -20,13 +20,15 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 enum class DensityProfile(val factor: Float, val key: String, val label: String,
     /** 14h·2 — a list row's minimum height (the Table's, measured 58–60 px against the tree's 27:
-     * the `Checkbox`'s 48 dp interactive minimum was the floor, not the padding). */
+     * the `Checkbox`'s 48 dp interactive minimum was the floor, not the padding). The tray PR
+     * (2026-09-16) took Compact 36 → 29 and Comfortable 44 → 36: Notion's one-line rows measured
+     * 30 px beside the tree's 33 at the same window, and the task rows went to one line on it. */
     val rowHeightDp: Int,
     /** The minimum interactive size a control keeps inside a dense list: 28 dp under a pointer, Material's 48 under a finger. */
     val listInteractiveMinDp: Int,
 ) {
-    COMPACT(0.85f, "compact", "Compact", rowHeightDp = 36, listInteractiveMinDp = 28),
-    COMFORTABLE(0.95f, "comfortable", "Comfortable", rowHeightDp = 44, listInteractiveMinDp = 28),
+    COMPACT(0.85f, "compact", "Compact", rowHeightDp = 29, listInteractiveMinDp = 28),
+    COMFORTABLE(0.95f, "comfortable", "Comfortable", rowHeightDp = 36, listInteractiveMinDp = 28),
     TOUCH(1.23f, "touch", "Touch", rowHeightDp = 56, listInteractiveMinDp = 48);
 
     /** "Pointer or finger?" for copy and affordances: *· open* under a pointer, *· tap to open* on Touch (14h·2 #3). */

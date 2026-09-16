@@ -184,7 +184,7 @@ fun WorkbenchScaffold(
                     }
                     is WorkbenchRoute.Review -> ReviewScreen(core = core, onBack = { navState.back() }, onOpenPage = navState::openPage)
                 }
-                if (shortcuts.open) ShortcutsOverlay(onDismiss = { shortcuts.open = false })
+                if (shortcuts.open) ShortcutsOverlay(onDismiss = { shortcuts.open = false }, quickAddChordLabel = shortcuts.quickAddChordLabel)
                 if (switcher.open) {
                     // Over everything, on every route — the switcher is how you get anywhere.
                     QuickSwitcher(

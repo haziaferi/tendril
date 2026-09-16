@@ -65,9 +65,6 @@
     <string name="trash_entries_open">Trash</string>
 
     <!-- Reminders (spec §5.4) -->
-    <string name="reminders_title">Reminders</string>
-    <string name="reminders_empty">No reminders yet</string>
-    <string name="reminders_add">Add reminder</string>
     <string name="reminders_open">Reminders</string>
 
     <!-- Calendar (spec §3.2) -->

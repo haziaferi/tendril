@@ -107,4 +107,6 @@ class ShortcutActions {
 /** The overlay's open flag — the switcher's pattern, so Settings and F1 share one door. */
 class ShortcutsState {
     var open: Boolean by mutableStateOf(false)
+    /** B§13.6 #7 — the global quick-add chord the desktop registered, for the card's static row. */
+    var quickAddChordLabel: String by mutableStateOf(QuickAddChord.DEFAULT.label)
 }

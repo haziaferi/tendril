@@ -111,6 +111,11 @@ import com.tendril.app.generated.resources.taskshabits_undated_toggle
 import com.tendril.app.generated.resources.trash_entries_open
 import com.tendril.app.generated.resources.review_open
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.caption
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -318,7 +323,7 @@ private fun TasksHabitsBody(
                 }
             }
             if (!wide) filters()
-            val lists: @Composable () -> Unit = {
+            val listsInner: @Composable () -> Unit = {
                 when (tab) {
                     TabSelection.TASKS -> TasksList(
                         tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
@@ -328,6 +333,11 @@ private fun TasksHabitsBody(
                     TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions, { reminderTarget = it }, onOpenHabit = openHabit, selectedHabitId = (selected as? Selected.Habit)?.id)
                 }
             }
+            // The tray PR (2026-09-16) — under a pointer the rows are one line at the profile's
+            // height, and the `Checkbox`/`IconButton` 48 dp minimum yields to the list's (14h·2's
+            // rule for the Table): a task row measured 65 px beside Notion's one-line 30.
+            val listMin = LocalDensityProfile.current.listInteractiveMinDp.dp
+            val lists: @Composable () -> Unit = { androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalMinimumInteractiveComponentSize provides listMin) { listsInner() } }
             if (!wide) lists() else Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.width(listWidth.widthDp.dp).fillMaxHeight()) {
                     Column(modifier = Modifier.fillMaxSize()) { filters(); lists() }
@@ -574,7 +584,8 @@ private fun TaskRow(
                 onLongClick = { menuAt = null; menuOpen = true },
             )
             .onSecondaryClick { menuAt = it; menuOpen = true }
-            .padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+            .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp)
+                  else Modifier.padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp))
             .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -586,36 +597,48 @@ private fun TaskRow(
             checked = entry.status == EntryStatus.DONE,
             onCheckedChange = { checked -> viewModel.setDone(entry.id, checked) },
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused), style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.body)
+        // The When, the Deadline and the steps, in that order and in one colour: a deadline
+        // that has passed is information, not an alarm (§0.5.2). Under a pointer the meta sits
+        // at the title's right as a caption (Things' date tag, Notion's list view — the tray PR,
+        // 2026-09-16: one line, Notion's row); under Touch it stays the second line.
+        val subtitle = listOfNotNull(
+            entry.startDate?.toString(),
+            entry.startTime?.toString(),
+            entry.dueDate?.let { "due $it" },
+            if (stepsTotal > 0) "$stepsDone/$stepsTotal steps" else null,
+            loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate),
+        ).joinToString(" · ")
+        val title = keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused)
+        if (pointer) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (subtitle.isNotEmpty()) Text(subtitle, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
             }
-            // The When, the Deadline and the steps, in that order and in one colour: a deadline
-            // that has passed is information, not an alarm (§0.5.2).
-            val subtitle = listOfNotNull(
-                entry.startDate?.toString(),
-                entry.startTime?.toString(),
-                entry.dueDate?.let { "due $it" },
-                if (stepsTotal > 0) "$stepsDone/$stepsTotal steps" else null,
-                loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate),
-            ).joinToString(" · ")
-            if (subtitle.isNotEmpty()) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.body)
+                if (subtitle.isNotEmpty()) {
+                    Text(subtitle, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
+        // Under a pointer the buttons are the find bar's 28 dp with 18 dp glyphs: Material's
+        // 40 dp `IconButton` would hold the one-line row at 44 dp (the tray PR, measured).
+        val button = rowButtonModifier(pointer)
+        val glyph = rowGlyphModifier(pointer)
         // §0.6.5 — start/stop, on steps too: a step is a task.
-        TrackButton(TrackTarget.Entry(entry.id), actions.runningTarget, viewModel::toggleTracking)
+        TrackButton(TrackTarget.Entry(entry.id), actions.runningTarget, viewModel::toggleTracking, modifier = button, iconModifier = glyph)
         // No bell where nothing can fire (desktop, §0.8 step 7a): the sheet's absence is the signal.
         if (!isStep && LocalRemindersAvailable.current) {
-            IconButton(onClick = { onOpenReminders(entry) }) {
-                Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open))
+            IconButton(onClick = { onOpenReminders(entry) }, modifier = button) {
+                Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open), modifier = glyph)
             }
         }
         IconButton(
             onClick = { menuAt = null; menuOpen = true },
-            modifier = Modifier.alpha(if (!pointer || hovered || menuOpen) 1f else 0f),
+            modifier = button.alpha(if (!pointer || hovered || menuOpen) 1f else 0f),
         ) {
-            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
+            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More", modifier = glyph)
         }
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
@@ -735,7 +758,7 @@ private fun HabitRow(
             .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onOpen, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(horizontal = 16.dp) else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -746,27 +769,34 @@ private fun HabitRow(
                 if (checked) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id)
             },
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.body)
-            Text(
-                // §3.3 — time and duration are what distinguish a habit that sits at an
-                // hour from one that just needs doing sometime today, so both show when
-                // set and neither takes room when not.
-                listOfNotNull(
-                    "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
-                    habit.time?.toString(),
-                    habit.duration?.let(::formatHabitDuration),
-                    // §0.6.6 — retired from the row by default; a plain number when asked for.
-                    if (showStreaks && habit.streak > 0) "streak ${habit.streak}" else null,
-                    loggedToday[habit.id]?.let { formatMinutes(it) + " today" },
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // §3.3 — time and duration are what distinguish a habit that sits at an hour from one
+        // that just needs doing sometime today, so both show when set and neither takes room
+        // when not. Under a pointer the line sits at the title's right (one row, the tray PR);
+        // under Touch it is the second line.
+        val meta = listOfNotNull(
+            "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
+            habit.time?.toString(),
+            habit.duration?.let(::formatHabitDuration),
+            // §0.6.6 — retired from the row by default; a plain number when asked for.
+            if (showStreaks && habit.streak > 0) "streak ${habit.streak}" else null,
+            loggedToday[habit.id]?.let { formatMinutes(it) + " today" },
+        ).joinToString(" · ")
+        if (pointer) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(meta, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
+            }
+        } else {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.body)
+                Text(meta, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        TrackButton(TrackTarget.Habit(habit.id), runningTarget, viewModel::toggleTracking)
-        IconButton(onClick = { menuAt = null; menuOpen = true }, modifier = Modifier.alpha(if (!pointer || hovered || menuOpen) 1f else 0f)) {
-            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
+        val button = rowButtonModifier(pointer)
+        val glyph = rowGlyphModifier(pointer)
+        TrackButton(TrackTarget.Habit(habit.id), runningTarget, viewModel::toggleTracking, modifier = button, iconModifier = glyph)
+        IconButton(onClick = { menuAt = null; menuOpen = true }, modifier = button.alpha(if (!pointer || hovered || menuOpen) 1f else 0f)) {
+            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More", modifier = glyph)
         }
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
@@ -842,3 +872,8 @@ private fun MergedList(
         }
     }
 }
+
+/** A row's button under a pointer: the find bar's 28 dp; Material's 40 dp under Touch. */
+private fun rowButtonModifier(pointer: Boolean): Modifier = if (pointer) Modifier.size(28.dp) else Modifier
+/** Its glyph: 18 dp under a pointer, Material's 24 under Touch. */
+private fun rowGlyphModifier(pointer: Boolean): Modifier = if (pointer) Modifier.size(18.dp) else Modifier

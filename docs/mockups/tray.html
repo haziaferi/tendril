@@ -30,7 +30,7 @@ h3{font:600 11px/1 Inter,system-ui;letter-spacing:.06em;text-transform:uppercase
 </style></head><body>
 <h1>The Tray</h1><p class="lead">B§13.6 #7 — the notification-area icon with its menu, desktop reminder toasts, a global quick-add chord and its popup, and the Settings section that owns the two choices. Two of the four frames are the OS's (the menu is a Win32 <code>PopupMenu</code> as AWT draws it, the toast is Windows 11's own card); the popup and the section are Tendril's, on the seven styles. Grounded on Todoist (a global quick add, customisable — Ctrl+Space or Win+Alt+Q on Windows), TickTick (Shift+Alt+A), Things (Ctrl+Space Quick Entry — a small floating window; Enter saves, Esc discards) and Microsoft's notification-area guidance.</p>
 <section class="frame" style="--bg:#1B1D21;--s2:#272A2E;--text:#D8D8DA;--dim:#9B9DA3;--border:#33363B;--accent:#A7AFBE;--soft:#353A44;--err:#E08A80"><h3>A — the icon and its menu (Win32, drawn by the OS) · B — a reminder toast (Windows 11's card)</h3><p class="note">The menu and the toast take the system's font and colours; only their words are Tendril's. Under <code>gradlew run</code> the toast's app line reads <i>Java(TM) Platform SE binary</i> — the packaged exe gives it the app's name.</p><div class="win"><div class="os">
-<div class="menu"><div class="mi">Open Tendril</div><div class="mi">Quick add…<span class="mk">Win+Alt+T</span></div><div class="msep"></div><div class="mi">Quit</div></div>
+<div class="menu"><div class="mi">Open Tendril</div><div class="mi">Quick add…<span class="mk">Win+Alt+N</span></div><div class="msep"></div><div class="mi">Quit</div></div>
 <div class="tb"><span class="tbi">﹀</span><span class="tbi">☁</span><span class="tbi tendril" title="Tendril">✦</span><span class="tbi">🔊</span><span class="tbi">🔋</span><span class="clock">14:20<br>Fri 18 Sep</span></div>
 </div><div class="toast">
 <div class="tapp"><span class="tico">✦</span><span>Tendril</span><span class="tnow">now</span></div>
@@ -44,8 +44,8 @@ h3{font:600 11px/1 Inter,system-ui;letter-spacing:.06em;text-transform:uppercase
 <div class="t-section">Notification area</div>
 <div class="swrow"><div><div class="t-body">Keep Tendril running in the notification area when the window closes</div><div class="t-desc">Reminders arrive as Windows notifications while it runs; the icon may sit behind the taskbar's ^ until you drag it out. Quit from the icon's menu.</div></div><span class="switch on"><i></i></span></div>
 <div class="t-label">Quick add from anywhere</div>
-<div class="chips"><span class="chip on">Win+Alt+T</span><span class="chip">Ctrl+Shift+Space</span><span class="chip">Shift+Alt+A</span><span class="chip">Ctrl+Alt+Space</span></div>
-<div class="t-desc errline">Win+Alt+T is taken by another app — choose another chord.</div>
+<div class="chips"><span class="chip on">Win+Alt+N</span><span class="chip">Win+Alt+Q</span><span class="chip">Ctrl+Shift+Space</span><span class="chip">Shift+Alt+A</span><span class="chip">Ctrl+Alt+Space</span></div>
+<div class="t-desc errline">Win+Alt+N is taken by another app — choose another chord.</div>
 <div class="t-section">Keyboard</div>
 <div class="t-body link">Keyboard shortcuts… (F1)</div>
 </div></div></div></section>
@@ -55,7 +55,7 @@ h3{font:600 11px/1 Inter,system-ui;letter-spacing:.06em;text-transform:uppercase
 <div class="t-section">Notification area</div>
 <div class="swrow"><div><div class="t-body">Keep Tendril running in the notification area when the window closes</div><div class="t-desc">Reminders arrive as Windows notifications while it runs; the icon may sit behind the taskbar's ^ until you drag it out. Quit from the icon's menu.</div></div><span class="switch on"><i></i></span></div>
 <div class="t-label">Quick add from anywhere</div>
-<div class="chips"><span class="chip on">Win+Alt+T</span><span class="chip">Ctrl+Shift+Space</span><span class="chip">Shift+Alt+A</span><span class="chip">Ctrl+Alt+Space</span></div>
+<div class="chips"><span class="chip on">Win+Alt+N</span><span class="chip">Win+Alt+Q</span><span class="chip">Ctrl+Shift+Space</span><span class="chip">Shift+Alt+A</span><span class="chip">Ctrl+Alt+Space</span></div>
 
 <div class="t-section">Keyboard</div>
 <div class="t-body link">Keyboard shortcuts… (F1)</div>

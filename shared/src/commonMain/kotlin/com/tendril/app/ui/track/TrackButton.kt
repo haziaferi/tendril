@@ -35,13 +35,15 @@ fun TrackButton(
     runningTarget: TrackTarget?,
     onToggle: (TrackTarget) -> Unit,
     modifier: Modifier = Modifier,
+    /** The glyph's size where a row draws its buttons small (the desktop's one-line rows). */
+    iconModifier: Modifier = Modifier,
 ) {
     val isRunning = runningTarget == target
     IconButton(onClick = { onToggle(target) }, modifier = modifier) {
         if (isRunning) {
-            Icon(Icons.Filled.Stop, contentDescription = stringResource(Res.string.track_stop), tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Filled.Stop, contentDescription = stringResource(Res.string.track_stop), tint = MaterialTheme.colorScheme.primary, modifier = iconModifier)
         } else {
-            Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(Res.string.track_start))
+            Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(Res.string.track_start), modifier = iconModifier)
         }
     }
 }

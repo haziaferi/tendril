@@ -35,14 +35,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tendril.app.ui.components.TendrilSheet
-import com.tendril.app.AppContainer
-import com.tendril.app.R
+import com.tendril.app.generated.resources.Res
+import com.tendril.app.generated.resources.reminders_add
+import com.tendril.app.generated.resources.reminders_empty
+import com.tendril.app.generated.resources.reminders_title
+import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.reminder.AllDayAnchorPreset
@@ -50,6 +53,8 @@ import com.tendril.app.data.reminder.ReminderOffset
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
@@ -59,20 +64,21 @@ private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a
  * no cap on how many stack, so this is a list you append to rather than one picker.
  *
  * Offered for either kind (§4): a birthday reminder on an EVENT is as valid as a deadline
- * reminder on a TASK.
+ * reminder on a TASK. Shared since B§13.6 #7 (the tray): the desktop fires these as Windows
+ * notifications, so the bell is on both platforms and every write goes through
+ * [com.tendril.app.domain.EntryScheduleCoordinator] alone.
  */
 @Composable
-fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) {
+fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
     val viewModel: ReminderViewModel = viewModel(
         key = "reminders_${entry.id}",
         factory = viewModelFactory {
             initializer {
                 ReminderViewModel(
                     entry.id,
-                    container.database.entryDao(),
-                    container.database.reminderDao(),
-                    container.alarmScheduler,
-                    container.entryScheduleCoordinator,
+                    core.database.entryDao(),
+                    core.database.reminderDao(),
+                    core.entryScheduleCoordinator,
                 )
             }
         }
@@ -94,15 +100,15 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
     // Scrolls: with reminders listed, the offset chips, the all-day anchor row and the
     // Add button together run past the sheet's height, and an unscrollable Column just
     // clips the button off the bottom.
-    TendrilSheet(title = stringResource(R.string.reminders_title), onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+    TendrilSheet(title = stringResource(Res.string.reminders_title), onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
         Column {
-            Text(entry.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(entry.title, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
 
             if (reminders.isEmpty()) {
                 Text(
-                    stringResource(R.string.reminders_empty),
-                    style = MaterialTheme.typography.bodySmall,
+                    stringResource(Res.string.reminders_empty),
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
@@ -115,7 +121,7 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
                             if (needsAnchor) {
                                 Text(
                                     "Fires at ${(reminder.anchorTime ?: LocalTime.MIDNIGHT).format(TIME_FORMAT)}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.description,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
@@ -131,7 +137,7 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
-            Text("Remind me", style = MaterialTheme.typography.labelLarge)
+            Text("Remind me", style = MaterialTheme.typography.label)
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -178,10 +184,10 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
 
             if (needsAnchor) {
                 Spacer(Modifier.height(16.dp))
-                Text("Fires at", style = MaterialTheme.typography.labelLarge)
+                Text("Fires at", style = MaterialTheme.typography.label)
                 Text(
                     "This one has no time of day, so a reminder needs a time to count back from.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -211,7 +217,7 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
                     // rather than letting it read as an unfinished form.
                     Text(
                         "Defaults to midnight if none is picked.",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -228,7 +234,7 @@ fun ReminderSheet(container: AppContainer, entry: Entry, onDismiss: () -> Unit) 
                     viewModel.add(offset, if (needsAnchor) anchor else null)
                 },
                 enabled = !useCustomOffset || (customCount.toIntOrNull() ?: 0) > 0,
-            ) { Text(stringResource(R.string.reminders_add)) }
+            ) { Text(stringResource(Res.string.reminders_add)) }
         }
     }
 

@@ -7,19 +7,11 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.getSystemService
 import com.tendril.app.data.entry.Entry
-import com.tendril.app.data.entry.EntryKind
-import com.tendril.app.data.entry.EntryStatus
-import com.tendril.app.data.entry.RecurrenceRule
-import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderDao
-import com.tendril.app.data.reminder.toDuration
-import com.tendril.app.domain.nextHabitReminderAt
-import com.tendril.app.domain.recurrence.EntryOccurrences
+import com.tendril.app.domain.reminders.FiringKind
+import com.tendril.app.domain.reminders.entryFirings
+import com.tendril.app.domain.reminders.habitFiring
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
@@ -48,84 +40,29 @@ class AlarmScheduler(
      */
     suspend fun rescheduleFor(entry: Entry, exceptions: List<Entry> = emptyList()) {
         cancelAllFor(entry.id)
-        if (entry.deletedAt != null) return
-        // A resolved TASK stops reminding. An EVENT has no status to resolve (§4), so this
-        // gate is deliberately TASK-only rather than folded into one `kind != TASK` bail —
-        // pre-due reminders below apply to either kind.
-        if (entry.kind == EntryKind.TASK && entry.status != EntryStatus.PENDING) return
-        val zone = ZoneId.systemDefault()
-        val startDate = nextOccurrenceDate(entry, exceptions, zone) ?: return
-
-        // Overdue trigger: start_date+start_time, or midnight if no time (§4.1 round 1).
-        // TASK-only (§9.7) — an EVENT has no done/not-done state for it to drive.
-        if (entry.kind == EntryKind.TASK) {
-            val overdueTrigger = LocalDateTime.of(startDate, entry.startTime ?: LocalTime.MIDNIGHT)
-                .atZone(zone).toInstant()
-            scheduleIfFuture(
-                requestCode = overdueRequestCode(entry.id),
-                triggerAt = overdueTrigger,
-                receiver = OverdueAlarmReceiver::class.java,
-                entryId = entry.id,
-            )
-        }
-
-        // Pre-due reminders (§3.2/§5.4) — anchored to the real time if present, else the
-        // reminder's own configured anchor time, else midnight (§4).
-        val anchorTime = entry.startTime ?: LocalTime.MIDNIGHT
-        val baseInstant = LocalDateTime.of(startDate, anchorTime).atZone(zone).toInstant()
-        reminderDao.getForEntry(entry.id).forEach { reminder ->
-            val effectiveBase = if (entry.startTime != null) {
-                baseInstant
-            } else {
-                LocalDateTime.of(startDate, reminder.anchorTime ?: LocalTime.MIDNIGHT).atZone(zone).toInstant()
+        // B§13.6 #7 — the arithmetic (the gates, the next occurrence of a recurring EVENT, the
+        // overdue trigger at start+time or midnight, each reminder at base − offset with the
+        // anchor rule, nothing in the past) is `domain/reminders/ReminderFirings.kt`, shared with
+        // the desktop's scheduler and tested there; this class only owns the request codes and
+        // the receivers.
+        entryFirings(entry, reminderDao.getForEntry(entry.id), exceptions).forEach { firing ->
+            when (firing.kind) {
+                FiringKind.OVERDUE -> scheduleIfFuture(
+                    requestCode = overdueRequestCode(entry.id),
+                    triggerAt = firing.at,
+                    receiver = OverdueAlarmReceiver::class.java,
+                    entryId = entry.id,
+                )
+                FiringKind.REMINDER -> scheduleIfFuture(
+                    requestCode = reminderRequestCode(entry.id, firing.reminderId!!),
+                    triggerAt = firing.at,
+                    receiver = ReminderAlarmReceiver::class.java,
+                    entryId = entry.id,
+                    reminderId = firing.reminderId,
+                )
+                FiringKind.HABIT -> Unit
             }
-            val trigger = effectiveBase.minus(reminder.offset.toDuration())
-            scheduleIfFuture(
-                requestCode = reminderRequestCode(entry.id, reminder.id),
-                triggerAt = trigger,
-                receiver = ReminderAlarmReceiver::class.java,
-                entryId = entry.id,
-                reminderId = reminder.id,
-            )
         }
-    }
-
-    /**
-     * Which occurrence this Entry's alarms should be anchored to.
-     *
-     * For everything except a recurring EVENT this is just `entry.startDate`, unchanged. For a
-     * recurring EVENT it is the first occurrence whose start instant is still in the future
-     * (§4.1). Anchoring to `startDate` meant that once a series' *first* occurrence had passed,
-     * [scheduleIfFuture]'s never-in-the-past guard suppressed every alarm after it — so a
-     * weekly meeting reminded exactly once, ever, while the same series went on recurring in
-     * Tendril's Calendar and in the system calendar it publishes to (§9.11).
-     *
-     * Only the next occurrence is armed, never a run of them: request codes are derived from
-     * `(entryId, reminderId)` alone (§9.7/§9.8 R4), so two occurrences of one series would
-     * collide on the same `PendingIntent` and the second would silently replace the first.
-     * That is the same "only the currently-live occurrence's alarms exist" model §4.1 already
-     * settled on for elastic TASK recurrence, and it leans on the same backstop: §9.7's
-     * reconciliation sweep, which re-arms everything on boot and on app open. A series whose
-     * next occurrence passes while the app is never opened waits for that sweep — bounded and
-     * self-healing, rather than the previous permanent silence.
-     */
-    private fun nextOccurrenceDate(entry: Entry, exceptions: List<Entry>, zone: ZoneId): LocalDate? {
-        val anchor = entry.startDate ?: return null
-        if (entry.kind != EntryKind.EVENT || entry.recurrenceRule !is RecurrenceRule.Fixed) return anchor
-
-        val now = Instant.now()
-        val today = LocalDate.now(zone)
-        val candidates = EntryOccurrences
-            .expand(listOf(entry) + exceptions, today, today.plusDays(EntryOccurrences.DEFAULT_ALARM_HORIZON_DAYS))
-            .filter { it.isFirstDay && (it.entry.id == entry.id || it.entry.originalEntryId == entry.id) }
-
-        // "On or after today" isn't enough on its own: today's occurrence may already have
-        // started, in which case its alarms are all in the past and the series' *next* one is
-        // what should be armed.
-        return candidates.firstOrNull { occurrence ->
-            LocalDateTime.of(occurrence.startDate, occurrence.startTime ?: LocalTime.MIDNIGHT)
-                .atZone(zone).toInstant().isAfter(now)
-        }?.startDate ?: candidates.firstOrNull()?.startDate
     }
 
     /**
@@ -146,7 +83,7 @@ class AlarmScheduler(
     fun rescheduleHabit(habit: com.tendril.app.data.habit.Habit) {
         val requestCode = habitRequestCode(habit.id)
         cancelHabit(habit.id)
-        val triggerAt = nextHabitReminderAt(habit, ZonedDateTime.now()) ?: return
+        val triggerAt = habitFiring(habit, ZonedDateTime.now())?.at ?: return
         scheduleIfFuture(
             requestCode = requestCode,
             triggerAt = triggerAt,

@@ -49,7 +49,7 @@ import com.tendril.app.ui.theme.label
  * (#1) is the one thing this card must not repeat. Esc, the scrim and × close it.
  */
 @Composable
-fun ShortcutsOverlay(onDismiss: () -> Unit) {
+fun ShortcutsOverlay(onDismiss: () -> Unit, quickAddChordLabel: String = QuickAddChord.DEFAULT.label) {
     Popup(properties = PopupProperties(focusable = true), onDismissRequest = onDismiss) {
         BackHandler(enabled = true, onBack = onDismiss)
         BoxWithConstraints(
@@ -75,7 +75,7 @@ fun ShortcutsOverlay(onDismiss: () -> Unit) {
                         Text("Keyboard shortcuts", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
                     }
-                    val groups = shortcutRows()
+                    val groups = shortcutRows(quickAddChordLabel)
                     if (twoColumns) {
                         val half = (groups.size + 1) / 2
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(end = 12.dp)) {
@@ -98,7 +98,7 @@ class ShortcutRow(val label: String, val keys: List<String>)
  * The card's content, from the table: the five tab chords collapse to one row, Back and
  * Forward to one; then the static rows. Public so a test can hold the card to the table.
  */
-fun shortcutRows(): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
+fun shortcutRows(quickAddChordLabel: String = QuickAddChord.DEFAULT.label): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
     val byAction = SHORTCUTS.toMap()
     fun chord(a: ShortcutAction) = byAction.getValue(a).label()
     val navigate = buildList {
@@ -109,7 +109,10 @@ fun shortcutRows(): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
         // B§13.6 #6 — a pop-out window's own key; the table above is the main window's.
         add(ShortcutRow("Close a pop-out window", listOf("Ctrl+W")))
     }
-    val create = listOf(ShortcutAction.NEW_PAGE, ShortcutAction.NEW_TASK, ShortcutAction.JOURNAL_TODAY).map { ShortcutRow(it.label, listOf(chord(it))) }
+    val create = listOf(ShortcutAction.NEW_PAGE, ShortcutAction.NEW_TASK, ShortcutAction.JOURNAL_TODAY).map { ShortcutRow(it.label, listOf(chord(it))) } +
+        // B§13.6 #7 — the global chord is the OS's, registered by the desktop, chosen in Settings;
+        // not in the table above because the window never sees it.
+        ShortcutRow("Quick add from anywhere — set in Settings", listOf(quickAddChordLabel))
     val find = listOf(ShortcutAction.SWITCHER, ShortcutAction.FIND_IN_PAGE, ShortcutAction.SHORTCUTS).map { ShortcutRow(it.label, listOf(chord(it))) }
     val lists = listOf(
         ShortcutRow("Move · open", listOf("↑", "↓", "↵")),

@@ -24,17 +24,19 @@ import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.calendar.CalendarOpensOnSection
 import com.tendril.app.ui.settings.AiSettingsSection
+import com.tendril.app.ui.settings.NotificationAreaSection
+import kotlinx.coroutines.flow.StateFlow
 import com.tendril.app.ui.settings.TaskSettingsSection
 import com.tendril.app.ui.settings.ThemeSection
 
 /**
  * §0.6.15 — the desktop's Settings: the shared Claude section, and a line about the rest. The
- * last `NotAvailableOnDesktop` stand-in went with this; the sync folder, backups and reminders
- * are still Android's. 14g·1 — the theme section is the shared one (`ThemeSection`), OLED-less.
+ * last `NotAvailableOnDesktop` stand-in went with this; backups are still Android's. 14g·1 — the
+ * theme section is the shared one (`ThemeSection`), OLED-less. B§13.6 #7 — *Notification area*.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Unit, onShowShortcuts: () -> Unit, modifier: Modifier = Modifier) {
+fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Unit, onShowShortcuts: () -> Unit, hotkeyError: StateFlow<String?>, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize()) {
         ShellTopBar(title = { Text("Settings") })
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -59,8 +61,11 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             Text("Keyboard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
             androidx.compose.material3.TextButton(onClick = onShowShortcuts, modifier = Modifier.padding(start = 8.dp)) { Text("Keyboard shortcuts… (F1)") }
             HorizontalDivider()
+            // B§13.6 #7 — the × rule and the global quick-add chord; the section is shared code the phone never draws.
+            NotificationAreaSection(core.keyValueStore, hotkeyError)
+            HorizontalDivider()
             Text(
-                "Backups and reminders are Android-only for now.",
+                "Backups are Android-only for now.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp),
