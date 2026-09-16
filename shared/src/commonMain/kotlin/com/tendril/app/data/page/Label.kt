@@ -28,7 +28,7 @@ data class Label(
  * for anywhere. Assigned deterministically from a small fixed palette so re-creating a label
  * with the same name is stable across devices without needing to sync a color choice. */
 object LabelColors {
-    private val palette = listOf(
+    val palette = listOf(
         // Eight is load-bearing: forName indexes by hash modulo size, so the count
         // has to stay put or every existing label re-colours. Within that, these are
         // the smallest moves off the original set that keep every pair at least 12

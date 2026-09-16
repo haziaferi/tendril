@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Color
  * property of the code, walked by `RegisterSolveTest` for every register × mode × OLED.
  */
 data class TendrilPalette(
+    /** The resolved mode — a stored hue (a label, a callout) is lightened on a dark ground, darkened on a light one. */
+    val dark: Boolean,
     val bg: Color,
     /** The lifted ground — hover, the selected row, a sheet: text mixed 4 % (light) / 6 % (dark). */
     val surface2: Color,
@@ -29,10 +31,29 @@ data class TendrilPalette(
     val accentSoftText: Color,
     /** Chrome hairlines: text at 11 % / 14 % — Notion's weight, ~1.3:1, meaningless by design. */
     val border: Color,
-    /** The fan's third hue: the register's second channel solved to ≥ 3.0:1 as a mark, else the
-     *  accent mixed 55 % with the text. Block references, related edges, canvas nodes (14g·2). */
+    /** The fan's third hue as a *mark* (≥ 3.0:1): the register's second channel where it has one,
+     *  else the accent fanned 180°. Block-reference bars, related edges, canvas outlines, the
+     *  current find match (14g·2). */
     val third: Color,
+    /** [third] solved to ≥ 4.6:1 — the third hue where it is read or carries text. */
+    val thirdStrong: Color,
+    /** ≥ 4.6:1 on [thirdStrong]. */
+    val onThird: Color,
+    /** [third] at 14 % / 24 % into the ground — a database's fill until it has its own hue. */
     val thirdSoft: Color,
+    /** The find mark: [third] at up to 30 % / 36 %, backed off until [text] reads on it at 4.6. */
+    val findSoft: Color,
+    /** The calendar's event layer: the accent fanned −120°, ≥ 4.6:1. */
+    val event: Color,
+    val eventSoft: Color,
+    /** The calendar's habit layer: the accent fanned +60°, ≥ 4.6:1. */
+    val habit: Color,
+    val habitSoft: Color,
+    /** The error family — blocked, overdue, delete: a red at 5° solved to ≥ 4.6:1 on the ground
+     *  *and* on [errorSoft]. */
+    val error: Color,
+    val errorSoft: Color,
+    val onError: Color,
 )
 
 /** The stored preference; [SYSTEM] follows the OS and is the default (§2.3's tri-state, closed). */

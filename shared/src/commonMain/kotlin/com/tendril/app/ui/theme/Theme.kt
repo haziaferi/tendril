@@ -11,7 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /** Exposes the raw palette to composables that need tokens Material3's ColorScheme has no slot for
- *  (accentSoft/accentSoftText, textFaint, border, third) — the mapped ColorScheme below covers the rest. */
+ *  (accentSoftText, textFaint, border, the calendar's layers, the find mark) — the mapped ColorScheme
+ *  below covers the rest. */
 val LocalTendrilPalette = staticCompositionLocalOf { paletteFor(Register.INK, dark = false) }
 
 private fun ColorScheme.applyPalette(p: TendrilPalette): ColorScheme = copy(
@@ -21,7 +22,18 @@ private fun ColorScheme.applyPalette(p: TendrilPalette): ColorScheme = copy(
     onPrimaryContainer = p.accentSoftText,
     secondary = p.accentStrong,
     onSecondary = p.onAccent,
-    // `tertiary` stays Material's until 14g·2 maps `third` onto the elements that carry it.
+    // 14g·2 — the calendar reads its layers from the palette, so Material's secondary container
+    // is only ever a lifted ground here; the third hue and the error family are solved tokens.
+    secondaryContainer = p.surface2,
+    onSecondaryContainer = p.text,
+    tertiary = p.third,
+    onTertiary = p.onThird,
+    tertiaryContainer = p.thirdSoft,
+    onTertiaryContainer = p.text,
+    error = p.error,
+    onError = p.onError,
+    errorContainer = p.errorSoft,
+    onErrorContainer = p.error,
     background = p.bg,
     onBackground = p.text,
     surface = p.bg,

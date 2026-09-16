@@ -163,7 +163,7 @@ internal fun WeekGridView(
                             val (shown, more) = visibleAllDay(col.allDay)
                             shown.forEach { o ->
                                 Surface(
-                                    color = if (o.entry.kind == com.tendril.app.data.entry.EntryKind.TASK) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                    color = layerTint(if (o.entry.kind == com.tendril.app.data.entry.EntryKind.TASK) BlockKind.TASK else BlockKind.EVENT),
                                     shape = RoundedCornerShape(4.dp),
                                     modifier = Modifier.fillMaxWidth().clickable { onEdit(o.entry) },
                                 ) {
@@ -215,12 +215,7 @@ internal fun WeekGridView(
                             val y = block.startMinute / 60f * hourPx
                             val h = block.minutes / 60f * hourPx
                             val moving = drag?.block?.key == block.key
-                            val tint = when (block.kind) {
-                                BlockKind.EVENT -> MaterialTheme.colorScheme.secondaryContainer
-                                BlockKind.TASK -> MaterialTheme.colorScheme.primaryContainer
-                                BlockKind.HABIT -> MaterialTheme.colorScheme.tertiaryContainer
-                                BlockKind.OTHER -> MaterialTheme.colorScheme.surfaceVariant
-                            }
+                            val tint = layerTint(block.kind)
                             val entry = block.occurrence?.entry
                             Box(
                                 modifier = Modifier

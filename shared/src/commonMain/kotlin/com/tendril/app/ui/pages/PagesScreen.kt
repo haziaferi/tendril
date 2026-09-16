@@ -8,6 +8,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.theme.labelColours
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -58,6 +60,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -347,10 +350,19 @@ internal fun LabelFilterRow(viewModel: PagesViewModel, horizontalPadding: androi
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             allLabels.forEach { label ->
+                // 14g·2 — the label's stored hue, rendered by the register: the tint at rest, the
+                // hue solid when the filter is on (§3.1.6).
+                val colours = labelColours(label.color, LocalTendrilPalette.current)
+                val selected = label.id in selectedLabelIds
                 FilterChip(
-                    selected = label.id in selectedLabelIds,
+                    selected = selected,
                     onClick = { viewModel.toggleLabelFilter(label.id) },
                     label = { Text(label.name, maxLines = 1) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = colours.tint, labelColor = colours.hue, iconColor = colours.hue,
+                        selectedContainerColor = colours.hue, selectedLabelColor = colours.onHue, selectedLeadingIconColor = colours.onHue,
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = colours.hue.copy(alpha = 0.4f)),
                     leadingIcon = if (label.id in boundLabelIds) {
                         { Icon(Icons.Filled.TableChart, contentDescription = "Brings a database's fields", modifier = Modifier.size(14.dp)) }
                     } else null,

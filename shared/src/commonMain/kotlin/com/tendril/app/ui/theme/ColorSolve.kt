@@ -84,18 +84,53 @@ fun solveText(seed: Srgb, bg: Srgb, target: Double = TEXT_TARGET, floor: Double 
  * A hue solved to [floor] on [bg] by *lightness only* — darkened on a light ground, lightened
  * on a dark one — so Clay stays clay rather than the taupe a mix toward the text produces.
  * A hue already over the floor is left where its register put it.
+ *
+ * 14g·2 — [tintShare]: when set, every candidate must also clear [floor] on *its own tint* (the
+ * candidate mixed [tintShare] into [bg]) — a label's hue read as text on its 14 % chip, the error
+ * red on its soft. The tint moves with the candidate, which is why it cannot be a fixed
+ * `against` list (`docs/critiques/coloured-elements-mock.md` #1, #2: 4.09–4.25 and 4.1–4.3 when
+ * solved on the ground alone).
  */
-fun solveHue(hue: Srgb, bg: Srgb, floor: Double, lighten: Boolean): Srgb {
-    if (contrast(hue, bg) >= floor) return hue
+fun solveHue(hue: Srgb, bg: Srgb, floor: Double, lighten: Boolean, tintShare: Double? = null): Srgb {
+    fun clears(c: Srgb) = contrast(c, bg) >= floor && (tintShare == null || contrast(c, mix(c, bg, tintShare)) >= floor)
+    if (clears(hue)) return hue
     val (h, s, l) = hue.toHsl()
     var last = hue
     for (i in 1..100) {
         val lightness = if (lighten) l + (1 - l) * i / 100.0 else l * (1 - i / 100.0)
         last = hslToSrgb(h, s, lightness)
-        if (contrast(last, bg) >= floor) return last
+        if (clears(last)) return last
     }
     return last
 }
+
+/**
+ * B§13.8.3 (14g·2) — a data hue *fanned* from the accent: the accent's hue turned [degrees],
+ * its saturation raised to at least [DATA_SATURATION] (Ink's grey-blue would otherwise fan to
+ * three greys), then [solveHue]d to [floor]. Event, habit and the third hue come from here, so
+ * every register's data hues sit ≥ 60° from its accent and from each other by construction.
+ */
+fun fanHue(accent: Srgb, degrees: Double, bg: Srgb, floor: Double, lighten: Boolean): Srgb {
+    val (h, s, l) = accent.toHsl()
+    return solveHue(hslToSrgb((h + degrees + 360) % 360, max(s, DATA_SATURATION), l), bg, floor, lighten)
+}
+
+/** The largest share of [hue] over [bg], at most [share], on which [text] still clears [floor] —
+ *  a mark's background (the find tint), which carries the register's own text. */
+fun tintFor(hue: Srgb, bg: Srgb, text: Srgb, share: Double, floor: Double): Srgb {
+    var p = (share * 100).roundToInt()
+    while (p > 0) {
+        val m = mix(hue, bg, p / 100.0)
+        if (contrast(text, m) >= floor) return m
+        p--
+    }
+    return bg
+}
+
+/** What reads on a solid [c]: the ground on a dark theme (white on a light one), then the other,
+ *  then the text — the first to clear [floor]. `onAccent`'s rule, shared by every solid fill. */
+fun onColour(c: Srgb, bg: Srgb, text: Srgb, dark: Boolean, floor: Double = 4.6): Srgb =
+    listOf(if (dark) bg else Srgb.WHITE, if (dark) Srgb.WHITE else bg, text).firstOrNull { contrast(it, c) >= floor } ?: text
 
 /** B§13.7.3 rule 3 — the OLED ground: the register's dark ground at 4 % lightness, hue kept. */
 fun oledGround(bg: Srgb): Srgb {
@@ -106,6 +141,7 @@ fun oledGround(bg: Srgb): Srgb {
 const val TEXT_TARGET = 12.0
 const val TEXT_FLOOR = 9.5
 const val OLED_LIGHTNESS = 0.04
+const val DATA_SATURATION = 0.40
 
 /** Hue in degrees, saturation and lightness 0…1 — the CSS definition. */
 fun Srgb.toHsl(): Triple<Double, Double, Double> {
