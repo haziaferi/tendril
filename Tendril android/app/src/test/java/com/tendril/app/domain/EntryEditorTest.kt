@@ -60,9 +60,9 @@ class EntryEditorTest {
 
     @Test
     fun `switching a task to an event drops the task-only fields`() = runBlocking {
-        val t = task("Call bank", monday).copy(dueDate = monday.plusDays(4), important = true, recurrenceRule = RecurrenceRule.Elastic(Period.ofWeeks(1)))
+        val t = task("Call bank", monday).copy(dueDate = monday.plusDays(4), importance = 3, recurrenceRule = RecurrenceRule.Elastic(Period.ofWeeks(1)))
         val e = editor.save(t.copy(kind = EntryKind.EVENT), at)
-        assertNull(e.status); assertNull(e.dueDate); assertTrue(!e.important)
+        assertNull(e.status); assertNull(e.dueDate); assertEquals(0, e.importance)
         assertNull("a period is not an event's recurrence", e.recurrenceRule)
     }
 

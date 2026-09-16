@@ -176,8 +176,12 @@ class QuickAddParserTest {
 
     @Test
     fun `importance`() {
-        assertTrue(task("Call bank by friday !").important)
-        assertTrue(task("important: renew passport").important)
+        // 14g·3 — `!` is what the flag was (high), `!!` and more urgent, the word high.
+        assertEquals(3, task("Call bank by friday !").importance)
+        assertEquals(4, task("Call bank by friday !!").importance)
+        assertEquals(4, task("Call bank !!!").importance)
+        assertEquals(3, task("important: renew passport").importance)
+        assertEquals(0, task("Call bank by friday").importance)
         assertEquals("Call bank", task("Call bank by friday !").title)
         assertEquals("renew passport", task("important: renew passport").title)
     }

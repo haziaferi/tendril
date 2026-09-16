@@ -24,12 +24,12 @@ import com.tendril.app.notifications.AlarmScheduler
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.CalendarProviderPreferences
-import com.tendril.app.storage.TaskPreferences
 import com.tendril.app.storage.GoogleCalendarPreferences
 import com.tendril.app.storage.AndroidAiKeyStore
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
+import com.tendril.app.storage.migrateLegacyTaskPreferences
 import com.tendril.app.storage.migrateLegacyThemePreferences
 import com.tendril.app.widget.WidgetRefresh
 import kotlinx.coroutines.CoroutineScope
@@ -64,7 +64,6 @@ class AppContainer(context: Context) {
     val alarmScheduler = AlarmScheduler(context, database.reminderDao())
     val calendarProviderPreferences = CalendarProviderPreferences(context)
     /** §0.5.1 — the two disclosure switches for Tasks & Habits; off by default. */
-    val taskPreferences = TaskPreferences(context)
     val calendarProviderSync = CalendarProviderSync(context, database.entryDao(), calendarProviderPreferences)
     val entryScheduleCoordinator =
         AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
@@ -155,6 +154,8 @@ class AppContainer(context: Context) {
     )
 
     /** 14g·1 — the theme lives in the store now; the old file is read once and deleted. */
+    /** 14g·3 — the Tasks switches, shared; the old file migrated once. */
+    val taskSettings = workbenchCore.taskSettings.also { migrateLegacyTaskPreferences(context, workbenchCore.keyValueStore) }
     val themeSettings = workbenchCore.themeSettings.also { settings ->
         migrateLegacyThemePreferences(context, workbenchCore.keyValueStore)
         // §9.6 — Glance widget colours resolve at placement; a colour change pushes a refresh

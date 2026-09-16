@@ -61,4 +61,19 @@ class ThemeSettingsTest {
         assertEquals(FontWeight.Medium, eyePassWeight(FontWeight.Bold))
         assertFalse(eyePassWeight(FontWeight.W100).weight < 400)
     }
+
+    /** 14g·3 — the Tasks switches: on by default for urgency, the old file's explicit choices carried. */
+    @Test
+    fun `task settings default to urgency on and streaks off, and the old file migrates once`() {
+        val store = MapKeyValueStore()
+        val settings = com.tendril.app.ui.settings.TaskSettings(store)
+        assertTrue(settings.showUrgency()); assertFalse(settings.showHabitStreaks())
+        settings.setShowUrgency(false); assertFalse(settings.showUrgency())
+
+        assertEquals(mapOf(com.tendril.app.ui.settings.SHOW_URGENCY_KEY to true, com.tendril.app.ui.settings.SHOW_HABIT_STREAKS_KEY to true), com.tendril.app.ui.settings.legacyTaskKeys(null, true, true))
+        // An old *off* on the flag was its default, not a wish to hide the ladder: not carried.
+        assertEquals(mapOf(com.tendril.app.ui.settings.SHOW_HABIT_STREAKS_KEY to false), com.tendril.app.ui.settings.legacyTaskKeys(null, false, false))
+        assertTrue(com.tendril.app.ui.settings.legacyTaskKeys("false", true, true).isEmpty())
+        assertTrue(com.tendril.app.ui.settings.legacyTaskKeys(null, null, null).isEmpty())
+    }
 }

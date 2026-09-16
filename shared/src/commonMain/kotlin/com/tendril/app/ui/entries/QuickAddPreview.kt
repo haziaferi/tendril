@@ -20,6 +20,7 @@ import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.domain.ParsedEntry
 import com.tendril.app.domain.TokenKind
+import com.tendril.app.domain.urgency.Urgency
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -56,7 +57,7 @@ fun QuickAddPreview(
         parsed.estimate?.let { PreviewChip("for ${durationLabel(it)}") { onDrop(TokenKind.SPAN) } }
         parsed.recurrence?.let { PreviewChip(repeatLabel(it)) { onDrop(TokenKind.REPEAT) } }
         parsed.deadline?.let { PreviewChip("by ${dateLabel(it)}") { onDrop(TokenKind.DEADLINE) } }
-        if (parsed.important) PreviewChip("Important") { onDrop(TokenKind.IMPORTANT) }
+        if (parsed.importance > 0) PreviewChip(Urgency.fromLevel(parsed.importance).label) { onDrop(TokenKind.IMPORTANT) }
     }
 }
 

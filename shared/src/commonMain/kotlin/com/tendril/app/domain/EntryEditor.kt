@@ -90,7 +90,7 @@ class EntryEditor(
             startTime = if (startDate == null) null else startTime,
         )
         EntryKind.EVENT -> copy(
-            status = null, dueDate = null, estimate = null, important = false, parentEntryId = null,
+            status = null, dueDate = null, estimate = null, importance = 0, parentEntryId = null,
             recurrenceRule = recurrenceRule?.takeIf { it is RecurrenceRule.Fixed },
             endDate = if (endTime != null || endDate != null) (endDate ?: startDate) else null,
             startTime = if (startDate == null) null else startTime,

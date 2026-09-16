@@ -181,8 +181,8 @@ fun CalendarScreen(
     /** §0.8 step 6d — a database row's date opens its page. */
     onOpenPage: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    /** §0.6.4 — the Settings switch that shows the importance flag; desktop has no Settings yet. */
-    showImportant: Boolean = false,
+    /** 14g·3 — the Settings switch that shows the urgency ladder (on by default, both platforms). */
+    showUrgency: Boolean = true,
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
@@ -232,7 +232,7 @@ fun CalendarScreen(
     editTarget?.let { entry ->
         EntryEditSheet(
             entry = entry,
-            showImportant = showImportant,
+            showUrgency = showUrgency,
             onSave = { viewModel.save(it); editTarget = null },
             onDelete = { viewModel.trash(entry.id); editTarget = null },
             onDismiss = { editTarget = null },
@@ -377,6 +377,7 @@ fun CalendarScreen(
                     onSetDone = viewModel::setDone,
                     onOpenReminders = if (reminderSheet != null) { { reminderTarget = it } } else null,
                     onEdit = { editTarget = it },
+                    showUrgency = showUrgency,
                 )
                 CalendarView.WEEK -> if (wide) WeekGridView(
                     weekStart = weekStart,
@@ -386,6 +387,7 @@ fun CalendarScreen(
                             .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
                     },
                     onEdit = { editTarget = it },
+                    showUrgency = showUrgency,
                     onMove = { occurrence, toDate, time ->
                         val entry = occurrence.entry
                         if (entry.recurrenceRule != null && entry.originalEntryId == null) pendingGridMove = PendingGridMove(occurrence, toDate, time)
@@ -447,6 +449,7 @@ private fun DayView(
     onSetDone: (Long, Boolean) -> Unit,
     onOpenReminders: ((Entry) -> Unit)?,
     onEdit: (Entry) -> Unit,
+    showUrgency: Boolean = true,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -518,6 +521,7 @@ private fun DayView(
                 onEdit = onEdit,
                 onPlace = onPlace,
                 onMoveBlock = onMoveBlock,
+                showUrgency = showUrgency,
             )
         } else if (occurrences.isEmpty() && extras.isEmpty()) {
             EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing scheduled", modifier = Modifier.fillMaxSize())

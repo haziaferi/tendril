@@ -226,3 +226,33 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
         connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `blockedByPropertyId` INTEGER")
     }
 }
+
+/** §9.10 / §0.6.4 (B§13.8.1) — v19 → v20. `entries.important` (a flag) becomes `importance`
+ * (the ladder, 0–4), a set flag landing on 3 (high). Android's platform SQLite predates
+ * `DROP COLUMN`, so the table is rebuilt the classic way: ids are copied, so `time_logs`,
+ * `entry_completions` and `reminders` keep their entries; the unique `uid` index is recreated. */
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `entries_new` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uid` TEXT NOT NULL, " +
+                "`title` TEXT NOT NULL, `kind` TEXT NOT NULL, `startDate` INTEGER, `startTime` INTEGER, `endDate` INTEGER, " +
+                "`endTime` INTEGER, `recurrenceRule` TEXT, `originalEntryId` INTEGER, `originalOccurrenceDate` INTEGER, " +
+                "`isExceptionSkip` INTEGER, `status` TEXT, `dueDate` INTEGER, `parentEntryId` INTEGER, `estimate` INTEGER, " +
+                "`importance` INTEGER NOT NULL, `sourceRowId` INTEGER, `deletedAt` INTEGER, `source` TEXT NOT NULL, " +
+                "`googleEventId` TEXT, `providerEventId` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)"
+        )
+        connection.execSQL(
+            "INSERT INTO `entries_new` (`id`, `uid`, `title`, `kind`, `startDate`, `startTime`, `endDate`, `endTime`, " +
+                "`recurrenceRule`, `originalEntryId`, `originalOccurrenceDate`, `isExceptionSkip`, `status`, `dueDate`, " +
+                "`parentEntryId`, `estimate`, `importance`, `sourceRowId`, `deletedAt`, `source`, `googleEventId`, " +
+                "`providerEventId`, `createdAt`, `updatedAt`) " +
+                "SELECT `id`, `uid`, `title`, `kind`, `startDate`, `startTime`, `endDate`, `endTime`, `recurrenceRule`, " +
+                "`originalEntryId`, `originalOccurrenceDate`, `isExceptionSkip`, `status`, `dueDate`, `parentEntryId`, " +
+                "`estimate`, CASE `important` WHEN 1 THEN 3 ELSE 0 END, `sourceRowId`, `deletedAt`, `source`, " +
+                "`googleEventId`, `providerEventId`, `createdAt`, `updatedAt` FROM `entries`"
+        )
+        connection.execSQL("DROP TABLE `entries`")
+        connection.execSQL("ALTER TABLE `entries_new` RENAME TO `entries`")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_entries_uid` ON `entries` (`uid`)")
+    }
+}

@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import com.tendril.app.domain.urgency.Urgency
+import com.tendril.app.ui.components.UrgencyPicker
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,12 +56,12 @@ import java.time.LocalTime
  * shape its kind allows: flipping Task ↔ Event hides the fields the other kind cannot hold, and
  * `EntryEditor.save` enforces the same on the way to the row. Edits to a recurring entry apply
  * to the whole series — moving one occurrence alone is the drag's question, not this sheet's.
- * [showImportant] is the Settings switch (§0.6.4): the flag is shown only when it is on.
+ * [showUrgency] is the Settings switch (14g·3): the ladder's picker is shown only when it is on.
  */
 @Composable
 fun EntryEditSheet(
     entry: Entry,
-    showImportant: Boolean,
+    showUrgency: Boolean,
     onSave: (Entry) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -72,7 +74,7 @@ fun EntryEditSheet(
     var endTime by remember { mutableStateOf(entry.endTime) }
     var deadline by remember { mutableStateOf(entry.dueDate) }
     var estimateMinutes by remember { mutableStateOf(entry.estimate?.toMinutes()?.toString().orEmpty()) }
-    var important by remember { mutableStateOf(entry.important) }
+    var importance by remember { mutableStateOf(entry.importance) }
     var repeat by remember { mutableStateOf(RepeatChoice.of(entry.recurrenceRule)) }
     // A stored rule richer than the presets (`every weekday`, `every 2 weeks`) is kept as it is
     // unless the person picks a preset; the chips only show the nearest one.
@@ -149,8 +151,8 @@ fun EntryEditSheet(
                     singleLine = true,
                     modifier = Modifier.width(200.dp).padding(top = 8.dp),
                 )
-                if (showImportant) {
-                    LabelledRow("Important") { Switch(checked = important, onCheckedChange = { important = it }) }
+                if (showUrgency) {
+                    LabelledRow("Urgency") { UrgencyPicker(Urgency.fromLevel(importance), onPick = { importance = it.level }) }
                 }
             }
 
@@ -186,7 +188,7 @@ fun EntryEditSheet(
                                     },
                                     dueDate = if (kind == EntryKind.TASK) deadline else null,
                                     estimate = if (kind == EntryKind.TASK) estimateMinutes.toLongOrNull()?.takeIf { it > 0 }?.let(Duration::ofMinutes) else null,
-                                    important = kind == EntryKind.TASK && important,
+                                    importance = if (kind == EntryKind.TASK) importance else 0,
                                 ),
                             )
                         },

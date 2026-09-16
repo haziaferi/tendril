@@ -31,10 +31,10 @@ class IcsRoundTripTest {
     private fun entry(
         title: String, kind: EntryKind, date: LocalDate?, time: LocalTime? = null, endTime: LocalTime? = null, endDate: LocalDate? = null,
         rule: RecurrenceRule? = null, due: LocalDate? = null, status: EntryStatus? = if (kind == EntryKind.TASK) EntryStatus.PENDING else null,
-        important: Boolean = false, estimate: Duration? = null, id: Long = 0, uid: String = java.util.UUID.randomUUID().toString(),
+        importance: Int = 0, estimate: Duration? = null, id: Long = 0, uid: String = java.util.UUID.randomUUID().toString(),
     ) = Entry(
         id = id, uid = uid, title = title, kind = kind, startDate = date, startTime = time, endDate = endDate, endTime = endTime,
-        recurrenceRule = rule, status = status, dueDate = due, important = important, estimate = estimate, createdAt = at, updatedAt = at,
+        recurrenceRule = rule, status = status, dueDate = due, importance = importance, estimate = estimate, createdAt = at, updatedAt = at,
     )
 
     private fun importInto(dao: FakeEntryDao, text: String) = runBlocking {
@@ -50,7 +50,7 @@ class IcsRoundTripTest {
             entry("Dentist, upstairs; bring card", EntryKind.EVENT, monday, LocalTime.of(15, 0), LocalTime.of(15, 45)),
             entry("Holiday", EntryKind.EVENT, monday, endDate = monday.plusDays(2)),
             entry("Yoga", EntryKind.EVENT, monday, LocalTime.of(7, 0), LocalTime.of(8, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY;BYDAY=MO")),
-            entry("Call bank", EntryKind.TASK, monday, due = monday.plusDays(4), important = true, estimate = Duration.ofMinutes(30)),
+            entry("Call bank", EntryKind.TASK, monday, due = monday.plusDays(4), importance = 4, estimate = Duration.ofMinutes(30)),
             entry("Bins", EntryKind.TASK, monday, rule = RecurrenceRule.Elastic(Period.ofWeeks(2)), status = EntryStatus.DONE),
             entry("Someday", EntryKind.TASK, null),
         )

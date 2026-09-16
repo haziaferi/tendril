@@ -32,7 +32,8 @@ data class ParsedEntry(
     val deadline: LocalDate? = null,
     /** TASK only — `for 45m` on a task is how long it takes, not a span. */
     val estimate: Duration? = null,
-    val important: Boolean = false,
+    /** TASK only — the ladder's set level (14g·3): `!` high, `!!` or more urgent, the word *important* high. */
+    val importance: Int = 0,
     val spans: List<TokenSpan> = emptyList(),
 )
 
@@ -136,8 +137,11 @@ object QuickAddParser {
             spans += TokenSpan(m.range.first, m.range.last + 1, TokenKind.KIND)
         }
 
-        val important = if (TokenKind.IMPORTANT in ignore) false else
-            IMPORTANT.find(line)?.let { m -> spans += TokenSpan(m.range.first, m.range.last + 1, TokenKind.IMPORTANT); true } ?: false
+        val importance = if (TokenKind.IMPORTANT in ignore) 0 else
+            IMPORTANT.find(line)?.let { m ->
+                spans += TokenSpan(m.range.first, m.range.last + 1, TokenKind.IMPORTANT)
+                if (m.value.count { it == '!' } >= 2) 4 else 3
+            } ?: 0
 
         // Recurrence — read before dates so its weekday is not also a date.
         var repeat: Repeat? = null
@@ -218,7 +222,7 @@ object QuickAddParser {
             recurrence = repeat?.let { if (kind == EntryKind.EVENT) it.fixed() else it.elastic() },
             deadline = if (kind == EntryKind.TASK) deadline else null,
             estimate = estimate,
-            important = important,
+            importance = importance,
             spans = spans.sortedBy { it.start },
         )
     }
@@ -319,7 +323,7 @@ fun ParsedEntry.toEntry(fallbackDate: LocalDate?, now: java.time.Instant): com.t
         status = if (kind == EntryKind.TASK) com.tendril.app.data.entry.EntryStatus.PENDING else null,
         dueDate = if (kind == EntryKind.TASK) deadline else null,
         estimate = if (kind == EntryKind.TASK) estimate else null,
-        important = if (kind == EntryKind.TASK) important else false,
+        importance = if (kind == EntryKind.TASK) importance else 0,
         createdAt = now,
         updatedAt = now,
     )

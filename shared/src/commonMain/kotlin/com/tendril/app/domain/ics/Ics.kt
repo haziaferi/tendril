@@ -58,7 +58,7 @@ object IcsWriter {
                 entry.dueDate?.let { out.line(dateProperty("DUE", it, null, zone)) }
                 out.line("STATUS:" + if (entry.status == EntryStatus.DONE) "COMPLETED" else "NEEDS-ACTION")
                 if (entry.status == EntryStatus.DONE) out.line("PERCENT-COMPLETE:100")
-                if (entry.important) out.line("PRIORITY:1")
+                icsPriority(entry.importance)?.let { out.line("PRIORITY:$it") }
                 entry.estimate?.let { out.line("DURATION:" + isoDuration(it)) }
             }
             when (val rule = entry.recurrenceRule) {
@@ -132,6 +132,8 @@ data class IcsComponent(
     val exdates: List<LocalDate>,
     /** Tendril's own export names an override's base here; other producers share the UID. */
     val relatedTo: String? = null,
+    /** RFC 5545 PRIORITY 1–9 (1 highest), null when absent or 0. */
+    val priority: Int? = null,
 )
 
 object IcsReader {
@@ -173,6 +175,7 @@ object IcsReader {
                             recurrenceId = p["RECURRENCE-ID"]?.let { (pp, v) -> parseDate(pp, v, zone).first },
                             exdates = exdates.toList(),
                             relatedTo = p["RELATED-TO"]?.second,
+                            priority = p["PRIORITY"]?.second?.trim()?.toIntOrNull()?.takeIf { it in 1..9 },
                         )
                     }
                     props = null; kind = null
@@ -228,3 +231,9 @@ object IcsReader {
 
     private fun unescape(text: String): String = text.replace("\\n", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
 }
+
+/** 14g·3 — the ladder as the nine RFC 5545 priorities: urgent 1 · high 3 · mid 5 · low 7; none is absent. */
+fun icsPriority(importance: Int): Int? = when (importance.coerceIn(0, 4)) { 4 -> 1; 3 -> 3; 2 -> 5; 1 -> 7; else -> null }
+
+/** The inverse, for any producer: 1–2 → urgent, 3–4 → high, 5–6 → mid, 7–9 → low. */
+fun importanceOfIcsPriority(priority: Int?): Int = when (priority) { null, 0 -> 0; 1, 2 -> 4; 3, 4 -> 3; 5, 6 -> 2; else -> 1 }

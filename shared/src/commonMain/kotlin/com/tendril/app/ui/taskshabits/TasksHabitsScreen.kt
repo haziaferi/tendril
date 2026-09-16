@@ -38,6 +38,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
@@ -54,14 +55,17 @@ import com.tendril.app.ui.nav.LocalDensityProfile
 import com.tendril.app.ui.nav.LocalShellLayout
 import com.tendril.app.ui.nav.ShellLayout
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.filled.ArrowRight
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Checkbox
 import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.domain.urgency.Urgency
+import com.tendril.app.domain.urgency.urgencyOf
+import com.tendril.app.ui.components.UrgencyDot
+import com.tendril.app.ui.components.UrgencyStripe
 import com.tendril.app.domain.track.formatMinutes
 import com.tendril.app.domain.plan.loggedSegment
 import com.tendril.app.ui.track.TrackButton
@@ -127,14 +131,14 @@ private enum class TimeFilter { TODAY, WEEK, MONTH }
 /**
  * §3.3, in `shared/` since §0.8 step 7a (as the Calendar since 6a). The Android-only surfaces
  * arrive as slots: [reminderSheet] (§5.4, alarms; null hides the bell), and the two Trash sheets
- * (§5.5.1; null hides the Trash button — desktop's case until they move too). [showImportance]
- * and [showStreaks] are the Settings switches (§0.6.4, §0.6.6); desktop has no Settings yet.
+ * (§5.5.1; null hides the Trash button — desktop's case until they move too). [showUrgency]
+ * and [showStreaks] are the Settings switches (14g·3, §0.6.6), shared on both platforms.
  */
 @Composable
 fun TasksHabitsScreen(
     core: WorkbenchCore,
     onOpenReview: () -> Unit,
-    showImportance: Boolean,
+    showUrgency: Boolean,
     showStreaks: Boolean,
     reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
     entryTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
@@ -164,7 +168,7 @@ fun TasksHabitsScreen(
     var filter by remember { mutableStateOf(TimeFilter.TODAY) }
     androidx.compose.runtime.CompositionLocalProvider(LocalRemindersAvailable provides (reminderSheet != null)) {
         TasksHabitsBody(
-            viewModel, core, onOpenReview, showImportance, showStreaks, reminderSheet, entryTrashSheet, habitTrashSheet, modifier,
+            viewModel, core, onOpenReview, showUrgency, showStreaks, reminderSheet, entryTrashSheet, habitTrashSheet, modifier,
             tab, { tab = it }, filter, { filter = it },
             quickAddRequested, onQuickAddConsumed,
         )
@@ -179,7 +183,7 @@ private fun TasksHabitsBody(
     viewModel: TasksHabitsViewModel,
     core: WorkbenchCore,
     onOpenReview: () -> Unit,
-    showImportance: Boolean,
+    showUrgency: Boolean,
     showStreaks: Boolean,
     reminderSheet: (@Composable (entry: Entry, onDismiss: () -> Unit) -> Unit)?,
     entryTrashSheet: (@Composable (onDismiss: () -> Unit) -> Unit)?,
@@ -217,12 +221,12 @@ private fun TasksHabitsBody(
     // than leaving a task beside the Habits list.
     LaunchedEffect(tab) { selected = null }
     val listWidth = remember { PaneWidthState(core.keyValueStore, TASKS_LIST_WIDTH_KEY, 420, 300, 600) }
-    val rowActions = remember(showImportance, runningTarget, loggedToday, wide, selected) {
+    val rowActions = remember(showUrgency, runningTarget, loggedToday, wide, selected) {
         TaskRowActions(
             onPostpone = { postponeTarget = it },
             onAddSubtask = { subtaskParent = it },
             onSetDeadline = { deadlineTarget = it },
-            showImportance = showImportance,
+            showUrgency = showUrgency,
             runningTarget = runningTarget,
             loggedToday = loggedToday.first,
             onSelect = if (wide) ({ selected = Selected.Task(it.id) }) else null,
@@ -357,7 +361,7 @@ private fun TasksHabitsBody(
         } else {
             AddTaskDialog(
                 onDismiss = { showAddDialog = false },
-                onAdd = { title, date, time, repeat, deadline, estimate, important -> viewModel.addTask(title, date, time, repeat, deadline, estimate = estimate, important = important) },
+                onAdd = { title, date, time, repeat, deadline, estimate, importance -> viewModel.addTask(title, date, time, repeat, deadline, estimate = estimate, importance = importance) },
             )
         }
     }
@@ -499,8 +503,8 @@ internal class TaskRowActions(
     val onPostpone: (Entry) -> Unit,
     val onAddSubtask: (Entry) -> Unit,
     val onSetDeadline: (Entry) -> Unit,
-    /** §0.5.1 — the flag is drawn, and offered, only while Settings says so. */
-    val showImportance: Boolean,
+    /** 14g·3 — the ladder's stripe is drawn, and the level offered, while Settings says so (on by default). */
+    val showUrgency: Boolean,
     /** §0.6.5 — what runs now, so each row knows whether it draws ▶ or ■. */
     val runningTarget: TrackTarget?,
     /** §0.8 step 7d — minutes logged today by entry id; absent means nothing to say. */
@@ -568,19 +572,20 @@ private fun TaskRow(
                 onLongClick = { menuAt = null; menuOpen = true },
             )
             .onSecondaryClick { menuAt = it; menuOpen = true }
-            .padding(start = if (isStep) 40.dp else 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+            .padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
             .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // B§13.8.1 (14g·3) — urgency is the row's colour: a 4 dp stripe, the level the greater of
+        // what was set and the deadline's pressure today; none draws nothing but keeps the width.
+        if (actions.showUrgency) UrgencyStripe(urgencyOf(entry, LocalDate.now()), height = 22.dp) else Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(4.dp))
         Checkbox(
             checked = entry.status == EntryStatus.DONE,
             onCheckedChange = { checked -> viewModel.setDone(entry.id, checked) },
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (actions.showImportance && entry.important) {
-                    Icon(Icons.Filled.Star, contentDescription = "Important", modifier = Modifier.padding(end = 4.dp), tint = MaterialTheme.colorScheme.primary)
-                }
                 Text(keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused), style = if (isStep) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge)
             }
             // The When, the Deadline and the steps, in that order and in one colour: a deadline
@@ -628,12 +633,26 @@ private fun TaskMenuItems(entry: Entry, isStep: Boolean, actions: TaskRowActions
             onClick = { close(); actions.onSetDeadline(entry) },
         )
     }
-    if (actions.showImportance) {
+    if (actions.showUrgency) {
+        // 14g·3 — the level as a second menu anchored to the item: five rows, a dot each.
+        var levels by remember { mutableStateOf(false) }
+        val set = Urgency.fromLevel(entry.importance)
         DropdownMenuItem(
-            text = { Text(if (entry.important) "Not important" else "Important") },
-            leadingIcon = { Icon(if (entry.important) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null) },
-            onClick = { close(); viewModel.setImportant(entry.id, !entry.important) },
+            text = { Text("Urgency: " + set.label) },
+            leadingIcon = { UrgencyDot(set) },
+            trailingIcon = { Icon(Icons.Filled.ArrowRight, contentDescription = null) },
+            onClick = { levels = true },
         )
+        DropdownMenu(expanded = levels, onDismissRequest = { levels = false }) {
+            Urgency.entries.forEach { u ->
+                DropdownMenuItem(
+                    text = { Text(u.label) },
+                    leadingIcon = { UrgencyDot(u) },
+                    trailingIcon = if (u == set) ({ Icon(Icons.Filled.Check, contentDescription = null) }) else null,
+                    onClick = { levels = false; close(); viewModel.setImportance(entry.id, u.level) },
+                )
+            }
+        }
     }
     DropdownMenuItem(
         text = { Text("Move to Trash") },

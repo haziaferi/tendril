@@ -70,9 +70,11 @@ data class Entry(
      * designed without its consumers; shown nowhere until Plan mode or tracking reads it. */
     val estimate: Duration? = null,
 
-    /** §0.6.4 — the single opt-in *important* flag: a flag and not a scale, by §0.5.2. Hidden
-     * in the UI until enabled in Settings. */
-    val important: Boolean = false,
+    /** §0.6.4 as amended by B§13.8.1 (14g·3, v20) — the urgency ladder's *set* half: 0 none ·
+     * 1 low · 2 mid · 3 high · 4 urgent. The old opt-in flag migrated to 3. Time pressure from
+     * [dueDate] is derived at read time ([com.tendril.app.domain.urgency.urgencyOf]), never
+     * stored; the level a row shows is the greater of the two. */
+    val importance: Int = 0,
 
     /** FK to a Database Row (§5.2), populated by [com.tendril.app.domain.DatabaseSyncManager]'s
      * Sync-to-Tasks. Travels across devices via `sourceRowUid` — see

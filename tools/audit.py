@@ -59,6 +59,12 @@ def strip_literals(src: str) -> str:
             j = src.find('"""', i + 3)
             i = (j + 3) if j != -1 else n
             out.append('""')
+        elif src[i] == "'" and (src.startswith("'", i + 2) or (src.startswith("\\", i + 1) and src.startswith("'", i + 3))):
+            # A char literal — `'"'` in particular, which otherwise opens a string that
+            # swallows the rest of the file (every declaration after `Ics.kt`'s
+            # `trim('"')` read as dead until this case existed).
+            i += 4 if src[i + 1] == "\\" else 3
+            out.append("''")
         elif src[i] == '"':
             i += 1
             buf = []

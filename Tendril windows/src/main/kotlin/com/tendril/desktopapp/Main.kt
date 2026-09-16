@@ -217,15 +217,16 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                         reminderSheet = null,
                     )
                 },
-                // §0.8 step 7a — shared. No alarms here, so no bell; the switches off.
+                // §0.8 step 7a — shared. No alarms here, so no bell. 14g·3 — the switches are the
+                // store's (`show_urgency`, `show_habit_streaks`), set in this pane's Tasks section.
                 tasksHabitsContent = { onOpenReview, quickAddRequested, onQuickAddConsumed ->
                     TasksHabitsScreen(
                         core = core,
                         onOpenReview = onOpenReview,
                         quickAddRequested = quickAddRequested,
                         onQuickAddConsumed = onQuickAddConsumed,
-                        showImportance = false,
-                        showStreaks = false,
+                        showUrgency = core.taskSettings.observeShowUrgency(),
+                        showStreaks = core.taskSettings.observeShowHabitStreaks(),
                         reminderSheet = null,
                         // 14f·1 (§0.10 item 13) — the Trash sheets are shared now, so the desktop
                         // has its Trash button; the bell stays absent: no alarms here (§12.1).

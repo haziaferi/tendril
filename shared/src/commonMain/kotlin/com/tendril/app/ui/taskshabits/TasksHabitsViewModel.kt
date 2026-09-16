@@ -77,7 +77,7 @@ class TasksHabitsViewModel(
         deadline: LocalDate? = null,
         parentEntryId: Long? = null,
         estimate: Duration? = null,
-        important: Boolean = false,
+        importance: Int = 0,
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -95,7 +95,7 @@ class TasksHabitsViewModel(
                     dueDate = deadline,
                     parentEntryId = parentEntryId,
                     estimate = estimate,
-                    important = important,
+                    importance = importance.coerceIn(0, 4),
                     createdAt = now,
                     updatedAt = now,
                 )
@@ -127,10 +127,11 @@ class TasksHabitsViewModel(
         }
     }
 
-    fun setImportant(entryId: Long, important: Boolean) {
+    /** 14g·3 — the ladder's set half, 0–4; time pressure is read, never written. */
+    fun setImportance(entryId: Long, level: Int) {
         viewModelScope.launch {
             val entry = entryDao.getById(entryId) ?: return@launch
-            entryDao.update(entry.copy(important = important, updatedAt = Instant.now()))
+            entryDao.update(entry.copy(importance = level.coerceIn(0, 4), updatedAt = Instant.now()))
         }
     }
 
