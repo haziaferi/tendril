@@ -1,6 +1,10 @@
 package com.tendril.app.ui.components
 
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.offset
@@ -77,5 +81,38 @@ fun Modifier.onPointerNavigation(onBack: () -> Unit, onForward: () -> Unit): Mod
         }
         event.changes.forEach { it.consume() }
         handler()
+    }
+}
+
+/**
+ * B§13.6 #5 — a drag that starts **on press-and-move under a pointer** and **on a long press
+ * under a finger** (the Plan rail's rule — a plain touch-drag would fight the list's scroll,
+ * and a long press on a mouse is a wait). [pointer] is `LocalDensityProfile.current.pointer`,
+ * read by the caller so this stays a plain modifier. Hand-rolled over `awaitEachGesture` rather
+ * than `detectDragGestures`, whose start offset was not the pointer's (it reported the node's far
+ * edge on the desktop); [onStart] gets the **down** position, local to the element, and [onDrag]
+ * every movement including the slop already crossed. A tap (no drag) is left to the element's
+ * own `clickable` — the down is not consumed.
+ */
+fun Modifier.dragSource(
+    pointer: Boolean,
+    key: Any?,
+    onStart: (androidx.compose.ui.geometry.Offset) -> Unit,
+    onDrag: (androidx.compose.ui.geometry.Offset) -> Unit,
+    onEnd: () -> Unit,
+    onCancel: () -> Unit,
+): Modifier = pointerInput(key, pointer) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val first = if (pointer) {
+            awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+        } else {
+            awaitLongPressOrCancellation(down.id)
+        }
+        if (first == null) return@awaitEachGesture
+        onStart(down.position)
+        if (first.position != down.position) onDrag(first.position - down.position)
+        val completed = drag(first.id) { change -> change.consume(); onDrag(change.position - change.previousPosition) }
+        if (completed) onEnd() else onCancel()
     }
 }

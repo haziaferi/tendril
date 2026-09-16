@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
 | 2026-09-16 (pop-out windows) | §3.1 amended (B§13.6 #6): a page in its own OS window on the desktop — `ui/nav/WorkbenchEnvironment.kt` (the scaffold's four locals, extracted; a pop-out takes the main window's scale), `ui/nav/PopOuts.kt` (`PopOutHost`, `PopOutRegistry`), `PageRoute.onShowOnRoadMap`, `WorkbenchNavState.depth`, `WindowFrame.decode(min)`, the openers in the workspace chrome and tree rows (Shift+click), the tree's ⧉; the desktop's `PopOutWindows.kt`. §2.2 the keyboard row. §0.10 item 14's after-the-pass list: #6 done. The shelf now closes on a trashed page. Critiques: `docs/critiques/pop-out-mock.md`, `pop-out-function.md` (and the dev-database wipe by the installed preview exe, recovered). Desktop verified; the phone untouched by construction. Tests 773 → 778. | §3.1, §2.2, §0.10 |
 | 2026-09-16 (14h·2 — the small things) | Thirteen items, each at its home: §2.3 the type scale (`TypeScale`, six sizes on 1.125; `tools/audit.py` rule 12); §2.2 *Submenus and captions* (`ui/components/Submenu.kt`, `openVerb()`, `DensityProfile.rowHeightDp` / `listInteractiveMinDp`); §3.1.1 find over the whole outline with folded matches counted and unfolded on ↵ (`domain/MindMapFold.kt`), the scroll only off-screen, the mention on `accentSoft`, the ground click; §3.1 the tree's second mark, the chip row, the card's *edited* line (`domain/time/RelativeTime.kt`, `rowsLabel`); §3.4 the map's self-refresh (`PageRelationDao.observeAll`); §5.6 the Table's rows and footer. **§0.10 item 14 closed — the desktop pass is done.** Critiques: `docs/critiques/small-things-measured.md`, `small-things-function.md`. Desktop verified; the phone walk pending. Tests 765 → 773. | §2.2, §2.3, §3.1, §3.1.1, §3.4, §5.6, §0.10 |
 | 2026-09-16 (14h·1 — the shelf) | §3.1 amended: a third pane on a wide window (`ui/pages/ShelfState.kt`, `ShelfPane.kt`; `ui/roadmap/RoadMapNeighbourhood.kt` over the shared `RoadMapCanvas`); *Show beside ▸* in the workspace chrome (`PaneChrome.menuItems` gains `close`, `compact`), *Open beside* and Ctrl+click on tree rows, `PageRoute` takes `onOpenPage`/`findRequest`; `TOGGLE_SHELF` = Ctrl+Shift+\ in the keyboard table; `pages_shelf`, `pages_shelf_last`, `pages_shelf_width`. §0.10 item 14: 14h·1 shipped. Critiques: `docs/critiques/shelf-mock.md`, `shelf-function.md`. Desktop verified; the phone walk pending. Tests 759 → 765. | §3.1, §2.2, §0.10 |
@@ -545,7 +546,13 @@ property (the Calendar view's `datePropertyId`, reused) to an optional end one
 days through the one date write every view makes** (`PageDatabaseViewModel.setDateCell`: a
 bound When/Deadline on a synced row goes through the Entry with its alarms re-armed, anything
 else is a stored cell) — so dragging a synced row's bar *is* moving its task. Undated rows are
-listed under the grid, the Calendar view's precedent. **"Blocked by"** is a database-level
+listed under the grid, the Calendar view's precedent — *and, since B§13.6 #5 (2026-09-16),
+dragged from that list onto a day column, which is `setDateCell` for the start property; the
+column lights, the ghost names it (*Read on → 22 Sep*)*. **The bar envelops its title** (the
+user, 2026-09-16, three notes the same hour — Notion's rule): a bar is as wide as its days or as
+wide as its title with 16 dp of air, whichever is more, so a one-day row is never an ellipsis and
+its label never sits on the ground looking like the next day's; a 2 dp line in the ink along the
+bar's foot marks the true span. **"Blocked by"** is a database-level
 pointer, `blockedByPropertyId`, naming one of its own RELATION columns that points back at the
 database — chosen in `···` → *Blocked by…*. A pointer, not a `BindingRole`: `bindProperty`
 crystallises and proxies through an Entry, and a relation's values must stay stored. A row with
@@ -710,7 +717,7 @@ Genuinely undecided — distinct from §0.7.
     settings, Compact and Week by default; no mnemonics; System / Light / Dark, default System).
     B§13.6's ten further diffs answered the same day: right-click, back/forward and list keyboard
     folded into 14d/14e; a shelf pane as 14h; pop-out windows *(done 2026-09-16, §3.1)*, drag
-    between panes (phone too), hover
+    between panes (phone too) *(done 2026-09-16, §3.2, §0.6.14; the phone's strip unwalked)*, hover
     previews, and the tray with a global hotkey (JNA is in the cache, item 20) after the pass; tabs
     no; cross-block undo to item 19. The item closes when 14h ships.* ***14a shipped 2026-09-14**
     — the shell as mocked on both platforms (§2.2), the remembered window, the title, the sync
@@ -893,6 +900,10 @@ navigation-paradigm question later.
   top of every screen for a *Sync folder* section at the head of Settings, where Android keeps
   them and the only place the mock has room. Exempt: the widget-configure Activity, outside the
   shell.)*
+- **A drag's start** *(B§13.6 #5.)* Under a pointer a drag begins on press-and-move; under
+  Touch on a long press (a plain touch-drag would fight the scroll; a long press on a mouse is a
+  wait) — `dragSource`, one modifier both surfaces use. The Plan rail and the grid's own block
+  drag keep their long press on both (their gesture predates the rule; recorded).
 - **Submenus and captions** *(14h·2.)* A menu item with a `▸` (*Urgency ▸*, *Show beside ▸*)
   opens its list **beside** the item, level with it at the menu's right edge (`ui/components/
   Submenu.kt` — the platforms' placement; a nested `DropdownMenu` lands under the parent). A
@@ -1656,6 +1667,29 @@ dropdown; an empty query shows nothing; a query with no matches uses the §2.5 `
 composable ("No pages match '…'").
 
 ### 3.2 Calendar
+
+*(**Amended 2026-09-16 — B§13.6 #5, drag between panes.** The Calendar gains a **task tray** —
+the Day view's Plan rail grown into a pane beside the week (Sunsama's, Akiflow's backlog; decided
+2026-09-16 on `docs/mockups/drag-between-panes.html` and `docs/critiques/drag-between-panes-mock.md`):
+**Unscheduled** (pending tasks with no When — never a step, never a series) and **Overdue**
+(dated before today), `domain/plan/Tray.kt`, 36 dp chips with the urgency stripe, the overdue
+date in the dim colour (the stripe says how urgent). On a wide window a pane at the week's left,
+240…360 dp (`calendar_tray_width`), collapsible from its header to a chevron in the bar
+(`calendar_tray_collapsed`), the tree's handle; under Touch a collapsible **strip** under the Week
+strip and the Month grid (the Day view keeps its rail, which also places a time). **The drag**
+starts on press-and-move under a pointer and on a long press under a finger
+(`ui/components/Pointer.kt` `dragSource` — hand-rolled over `awaitEachGesture`, since
+`detectDragGestures`' start offset was not the pointer's); the screen owns it and draws the ghost
+(the chip itself, a shadow, the target named: *Thu 17 · 10:00*, *Thu 17*, *Clear When*).
+**Exactly one target lights** — the thing under the pointer: a day header or the all-day row (the
+day, the task's own time kept), a quarter-hour slot on the grid (the day and the time), a Week
+strip card or a Month cell on the phone (`ui/calendar/DropGeometry.kt`: one `WeekGeometry` both
+the grid's own drag and the tray's ask, `weekDropAt`, `dayCellAt`), or the tray itself. **The
+drops are the existing writes** (`place`, `move`), so a series meets the same *this one or all?*;
+**a block dropped on the tray clears its When** (`EntryEditor.clearWhen` — the four date/time
+fields; the Deadline stays, two dates being two things; a series is refused with a snackbar).
+Nothing is placed for the person (§0.5.2): the tray offers, the drag decides.
+`docs/critiques/drag-between-panes-function.md` walked the build; the phone's strip is unwalked.)*
 
 *(**Amended 2026-09-16 — B§13.4 14f·2, the tab on a wide window.** From 840 dp (`LocalShellLayout`)
 the **Week is a time grid** (`ui/calendar/WeekGridView.kt`): seven of the Day view's Plan lanes

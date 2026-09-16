@@ -80,6 +80,17 @@ class EntryEditor(
         return save(entry.copy(startDate = toDate, startTime = newStartTime, endDate = newEndDate, endTime = newEndTime), now)
     }
 
+    /**
+     * B§13.6 #5 — a block dropped back on the Calendar's tray: the When goes (date, time, the
+     * span's end), the Deadline stays — two dates, two things (§0.6.4). A series keeps its days:
+     * null, and the caller says so; an override row of a series is plain and clears like any
+     * entry. Reminders on the old day are re-armed off through the coordinator, as every edit is.
+     */
+    suspend fun clearWhen(entry: Entry, now: Instant = Instant.now()): Entry? {
+        if (entry.recurrenceRule != null && entry.originalEntryId == null) return null
+        return save(entry.copy(startDate = null, startTime = null, endDate = null, endTime = null), now)
+    }
+
     /** The §4 invariants, applied rather than assumed. */
     private fun Entry.normalisedForKind(): Entry = when (kind) {
         EntryKind.TASK -> copy(

@@ -7,6 +7,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -98,6 +99,16 @@ internal fun WeekGridView(
     onShiftWeek: (Int) -> Unit,
     /** 14g·3 — the task blocks' urgency stripe; off hides it. */
     showUrgency: Boolean = true,
+    /** B§13.6 #5 — the grid's geometry for the screen's own drags (the tray's), root coordinates. */
+    onGeometry: (WeekGeometry) -> Unit = {},
+    /** A drag from outside over the grid: the target the grid lights. */
+    externalTarget: WeekDrop? = null,
+    /** The grid's own block drag — its position and title — reported so the tray can light when the block is over it and the screen can draw the ghost there (the grid's is under the tray). */
+    onDragPosition: (Offset?, String?) -> Unit = { _, _ -> },
+    /** What the ghost says when the block is outside the grid (*Clear When* over the tray), else null. */
+    outsideTargetLabel: (Offset) -> String? = { null },
+    /** The block dropped outside the grid — the screen decides (the tray clears its When). */
+    onDropOutside: (EntryOccurrence, Offset) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
     val hourPx = with(density) { HOUR_DP.dp.toPx() }
@@ -114,6 +125,9 @@ internal fun WeekGridView(
         }
     }
     var gridBounds by remember { mutableStateOf(Rect.Zero) }
+    var headerBounds by remember { mutableStateOf(Rect.Zero) }
+    var allDayBounds by remember { mutableStateOf<Rect?>(null) }
+    var laneWidthState by remember { mutableStateOf(0f) }
     var boxOrigin by remember { mutableStateOf(Offset.Zero) }
     var drag by remember { mutableStateOf<GridDrag?>(null) }
     val scroll = rememberScrollState()
@@ -127,6 +141,10 @@ internal fun WeekGridView(
         scroll.scrollTo((openScrollMinute(perDay.flatMap { it.blocks }) / 60f * hourPx).roundToInt())
     }
     fun minuteAt(rootY: Float): Int = (((rootY - gridBounds.top + scroll.value) / hourPx) * 60).roundToInt().coerceIn(0, DAY_MINUTES - 1)
+    val geometry = WeekGeometry(gridBounds, headerBounds, allDayBounds, gutterPx, laneWidthState, hourPx, scroll.value.toFloat(), weekStart)
+    LaunchedEffect(geometry) { if (laneWidthState > 0f) onGeometry(geometry) }
+    val hasAllDayRow = perDay.any { it.allDay.isNotEmpty() }
+    LaunchedEffect(hasAllDayRow) { if (!hasAllDayRow) allDayBounds = null }
 
     Box(modifier = Modifier.fillMaxSize().onGloballyPositioned { boxOrigin = it.boundsInRoot().topLeft }) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -136,15 +154,18 @@ internal fun WeekGridView(
                 Text(weekLabel(days.first(), days.last()), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 IconButton(onClick = { onShiftWeek(1) }) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next week") }
             }
-            // Day headers: the Day view's per column.
-            Row(modifier = Modifier.fillMaxWidth()) {
+            // Day headers: the Day view's per column. B§13.6 #5 — a drop target too (the day, no time).
+            val targetOutline = MaterialTheme.colorScheme.primary
+            Row(modifier = Modifier.fillMaxWidth().onGloballyPositioned { headerBounds = it.boundsInRoot() }) {
                 Box(modifier = Modifier.width(GUTTER_DP.dp))
                 perDay.forEach { col ->
                     val isToday = col.day == today
+                    val targeted = externalTarget is WeekDrop.AllDay && externalTarget.day == col.day && allDayBounds == null
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .then(if (isToday) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)) else Modifier)
+                            .then(if (isToday || targeted) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)) else Modifier)
+                            .then(if (targeted) Modifier.border(2.dp, targetOutline, RoundedCornerShape(6.dp)) else Modifier)
                             .clickable { onSelectDate(col.day) }
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                     ) {
@@ -159,11 +180,16 @@ internal fun WeekGridView(
                 }
             }
             // The all-day row: three, then "+n" opening the day.
-            if (perDay.any { it.allDay.isNotEmpty() }) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp)) {
+            if (hasAllDayRow) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp).onGloballyPositioned { allDayBounds = it.boundsInRoot() }) {
                     Box(modifier = Modifier.width(GUTTER_DP.dp))
                     perDay.forEach { col ->
-                        Column(modifier = Modifier.weight(1f).padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        val targeted = externalTarget is WeekDrop.AllDay && externalTarget.day == col.day
+                        Column(
+                            modifier = Modifier.weight(1f).padding(horizontal = 2.dp)
+                                .then(if (targeted) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(4.dp)).border(2.dp, targetOutline, RoundedCornerShape(4.dp)) else Modifier),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
                             val (shown, more) = visibleAllDay(col.allDay)
                             shown.forEach { o ->
                                 val chipStripe = blockStripe(o.entry, showUrgency, today)
@@ -192,6 +218,8 @@ internal fun WeekGridView(
             BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { gridBounds = it.boundsInRoot() }.verticalScroll(scroll)) {
                 val widthPx = with(density) { maxWidth.toPx() }
                 val laneWidthPx = (widthPx - gutterPx) / 7f
+                laneWidthState = laneWidthPx
+                val slotTint = MaterialTheme.colorScheme.primaryContainer
                 val lineColor = MaterialTheme.colorScheme.outlineVariant
                 val nowColor = MaterialTheme.colorScheme.primary
                 val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -213,6 +241,17 @@ internal fun WeekGridView(
                             val x0 = gutterPx + todayIndex * laneWidthPx
                             drawLine(nowColor, Offset(x0, y), Offset(x0 + laneWidthPx, y), strokeWidth = 3f)
                             drawCircle(nowColor, radius = 5f, center = Offset(x0, y))
+                        }
+                        // B§13.6 #5 — the quarter hour a drag from outside would land on.
+                        (externalTarget as? WeekDrop.Slot)?.let { slot ->
+                            val lane = perDay.indexOfFirst { it.day == slot.day }
+                            if (lane >= 0) {
+                                val sx = gutterPx + lane * laneWidthPx + 2f
+                                val sy = slot.time.toSecondOfDay() / 3600f * hourPx
+                                val slotSize = androidx.compose.ui.geometry.Size(laneWidthPx - 4f, hourPx / 4f)
+                                drawRoundRect(slotTint, Offset(sx, sy), slotSize, CornerRadius(6.dp.toPx()))
+                                drawRoundRect(nowColor, Offset(sx, sy), slotSize, CornerRadius(6.dp.toPx()), style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))))
+                            }
                         }
                     }
                     for (h in 0..23) {
@@ -244,15 +283,20 @@ internal fun WeekGridView(
                                         if (block.occurrence != null) Modifier.pointerInput(block.key) {
                                             detectDragGesturesAfterLongPress(
                                                 onDragStart = { start -> drag = GridDrag(block, Offset(gridBounds.left + x, gridBounds.top + y - scroll.value) + start) },
-                                                onDrag = { change, delta -> change.consume(); drag = drag?.let { it.copy(position = it.position + delta) } },
+                                                onDrag = { change, delta -> change.consume(); drag = drag?.let { it.copy(position = it.position + delta) }; onDragPosition(drag?.position, drag?.block?.title) },
                                                 onDragEnd = {
-                                                    val d = drag; drag = null
-                                                    if (d?.block?.occurrence != null && gridBounds.contains(d.position)) {
-                                                        val lane = laneAt(d.position.x - gridBounds.left, gutterPx, laneWidthPx)
-                                                        onMove(d.block.occurrence, days[lane], timeOfMinute(snapMinute(minuteAt(d.position.y))))
+                                                    val d = drag; drag = null; onDragPosition(null, null)
+                                                    if (d?.block?.occurrence != null) {
+                                                        if (gridBounds.contains(d.position)) {
+                                                            val lane = laneAt(d.position.x - gridBounds.left, gutterPx, laneWidthPx)
+                                                            onMove(d.block.occurrence, days[lane], timeOfMinute(snapMinute(minuteAt(d.position.y))))
+                                                        } else {
+                                                            // B§13.6 #5 — off the grid: the screen decides (the tray clears its When).
+                                                            onDropOutside(d.block.occurrence, d.position)
+                                                        }
                                                     }
                                                 },
-                                                onDragCancel = { drag = null },
+                                                onDragCancel = { drag = null; onDragPosition(null, null) },
                                             )
                                         } else Modifier,
                                     )
@@ -277,8 +321,9 @@ internal fun WeekGridView(
             val target = if (inside) {
                 val laneWidthPx = (gridBounds.width - gutterPx) / 7f
                 days[laneAt(d.position.x - gridBounds.left, gutterPx, laneWidthPx)].format(DateTimeFormatter.ofPattern("EEE d")) + " " + timeOfMinute(snapMinute(minuteAt(d.position.y)))
-            } else null
-            Surface(
+            } else outsideTargetLabel(d.position)
+            // Off the grid over a target the screen owns (the tray), the screen draws the ghost above that pane.
+            if (inside || target == null) Surface(
                 modifier = Modifier.offset { IntOffset((d.position.x - boxOrigin.x).roundToInt() + 12, (d.position.y - boxOrigin.y).roundToInt() - 18) },
                 tonalElevation = 6.dp, shadowElevation = 6.dp, shape = RoundedCornerShape(6.dp),
             ) {
