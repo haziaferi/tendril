@@ -23,11 +23,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.domain.track.target
@@ -39,6 +36,11 @@ import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.track_stop
 import java.time.Duration
 import java.time.Instant
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.clock
+import com.tendril.app.ui.theme.clockSmall
+import com.tendril.app.ui.theme.label
 
 /**
  * §0.6.5 / §0.8 step 7c — the "now": one strip above the bottom bar, on every route on both
@@ -66,13 +68,13 @@ fun RunningTimerBar(core: WorkbenchCore, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             val colour = MaterialTheme.colorScheme.onPrimaryContainer
-            Text("▶", fontSize = 14.sp, color = colour)
-            Text(timer.title ?: "…", fontSize = 14.sp, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Text(formatElapsed(timer.log, timer.now), style = CLOCK, fontSize = 14.sp, color = colour)
+            Text("▶", style = MaterialTheme.typography.body, color = colour)
+            Text(timer.title ?: "…", style = MaterialTheme.typography.body, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(formatElapsed(timer.log, timer.now), style = MaterialTheme.typography.clock, color = colour)
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 stringResource(Res.string.track_stop),
-                fontSize = 12.5.sp,
+                style = MaterialTheme.typography.label,
                 color = colour,
                 modifier = Modifier.clickable { scope.launch { core.timeTracker.stop() } }.padding(vertical = 8.dp),
             )
@@ -98,18 +100,18 @@ fun RunningTimerRailFoot(core: WorkbenchCore, modifier: Modifier = Modifier) {
         ) {
             Text(
                 "▶ " + (timer.title ?: "…"),
-                fontSize = 11.sp, lineHeight = 14.sp,
+                style = MaterialTheme.typography.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
                 formatElapsed(timer.log, timer.now),
-                style = CLOCK, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.clockSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 stringResource(Res.string.track_stop),
-                fontSize = 11.sp, lineHeight = 14.sp,
+                style = MaterialTheme.typography.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable { scope.launch { core.timeTracker.stop() } }.padding(horizontal = 8.dp, vertical = 2.dp),
             )
@@ -117,8 +119,6 @@ fun RunningTimerRailFoot(core: WorkbenchCore, modifier: Modifier = Modifier) {
     }
 }
 
-/** Tabular figures, so the clock does not jitter as the digits change. */
-private val CLOCK = TextStyle(fontFeatureSettings = "tnum")
 
 /** The running log, its target's title, and a `now` that ticks each second — or null while nothing runs. */
 private class RunningTimer(val log: TimeLog, val title: String?, val now: Instant)

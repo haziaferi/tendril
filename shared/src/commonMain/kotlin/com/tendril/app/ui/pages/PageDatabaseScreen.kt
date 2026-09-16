@@ -85,6 +85,7 @@ import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
+import com.tendril.app.ui.theme.body
 
 private val CELL_WIDTH = 160.dp
 
@@ -382,7 +383,7 @@ private fun TableBody(
             ) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(tableRow.page.id) }) {
-                        Text(tableRow.page.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        Text(tableRow.page.title, style = MaterialTheme.typography.body, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                         BlockedChip(tableRow, viewModel)
                     }
                 }
@@ -588,13 +589,13 @@ private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewMode
         sortedDates.forEach { date ->
             item { Text(date, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             items(grouped[date].orEmpty(), key = { it.page.id }) { row ->
-                Text(row.page.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(row.page.id) }.padding(horizontal = 16.dp, vertical = 8.dp))
+                Text(row.page.title, style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(row.page.id) }.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
         if (hasUndated) {
             item { Text("No date", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             items(grouped[null].orEmpty(), key = { it.page.id }) { row ->
-                Text(row.page.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(row.page.id) }.padding(horizontal = 16.dp, vertical = 8.dp))
+                Text(row.page.title, style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(row.page.id) }.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
     }
@@ -611,7 +612,7 @@ private fun AddViewSheet(onDismiss: () -> Unit, onAdd: (String, ViewType) -> Uni
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
             Box {
@@ -1365,7 +1366,7 @@ private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUn
                 BasicTextField(
                     value = countText,
                     onValueChange = { countText = it.filter(Char::isDigit) },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                     modifier = Modifier.width(48.dp),
                 )
                 Spacer(Modifier.width(12.dp))
@@ -1431,7 +1432,7 @@ private fun AddPropertySheet(
             BasicTextField(
                 value = name,
                 onValueChange = { name = it },
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
             Box {

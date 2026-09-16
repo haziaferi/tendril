@@ -63,6 +63,9 @@ import com.tendril.app.domain.rankPageHits
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.delay
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.body
 
 /** Whether the switcher is open — owned by the scaffold, toggled by the Pages search icon and
  * by the desktop's Ctrl+K, which lives outside the composition and needs a handle. */
@@ -152,7 +155,7 @@ fun QuickSwitcher(
                                 ResultRow(selected = index == selected, onClick = { onDismiss(); command.run() }) {
                                     Icon(Icons.Outlined.KeyboardCommandKey, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(Modifier.width(12.dp))
-                                    Text(command.title, style = MaterialTheme.typography.bodyLarge)
+                                    Text(command.title, style = MaterialTheme.typography.body)
                                 }
                             }
                         }
@@ -172,9 +175,9 @@ fun QuickSwitcher(
                                     }
                                     Spacer(Modifier.width(12.dp))
                                     Column {
-                                        Text(hit.title, style = MaterialTheme.typography.bodyLarge)
+                                        Text(hit.title, style = MaterialTheme.typography.body)
                                         if (hit.snippet.isNotBlank()) {
-                                            Text(highlightMatches(hit.snippet), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(highlightMatches(hit.snippet, MaterialTheme.typography.heading.fontWeight), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -199,14 +202,14 @@ private fun ResultRow(selected: Boolean, onClick: () -> Unit, content: @Composab
     ) { content() }
 }
 
-/** The delimiters SQLite's `snippet()` wraps each match in → a bold span (see `PageFtsDao.search`). */
-internal fun highlightMatches(snippet: String): AnnotatedString = buildAnnotatedString {
+/** The delimiters SQLite's `snippet()` wraps each match in → a span at the heading's weight (see `PageFtsDao.search`). */
+internal fun highlightMatches(snippet: String, weight: FontWeight? = FontWeight.SemiBold): AnnotatedString = buildAnnotatedString {
     var inMatch = false
     for (char in snippet) {
         when (char) {
             SEARCH_HL_OPEN -> inMatch = true
             SEARCH_HL_CLOSE -> inMatch = false
-            else -> if (inMatch) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(char) } else append(char)
+            else -> if (inMatch) withStyle(SpanStyle(fontWeight = weight)) { append(char) } else append(char)
         }
     }
 }

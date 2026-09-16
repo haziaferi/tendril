@@ -32,11 +32,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.label
 
 /**
  * 14e — the shortcut list, **generated from [SHORTCUTS]** so what is listed is what is bound
@@ -70,7 +72,7 @@ fun ShortcutsOverlay(onDismiss: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(start = 26.dp, end = 14.dp, top = 14.dp, bottom = 22.dp).verticalScroll(rememberScrollState())) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Keyboard shortcuts", fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Text("Keyboard shortcuts", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
                     }
                     val groups = shortcutRows()
@@ -121,10 +123,10 @@ fun shortcutRows(): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
 @Composable
 private fun GroupBlock(group: Pair<ShortcutGroup, List<ShortcutRow>>) {
     Column(modifier = Modifier.padding(top = 14.dp)) {
-        Text(group.first.label.uppercase(), fontSize = 11.sp, letterSpacing = 0.7.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+        Text(group.first.label.uppercase(), style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
         group.second.forEach { row ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(row.label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Text(row.label, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { row.keys.forEach { KeyChip(it) } }
             }
@@ -140,7 +142,7 @@ private fun KeyChip(text: String) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(text, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(text, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

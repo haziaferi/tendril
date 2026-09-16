@@ -50,6 +50,7 @@ import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
+import com.tendril.app.ui.theme.body
 
 /**
  * §0.8 step 6b / §3.2 — the edit sheet that was never built. Every field an Entry has, in the
@@ -254,7 +255,7 @@ private enum class RepeatChoice(val label: String) {
 @Composable
 private fun LabelledRow(label: String, control: @Composable () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.body)
         control()
     }
 }

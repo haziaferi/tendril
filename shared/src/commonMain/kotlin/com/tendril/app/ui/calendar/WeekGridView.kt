@@ -52,7 +52,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.domain.plan.BlockKind
 import com.tendril.app.domain.plan.TimelineBlock
@@ -71,6 +70,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import com.tendril.app.ui.theme.caption
 
 private const val HOUR_DP = 56
 private const val GUTTER_DP = 44
@@ -200,7 +200,7 @@ internal fun WeekGridView(
                                 ) {
                                     // 14g·3 — an all-day task chip wears its urgency stripe like a timed block.
                                     Text(
-                                        o.entry.title, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        o.entry.title, style = MaterialTheme.typography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier
                                             .drawBehind { chipStripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
                                             .padding(start = if (chipStripe != null) 12.dp else 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
@@ -208,7 +208,7 @@ internal fun WeekGridView(
                                 }
                             }
                             if (more > 0) {
-                                Text("+$more", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clickable { onSelectDate(col.day) }.padding(horizontal = 6.dp))
+                                Text("+$more", style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clickable { onSelectDate(col.day) }.padding(horizontal = 6.dp))
                             }
                         }
                     }

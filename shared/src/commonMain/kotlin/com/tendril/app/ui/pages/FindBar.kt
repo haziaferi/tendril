@@ -34,9 +34,9 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
 
 /**
  * §0.10 item 19 — the find bar, option A of `docs/mockups/find-in-page.html` (decided
@@ -80,12 +80,12 @@ fun FindBar(
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 5.dp),
         ) {
-            if (query.isEmpty()) Text("Find in page", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (query.isEmpty()) Text("Find in page", style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                textStyle = TextStyle(fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focus)
@@ -106,9 +106,8 @@ fun FindBar(
                 hidden > 0 -> "${(current ?: 0) + 1} of $total · $hidden inside a mind map"
                 else -> "${(current ?: 0) + 1} of $total"
             },
-            fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = TextStyle(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.description.copy(fontFeatureSettings = "tnum"),
         )
         IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(FIND_BUTTON)) {
             Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous (Shift+Enter)", modifier = Modifier.size(18.dp))

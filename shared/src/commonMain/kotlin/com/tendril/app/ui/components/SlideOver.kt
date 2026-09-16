@@ -32,12 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.tendril.app.ui.theme.heading
 
 /**
  * B§13.4 14b — a sheet's frame on a wide window, as `docs/mockups/desktop-shell.html` draws it
@@ -91,8 +90,7 @@ internal fun SlideOver(
                         ) {
                             Text(
                                 title,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium,
+                                style = MaterialTheme.typography.heading,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f).padding(vertical = 8.dp),
                             )

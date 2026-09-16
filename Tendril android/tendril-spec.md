@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
 | 2026-09-16 (pop-out windows) | §3.1 amended (B§13.6 #6): a page in its own OS window on the desktop — `ui/nav/WorkbenchEnvironment.kt` (the scaffold's four locals, extracted; a pop-out takes the main window's scale), `ui/nav/PopOuts.kt` (`PopOutHost`, `PopOutRegistry`), `PageRoute.onShowOnRoadMap`, `WorkbenchNavState.depth`, `WindowFrame.decode(min)`, the openers in the workspace chrome and tree rows (Shift+click), the tree's ⧉; the desktop's `PopOutWindows.kt`. §2.2 the keyboard row. §0.10 item 14's after-the-pass list: #6 done. The shelf now closes on a trashed page. Critiques: `docs/critiques/pop-out-mock.md`, `pop-out-function.md` (and the dev-database wipe by the installed preview exe, recovered). Desktop verified; the phone untouched by construction. Tests 773 → 778. | §3.1, §2.2, §0.10 |
@@ -1007,6 +1008,40 @@ titleMedium 18, titleLarge 22. Every literal `fontSize` in shared UI takes one o
 The density profile still multiplies (B§13.7.3 rule 2). `docs/critiques/small-things-function.md`
 measured the result.
 
+**The type vocabulary (Amended 2026-09-16 — the type PR; `docs/mockups/type-vocabulary.html`,
+`docs/critiques/type-vocabulary-mock.md`, `-function.md`).** Two findings, beside Notion at the
+same window (the user's mid-walk notes on B§13.6 #3): *the font size in Compact is a bit large*
+and *headers should be bold rather than large* — and, measured, the desktop had been drawing
+every `Medium` as Regular, because each family was loaded at its default instance only and
+Compose synthesises bold, not Medium. **Decided:** **Inter, bundled, the default** (what Notion
+looks like on macOS; DM Sans kept as a choice — a stored `sans` keeps it, a phone that never chose
+takes Inter), every family loaded at **true 400 / 500 / 600** through the resources `Font()`
+overload that takes `variationSettings` (both platforms, CMP 1.12); the eye pass carries **400,
+500 and 600** (never 700, never thin; the editor's `Bold` span is content and stays bold);
+**Notion's rule — weight carries the hierarchy, the sizes step down**: the scale is now 11 · 12.5
+· 14 · 16 · 18, with 20 and 24 for the editor's H2 and H1 only, and nothing in the chrome above
+18. **Seven styles, one spelling per kind of chrome text** — `ui/theme/TendrilType.kt`, read as
+`MaterialTheme.typography.heading` and friends, the Material roles set so a chip, a button or a
+dialog inherits them without being told:
+
+| style | size / weight | where |
+|---|---|---|
+| `pageTitle` | 18 / 600 | a screen's title, the page bar's editable title, a task pane's title |
+| `heading` | 14 / 600 | the tree's *Pages*, the tray's *Tasks*, a shelf's or a slide-over's header, Settings' and a sheet's sections, a card's title |
+| `body` | 14 / 400 | rows (tree, tasks, the Table's cells, the switcher), dialogs' copy, toggle labels |
+| `label` | 12.5 / 500 | field labels (*Register*, *Mode*), chips, the FocusBar |
+| `description` | 12.5 / 400, dim | explainers under a section, a card's second line, a due date |
+| `caption` | 11 / 400, dim | *edited 2 h ago*, a card's footer, a count, the rail's labels |
+| `eyebrow` | 11 / 500, uppercase, +0.06 em | *UNSCHEDULED · 3*, the shortcuts' groups, *Steps* |
+
+The editor's content is not chrome and keeps its own sizes: `editorBody` 16, `editorH1` 24 /
+`editorH2` 20 / `editorH3` 16 SemiBold. **Enforced:** `tools/audit.py` rule 12 is now *literal
+type* — a literal `fontSize`, `N.sp` or `fontWeight = FontWeight.X` in shared UI outside
+`ui/theme/` fails the run (the 45 sizes and 31 weights that were there folded onto the seven; 40
+chrome sites at `bodyLarge` 16 became `body`). Measured after, beside Notion: section titles
+12–14 px SemiBold against Notion's 15, the page title 18 against 33, descriptions 10 against
+Notion's 12 body; the tree's row pitch unchanged at 33 px against Notion's 29–30 (recorded).
+
 **A theme is ground × hue × mode; a register is a named preset of the first two.** Shared by both
 platforms through `KeyValueStore` (`theme_register`, `theme_mode`, `theme_typeface`, `theme_oled` —
 `ui/theme/ThemeSettings.kt`; the phone's old `tendril_theme_prefs` file is migrated once at start
@@ -1024,9 +1059,10 @@ and deleted, an explicit old mode kept, a never-touched one becoming System).
 - **Mode**: System / Light / Dark, **default System** (Android's night mode, Windows' app theme
   through `isSystemInDarkTheme()`). The recorded tri-state defect is closed: no explicit flag,
   System is a choice like the other two.
-- **Typeface**: Sans (DM Sans) / Serif (Source Serif 4), one family for everything; the scale
-  carries **400 and 500 only** (`eyePassWeight`, B§13.7.3 rule 2) and there is no base-size
-  control — density (§2.2) is the size lever.
+- **Typeface**: Inter (the default since the type PR, 2026-09-16) / DM Sans / Serif (Source Serif
+  4), one family for everything at true 400 / 500 / 600; the scale carries **400, 500 and 600
+  only** (`eyePassWeight`, B§13.7.3 rule 2 as amended) and there is no base-size control —
+  density (§2.2) is the size lever.
 - **Deeper blacks** (`theme_oled`, phone only): the register's dark ground at 4 % lightness, every
   token re-solved on it. The desktop never reads the key (B§13.7.3 rule 3).
 

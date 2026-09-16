@@ -105,7 +105,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -137,6 +136,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.heading
 
 private enum class CalendarView { DAY, WEEK, MONTH, AGENDA }
 
@@ -658,7 +659,7 @@ private fun DayView(
                         }
                         // §3.2 — the row itself opens the edit sheet (it had no tap target before 6b).
                         Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
-                            Text(entry.title, style = MaterialTheme.typography.bodyLarge)
+                            Text(entry.title, style = MaterialTheme.typography.body)
                             Text(
                                 listOfNotNull(occurrenceSubtitle(occurrence, date), loggedSegment(loggedPerEntry[entry.id] ?: 0, entry.estimate)).joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
@@ -699,7 +700,7 @@ private fun ExtraRow(extra: CalendarExtra, onOpenPage: (Long) -> Unit) {
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(extra.title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            Text(extra.title, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.primary)
             Text(extra.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -741,7 +742,7 @@ private fun AgendaView(
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (entry.status != null) Checkbox(checked = entry.status == EntryStatus.DONE, onCheckedChange = { onSetDone(entry.id, it) })
                     Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
-                        Text(entry.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(entry.title, style = MaterialTheme.typography.body)
                         Text(occurrenceSubtitle(occurrence, day), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -817,8 +818,7 @@ private fun WeekStripView(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
                             "${day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${day.dayOfMonth}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
+                            style = if (day == LocalDate.now()) MaterialTheme.typography.heading else MaterialTheme.typography.body,
                         )
                         if (dayEntries.isEmpty() && dayExtras.isEmpty()) {
                             Text("—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -912,8 +912,7 @@ private fun MonthGridView(
                     ) {
                         Text(
                             "${day.dayOfMonth}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
+                            style = if (day == LocalDate.now()) MaterialTheme.typography.heading else MaterialTheme.typography.body,
                         )
                         if (count > 0) {
                             // One dot for "something is on this day" until the dots PR draws one per layer — dim, not the accent.

@@ -18,6 +18,7 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.domain.journal.JournalToday
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.tendril.app.ui.theme.body
 
 private val hourMinute: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -80,7 +81,7 @@ private fun StripRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, title
     ) {
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
         Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(title, style = MaterialTheme.typography.body)
             if (!detail.isNullOrBlank()) {
                 Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

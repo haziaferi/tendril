@@ -35,9 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.pageTitle
 
 /**
  * B§13.4 14a — the shell's chrome, drawn as `docs/mockups/desktop-shell.html` draws it rather
@@ -73,7 +73,7 @@ fun ShellRail(navState: WorkbenchNavState, foot: @Composable () -> Unit) {
                     label = destinationLabel(destination),
                     selected = currentTab == destination,
                     onClick = { navState.switchTab(destination) },
-                    pillWidth = 52.dp, pillHeight = 30.dp, iconSize = 22.dp, labelSize = 11.5f,
+                    pillWidth = 52.dp, pillHeight = 30.dp, iconSize = 22.dp,
                     modifier = Modifier.width(RAIL_WIDTH).padding(vertical = 10.dp),
                 )
             }
@@ -103,7 +103,7 @@ fun ShellBottomBar(navState: WorkbenchNavState) {
                     label = destinationLabel(destination),
                     selected = currentTab == destination,
                     onClick = { navState.switchTab(destination) },
-                    pillWidth = 64.dp, pillHeight = 32.dp, iconSize = 24.dp, labelSize = 12f,
+                    pillWidth = 64.dp, pillHeight = 32.dp, iconSize = 24.dp,
                     // The mock's 96 px items were drawn in a 700 px window; on a 360 dp phone five
                     // of them would run off the edge, so here they share the width equally.
                     modifier = Modifier.weight(1f),
@@ -123,7 +123,6 @@ private fun ShellItem(
     pillWidth: androidx.compose.ui.unit.Dp,
     pillHeight: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
-    labelSize: Float,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -147,7 +146,7 @@ private fun ShellItem(
         ) {
             Icon(icon, contentDescription = null, tint = colour, modifier = Modifier.size(iconSize))
         }
-        Text(label, fontSize = labelSize.sp, lineHeight = (labelSize * 1.3f).sp, color = colour, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.caption, color = colour, maxLines = 1)
     }
 }
 
@@ -176,7 +175,7 @@ fun ShellTopBar(
             navigationIcon()
             Box(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 ProvideTextStyle(
-                    MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface),
+                    MaterialTheme.typography.pageTitle.copy(color = MaterialTheme.colorScheme.onSurface),
                 ) { title() }
             }
             // A nested Row, as Material's `TopAppBar` has: a `DropdownMenu` in the actions anchors

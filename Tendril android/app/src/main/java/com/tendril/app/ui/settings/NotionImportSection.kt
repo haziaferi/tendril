@@ -36,6 +36,7 @@ import com.tendril.app.notionimport.NotionImportSummary
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.ui.pages.EnableSyncSheet
 import kotlinx.coroutines.launch
+import com.tendril.app.ui.theme.body
 
 /**
  * Settings → Notion import (§7): a one-shot additive import from a Notion Markdown & CSV
@@ -82,7 +83,7 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
             Icon(Icons.Outlined.UploadFile, contentDescription = null)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Import from Notion", style = MaterialTheme.typography.bodyLarge)
+                Text("Import from Notion", style = MaterialTheme.typography.body)
                 Text(
                     "A Notion Markdown & CSV export .zip — pages and databases are added " +
                         "alongside your existing ones, nothing here is replaced.",

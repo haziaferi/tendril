@@ -41,6 +41,7 @@ import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.ui.components.hoverPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
+import com.tendril.app.ui.theme.body
 
 /**
  * §0.6.12 — a BLOCK_REFERENCE block: the source block's live text behind an accent bar (the
@@ -98,7 +99,7 @@ internal fun BlockReferencePickerDialog(viewModel: PageDetailViewModel, onDismis
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
             )
             if (query.isBlank()) {
                 Text("Type a few words of the block", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -106,7 +107,7 @@ internal fun BlockReferencePickerDialog(viewModel: PageDetailViewModel, onDismis
             LazyColumn {
                 items(results, key = { it.second.id }) { (page, candidate) ->
                     Column(modifier = Modifier.fillMaxWidth().clickable { onPick(candidate) }.padding(vertical = 8.dp)) {
-                        Text(candidate.content, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+                        Text(candidate.content, style = MaterialTheme.typography.body, maxLines = 2)
                         Text(page.title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

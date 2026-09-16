@@ -38,6 +38,7 @@ import com.tendril.app.data.prefs.AiKeyStore
 import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.domain.ai.AI_MODEL_KEY
 import com.tendril.app.domain.ai.AiModels
+import com.tendril.app.ui.theme.body
 
 /**
  * §0.6.15 / §3.5 — the Anthropic key (masked, reveal, Save, Clear) and the model. Saving a
@@ -58,7 +59,7 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
             Icon(Icons.Outlined.Key, contentDescription = null)
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("Claude (opt-in)", style = MaterialTheme.typography.bodyLarge)
+                Text("Claude (opt-in)", style = MaterialTheme.typography.body)
                 Text(
                     text = if (storedKey != null) "Key saved — Rewrite, Expand and Summarise appear on a selection" else "No key — nothing is sent anywhere",
                     style = MaterialTheme.typography.bodySmall,

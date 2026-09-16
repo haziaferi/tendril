@@ -43,7 +43,6 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -68,6 +67,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
 
 /**
  * B§13.6 #3 — hover previews. Hold the pointer on an `@mention`, a mention block, a block
@@ -227,10 +229,10 @@ fun HoverPreviewCard(
                         contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(p.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(p.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.heading, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     // hover-preview-mock.md #1: text, so `onSurfaceVariant` (4.6+), never the faint token (2.8:1 on the mock).
-                    Text("edited " + relativeTime(p.editedAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Text("edited " + relativeTime(p.editedAt), style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
                 if (p.lines.isNotEmpty()) Spacer(Modifier.height(6.dp))
                 p.lines.forEach { line ->
@@ -245,8 +247,8 @@ fun HoverPreviewCard(
                         val prefix = when (line.kind) { LineKind.TODO_OPEN -> "☐ "; LineKind.TODO_DONE -> "☑ "; else -> "" }
                         Text(
                             prefix + line.text,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = if (line.kind == LineKind.HEADING) FontWeight.Medium else null,
+                            style = MaterialTheme.typography.description,
+                            fontWeight = if (line.kind == LineKind.HEADING) MaterialTheme.typography.heading.fontWeight else null,
                             color = if (line.kind == LineKind.COUNT) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
@@ -265,7 +267,7 @@ fun HoverPreviewCard(
                 if (footer != null) {
                     Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Text(footer, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                    Text(footer, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                 }
             }
         }

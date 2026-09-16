@@ -35,7 +35,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.theme.Register
@@ -44,6 +43,9 @@ import com.tendril.app.ui.theme.TendrilTypeface
 import com.tendril.app.ui.theme.ThemeSettings
 import com.tendril.app.ui.theme.paletteFor
 import com.tendril.app.ui.theme.resolveDark
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.ui.theme.body
 
 /**
  * 14g·1 — the one theme section both Settings homes render (the phone's Appearance disclosure,
@@ -104,7 +106,7 @@ fun ThemeSection(settings: ThemeSettings, showOled: Boolean, modifier: Modifier 
             Spacer(Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Deeper blacks", style = MaterialTheme.typography.bodyLarge)
+                    Text("Deeper blacks", style = MaterialTheme.typography.body)
                     Text(
                         "For an OLED screen: the dark ground at 4 %, every colour re-solved on it.",
                         style = MaterialTheme.typography.bodySmall,
@@ -144,8 +146,7 @@ private fun RegisterSwatch(register: Register, dark: Boolean, selected: Boolean,
         }
         Text(
             register.label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            style = if (selected) MaterialTheme.typography.eyebrow.copy(letterSpacing = MaterialTheme.typography.caption.letterSpacing) else MaterialTheme.typography.caption,
             textAlign = TextAlign.Center,
             maxLines = 1,
             softWrap = false,

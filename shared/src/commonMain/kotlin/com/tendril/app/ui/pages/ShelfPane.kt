@@ -37,10 +37,8 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
@@ -50,6 +48,7 @@ import com.tendril.app.ui.nav.ShellTopBar
 import com.tendril.app.ui.nav.WorkbenchNavState
 import com.tendril.app.ui.roadmap.DepthChips
 import com.tendril.app.ui.roadmap.RoadMapNeighbourhood
+import com.tendril.app.ui.theme.heading
 
 /**
  * B§13.4 14h·1 — the shelf: the pane at the workspace's right edge, [widthDp] wide (the
@@ -85,7 +84,7 @@ internal fun ShelfPane(
                     if (pageId == null) {
                         // A beat while the day's page is found or made; the header keeps the shelf's shape.
                         ShellTopBar(
-                            title = { Text("Today's Journal", fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+                            title = { Text("Today's Journal", style = MaterialTheme.typography.heading) },
                             navigationIcon = { ShelfGlyph(Icons.Outlined.MenuBook) },
                             actions = { CloseShelfButton(shelfState) },
                         )
@@ -176,7 +175,7 @@ private fun ShelfGraph(core: WorkbenchCore, navState: WorkbenchNavState, shelfSt
         title = {
             Text(
                 "Around " + (page?.title?.ifBlank { "Untitled" } ?: ""),
-                fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.heading, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         },
         navigationIcon = { ShelfGlyph(Icons.Outlined.AccountTree) },

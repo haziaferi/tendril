@@ -40,10 +40,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.domain.plan.TrayTasks
 import com.tendril.app.domain.urgency.urgencyOf
@@ -53,6 +51,12 @@ import com.tendril.app.ui.nav.LocalDensityProfile
 import com.tendril.app.ui.nav.TOP_BAR_HEIGHT
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.label
 
 /**
  * B§13.6 #5 — the Calendar's task tray: the Plan rail grown into a pane beside the week
@@ -91,14 +95,14 @@ internal fun TaskTray(
             modifier = Modifier.fillMaxWidth().height(TOP_BAR_HEIGHT).padding(start = 14.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Tasks", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Text("Tasks", style = MaterialTheme.typography.heading, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
             IconButton(onClick = onCollapse, modifier = Modifier.size(28.dp)) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Hide the tray", modifier = Modifier.size(18.dp)) }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
             SectionLabel("Unscheduled · ${tasks.unscheduled.size}")
             if (tasks.unscheduled.isEmpty()) {
-                Text("Nothing unscheduled", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
+                Text("Nothing unscheduled", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
             }
             tasks.unscheduled.forEach { entry ->
                 TrayChip(entry, today, showUrgency, dragging = entry.id == draggingId, dueLabel = null, onDragStart, onDrag, onDragEnd, onDragCancel, onOpen, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp))
@@ -114,7 +118,7 @@ internal fun TaskTray(
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         Text(
             "Drag a task onto a day, or onto an hour. Drop a block here to clear its When.",
-            fontSize = 12.5.sp,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
         )
@@ -148,13 +152,13 @@ internal fun TaskTrayStrip(
         ) {
             Text(
                 "Unscheduled · ${tasks.unscheduled.size}" + if (tasks.overdue.isNotEmpty()) "   Overdue · ${tasks.overdue.size}" else "",
-                fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
             )
             Icon(if (collapsed) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = if (collapsed) "Show the tray" else "Hide the tray", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (!collapsed) {
             if (tasks.isEmpty) {
-                Text("Nothing unscheduled", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Text("Nothing unscheduled", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
@@ -214,9 +218,9 @@ private fun TrayChip(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (showUrgency) UrgencyStripe(urgencyOf(entry, today), height = 20.dp)
-        Text(entry.title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (height > 36.dp) Modifier else Modifier.weight(1f))
+        Text(entry.title, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (height > 36.dp) Modifier else Modifier.weight(1f))
         if (dueLabel != null) {
-            Text(dueLabel, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(dueLabel, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
@@ -234,14 +238,14 @@ fun DragGhost(title: String, target: String?, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-        if (target != null) Text(target, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text(title, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        if (target != null) Text(target, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(text.uppercase(), fontSize = 11.sp, letterSpacing = 0.7.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 6.dp))
+    Text(text.uppercase(), style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 6.dp))
 }
 
 /** The overdue row's date and the ghost's target, one format. */
