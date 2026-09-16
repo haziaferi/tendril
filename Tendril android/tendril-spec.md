@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14f·2 — the Calendar's week grid) | §3.2 amended: `ui/calendar/WeekGridView.kt` (seven Plan lanes; date and time in one drag, `CalendarViewModel.moveBlock`), `domain/plan/WeekLayout.kt` (`laneAt`, `openScrollMinute`, `visibleAllDay`), `CalendarDefaultView.kt` (`calendar_default_view`, `defaultCalendarView`), `CalendarOpensOnSection` on both platforms' settings, `QuickAddBar.kt` (the strip on a wide window). §3.3's filter rows into the list column. §0.10 item 14: 14f·2 shipped — the pass's surfaces done; item 21 added (the desktop's clipboard crash). Critique: `docs/critiques/calendar-function.md` (+ the addendum in `tasks-calendar-mock.md`). Desktop verified; the phone walk pending. Tests 732 → 736. | §3.2, §3.3, §0.10 |
 | 2026-09-16 (14f·1 — Tasks on a wide window) | §3.3 amended: two panes from 840 dp (`LocalShellLayout`), `ui/taskshabits/TaskDetailPane.kt` (task and habit panes, chips = the menu by name), `ui/components/PaneHandle.kt` (`PaneWidthState`, `tasks_list_width`), rows' hover `···` / right-click / long-press, the habit row's × → its menu, `ui/trash/` shared (`EntryTrashSheet`, `HabitTrashSheet` take `WorkbenchCore`; §0.10 item 13 resolved), the keyboard on Habits, Merged and the phone's Pages list. Critiques: `docs/critiques/tasks-calendar-mock.md`, `tasks-function.md`. Desktop verified; the phone walk pending. Tests 730 → 732. | §3.3, §0.10 |
 | 2026-09-16 (find in page) | §3.1.1 amended: the find bar (option A of `docs/mockups/find-in-page.html`), `domain/find/FindInPage.kt`, `ui/pages/FindBar.kt`, `FindMarks` on `spansVisualTransformation`, Ctrl+F in `Shortcuts.kt` and `WorkbenchNavState.findRequested`, *Find in page* in the page's `···`. §0.10 item 19 resolved; item 14's list gains the `find` token and two find notes. Critiques: `docs/critiques/find-in-page-mock.md`, `find-in-page-function.md`. Desktop verified; the phone walk pending. Tests 725 → 730. | §3.1.1, §0.10 |
 | 2026-09-16 (14e — the keyboard) | §2.2 *The keyboard* (new bullet): one binding table (`ui/nav/Shortcuts.kt`) and the F1 card generated from it (`ShortcutsOverlay.kt`); Alt+← / Alt+→ and the mouse's side buttons with a forward list on `WorkbenchNavState`; Ctrl+Shift+N's `requestQuickAdd`; `ui/components/ListKeyboard.kt` on the tree and the Tasks list. §0.10 item 14: 14e shipped; item 18 struck (resolved by 14d); item 19 (find in page) added. Critiques: `docs/critiques/keyboard-desktop.md`, `keyboard-function.md`. Tests 713 → 725. | §2.2, §0.10 |
@@ -629,6 +630,11 @@ Genuinely undecided — distinct from §0.7.
 10. ~~**Escape on desktop** does not close an armed mind map or canvas; the X and Android's back gesture do. Compose Multiplatform's `BackHandler` needs a desktop back dispatcher that the window does not provide by default — a small wiring item in `Main.kt`, not a design question.~~ *Resolved 2026-09-12: the window did provide the dispatcher; nothing fed it. `Main.kt` adds one `NavigationEventInput` driven by the Escape key (see `tendril-windows-spec.md`, same date).*
 9. Whether this file should move out of `Tendril android/` to the repository root, now that its
    §0 is cross-platform — a mechanical move with a handful of path references to update.
+21. **The desktop dies on a clipboard failure.** Seen 2026-09-16 (14f·2's walk): a paste into a
+    text field raised `IllegalStateException: cannot open system clipboard` from Compose's
+    `TextFieldSelectionManager.paste` on the AWT thread — uncaught, so the window closed. Not the
+    app's code, but one `Thread.setDefaultUncaughtExceptionHandler` (log and keep the window) in
+    `Main.kt` would keep a clipboard hiccup from ending a session. Not started.
 20. **The desktop key file could be DPAPI-wrapped after all.** §0.6.15 and the windows spec say a
     DPAPI wrap needs JNA, which the offline build cannot fetch — but `net.java.dev.jna:jna` and
     `jna-platform` 5.6.0 are in the Gradle cache (found 2026-09-13, B§13.6 #7): a direct dependency
@@ -725,6 +731,11 @@ Genuinely undecided — distinct from §0.7.
     build). Added to the small-things list: the filter rows span both panes above the split
     (14f·2 keeps them over the list); a task's repeat cannot be changed after the Add sheet.
     14f·2 (the Calendar) next.*
+    ***14f·2 shipped 2026-09-16** — the Calendar's week grid (§3.2, amended), the opening view
+    as a Settings choice, quick add's strip on a wide window, the Tasks filters over the list
+    column. `docs/critiques/calendar-function.md` walked the build (the opening scroll fixed; the
+    clipboard crash recorded as item 21). **The pass's surfaces are done — 14a…14f·2**; 14g (the
+    theme model and the registers) next, then 14h (the shelf).*
 13. ~~**Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*~~ *Resolved 2026-09-16 (14f·1): the two Trash sheets are shared and the desktop has the button; the bell stays Android's, as the reason stands.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -1461,6 +1472,29 @@ dropdown; an empty query shows nothing; a query with no matches uses the §2.5 `
 composable ("No pages match '…'").
 
 ### 3.2 Calendar
+
+*(**Amended 2026-09-16 — B§13.4 14f·2, the tab on a wide window.** From 840 dp (`LocalShellLayout`)
+the **Week is a time grid** (`ui/calendar/WeekGridView.kt`): seven of the Day view's Plan lanes
+under one scroll and one header — the same 56 dp hour, 44 dp gutter, `timelineBlocks`, now-line
+(today's lane only) and quarter-hour snap — so the week has the day's shape rather than the
+strip's seven bulleted cards (`docs/critiques/tasks-calendar-mock.md` #11). The header is the Day
+view's per column (day and date, today tinted, *Planned Nm* as a second line; a click opens the
+Day); the all-day row holds the untimed and multi-day continuations, three then "+n"; blocks wear
+the layer's tint with `onSurface` text (the mock's 2.70:1 chips, #7). It opens scrolled an hour
+before the week's first block, else 07:00, keyed on the blocks' arrival (the mock's grid ran off
+its frame with nothing scrolling, #6). **A drag changes date and time in one gesture** (decided
+2026-09-16): the lane under the pointer is the day, the quarter-hour the time, one
+`EntryEditor.move` call for both axes (`CalendarViewModel.moveBlock`); a series asks *this one or
+all?* as every move does. Below 840 dp the strip stays. **The opening view is a Settings choice**
+(B§13.4, 2026-09-13): `calendar_default_view` — an *Opens on* chips row in the desktop's Settings
+pane and the phone's Calendar settings sheet (`CalendarOpensOnSection`, shared); unset, a wide
+window opens on the **week** (Fantastical, Sunsama, Akiflow) and a phone on the **day** — §2.2's
+default, not Month, which B§13.4's row had assumed. **Quick add on a wide window** is a strip
+under the bar (the find bar's pattern; decided 2026-09-16) opened by the bar's ⊕, the same field
+and chip preview as the Day view's inline field, which hides on a wide window and stays on the
+phone; no chord (Ctrl+Shift+N is *New task*, #8); Enter writes, Esc closes. The Tasks tab's two
+filter rows moved into its list column on a wide window (14f·1's walk, #2).
+`docs/critiques/calendar-function.md` walked the build; the phone's half is pending (testing paused).)*
 
 - Day, Week, Month views *(**and Agenda, added 2026-09-12 (§0.8 step 6c):** the next 30 days as one list grouped by day, empty days skipped — the fourth view, off the same segmented row)*; **week starts Monday**; defaults to **Day** view on open. All three draw
   *occurrences*, not stored rows (§4.1.1) — a recurring EVENT appears on every occurrence in view

@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.WorkbenchCore
+import com.tendril.app.ui.calendar.CalendarOpensOnSection
 import com.tendril.app.ui.settings.AiSettingsSection
 
 /**
@@ -41,6 +42,9 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             AiSettingsSection(core.aiKeyStore, core.keyValueStore)
             HorizontalDivider()
             DensitySection(core.keyValueStore)
+            HorizontalDivider()
+            // 14f·2 — the Calendar's opening view (`calendar_default_view`), shared with the phone's sheet.
+            CalendarOpensOnSection(core.keyValueStore)
             HorizontalDivider()
             // 14e — the overlay's second door, so the chord is not the only way to learn the chords.
             Text("Keyboard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))

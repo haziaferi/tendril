@@ -107,6 +107,12 @@ class CalendarViewModel(
         viewModelScope.launch { entryEditor.save(entry) }
     }
 
+    /** 14f·2 — a block dragged in the week grid: the column is the date, the quarter-hour the
+     * time, one editor call for both axes; a series asks the screen first, as the others do. */
+    fun moveBlock(entry: Entry, occurrenceDate: LocalDate, toDate: LocalDate, time: LocalTime, scope: MoveScope) {
+        viewModelScope.launch { entryEditor.move(entry, occurrenceDate, toDate, time, scope) }
+    }
+
     /** §0.8 step 6b — a drag's end: this occurrence, or the whole series, to [toDate]. */
     fun move(entry: Entry, occurrenceDate: LocalDate, toDate: LocalDate, scope: MoveScope) {
         viewModelScope.launch { entryEditor.move(entry, occurrenceDate, toDate, scope = scope) }

@@ -86,3 +86,28 @@ The phone changes nothing in 14f except what the Trash sheets' move touches — 
 #1, #2, #7 → the plan's colour rules; #3 keep Compose's targets; #4 → the pane is the menu by
 name; #6 → the grid scrolls, opens at 07:00; #8 → no chord on quick add; #10 → the all-day row
 grows. A function walk on each 14f build before its merge.
+
+## Addendum (2026-09-16, before 14f·2) — the app's Day timeline and Week strip, judged
+
+*The Calendar as built, on the desktop at 1200×800 (Compact), for what the week grid can reuse
+and what it replaces. Read from the screen and `PlanView.kt` / `DayTimeline.kt`.*
+
+11. **[Med · judged]** The Week on a wide window is seven cards with bulleted titles — no time
+    axis, no durations, the same words seven times; a week's *overview*, not its shape. The grid
+    replaces it above 840 dp; the strip stays the phone's (and the narrow window's) form.
+12. **[Low · judged, reuse]** The Day's Plan mode already has the geometry the grid needs —
+    56 dp per hour, a 44 dp gutter, a 24-hour canvas, the now-line, blocks sized by span or
+    estimate (dashed when estimated), a drag that snaps to the quarter hour
+    (`timelineBlocks`, `PlanView`). The grid is seven of these lanes under one scroll and one
+    header; the drag gains a horizontal axis (the column = the date) at almost no cost, so
+    time-drop and date-drop land in one gesture rather than the *drag between panes* PR.
+13. **[Low · judged]** The Day view's header — ‹ *mercoledì, settembre 16* › with *Planned 30m*
+    under it — is the header the grid wants per column: day and date, today tinted, the day's
+    planned minutes as a quiet second line. The mock's header had only the number.
+14. **[Low · judged]** Quick add is a full-width field under the date header on the Day view; the
+    mock put it in the bar. On a wide window one home is enough: a *Quick add* button in the bar
+    opening a strip under it (the find bar's pattern) with the same field and chip preview, on
+    every view; the Day view keeps its inline field on the phone.
+15. **[Low · judged]** Plan mode's *Unplanned · drag onto the day* rail is the Day's; the grid
+    shows no unplanned rail (Tasks is where they live) — dragging a task onto a week day is the
+    *drag between panes* PR (a task from the Tasks list onto the grid).

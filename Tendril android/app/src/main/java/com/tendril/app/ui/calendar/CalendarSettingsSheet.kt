@@ -27,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.components.TendrilSheet
+import com.tendril.app.ui.calendar.CalendarOpensOnSection
+import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.googlecalendar.GoogleCalendarAuthManager
 import com.tendril.app.googlecalendar.GoogleCalendarSyncEngine
 import com.tendril.app.googlecalendar.SyncOutcome
@@ -45,6 +47,8 @@ fun CalendarSettingsSheet(
     authManager: GoogleCalendarAuthManager,
     syncEngine: GoogleCalendarSyncEngine,
     preferences: GoogleCalendarPreferences,
+    /** 14f·2 — the device preferences, for the *Opens on* row. */
+    keyValueStore: KeyValueStore,
     onDismiss: () -> Unit,
 ) {
     val isConnected by preferences.isConnected.collectAsState()
@@ -83,6 +87,8 @@ fun CalendarSettingsSheet(
 
     TendrilSheet(title = "Calendar settings", onDismiss = onDismiss) {
         Column {
+            // 14f·2 — the view the Calendar opens on; the desktop's Settings pane has the same row.
+            CalendarOpensOnSection(keyValueStore, modifier = Modifier.padding(0.dp))
             Text("Google Calendar sync", style = MaterialTheme.typography.bodyMedium)
             Text(
                 if (isConnected) "Connected" else "Not connected",

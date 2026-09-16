@@ -59,6 +59,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                         authManager = container.googleCalendarAuthManager,
                         syncEngine = container.googleCalendarSyncEngine,
                         preferences = container.googleCalendarPreferences,
+                        keyValueStore = container.workbenchCore.keyValueStore,
                         onDismiss = onDismiss,
                     )
                 },

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package com.tendril.app.ui.calendar
 
@@ -26,6 +26,10 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.AddCircle
+import androidx.compose.ui.backhandler.BackHandler
+import com.tendril.app.ui.nav.LocalShellLayout
+import com.tendril.app.ui.nav.ShellLayout
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -184,8 +188,24 @@ fun CalendarScreen(
             initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao(), core.timeTracker, core.keyValueStore) }
         }
     )
-    // Defaults to Day, not Month (§2.2).
-    var view by remember { mutableStateOf(CalendarView.DAY) }
+    // 14f·2 — the opening view is a Settings choice (`calendar_default_view`); with nothing
+    // stored, Week on a wide window and Day otherwise (§2.2's phone default, not Month).
+    val wide = LocalShellLayout.current == ShellLayout.RAIL
+    var view by remember {
+        mutableStateOf(
+            when (defaultCalendarView(core.keyValueStore.get(CALENDAR_DEFAULT_VIEW_KEY), wide)) {
+                CalendarViewKey.DAY -> CalendarView.DAY
+                CalendarViewKey.WEEK -> CalendarView.WEEK
+                CalendarViewKey.MONTH -> CalendarView.MONTH
+                CalendarViewKey.AGENDA -> CalendarView.AGENDA
+            }
+        )
+    }
+    // 14f·2 — quick add's home on a wide window: a strip under the bar, opened from it; Esc closes.
+    var quickAddOpen by remember { mutableStateOf(false) }
+    BackHandler(enabled = quickAddOpen) { quickAddOpen = false }
+    // 14f·2 — a block dragged in the week grid: date and time in one gesture; a series asks first.
+    var pendingGridMove by remember { mutableStateOf<PendingGridMove?>(null) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     val allEntries by viewModel.entries.collectAsState()
     val layers by viewModel.layers.collectAsState()
@@ -226,6 +246,15 @@ fun CalendarScreen(
             dismissButton = { TextButton(onClick = { viewModel.moveTo(move.occurrence.entry, move.occurrence.startDate, move.time, MoveScope.ALL); pendingTimeMove = null }) { Text("All") } },
         )
     }
+    pendingGridMove?.let { move ->
+        AlertDialog(
+            onDismissRequest = { pendingGridMove = null },
+            title = { Text("Move \"${move.occurrence.entry.title}\" to ${move.toDate} ${move.time}?") },
+            text = { Text("This repeats. Move only this occurrence, or the whole series?") },
+            confirmButton = { TextButton(onClick = { viewModel.moveBlock(move.occurrence.entry, move.occurrence.startDate, move.toDate, move.time, MoveScope.THIS_ONE); pendingGridMove = null }) { Text("This one") } },
+            dismissButton = { TextButton(onClick = { viewModel.moveBlock(move.occurrence.entry, move.occurrence.startDate, move.toDate, move.time, MoveScope.ALL); pendingGridMove = null }) { Text("All") } },
+        )
+    }
     pendingMove?.let { move ->
         AlertDialog(
             onDismissRequest = { pendingMove = null },
@@ -250,6 +279,9 @@ fun CalendarScreen(
                 // Horizontal three-dot icon (§2.2) — never the gear, which is reserved for
                 // the main Settings tab.
                 actions = {
+                    if (wide) IconButton(onClick = { quickAddOpen = !quickAddOpen }) {
+                        Icon(Icons.Outlined.AddCircle, contentDescription = "Quick add")
+                    }
                     IconButton(onClick = { showSettings = true }) {
                         Icon(Icons.Outlined.MoreHoriz, contentDescription = "Calendar settings")
                     }
@@ -258,6 +290,9 @@ fun CalendarScreen(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            if (wide && quickAddOpen) {
+                QuickAddBar(today = selectedDate, onQuickAdd = { viewModel.quickAdd(it, selectedDate) }, onClose = { quickAddOpen = false })
+            }
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 CalendarView.entries.forEachIndexed { index, v ->
                     SegmentedButton(
@@ -337,11 +372,27 @@ fun CalendarScreen(
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
+                    showQuickAdd = !wide,
                     onSetDone = viewModel::setDone,
                     onOpenReminders = if (reminderSheet != null) { { reminderTarget = it } } else null,
                     onEdit = { editTarget = it },
                 )
-                CalendarView.WEEK -> WeekStripView(
+                CalendarView.WEEK -> if (wide) WeekGridView(
+                    weekStart = weekStart,
+                    occurrences = occurrences,
+                    habitExtras = { day ->
+                        extras.filterIsInstance<CalendarExtra.HabitAt>().filter { it.date == day }
+                            .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
+                    },
+                    onEdit = { editTarget = it },
+                    onMove = { occurrence, toDate, time ->
+                        val entry = occurrence.entry
+                        if (entry.recurrenceRule != null && entry.originalEntryId == null) pendingGridMove = PendingGridMove(occurrence, toDate, time)
+                        else viewModel.moveBlock(entry, occurrence.startDate, toDate, time, MoveScope.ALL)
+                    },
+                    onSelectDate = { selectedDate = it; view = CalendarView.DAY },
+                    onShiftWeek = { selectedDate = selectedDate.plusWeeks(it.toLong()) },
+                ) else WeekStripView(
                     selectedDate = selectedDate,
                     occurrences = occurrences,
                     extras = extras,
@@ -390,6 +441,8 @@ private fun DayView(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onQuickAdd: (ParsedEntry) -> Unit,
+    /** 14f·2 — false on a wide window, where the strip under the bar is quick add's one home. */
+    showQuickAdd: Boolean = true,
     onSetDone: (Long, Boolean) -> Unit,
     onOpenReminders: ((Entry) -> Unit)?,
     onEdit: (Entry) -> Unit,
@@ -432,7 +485,7 @@ private fun DayView(
         val parsed = remember(quickAddText, ignored, kindOverride) {
             QuickAddParser.parse(quickAddText, LocalDate.now(), EntryKind.EVENT, ignored, kindOverride)
         }
-        OutlinedTextField(
+        if (showQuickAdd) OutlinedTextField(
             value = quickAddText,
             onValueChange = { quickAddText = it; ignored = emptySet(); kindOverride = null },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -444,7 +497,7 @@ private fun DayView(
                 quickAddText = ""; ignored = emptySet(); kindOverride = null
             }),
         )
-        if (quickAddText.isNotBlank()) {
+        if (showQuickAdd && quickAddText.isNotBlank()) {
             QuickAddPreview(
                 parsed = parsed,
                 onFlipKind = { kindOverride = if (parsed.kind == EntryKind.TASK) EntryKind.EVENT else EntryKind.TASK },
@@ -596,6 +649,8 @@ private fun occurrenceSubtitle(occurrence: EntryOccurrence, day: LocalDate): Str
 
 /** A dragged occurrence dropped on a day, waiting for "this one or all?". */
 private data class PendingMove(val occurrence: EntryOccurrence, val toDate: LocalDate)
+/** 14f·2 — a grid drag on a series, waiting for "this one or all?" (both axes). */
+private data class PendingGridMove(val occurrence: EntryOccurrence, val toDate: LocalDate, val time: LocalTime)
 
 /** A block dragged to another hour on Plan mode's grid, waiting for the same question. */
 private data class PendingTimeMove(val occurrence: EntryOccurrence, val time: LocalTime)
