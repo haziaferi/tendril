@@ -30,7 +30,12 @@ import com.tendril.app.storage.AndroidAiKeyStore
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
-import com.tendril.app.storage.ThemePreferences
+import com.tendril.app.storage.migrateLegacyThemePreferences
+import com.tendril.app.widget.WidgetRefresh
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.tendril.app.sync.PagesSyncEngine
 import com.tendril.app.sync.PortableArchive
 import com.tendril.app.sync.SnapshotSyncOrchestrator
@@ -52,7 +57,6 @@ class AppContainer(context: Context) {
      * point, and someone who is not told will read a working sync as having lost their data.
      */
     val databaseWasRecovered: Boolean = databaseOpen.recovered
-    val themePreferences = ThemePreferences(context)
     val syncFolderManager = SyncFolderManager(context)
     val secretStore = SecretStore(context)
     val appLockPreferences = AppLockPreferences(context)
@@ -149,6 +153,15 @@ class AppContainer(context: Context) {
         resolveEntryUseCase, entryScheduleCoordinator, pageContentRepository, purgeRegistry,
         localImages, AndroidKeyValueStore(context), AndroidAiKeyStore(secretStore),
     )
+
+    /** 14g·1 — the theme lives in the store now; the old file is read once and deleted. */
+    val themeSettings = workbenchCore.themeSettings.also { settings ->
+        migrateLegacyThemePreferences(context, workbenchCore.keyValueStore)
+        // §9.6 — Glance widget colours resolve at placement; a colour change pushes a refresh
+        // from the setter itself, so no call site can forget the hook.
+        val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        settings.onColourChanged = { refreshScope.launch { WidgetRefresh.updateAll(context) } }
+    }
 
     companion object {
         fun from(context: Context): AppContainer =

@@ -83,7 +83,6 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
         },
         settingsContent = {
             SettingsScreen(
-                themePreferences = container.themePreferences,
                 syncFolderManager = container.syncFolderManager,
                 secretStore = container.secretStore,
                 appLockPreferences = container.appLockPreferences,

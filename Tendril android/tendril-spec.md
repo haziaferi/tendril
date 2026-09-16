@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14g·1 — the theme model) | §2.3 rewritten as the model: ground × hue × mode, ten registers (`ui/theme/Registers.kt` — Clay, Moss and Mauve return solved on the cold ground), every token solved to a floor (`ColorSolve.kt`, `paletteFor`; text into the 9.5–13:1 band, dim/faint on both grounds, the accent by lightness alone, marks to 3:1), mode System default, `ThemeSettings` in `KeyValueStore` on both platforms with the phone's `ThemePreferences` migrated once and deleted, `ThemeSection` shared, the type scale clamped to 400/500. `Theme.kt` maps the surface-container family; the scaffold sits every route on one `Surface`. §0.10 item 14: 14g·1 shipped. Critiques: `docs/critiques/registers-mock.md`, `registers-function.md`. Desktop verified; the phone walk pending. Tests 736 → 748. | §2.3, §0.10 |
 | 2026-09-16 (14f·2 — the Calendar's week grid) | §3.2 amended: `ui/calendar/WeekGridView.kt` (seven Plan lanes; date and time in one drag, `CalendarViewModel.moveBlock`), `domain/plan/WeekLayout.kt` (`laneAt`, `openScrollMinute`, `visibleAllDay`), `CalendarDefaultView.kt` (`calendar_default_view`, `defaultCalendarView`), `CalendarOpensOnSection` on both platforms' settings, `QuickAddBar.kt` (the strip on a wide window). §3.3's filter rows into the list column. §0.10 item 14: 14f·2 shipped — the pass's surfaces done; item 21 added (the desktop's clipboard crash). Critique: `docs/critiques/calendar-function.md` (+ the addendum in `tasks-calendar-mock.md`). Desktop verified; the phone walk pending. Tests 732 → 736. | §3.2, §3.3, §0.10 |
 | 2026-09-16 (14f·1 — Tasks on a wide window) | §3.3 amended: two panes from 840 dp (`LocalShellLayout`), `ui/taskshabits/TaskDetailPane.kt` (task and habit panes, chips = the menu by name), `ui/components/PaneHandle.kt` (`PaneWidthState`, `tasks_list_width`), rows' hover `···` / right-click / long-press, the habit row's × → its menu, `ui/trash/` shared (`EntryTrashSheet`, `HabitTrashSheet` take `WorkbenchCore`; §0.10 item 13 resolved), the keyboard on Habits, Merged and the phone's Pages list. Critiques: `docs/critiques/tasks-calendar-mock.md`, `tasks-function.md`. Desktop verified; the phone walk pending. Tests 730 → 732. | §3.3, §0.10 |
 | 2026-09-16 (find in page) | §3.1.1 amended: the find bar (option A of `docs/mockups/find-in-page.html`), `domain/find/FindInPage.kt`, `ui/pages/FindBar.kt`, `FindMarks` on `spansVisualTransformation`, Ctrl+F in `Shortcuts.kt` and `WorkbenchNavState.findRequested`, *Find in page* in the page's `···`. §0.10 item 19 resolved; item 14's list gains the `find` token and two find notes. Critiques: `docs/critiques/find-in-page-mock.md`, `find-in-page-function.md`. Desktop verified; the phone walk pending. Tests 725 → 730. | §3.1.1, §0.10 |
@@ -736,6 +737,12 @@ Genuinely undecided — distinct from §0.7.
     column. `docs/critiques/calendar-function.md` walked the build (the opening scroll fixed; the
     clipboard crash recorded as item 21). **The pass's surfaces are done — 14a…14f·2**; 14g (the
     theme model and the registers) next, then 14h (the shelf).*
+    ***14g·1 shipped 2026-09-16** — the theme model (§2.3, rewritten): ten registers on two
+    grounds, every token solved to a floor and test-walked, mode System / Light / Dark with System
+    default, the theme in `KeyValueStore` on both platforms (the phone's file migrated once), one
+    shared Settings section, DM Sans 400/500 only. `docs/critiques/registers-function.md` walked
+    the build (the desktop's unpainted ground fixed in the scaffold). 14g·2 (the token map across
+    elements) and 14g·3 (the urgency ladder, v20) next, then 14h.*
 13. ~~**Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*~~ *Resolved 2026-09-16 (14f·1): the two Trash sheets are shared and the desktop has the button; the bell stays Android's, as the reason stands.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -913,64 +920,68 @@ navigation-paradigm question later.
 
 ### 2.3 Theming system (Settings → Appearance)
 
-**Decided**, scoped to Workbench only (the other three navigation explorations do not get this
-theming system).
+**Rewritten 2026-09-16 (14g·1, B§13.7) — the model is built.** The eight hand-typed palettes that
+stood here from 2026-08 to 2026-09-16 are in git history (`Palette.kt` at `854ba1b`); nothing in
+the app reads a typed hex any more.
 
-- Lives behind a **collapsed-by-default disclosure row** in Settings (icon, current summary e.g.
-  "Ink · Light · Sans", chevron) — not always-expanded controls, to avoid accidental taps while
-  scrolling Settings.
-- **4 colour themes × 2 modes = 8 palettes.** Every text/background pairing is WCAG AA verified:
-  4.5:1 for body/small text, 3:1 for large text (≥~24px or ≥~19px bold) and icon-only glyphs.
-- **2 typefaces**, selected independently of colour: **Sans** (DM Sans) and **Serif** (Source Serif
-  4) — one family for both headings and body in either case, chosen deliberately over a display+body
-  split for lower layout risk.
+**A theme is ground × hue × mode; a register is a named preset of the first two.** Shared by both
+platforms through `KeyValueStore` (`theme_register`, `theme_mode`, `theme_typeface`, `theme_oled` —
+`ui/theme/ThemeSettings.kt`; the phone's old `tendril_theme_prefs` file is migrated once at start
+and deleted, an explicit old mode kept, a never-touched one becoming System).
 
-**Exact palette values** (hex, from the live prototype's source):
+- **Grounds** (`ui/theme/Registers.kt`, `Ground`): *neutral* (`#FFFFFF` / `#1B1D21`, Ink's), *cold*
+  (`#FBFBFA` / `#101216`, Console's), and Swiss's own cold pair (`#F4F6F8` / `#0E1018`). Never warm
+  (B§13.7.1). Each ground carries a text *seed* — its near-black and near-white — that the solver
+  starts from.
+- **Registers** (`Register.ALL`, ten): Ink (neutral, slate), Console (violet), Swiss (navy + signal
+  yellow as a second channel), Playground (teal + warm), Blush (pink), Chalk (sand), Kodachrome
+  (rust), and — returned 2026-09-16 as registers, their old accents on the cold ground — **Clay,
+  Moss, Mauve**. A stored old name (`CLAY`) resolves to its register. Adding one is a hue and a
+  label; the solver does the rest.
+- **Mode**: System / Light / Dark, **default System** (Android's night mode, Windows' app theme
+  through `isSystemInDarkTheme()`). The recorded tri-state defect is closed: no explicit flag,
+  System is a choice like the other two.
+- **Typeface**: Sans (DM Sans) / Serif (Source Serif 4), one family for everything; the scale
+  carries **400 and 500 only** (`eyePassWeight`, B§13.7.3 rule 2) and there is no base-size
+  control — density (§2.2) is the size lever.
+- **Deeper blacks** (`theme_oled`, phone only): the register's dark ground at 4 % lightness, every
+  token re-solved on it. The desktop never reads the key (B§13.7.3 rule 3).
 
-| Theme | Mode | bg | surface2 | text | textDim | textFaint | accent | accentStrong | onAccent | accentSoft | accentSoftText | border |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Ink | Light | `#FFFFFF` | `#F1F0EC` | `#1B1B18` | `#6B6A63` | `#959389` | `#4A5568` | `#333D4D` | `#FFFFFF` | `#E7EAEE` | `#3D4759` | `#E4E2DA` |
-| Ink | Dark | `#1B1D21` | `#24262B` | `#EDEDEF` | `#9B9DA3` | `#6A6C72` | `#8792A6` | `#A9B3C4` | `#12131A` | `#262A33` | `#9BAAC2` | `#2A2D33` |
-| Clay | Light | `#FFFFFF` | `#F1E9DC` | `#2A2320` | `#7A6B5C` | `#A28F79` | `#A87249` | `#8A5D3B` | `#FFFFFF` | `#F3E4D3` | `#7A4E2E` | `#EBDFCC` |
-| Clay | Dark | `#221C18` | `#2B241F` | `#F2EAE1` | `#B0A190` | `#776A5A` | `#D4A57C` | `#E8C39D` | `#1A1310` | `#33281F` | `#E0B98E` | `#362E27` |
-| Moss | Light | `#FFFFFF` | `#EBF0E9` | `#1E241F` | `#5E6B5F` | `#889783` | `#6E8C70` | `#48624A` | `#FFFFFF` | `#E4ECE3` | `#3C5240` | `#E2E9E0` |
-| Moss | Dark | `#1C211B` | `#232A22` | `#E9EFE7` | `#9DAA9A` | `#6B766A` | `#93AC93` | `#B3C7B1` | `#131A13` | `#253026` | `#A9C2A8` | `#2A322A` |
-| Mauve | Light | `#FFFFFF` | `#F1E7EC` | `#241E22` | `#7A6B72` | `#A38C99` | `#A9708D` | `#7D4D64` | `#FFFFFF` | `#F0DEE6` | `#7A4A5E` | `#EBD9E1` |
-| Mauve | Dark | `#211A23` | `#29212C` | `#F0E6EB` | `#AC9AA5` | `#77636D` | `#CC93AC` | `#E0AFC4` | `#18121A` | `#322730` | `#DBA9BE` | `#362B38` |
+**Every token is solved, not typed** (`paletteFor(register, dark, oled)`, `ColorSolve.kt`). The
+floors, `Floors` in code:
 
-`surface` is white (light) / the theme's near-black-tinted dark tone (dark) in every case — see
-prototype source for the exact `surface`/`surface-3` steps not tabulated above.
+| token | rule | floor |
+|---|---|---|
+| `text` | the seed pulled toward the ground until it reads in the **9.5–13:1 band**, stopping at ~12 | B§13.7.3 rule 2; the critique measured the mock's registers at 15–17.5 |
+| `surface2` | text mixed 4 % (light) / 6 % (dark) into the ground | — |
+| `textDim` | the smallest share of text over the ground that clears the floor **on the ground and on `surface2`** | 4.6:1 (the mock solved on the ground only and dim read 4.28–4.51 on `surface2`) |
+| `textFaint` | the same, both grounds | 3.05:1 |
+| `accent` | the hue, darkened (light) or lightened (dark) **by lightness alone** until it clears — hue and saturation kept, so Clay stays clay | 8.0:1 light / 7.6:1 dark |
+| `onAccent` | white on a light ground, the ground on a dark one, whichever clears | 4.6:1 |
+| `accentSoft` / `accentSoftText` | accent 12 % / 22 % into the ground; its text solved on it | 4.6:1 |
+| `accentStrong` | the solved accent mixed 80 % with the text | — |
+| `border` | text 11 % / 14 % into the ground — a meaningless hairline; a hairline that means something takes `textFaint` | — |
+| `third` / `thirdSoft` | the second channel solved as a mark, else accent mixed 55 % with text | 3.0:1 (Swiss's yellow measured 2.6 on the mock) |
 
-**Two colours in the app sit outside this table entirely (recorded 2026-09-06).** Inline links and
-`@` page mentions in the block editor both render one hardcoded blue that is not a palette token and
-appears in none of the eight rows above. It is identical in Ink and in Mauve, in light mode and in
-dark, and its contrast against `bg` was never part of the AA verification this section claims for
-"every text/background pairing" — so that claim is true of every pairing the palette defines, and
-silently not true of the two most-tapped pieces of text inside a page. Either they become tokens, or
-the verification sentence has to say what it excludes.
+`RegisterSolveTest` walks every register × mode × OLED — 30 palettes — against these floors on every
+build, so the AA claim of this section is a property of the code. Ink is solved like the rest (its
+dark accent measured 5.4 where the model asks 7.6; the "unchanged" exception is withdrawn). The
+Material mapping (`Theme.kt`) covers the surface-container family too, so a dark register never
+shows Material's own purple-grey through a menu; `tertiary` is 14g·2's to map.
 
-**And the mode setting has three states, not two (recorded 2026-09-06).** Before the picker is ever
-touched the app follows the system, which is a third state that neither "4 colour themes × 2 modes =
-8 palettes" nor the flat picker describes. Choosing a mode sets an explicit flag that nothing ever
-clears, so "follow the system" becomes unreachable the moment any mode is chosen — a one-way door in
-a document whose running rule is that nothing is a one-way, permanent choice (§5.3). The widgets
-re-implement the same tri-state separately, which is a second place for it to drift.
+**The section**: `ui/settings/ThemeSection.kt`, shared — the ten swatches (each the accent on its
+own ground in the mode being shown, the name under, the register's *use* as a caption), Mode,
+Typeface, and on the phone *Deeper blacks*; rendered inside the phone's collapsed-by-default
+Appearance disclosure (kept: icon, summary "Ink · System · Sans", chevron) and in the desktop pane
+between Density and *Opens on*. `docs/critiques/registers-mock.md` shaped the floors;
+`registers-function.md` walked the build (the desktop's unpainted ground fixed — the scaffold now
+sits every route on one `Surface`). The phone walk is pending (testing paused).
 
-**[Amended] 2026-09-14 — the theming model is replaced by B§13.7, not yet built.** A theme becomes
-**ground × hue × mode**: two grounds only (*neutral*, Ink's; *cold*, Console's — never warm, for
-eye strain measured on the person who uses the app), one accent hue solved to 8.0:1 light / 7.6:1
-dark, and System / Light / Dark with System the default (which closes the tri-state defect above).
-A *register* is a named preset of ground + hue: **Ink, Console, Swiss, Playground, Blush, Chalk,
-Kodachrome** (B§13.7.2, with every hex and ratio). Clay, Moss and Mauve tint their surfaces and are
-not registers; their hues may return as registers later, one solve each. Every derived token
-(`textDim`, `textFaint`, `accentSoft`, `border`) is **solved to a contrast floor** rather than
-tabulated, so the AA claim above becomes a property of `Theme.kt`; links and mentions take the accent
-token, closing the other recorded defect. The table above stays as the record of what shipped.
-Shared by both platforms; the screen's own settings — density scale, *Deeper blacks* on OLED — are
-per device (B§13.7.3). Data colour is B§13.8 (same day): urgency is a task's colour — a five-step ladder,
-`Entry.important` becoming `importance` 0–4 with deadline pressure as an input — category is its
-database's or first label's hue, databases take any hue with a mandatory icon, calendar layers get
-dots in Month and Agenda. Lands with §0.10 item 14's PR 14g, the ladder's schema step included.
+**Data colour** is B§13.8: urgency is a task's colour (a five-step ladder, `Entry.important`
+becoming `importance` 0–4 — 14g·3, schema v20), category its database's or first label's hue, a
+database any hue with a mandatory icon, calendar layers dots in Month and Agenda; links and
+`@` mentions take the accent token and find gets its own mark with the token map (14g·2). The
+recorded hardcoded-blue defect closes there.
 
 ### 2.4 Accessibility scope (Decided 2026-08-26)
 

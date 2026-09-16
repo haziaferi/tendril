@@ -24,7 +24,7 @@ import com.tendril.app.applock.showAppUnlockPrompt
 import com.tendril.app.notifications.reconcileAlarms
 import com.tendril.app.ui.nav.AndroidWorkbenchScaffold
 import com.tendril.app.ui.theme.TendrilTheme
-import com.tendril.app.ui.theme.defaultTendrilMode
+import com.tendril.app.ui.theme.resolveDark
 import kotlinx.coroutines.launch
 
 /**
@@ -84,12 +84,9 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch { reconcileAlarms(applicationContext) }
 
         setContent {
-            val colorTheme by container.themePreferences.colorTheme.collectAsState()
-            val modeIsExplicit by container.themePreferences.modeIsExplicit.collectAsState()
-            val explicitMode by container.themePreferences.explicitMode.collectAsState()
-            val typeface by container.themePreferences.typeface.collectAsState()
-            val systemDefaultMode = defaultTendrilMode()
-            val mode = if (modeIsExplicit) explicitMode ?: systemDefaultMode else systemDefaultMode
+            // 14g·1 — register · mode · typeface · OLED from the shared store; System follows the OS.
+            val theme = container.themeSettings.observe()
+            val dark = theme.mode.resolveDark()
 
             var isUnlocked by isUnlockedForSession
             val appLockEnabled by container.appLockPreferences.enabled.collectAsState()
@@ -160,7 +157,7 @@ class MainActivity : FragmentActivity() {
                 if (!isUnlocked) requestUnlock()
             }
 
-            TendrilTheme(colorTheme = colorTheme, mode = mode, typeface = typeface) {
+            TendrilTheme(register = theme.register, dark = dark, typeface = theme.typeface, oled = theme.oled) {
                 if (appLockEnabled && !isUnlocked) {
                     LockScreen(onUnlockClick = ::requestUnlock)
                 } else {

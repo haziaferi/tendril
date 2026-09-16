@@ -41,14 +41,23 @@ fun fontFamilyFor(typeface: TendrilTypeface): FontFamily = when (typeface) {
 }
 
 /**
+ * B§13.7.3 rule 2 (14g·1) — no thin weights: the scale uses DM Sans 400 and 500 only. Anything
+ * lighter reads as 400, anything at or over 450 as 500; a site that asks for bold gets its own
+ * emphasis, but the *scale* never does. (No base-size control either — density is the size lever.)
+ */
+fun eyePassWeight(weight: FontWeight?): FontWeight =
+    if ((weight ?: FontWeight.Normal).weight >= 450) FontWeight.Medium else FontWeight.Normal
+
+/**
  * One family for both headings and body (§2.3 — deliberately not a display+body split).
- * Sizes/line-heights follow Material3's default type scale; only the family swaps per theme.
+ * Sizes/line-heights follow Material3's default type scale; only the family swaps per theme,
+ * and every style's weight is clamped by [eyePassWeight].
  */
 @Composable
 fun typographyFor(typeface: TendrilTypeface): Typography {
     val family = fontFamilyFor(typeface)
     val base = Typography()
-    fun TextStyle.withFamily() = copy(fontFamily = family)
+    fun TextStyle.withFamily() = copy(fontFamily = family, fontWeight = eyePassWeight(fontWeight))
     return Typography(
         displayLarge = base.displayLarge.withFamily(),
         displayMedium = base.displayMedium.withFamily(),

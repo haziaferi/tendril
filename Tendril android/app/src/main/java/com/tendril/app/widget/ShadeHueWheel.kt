@@ -29,8 +29,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.tendril.app.ui.theme.TendrilColorTheme
-import com.tendril.app.ui.theme.TendrilMode
+import com.tendril.app.ui.theme.Register
 import kotlin.math.atan2
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -49,8 +48,8 @@ private const val WHEEL_BITMAP_HEIGHT = 120
  */
 @Composable
 fun ShadeHueWheel(
-    theme: TendrilColorTheme,
-    mode: TendrilMode,
+    theme: Register,
+    mode: Boolean,
     shade: Int,
     hueOffset: Int,
     onChange: (shade: Int, hueOffset: Int) -> Unit,
@@ -119,7 +118,7 @@ private inline fun applyPick(position: Offset, radiusPx: Float, onChange: (Int, 
     onChange(shadePct, angleDeg)
 }
 
-private fun buildWheelBitmap(theme: TendrilColorTheme, mode: TendrilMode): Bitmap {
+private fun buildWheelBitmap(theme: Register, mode: Boolean): Bitmap {
     val bmp = Bitmap.createBitmap(WHEEL_BITMAP_WIDTH, WHEEL_BITMAP_HEIGHT, Bitmap.Config.ARGB_8888)
     val r = WHEEL_BITMAP_WIDTH / 2f
     for (py in 0 until WHEEL_BITMAP_HEIGHT) {
