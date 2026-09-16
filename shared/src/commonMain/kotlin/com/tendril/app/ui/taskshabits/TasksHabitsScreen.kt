@@ -264,50 +264,54 @@ private fun TasksHabitsBody(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                TabSelection.entries.forEachIndexed { index, t ->
-                    SegmentedButton(
-                        selected = tab == t,
-                        onClick = { setTab(t) },
-                        shape = SegmentedButtonDefaults.itemShape(index, TabSelection.entries.size),
-                    ) {
-                        Text(
-                            stringResource(
-                                when (t) {
-                                    TabSelection.TASKS -> Res.string.taskshabits_tab_tasks
-                                    TabSelection.HABITS -> Res.string.taskshabits_tab_habits
-                                    TabSelection.MERGED -> Res.string.taskshabits_tab_merged
-                                }
-                            )
-                        )
-                    }
-                }
-            }
-
-            if (tab != TabSelection.HABITS) {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    TimeFilter.entries.forEachIndexed { index, f ->
+            // 14f·2 (·1's walk, #2) — the two filter rows belong to the list: on a wide window
+            // they sit over the list column, so the pane starts at the bar.
+            val filters: @Composable () -> Unit = {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    TabSelection.entries.forEachIndexed { index, t ->
                         SegmentedButton(
-                            selected = filter == f,
-                            onClick = { setFilter(f) },
-                            shape = SegmentedButtonDefaults.itemShape(index, TimeFilter.entries.size),
+                            selected = tab == t,
+                            onClick = { setTab(t) },
+                            shape = SegmentedButtonDefaults.itemShape(index, TabSelection.entries.size),
                         ) {
                             Text(
                                 stringResource(
-                                    when (f) {
-                                        TimeFilter.TODAY -> Res.string.taskshabits_filter_today
-                                        TimeFilter.WEEK -> Res.string.taskshabits_filter_week
-                                        TimeFilter.MONTH -> Res.string.taskshabits_filter_month
+                                    when (t) {
+                                        TabSelection.TASKS -> Res.string.taskshabits_tab_tasks
+                                        TabSelection.HABITS -> Res.string.taskshabits_tab_habits
+                                        TabSelection.MERGED -> Res.string.taskshabits_tab_merged
                                     }
-                                ),
-                                style = MaterialTheme.typography.labelMedium,
+                                )
                             )
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-            }
 
+                if (tab != TabSelection.HABITS) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        TimeFilter.entries.forEachIndexed { index, f ->
+                            SegmentedButton(
+                                selected = filter == f,
+                                onClick = { setFilter(f) },
+                                shape = SegmentedButtonDefaults.itemShape(index, TimeFilter.entries.size),
+                            ) {
+                                Text(
+                                    stringResource(
+                                        when (f) {
+                                            TimeFilter.TODAY -> Res.string.taskshabits_filter_today
+                                            TimeFilter.WEEK -> Res.string.taskshabits_filter_week
+                                            TimeFilter.MONTH -> Res.string.taskshabits_filter_month
+                                        }
+                                    ),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+            if (!wide) filters()
             val lists: @Composable () -> Unit = {
                 when (tab) {
                     TabSelection.TASKS -> TasksList(
@@ -320,7 +324,7 @@ private fun TasksHabitsBody(
             }
             if (!wide) lists() else Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.width(listWidth.widthDp.dp).fillMaxHeight()) {
-                    lists()
+                    Column(modifier = Modifier.fillMaxSize()) { filters(); lists() }
                     PaneHandle(listWidth, modifier = Modifier.align(Alignment.CenterEnd))
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
