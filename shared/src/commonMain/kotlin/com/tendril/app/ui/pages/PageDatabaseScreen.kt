@@ -151,7 +151,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                         onValueChange = { titleField = it; viewModel.updateTitle(it) },
                         readOnly = viewOnly,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )
                 },
@@ -178,7 +178,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                         // §0.6.14 — which relation column means "blocked by".
                         DropdownMenuItem(text = { Text("Blocked by…") }, onClick = { showMenu = false; showBlockedBy = true })
                         DropdownMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
-                        paneChrome?.menuItems?.invoke(this)
+                        paneChrome?.menuItems?.invoke(this) { showMenu = false }
                     }
                 },
             )

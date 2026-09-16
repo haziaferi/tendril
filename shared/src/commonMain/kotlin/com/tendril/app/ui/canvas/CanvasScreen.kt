@@ -138,7 +138,7 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                         onValueChange = { titleField = it; viewModel.updateTitle(it) },
                         readOnly = viewOnly,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )
                 },
@@ -150,7 +150,7 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                         paneChrome.actions(this)
                         Box {
                             IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
-                            DropdownMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) }
+                            DropdownMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) { showPaneMenu = false } }
                         }
                     }
                 },

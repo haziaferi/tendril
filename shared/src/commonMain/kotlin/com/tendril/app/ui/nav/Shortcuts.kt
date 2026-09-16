@@ -25,6 +25,7 @@ enum class ShortcutAction(val group: ShortcutGroup, val label: String) {
     BACK(ShortcutGroup.NAVIGATE, "Back"),
     FORWARD(ShortcutGroup.NAVIGATE, "Forward"),
     TOGGLE_TREE(ShortcutGroup.NAVIGATE, "Hide or show the tree"),
+    TOGGLE_SHELF(ShortcutGroup.NAVIGATE, "Close or reopen the shelf"),
     NEW_PAGE(ShortcutGroup.CREATE, "New page"),
     NEW_TASK(ShortcutGroup.CREATE, "New task"),
     JOURNAL_TODAY(ShortcutGroup.CREATE, "Today's Journal"),
@@ -67,6 +68,8 @@ val SHORTCUTS: List<Pair<ShortcutAction, Chord>> = listOf(
     ShortcutAction.BACK to Chord(Key.DirectionLeft, ctrl = false, alt = true),
     ShortcutAction.FORWARD to Chord(Key.DirectionRight, ctrl = false, alt = true),
     ShortcutAction.TOGGLE_TREE to Chord(Key.Backslash),
+    // 14h·1 — rhymes with the tree's: the shelf is the other side pane.
+    ShortcutAction.TOGGLE_SHELF to Chord(Key.Backslash, shift = true),
     ShortcutAction.NEW_PAGE to Chord(Key.N),
     ShortcutAction.NEW_TASK to Chord(Key.N, shift = true),
     ShortcutAction.JOURNAL_TODAY to Chord(Key.T),
