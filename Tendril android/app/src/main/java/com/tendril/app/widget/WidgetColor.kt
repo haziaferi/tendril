@@ -1,8 +1,10 @@
 package com.tendril.app.widget
 
 import androidx.compose.ui.graphics.Color
-import com.tendril.app.ui.theme.TendrilColorTheme
-import com.tendril.app.ui.theme.TendrilMode
+import com.tendril.app.ui.theme.Register
+import com.tendril.app.ui.theme.paletteFor
+import com.tendril.app.ui.theme.toHsl
+import com.tendril.app.ui.theme.toSrgb
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -14,30 +16,25 @@ fun Color.toRgb(): Rgb = Rgb(
 )
 
 /**
- * §8.3 — accent2's own base HSL per theme/mode, already the analogous (±30°) rotation off
- * that theme's primary accent, transcribed verbatim from `noema-widgets-audit.html`'s
- * `PALETTES` table (`baseHue`/`baseSat`/`baseL`) — not re-derived, same "copy the prototype's
- * numbers" rule [com.tendril.app.ui.theme.TendrilPalette] follows for the rest of the palette.
- * At Shade=0/Hue=0 these reproduce the original fixed accent2 hex exactly (verified in the
- * prototype byte-for-byte across all 8 palettes).
+ * §8.3 — accent2's base HSL: the analogous (−30°) rotation off the register's *solved* accent
+ * (14g·1 — derived from `paletteFor`, one rule for every register, where the four old themes
+ * had a transcribed table). The eight old values were this rotation of the old accents to
+ * within a few degrees; a widget placed before 14g re-resolves on its next refresh, and the
+ * configure screen's audit (§8.4) still runs on whatever the rule yields.
  */
 data class Accent2Base(val hue: Float, val sat: Float, val lightness: Float)
 
-private val ACCENT2_BASE: Map<Pair<TendrilColorTheme, TendrilMode>, Accent2Base> = mapOf(
-    (TendrilColorTheme.INK to TendrilMode.LIGHT) to Accent2Base(188.0f, 0.169f, 0.349f),
-    (TendrilColorTheme.INK to TendrilMode.DARK) to Accent2Base(187.7f, 0.148f, 0.59f),
-    (TendrilColorTheme.CLAY to TendrilMode.LIGHT) to Accent2Base(356.2f, 0.394f, 0.473f),
-    (TendrilColorTheme.CLAY to TendrilMode.DARK) to Accent2Base(358.0f, 0.506f, 0.659f),
-    (TendrilColorTheme.MOSS to TendrilMode.LIGHT) to Accent2Base(94.6f, 0.119f, 0.427f),
-    (TendrilColorTheme.MOSS to TendrilMode.DARK) to Accent2Base(88.8f, 0.131f, 0.625f),
-    (TendrilColorTheme.MAUVE to TendrilMode.LIGHT) to Accent2Base(359.0f, 0.250f, 0.514f),
-    (TendrilColorTheme.MAUVE to TendrilMode.DARK) to Accent2Base(3.2f, 0.358f, 0.688f),
-)
+private val accent2Cache = HashMap<Pair<String, Boolean>, Accent2Base>()
 
-fun accent2Base(theme: TendrilColorTheme, mode: TendrilMode): Accent2Base = ACCENT2_BASE.getValue(theme to mode)
+fun accent2Base(register: Register, dark: Boolean): Accent2Base = synchronized(accent2Cache) {
+    accent2Cache.getOrPut(register.key to dark) {
+        val (h, s, l) = paletteFor(register, dark).accent.toSrgb().toHsl()
+        Accent2Base((((h - 30.0) % 360.0 + 360.0) % 360.0).toFloat(), s.toFloat(), l.toFloat())
+    }
+}
 
 /** §8.3 — "the mode's own verified-safe extreme" Shade=100% interpolates toward. */
-private val SAFE_LIGHTNESS: Map<TendrilMode, Float> = mapOf(TendrilMode.LIGHT to 0.12f, TendrilMode.DARK to 0.88f)
+private fun safeLightness(dark: Boolean): Float = if (dark) 0.88f else 0.12f
 
 data class Rgb(val r: Int, val g: Int, val b: Int) {
     fun toHex(): String = "#%02X%02X%02X".format(r, g, b)
@@ -77,9 +74,9 @@ fun hslToRgb(hueDeg: Float, saturation: Float, lightness: Float): Rgb {
  * accent2 tone toward the mode's safe extreme; Hue (±90°) rotates around accent2's own base
  * hue. Default state (shade=0, hue=0) reproduces the original fixed accent2 color exactly.
  */
-fun currentAccent2(theme: TendrilColorTheme, mode: TendrilMode, shade: Int, hueOffsetDeg: Int): Rgb {
-    val base = accent2Base(theme, mode)
-    val safeL = SAFE_LIGHTNESS.getValue(mode)
+fun currentAccent2(register: Register, dark: Boolean, shade: Int, hueOffsetDeg: Int): Rgb {
+    val base = accent2Base(register, dark)
+    val safeL = safeLightness(dark)
     val l = base.lightness + (safeL - base.lightness) * (shade / 100f)
     val h = base.hue + hueOffsetDeg
     return hslToRgb(h, base.sat, l)
@@ -136,15 +133,15 @@ data class ContrastResult(val role: ContrastRole, val ratio: Double, val pass: B
  * supplies every role's foreground color except ACCENT2, which is always derived from
  * shade/hue here (never independently overridable — matches §8.3's own model). */
 fun auditContrast(
-    theme: TendrilColorTheme,
-    mode: TendrilMode,
+    register: Register,
+    dark: Boolean,
     widgetBg: Rgb,
     opacityPct: Int,
     shade: Int,
     hueOffsetDeg: Int,
     roleRgb: (ContrastRole) -> Rgb,
 ): List<ContrastResult> = ContrastRole.entries.map { role ->
-    val fg = if (role == ContrastRole.ACCENT2) currentAccent2(theme, mode, shade, hueOffsetDeg) else roleRgb(role)
+    val fg = if (role == ContrastRole.ACCENT2) currentAccent2(register, dark, shade, hueOffsetDeg) else roleRgb(role)
     val ratio = worstCaseContrast(fg, widgetBg, opacityPct)
     ContrastResult(role, ratio, ratio >= role.threshold)
 }

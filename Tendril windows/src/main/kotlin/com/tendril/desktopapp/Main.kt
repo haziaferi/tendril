@@ -71,10 +71,8 @@ import com.tendril.app.ui.nav.ShortcutsState
 import com.tendril.app.ui.nav.shortcutFor
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.isAltPressed
-import com.tendril.app.ui.theme.TendrilColorTheme
-import com.tendril.app.ui.theme.TendrilMode
 import com.tendril.app.ui.theme.TendrilTheme
-import com.tendril.app.ui.theme.TendrilTypeface
+import com.tendril.app.ui.theme.resolveDark
 import com.tendril.desktopapp.sync.DesktopSyncFolderManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -91,8 +89,10 @@ import javax.swing.JFileChooser
  *
  * Every tab is shared now: Canvas (2026-09-11, `tendril-spec.md` §0.6.10), Calendar, Tasks &
  * Habits, Road Map (2026-09-12/13) and, with §0.6.15, Settings — a minimal [DesktopSettingsScreen]
- * holding the Claude section; theme, the sync folder, backups and reminders are still Android's.
- * Theme is fixed (Ink/Light/Sans) until the desktop pass (§0.10 item 14) gives it a picker.
+ * holding the Claude section; the sync folder, backups and reminders are still Android's.
+ * 14g·1 — the theme is the shared setting (`ThemeSettings`, `prefs.properties`): a register, a
+ * mode whose System follows Windows through `isSystemInDarkTheme()`, a typeface; the phone's
+ * OLED toggle never applies here.
  */
 fun main() {
     val dbFile = File(File(System.getProperty("user.home"), ".tendril-desktop-dev"), "tendril.db")
@@ -164,7 +164,8 @@ fun main() {
                     core.keyValueStore.put(WINDOW_FRAME_KEY, stored.encode())
                 }
             }
-            TendrilTheme(colorTheme = TendrilColorTheme.INK, mode = TendrilMode.LIGHT, typeface = TendrilTypeface.SANS) {
+            val theme = core.themeSettings.observe()
+            TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
                 App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions)
             }
         }

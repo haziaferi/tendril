@@ -7,11 +7,12 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /** Exposes the raw palette to composables that need tokens Material3's ColorScheme has no slot for
- *  (accentSoft/accentSoftText, textFaint, border) — the mapped ColorScheme below covers the rest. */
-val LocalTendrilPalette = staticCompositionLocalOf { paletteFor(TendrilColorTheme.INK, TendrilMode.LIGHT) }
+ *  (accentSoft/accentSoftText, textFaint, border, third) — the mapped ColorScheme below covers the rest. */
+val LocalTendrilPalette = staticCompositionLocalOf { paletteFor(Register.INK, dark = false) }
 
 private fun ColorScheme.applyPalette(p: TendrilPalette): ColorScheme = copy(
     primary = p.accent,
@@ -20,25 +21,45 @@ private fun ColorScheme.applyPalette(p: TendrilPalette): ColorScheme = copy(
     onPrimaryContainer = p.accentSoftText,
     secondary = p.accentStrong,
     onSecondary = p.onAccent,
+    // `tertiary` stays Material's until 14g·2 maps `third` onto the elements that carry it.
     background = p.bg,
     onBackground = p.text,
     surface = p.bg,
     onSurface = p.text,
     surfaceVariant = p.surface2,
     onSurfaceVariant = p.textDim,
+    // Material's container family — menus, sheets, dialogs, the switcher — sits on the same two
+    // grounds, so a dark register never shows Material's own purple-grey through the chrome.
+    surfaceContainerLowest = p.bg,
+    surfaceContainerLow = p.bg,
+    surfaceContainer = p.surface2,
+    surfaceContainerHigh = p.surface2,
+    surfaceContainerHighest = p.surface2,
+    surfaceBright = p.bg,
+    surfaceDim = p.surface2,
+    surfaceTint = p.accent,
+    inverseSurface = p.text,
+    inverseOnSurface = p.bg,
+    inversePrimary = p.accentSoft,
     outline = p.border,
     outlineVariant = p.textFaint,
 )
 
+/**
+ * 14g·1 — the theme is a [Register] in one resolved mode. [dark] is the *resolved* mode (the
+ * stored [TendrilMode] may be SYSTEM — [TendrilMode.resolveDark] settles it against the OS);
+ * [oled] is the phone's *Deeper blacks* device setting and means nothing on a light ground.
+ */
 @Composable
 fun TendrilTheme(
-    colorTheme: TendrilColorTheme,
-    mode: TendrilMode,
+    register: Register,
+    dark: Boolean,
     typeface: TendrilTypeface,
+    oled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val palette = paletteFor(colorTheme, mode)
-    val base = if (mode == TendrilMode.DARK) darkColorScheme() else lightColorScheme()
+    val palette = remember(register, dark, oled) { paletteFor(register, dark, oled) }
+    val base = if (dark) darkColorScheme() else lightColorScheme()
     val colorScheme = base.applyPalette(palette)
 
     CompositionLocalProvider(LocalTendrilPalette provides palette) {
@@ -50,7 +71,10 @@ fun TendrilTheme(
     }
 }
 
-/** Default mode before the user has ever touched the picker: follow the system setting. */
+/** SYSTEM follows the OS — Android's night mode, Windows' app theme through Compose Desktop. */
 @Composable
-fun defaultTendrilMode(): TendrilMode =
-    if (isSystemInDarkTheme()) TendrilMode.DARK else TendrilMode.LIGHT
+fun TendrilMode.resolveDark(): Boolean = when (this) {
+    TendrilMode.SYSTEM -> isSystemInDarkTheme()
+    TendrilMode.LIGHT -> false
+    TendrilMode.DARK -> true
+}

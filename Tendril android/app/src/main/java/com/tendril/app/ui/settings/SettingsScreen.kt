@@ -72,20 +72,15 @@ import com.tendril.app.storage.TaskPreferences
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
-import com.tendril.app.storage.ThemePreferences
 import com.tendril.app.sync.PortableArchive
 import com.tendril.app.sync.SyncCoordinator
 import com.tendril.app.ui.pages.LocalViewOnly
 import com.tendril.app.ui.settings.AiSettingsSection
-import com.tendril.app.ui.theme.TendrilColorTheme
-import com.tendril.app.ui.theme.TendrilMode
-import com.tendril.app.ui.theme.TendrilTypeface
-import com.tendril.app.ui.theme.defaultTendrilMode
-import com.tendril.app.ui.theme.paletteFor
+import com.tendril.app.ui.settings.ThemeSection
+import com.tendril.app.ui.theme.ThemeSettings
 
 @Composable
 fun SettingsScreen(
-    themePreferences: ThemePreferences,
     syncFolderManager: SyncFolderManager,
     secretStore: SecretStore,
     appLockPreferences: AppLockPreferences,
@@ -115,7 +110,7 @@ fun SettingsScreen(
         topBar = { ShellTopBar(title = { Text(stringResource(R.string.nav_settings)) }) },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxWidth().padding(innerPadding).verticalScroll(rememberScrollState())) {
-            AppearanceSection(themePreferences)
+            AppearanceSection(core.themeSettings)
             HorizontalDivider()
             SyncFolderSection(syncFolderManager, syncStatusPreferences, syncCoordinator)
             HorizontalDivider()
@@ -142,18 +137,13 @@ fun SettingsScreen(
 
 /**
  * Settings → Appearance (§2.3): a collapsed-by-default disclosure row — icon, current summary
- * ("Ink · Light · Sans"), chevron — so scrolling Settings can't accidentally fire a theme change.
+ * ("Ink · System · Sans"), chevron — so scrolling Settings can't accidentally fire a theme change.
+ * 14g·1 — the body is the shared [ThemeSection]; the phone shows its *Deeper blacks* row.
  */
 @Composable
-private fun AppearanceSection(prefs: ThemePreferences) {
+private fun AppearanceSection(settings: ThemeSettings) {
     var expanded by remember { mutableStateOf(false) }
-
-    val colorTheme by prefs.colorTheme.collectAsState()
-    val modeIsExplicit by prefs.modeIsExplicit.collectAsState()
-    val explicitMode by prefs.explicitMode.collectAsState()
-    val typeface by prefs.typeface.collectAsState()
-    val systemDefaultMode = defaultTendrilMode()
-    val mode = if (modeIsExplicit) explicitMode ?: systemDefaultMode else systemDefaultMode
+    val choice = settings.observe()
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -174,9 +164,9 @@ private fun AppearanceSection(prefs: ThemePreferences) {
                     Text(
                         text = stringResource(
                             R.string.settings_appearance_summary_template,
-                            colorTheme.label,
-                            mode.label,
-                            typeface.label,
+                            choice.register.label,
+                            choice.mode.label,
+                            choice.typeface.label,
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -194,77 +184,9 @@ private fun AppearanceSection(prefs: ThemePreferences) {
         }
 
         AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text(
-                    text = "Color theme",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    TendrilColorTheme.entries.forEach { theme ->
-                        ThemeSwatchChip(
-                            theme = theme,
-                            selected = theme == colorTheme,
-                            onClick = { prefs.setColorTheme(theme) },
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Mode",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                SingleChoiceSegmentedButtonRow {
-                    TendrilMode.entries.forEachIndexed { index, m ->
-                        SegmentedButton(
-                            selected = mode == m,
-                            onClick = { prefs.setMode(m) },
-                            shape = SegmentedButtonDefaults.itemShape(index, TendrilMode.entries.size),
-                        ) { Text(m.label) }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Typeface",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                SingleChoiceSegmentedButtonRow {
-                    TendrilTypeface.entries.forEachIndexed { index, t ->
-                        SegmentedButton(
-                            selected = typeface == t,
-                            onClick = { prefs.setTypeface(t) },
-                            shape = SegmentedButtonDefaults.itemShape(index, TendrilTypeface.entries.size),
-                        ) { Text(t.label) }
-                    }
-                }
-            }
+            ThemeSection(settings, showOled = true)
         }
     }
-}
-
-@Composable
-private fun ThemeSwatchChip(theme: TendrilColorTheme, selected: Boolean, onClick: () -> Unit) {
-    val swatch = paletteFor(theme, TendrilMode.LIGHT).accent
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(theme.label, maxLines = 1) },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Filled.Circle,
-                contentDescription = null,
-                tint = swatch,
-                modifier = Modifier.size(16.dp).clip(CircleShape),
-            )
-        },
-    )
 }
 
 /**

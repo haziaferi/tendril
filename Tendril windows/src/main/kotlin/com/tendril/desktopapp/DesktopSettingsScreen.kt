@@ -24,11 +24,12 @@ import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.calendar.CalendarOpensOnSection
 import com.tendril.app.ui.settings.AiSettingsSection
+import com.tendril.app.ui.settings.ThemeSection
 
 /**
  * §0.6.15 — the desktop's Settings: the shared Claude section, and a line about the rest. The
- * last `NotAvailableOnDesktop` stand-in went with this; theme, the sync folder, backups and
- * reminders are still Android's (`tendril-spec.md` §0.10 item 14 owns the desktop pass).
+ * last `NotAvailableOnDesktop` stand-in went with this; the sync folder, backups and reminders
+ * are still Android's. 14g·1 — the theme section is the shared one (`ThemeSection`), OLED-less.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +44,9 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             HorizontalDivider()
             DensitySection(core.keyValueStore)
             HorizontalDivider()
+            Text("Theme", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            ThemeSection(core.themeSettings, showOled = false)
+            HorizontalDivider()
             // 14f·2 — the Calendar's opening view (`calendar_default_view`), shared with the phone's sheet.
             CalendarOpensOnSection(core.keyValueStore)
             HorizontalDivider()
@@ -51,7 +55,7 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             androidx.compose.material3.TextButton(onClick = onShowShortcuts, modifier = Modifier.padding(start = 8.dp)) { Text("Keyboard shortcuts… (F1)") }
             HorizontalDivider()
             Text(
-                "Theme, backups and reminders are Android-only for now.",
+                "Backups and reminders are Android-only for now.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp),

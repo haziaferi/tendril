@@ -41,7 +41,6 @@ import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import com.tendril.app.AppContainer
 import com.tendril.app.ui.theme.TendrilTheme
-import com.tendril.app.ui.theme.paletteFor
 import kotlinx.coroutines.launch
 
 /**
@@ -65,8 +64,10 @@ class AppWidgetConfigureActivity : ComponentActivity() {
         }
 
         val container = AppContainer.from(this)
-        val (theme, mode) = resolveThemeMode(container, this)
-        val palette = paletteFor(theme, mode)
+        val resolved = resolveThemeMode(container, this)
+        val theme = resolved.register
+        val mode = resolved.dark
+        val palette = resolved.palette
 
         setContent {
             var opacity by remember { mutableStateOf(WidgetPrefKeys.DEFAULT_OPACITY) }
@@ -88,8 +89,8 @@ class AppWidgetConfigureActivity : ComponentActivity() {
 
             val contrastRows = remember(opacity, shade, hueOffset) {
                 auditContrast(
-                    theme = theme,
-                    mode = mode,
+                    register = theme,
+                    dark = mode,
                     widgetBg = palette.bg.toRgb(),
                     opacityPct = opacity,
                     shade = shade,
@@ -110,7 +111,7 @@ class AppWidgetConfigureActivity : ComponentActivity() {
                 )
             }
 
-            TendrilTheme(colorTheme = theme, mode = mode, typeface = com.tendril.app.ui.theme.TendrilTypeface.SANS) {
+            TendrilTheme(register = theme, dark = mode, typeface = com.tendril.app.ui.theme.TendrilTypeface.SANS, oled = resolved.oled) {
                 Scaffold(
                     topBar = { TopAppBar(title = { Text("Widget appearance") }) },
                 ) { padding ->

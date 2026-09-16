@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -146,6 +148,10 @@ fun WorkbenchScaffold(
         val content: @Composable (wide: Boolean) -> Unit = { wide ->
             // 14e — the mouse's side buttons are Back and Forward on every route.
             CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR) {
+            // 14g·1 — the ground and its content colour are set here, once: a route that draws no
+            // background of its own (the desktop's Settings pane) otherwise shows the window's AWT
+            // grey, and its unstyled text takes `LocalContentColor`'s black on a dark register.
+            Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize().onPointerNavigation(onBack = { navState.back() }, onForward = { navState.forward() })) {
                 when (val current = route) {
                     is WorkbenchRoute.TabRoot, is WorkbenchRoute.PageDetail -> if (wide && current.tab == WorkbenchDestination.PAGES) {
@@ -191,6 +197,7 @@ fun WorkbenchScaffold(
                         onDismiss = { switcher.open = false },
                     )
                 }
+            }
             }
             }
         }
