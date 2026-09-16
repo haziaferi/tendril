@@ -76,8 +76,8 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 showImportance = container.taskPreferences.showImportance.collectAsState().value,
                 showStreaks = container.taskPreferences.showHabitStreaks.collectAsState().value,
                 reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },
-                entryTrashSheet = { onDismiss -> EntryTrashSheet(container = container, onDismiss = onDismiss) },
-                habitTrashSheet = { onDismiss -> HabitTrashSheet(container = container, onDismiss = onDismiss) },
+                entryTrashSheet = { onDismiss -> EntryTrashSheet(core = container.workbenchCore, onDismiss = onDismiss) },
+                habitTrashSheet = { onDismiss -> HabitTrashSheet(core = container.workbenchCore, onDismiss = onDismiss) },
             )
         },
         settingsContent = {

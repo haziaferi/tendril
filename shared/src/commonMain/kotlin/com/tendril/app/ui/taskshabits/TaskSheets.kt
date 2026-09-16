@@ -154,11 +154,19 @@ internal fun DeadlineDialog(current: LocalDate?, onSet: (LocalDate?) -> Unit, on
  */
 @Composable
 internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onDismiss: () -> Unit) {
+    TendrilSheet(title = habit.title, onDismiss = onDismiss) {
+        HabitDetailContent(habit, viewModel, showStreak)
+    }
+}
+
+/** The sheet's body, also the desktop pane's (14f·1): the presence sentences and the month of dots. */
+@Composable
+internal fun HabitDetailContent(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean) {
     val presence by viewModel.habitPresence(habit.id).collectAsState(initial = null)
     // §0.6.5 — the logged minutes join the presence sentences; zero says nothing, like the rest.
     val loggedMinutes by viewModel.habitLoggedThisMonth(habit.id).collectAsState(initial = 0)
     val perSession by viewModel.habitMinutesPerSession(habit.id).collectAsState(initial = null)
-    TendrilSheet(title = habit.title, onDismiss = onDismiss) {
+    run {
         Column {
             val p = presence
             if (p == null || (p.lastDate == null && p.timesThisMonth == 0 && loggedMinutes == 0)) {

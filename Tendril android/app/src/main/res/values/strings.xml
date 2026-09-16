@@ -35,7 +35,6 @@
     <string name="empty_tasks_cta">Add a task</string>
     <string name="empty_habits_message">No habits yet</string>
     <string name="empty_habits_cta">Add a habit</string>
-    <string name="empty_trash_message">Trash is empty</string>
 
     <!-- Content descriptions for icon-only controls (accessibility scope, spec §2.4) -->
     <string name="cd_expand_appearance">Expand appearance settings</string>
@@ -63,8 +62,6 @@
     <string name="taskshabits_add_habit">Add habit</string>
 
     <!-- Entry Trash (spec §5.5.1) -->
-    <string name="trash_entries_title">Trash</string>
-    <string name="trash_habits_title">Trash</string>
     <string name="trash_entries_open">Trash</string>
 
     <!-- Reminders (spec §5.4) -->

@@ -145,6 +145,7 @@ fun WorkbenchScaffold(
         // 14c: on a wide window the Pages tab, root or page, is the workspace (tree + page).
         val content: @Composable (wide: Boolean) -> Unit = { wide ->
             // 14e — the mouse's side buttons are Back and Forward on every route.
+            CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR) {
             Box(modifier = Modifier.fillMaxSize().onPointerNavigation(onBack = { navState.back() }, onForward = { navState.forward() })) {
                 when (val current = route) {
                     is WorkbenchRoute.TabRoot, is WorkbenchRoute.PageDetail -> if (wide && current.tab == WorkbenchDestination.PAGES) {
@@ -190,6 +191,7 @@ fun WorkbenchScaffold(
                         onDismiss = { switcher.open = false },
                     )
                 }
+            }
             }
         }
         // No top bar here — every destination owns its own [ShellTopBar] and handles the

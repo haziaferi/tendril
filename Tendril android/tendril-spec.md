@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14f·1 — Tasks on a wide window) | §3.3 amended: two panes from 840 dp (`LocalShellLayout`), `ui/taskshabits/TaskDetailPane.kt` (task and habit panes, chips = the menu by name), `ui/components/PaneHandle.kt` (`PaneWidthState`, `tasks_list_width`), rows' hover `···` / right-click / long-press, the habit row's × → its menu, `ui/trash/` shared (`EntryTrashSheet`, `HabitTrashSheet` take `WorkbenchCore`; §0.10 item 13 resolved), the keyboard on Habits, Merged and the phone's Pages list. Critiques: `docs/critiques/tasks-calendar-mock.md`, `tasks-function.md`. Desktop verified; the phone walk pending. Tests 730 → 732. | §3.3, §0.10 |
 | 2026-09-16 (find in page) | §3.1.1 amended: the find bar (option A of `docs/mockups/find-in-page.html`), `domain/find/FindInPage.kt`, `ui/pages/FindBar.kt`, `FindMarks` on `spansVisualTransformation`, Ctrl+F in `Shortcuts.kt` and `WorkbenchNavState.findRequested`, *Find in page* in the page's `···`. §0.10 item 19 resolved; item 14's list gains the `find` token and two find notes. Critiques: `docs/critiques/find-in-page-mock.md`, `find-in-page-function.md`. Desktop verified; the phone walk pending. Tests 725 → 730. | §3.1.1, §0.10 |
 | 2026-09-16 (14e — the keyboard) | §2.2 *The keyboard* (new bullet): one binding table (`ui/nav/Shortcuts.kt`) and the F1 card generated from it (`ShortcutsOverlay.kt`); Alt+← / Alt+→ and the mouse's side buttons with a forward list on `WorkbenchNavState`; Ctrl+Shift+N's `requestQuickAdd`; `ui/components/ListKeyboard.kt` on the tree and the Tasks list. §0.10 item 14: 14e shipped; item 18 struck (resolved by 14d); item 19 (find in page) added. Critiques: `docs/critiques/keyboard-desktop.md`, `keyboard-function.md`. Tests 713 → 725. | §2.2, §0.10 |
 | 2026-09-15 (14d — under a pointer) | §2.2 *Under a pointer* (new bullet): right-click = the pointer's long-press on rows and blocks (`ui/components/Pointer.kt`, `TextContextMenuExtras` expect/actual), hover-revealed `···` at 28 dp, the toolbar floating under a pointer profile (`LocalDensityProfile`), `PagesViewModel.moveToTrash` lock-gated; §3.1.1 amended (the toolbar's two homes). Critique passes in `docs/critiques/`; their High: the RELATION branch in the row-as-page strip. `MoreHoriz` on every bar, the tree header at the page bar's height, the outlined journal book. §0.10 item 14: 14d shipped, the deferred list. Tests 711 → 713. | §2.2, §3.1.1, §0.10 |
@@ -717,7 +718,14 @@ Genuinely undecided — distinct from §0.7.
     build pass replaced the benchmark's layout-bound chords. Added to the small-things list: a
     page opened by Ctrl+N or Ctrl+T from another tab stacks over that tab rather than landing in
     the Pages workspace.*
-13. **Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*
+    ***14f·1 shipped 2026-09-16** — Tasks as a desktop surface (§3.3, amended): the list beside a
+    pane whose chips are the row's menu by name, rows under a pointer, the Trash sheets shared
+    (§0.10 item 13 closed), the keyboard on Habits, Merged and the phone's Pages list. Two
+    critique passes (`docs/critiques/tasks-calendar-mock.md` before, `tasks-function.md` on the
+    build). Added to the small-things list: the filter rows span both panes above the split
+    (14f·2 keeps them over the list); a task's repeat cannot be changed after the Add sheet.
+    14f·2 (the Calendar) next.*
+13. ~~**Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*~~ *Resolved 2026-09-16 (14f·1): the two Trash sheets are shared and the desktop has the button; the bell stays Android's, as the reason stands.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
 
@@ -1568,6 +1576,26 @@ composable ("No pages match '…'").
 
 Three views: **Tasks**, **Habits**, **Merged** — one page, kept from losing clarity despite covering
 two different concerns.
+
+*(**Amended 2026-09-16 — B§13.4 14f·1, the tab on a wide window.** From 840 dp (the shell's own
+rule, read through `LocalShellLayout`) the tab is two panes: the list at 420 dp (resizable
+300…600 with the tree's 12 dp handle, kept in `tasks_list_width`) beside a **pane** that reads
+the chosen task in full — title, When, Deadline, Repeat, Importance (when Settings shows it),
+Tracked today, the steps as their own list with *Add a step* at its end — and offers **the row's
+verbs as chips, by name**: *Postpone…*, *Set deadline…*, *Important*, *Start timer*,
+*Reminders…* (Android only), *Move to Trash*, each opening the sheet the row's `···` opens, a
+slide-over here (decided 2026-09-16: nothing is edited inline; `docs/critiques/tasks-calendar-mock.md`
+#4 struck the mock's *Someday* and *Flag*, verbs the app does not have; its pane labels measured
+3.08:1 → `onSurfaceVariant`). A habit's pane is its detail sheet's content inline. A click or ↵
+selects (`primaryContainer` — not 14e's keyboard ring, which stays a ring); switching tabs empties
+the pane; a trashed subject empties it too. Below 840 dp the tab is exactly the phone's. **Rows
+under a pointer** (14d's deferral): a task row's and a habit row's `···` fade in on hover under a
+pointer profile and stay under Touch, right-click opens the menu at the pointer, long-press opens
+it on the phone; the habit row's one-tap × is that menu's *Move to Trash* now — a destructive verb
+one step in, as a task's is. The **Trash sheets are shared** (`ui/trash/`, taking `WorkbenchCore`),
+so the desktop has its Trash button (§0.10 item 13); the bell stays Android's — no alarms on the
+desktop. The Habits and Merged lists and the phone's Pages list take 14e's keyboard.
+`docs/critiques/tasks-function.md` walked the build; the phone's half is pending (testing paused).)*
 
 **Tasks** (GTD-style todo list):
 - *(**Added 2026-09-12 (§0.8 step 5):** the add dialog's title is read as a Quick Add line — `Gym

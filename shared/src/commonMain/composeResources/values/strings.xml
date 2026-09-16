@@ -13,6 +13,8 @@
     <string name="empty_pages_message">No pages yet</string>
     <string name="empty_pages_cta">New page</string>
     <string name="empty_trash_message">Trash is empty</string>
+    <string name="trash_entries_title">Trash</string>
+    <string name="trash_habits_title">Trash</string>
     <string name="empty_road_map_message">Nothing to map yet</string>
     <string name="empty_road_map_cta">Mention another page to get started</string>
 

@@ -30,7 +30,29 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import com.tendril.app.ui.components.PaneHandle
+import com.tendril.app.ui.components.PaneWidthState
+import com.tendril.app.ui.components.PointerMenu
+import com.tendril.app.ui.components.onSecondaryClick
+import com.tendril.app.ui.nav.DensityProfile
+import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.ui.nav.LocalShellLayout
+import com.tendril.app.ui.nav.ShellLayout
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -97,7 +119,6 @@ import com.tendril.app.ui.components.EmptyState
 import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 
 private enum class TabSelection { TASKS, HABITS, MERGED }
@@ -187,7 +208,16 @@ private fun TasksHabitsBody(
     var habitDetail by remember { mutableStateOf<Habit?>(null) }
     val runningTarget by core.timeTracker.runningTargetState()
     val loggedToday by viewModel.loggedToday.collectAsState()
-    val rowActions = remember(showImportance, runningTarget, loggedToday) {
+    // 14f·1 — on a wide window the tab is two panes: a click or ↵ selects a task or a habit for
+    // the pane on the right; the phone's click keeps today's meaning (nothing for a task, the
+    // detail sheet for a habit). The selection is not the keyboard cursor (14e's ring).
+    val wide = LocalShellLayout.current == ShellLayout.RAIL
+    var selected by remember { mutableStateOf<Selected?>(null) }
+    // A subject belongs to the list it was chosen from: switching tabs empties the pane rather
+    // than leaving a task beside the Habits list.
+    LaunchedEffect(tab) { selected = null }
+    val listWidth = remember { PaneWidthState(core.keyValueStore, TASKS_LIST_WIDTH_KEY, 420, 300, 600) }
+    val rowActions = remember(showImportance, runningTarget, loggedToday, wide, selected) {
         TaskRowActions(
             onPostpone = { postponeTarget = it },
             onAddSubtask = { subtaskParent = it },
@@ -195,8 +225,11 @@ private fun TasksHabitsBody(
             showImportance = showImportance,
             runningTarget = runningTarget,
             loggedToday = loggedToday.first,
+            onSelect = if (wide) ({ selected = Selected.Task(it.id) }) else null,
+            selectedId = (selected as? Selected.Task)?.id,
         )
     }
+    val openHabit: (Habit) -> Unit = { if (wide) selected = Selected.Habit(it.id) else habitDetail = it }
 
     val tasks by viewModel.tasks.collectAsState()
     val habits by viewModel.habits.collectAsState()
@@ -275,13 +308,41 @@ private fun TasksHabitsBody(
                 Spacer(Modifier.height(8.dp))
             }
 
-            when (tab) {
-                TabSelection.TASKS -> TasksList(
-                    tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
-                    onAdd = { showAddDialog = true },
-                ) { reminderTarget = it }
-                TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = { habitDetail = it }, onAdd = { showAddDialog = true })
-                TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions) { reminderTarget = it }
+            val lists: @Composable () -> Unit = {
+                when (tab) {
+                    TabSelection.TASKS -> TasksList(
+                        tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
+                        onAdd = { showAddDialog = true },
+                    ) { reminderTarget = it }
+                    TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = openHabit, onAdd = { showAddDialog = true }, selectedId = (selected as? Selected.Habit)?.id)
+                    TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions, { reminderTarget = it }, onOpenHabit = openHabit, selectedHabitId = (selected as? Selected.Habit)?.id)
+                }
+            }
+            if (!wide) lists() else Row(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.width(listWidth.widthDp.dp).fillMaxHeight()) {
+                    lists()
+                    PaneHandle(listWidth, modifier = Modifier.align(Alignment.CenterEnd))
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    // The pane resolves its subject from the live lists, so an edit shows at once
+                    // and a trashed subject empties the pane rather than showing a ghost.
+                    val groups = remember(tasks) { tasks.withSubtasks() }
+                    val subject = selected
+                    val taskGroup = (subject as? Selected.Task)?.let { sel ->
+                        groups.firstOrNull { it.task.id == sel.id }
+                            ?: groups.asSequence().flatMap { it.subtasks.asSequence() }.firstOrNull { it.id == sel.id }?.let { TaskWithSubtasks(it, emptyList()) }
+                    }
+                    val habit = (subject as? Selected.Habit)?.let { sel -> habits.firstOrNull { it.id == sel.id } }
+                    when {
+                        taskGroup != null -> TaskDetailPane(
+                            group = taskGroup, viewModel = viewModel, actions = rowActions,
+                            onOpenReminders = if (reminderSheet != null) ({ reminderTarget = taskGroup.task }) else null,
+                            onTrash = { viewModel.trashTask(taskGroup.task.id); selected = null },
+                        )
+                        habit != null -> HabitDetailPane(habit, viewModel, showStreak = showStreaks, onTrash = { viewModel.trashHabit(habit.id); selected = null })
+                        else -> EmptyTaskPane()
+                    }
+                }
             }
         }
     }
@@ -338,6 +399,15 @@ private fun inFilterRange(date: LocalDate?, filter: TimeFilter): Boolean {
     }
 }
 
+/** 14f·1 — what the wide window's pane shows. */
+private sealed class Selected {
+    data class Task(val id: Long) : Selected()
+    data class Habit(val id: Long) : Selected()
+}
+
+/** The list pane's width on a wide window, a device preference like the tree's. */
+private const val TASKS_LIST_WIDTH_KEY = "tasks_list_width"
+
 @Composable
 private fun TasksList(
     tasks: List<Entry>,
@@ -355,8 +425,8 @@ private fun TasksList(
     val dated = grouped.filter { it.task.startDate != null && inFilterRange(it.task.startDate, filter) }
     val undated = grouped.filter { it.task.startDate == null }
     // 14e (B§13.6 #8) — the rows as the keyboard sees them, in the order drawn: undated (when
-    // shown) then dated, each task followed by its steps. ↵ opens the row's menu — what its
-    // `···` does; a task has no detail screen to open.
+    // shown) then dated, each task followed by its steps. ↵ selects on a wide window (14f·1)
+    // and opens the row's menu on the phone — what its `···` does; a task has no detail screen.
     val keyState = remember { ListKeyState() }
     val flat: List<Entry> = remember(undated, dated, showUndated) {
         buildList {
@@ -389,7 +459,7 @@ private fun TasksList(
             state = keyState,
             count = { flat.size },
             titles = { flat.map { it.title } },
-            onOpen = { i -> flat.getOrNull(i)?.let { menuFor = it.id } },
+            onOpen = { i -> flat.getOrNull(i)?.let { e -> actions.onSelect?.invoke(e) ?: run { menuFor = e.id } } },
         ),
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
@@ -431,6 +501,9 @@ internal class TaskRowActions(
     val runningTarget: TrackTarget?,
     /** §0.8 step 7d — minutes logged today by entry id; absent means nothing to say. */
     val loggedToday: Map<Long, Int>,
+    /** 14f·1 — on a wide window a click or ↵ selects the row for the pane; null on the phone. */
+    val onSelect: ((Entry) -> Unit)? = null,
+    val selectedId: Long? = null,
 )
 
 @Composable
@@ -447,6 +520,13 @@ private fun TaskWithSteps(
     }
 }
 
+/**
+ * One task row. 14d's rule reaches it in 14f·1: the `···` fades in on hover under a pointer
+ * profile (always shown under Touch), right-click opens the same menu at the pointer, the
+ * phone's long-press opens it too. On a wide window a click selects the row for the pane and
+ * paints it `primaryContainer` — distinct from 14e's keyboard ring.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TaskRow(
     entry: Entry,
@@ -459,17 +539,31 @@ private fun TaskRow(
     rowKeys: RowKeys? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    var rowSize by remember { mutableStateOf(IntSize.Zero) }
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val pointer = LocalDensityProfile.current != DensityProfile.TOUCH
     // 14e — the keyboard cursor: a 2 dp ring inside the row, distinct from any selection tint;
     // ↵ on the cursor opens this row's menu, and a click puts the cursor here.
     val index = rowKeys?.indexOf?.invoke(entry) ?: -1
     val keyFocused = rowKeys != null && index >= 0 && rowKeys.state.focused == index && keyboardCursorShown()
+    val selected = actions.selectedId == entry.id
     LaunchedEffect(rowKeys?.menuFor) {
         if (rowKeys != null && rowKeys.menuFor == entry.id) { menuOpen = true; rowKeys.onMenuShown() }
     }
+    val moreEndPx = with(LocalDensity.current) { 44.dp.roundToPx() }
+    Box(modifier = Modifier.fillMaxWidth().onSizeChanged { rowSize = it }) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (rowKeys != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { rowKeys.state.clickedRow(index) } else Modifier)
+            .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+            .combinedClickable(
+                interactionSource = interaction, indication = null,
+                onClick = { if (index >= 0) rowKeys?.state?.clickedRow(index); actions.onSelect?.invoke(entry) },
+                onLongClick = { menuAt = null; menuOpen = true },
+            )
+            .onSecondaryClick { menuAt = it; menuOpen = true }
             .padding(start = if (isStep) 40.dp else 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
             .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
@@ -506,38 +600,55 @@ private fun TaskRow(
                 Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open))
             }
         }
-        Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "More")
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                if (!isStep) {
-                    DropdownMenuItem(text = { Text("Postpone…") }, onClick = { menuOpen = false; actions.onPostpone(entry) })
-                    DropdownMenuItem(text = { Text("Add a step") }, onClick = { menuOpen = false; actions.onAddSubtask(entry) })
-                    DropdownMenuItem(
-                        text = { Text(if (entry.dueDate == null) "Set deadline…" else "Change deadline…") },
-                        onClick = { menuOpen = false; actions.onSetDeadline(entry) },
-                    )
-                }
-                if (actions.showImportance) {
-                    DropdownMenuItem(
-                        text = { Text(if (entry.important) "Not important" else "Important") },
-                        leadingIcon = { Icon(if (entry.important) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null) },
-                        onClick = { menuOpen = false; viewModel.setImportant(entry.id, !entry.important) },
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Delete") },
-                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
-                    onClick = { menuOpen = false; viewModel.trashTask(entry.id) },
-                )
-            }
+        IconButton(
+            onClick = { menuAt = null; menuOpen = true },
+            modifier = Modifier.alpha(if (!pointer || hovered || menuOpen) 1f else 0f),
+        ) {
+            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
         }
+    }
+    PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
+        TaskMenuItems(entry, isStep, actions, viewModel) { menuOpen = false }
+    }
     }
 }
 
+/** The row's menu — also the pane's chips, by name (14f·1). */
 @Composable
-private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, showStreaks: Boolean, runningTarget: TrackTarget?, loggedToday: Map<Long, Int>, onOpen: (Habit) -> Unit, onAdd: () -> Unit) {
+private fun TaskMenuItems(entry: Entry, isStep: Boolean, actions: TaskRowActions, viewModel: TasksHabitsViewModel, close: () -> Unit) {
+    if (!isStep) {
+        DropdownMenuItem(text = { Text("Postpone…") }, onClick = { close(); actions.onPostpone(entry) })
+        DropdownMenuItem(text = { Text("Add a step") }, onClick = { close(); actions.onAddSubtask(entry) })
+        DropdownMenuItem(
+            text = { Text(if (entry.dueDate == null) "Set deadline…" else "Change deadline…") },
+            onClick = { close(); actions.onSetDeadline(entry) },
+        )
+    }
+    if (actions.showImportance) {
+        DropdownMenuItem(
+            text = { Text(if (entry.important) "Not important" else "Important") },
+            leadingIcon = { Icon(if (entry.important) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null) },
+            onClick = { close(); viewModel.setImportant(entry.id, !entry.important) },
+        )
+    }
+    DropdownMenuItem(
+        text = { Text("Move to Trash") },
+        leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+        onClick = { close(); viewModel.trashTask(entry.id) },
+    )
+}
+
+@Composable
+private fun HabitsList(
+    habits: List<Habit>,
+    viewModel: TasksHabitsViewModel,
+    showStreaks: Boolean,
+    runningTarget: TrackTarget?,
+    loggedToday: Map<Long, Int>,
+    onOpen: (Habit) -> Unit,
+    onAdd: () -> Unit,
+    selectedId: Long? = null,
+) {
     if (habits.isEmpty()) {
         EmptyState(
             icon = Icons.Filled.LocalFireDepartment,
@@ -548,44 +659,102 @@ private fun HabitsList(habits: List<Habit>, viewModel: TasksHabitsViewModel, sho
         )
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-        items(habits, key = { it.id }) { habit ->
-            Row(
-                // §0.6.6 — the row opens the presence view; the checkbox stays its own target.
-                modifier = Modifier.fillMaxWidth().clickable { onOpen(habit) }.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val checkedToday = habit.lastCompletedDate == LocalDate.now()
-                Checkbox(
-                    checked = checkedToday,
-                    onCheckedChange = { checked ->
-                        if (checked) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id)
-                    },
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(habit.title, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        // §3.3 — time and duration are what distinguish a habit that sits at an
-                        // hour from one that just needs doing sometime today, so both show when
-                        // set and neither takes room when not.
-                        listOfNotNull(
-                            "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
-                            habit.time?.toString(),
-                            habit.duration?.let(::formatHabitDuration),
-                            // §0.6.6 — retired from the row by default; a plain number when asked for.
-                            if (showStreaks && habit.streak > 0) "streak ${habit.streak}" else null,
-                            loggedToday[habit.id]?.let { formatMinutes(it) + " today" },
-                        ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TrackButton(TrackTarget.Habit(habit.id), runningTarget, viewModel::toggleTracking)
-                IconButton(onClick = { viewModel.trashHabit(habit.id) }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Delete")
-                }
-            }
+    // 14f·1 — the keyboard on the habits list too: ↑ ↓ ↵ opens (the phone's sheet, the desktop's pane).
+    val keyState = remember { ListKeyState() }
+    TypeAheadReset(keyState)
+    BackHandler(enabled = keyState.hasSomethingToClear) { keyState.clear() }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().listKeyboard(
+            state = keyState,
+            count = { habits.size },
+            titles = { habits.map { it.title } },
+            onOpen = { i -> habits.getOrNull(i)?.let(onOpen) },
+        ),
+        contentPadding = PaddingValues(bottom = 96.dp),
+    ) {
+        itemsIndexed(habits, key = { _, it -> it.id }) { index, habit ->
+            HabitRow(
+                habit, viewModel, showStreaks, runningTarget, loggedToday,
+                onOpen = { keyState.clickedRow(index); onOpen(habit) },
+                keyFocused = keyState.focused == index && keyboardCursorShown(),
+                typed = keyState.typed,
+                selected = selectedId == habit.id,
+            )
         }
+    }
+}
+
+/**
+ * One habit row. §0.6.6 — the row opens the presence view; the checkbox stays its own target.
+ * 14f·1: the trailing × that trashed a habit in one tap is a `···` menu now (hover-revealed
+ * under a pointer, right-click and long-press open it), so a destructive verb is one step in,
+ * as a task's is.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HabitRow(
+    habit: Habit,
+    viewModel: TasksHabitsViewModel,
+    showStreaks: Boolean,
+    runningTarget: TrackTarget?,
+    loggedToday: Map<Long, Int>,
+    onOpen: () -> Unit,
+    keyFocused: Boolean = false,
+    typed: String = "",
+    selected: Boolean = false,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    var rowSize by remember { mutableStateOf(IntSize.Zero) }
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val pointer = LocalDensityProfile.current != DensityProfile.TOUCH
+    val moreEndPx = with(LocalDensity.current) { 44.dp.roundToPx() }
+    Box(modifier = Modifier.fillMaxWidth().onSizeChanged { rowSize = it }) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+            .combinedClickable(interactionSource = interaction, indication = null, onClick = onOpen, onLongClick = { menuAt = null; menuOpen = true })
+            .onSecondaryClick { menuAt = it; menuOpen = true }
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val checkedToday = habit.lastCompletedDate == LocalDate.now()
+        Checkbox(
+            checked = checkedToday,
+            onCheckedChange = { checked ->
+                if (checked) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id)
+            },
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                // §3.3 — time and duration are what distinguish a habit that sits at an
+                // hour from one that just needs doing sometime today, so both show when
+                // set and neither takes room when not.
+                listOfNotNull(
+                    "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
+                    habit.time?.toString(),
+                    habit.duration?.let(::formatHabitDuration),
+                    // §0.6.6 — retired from the row by default; a plain number when asked for.
+                    if (showStreaks && habit.streak > 0) "streak ${habit.streak}" else null,
+                    loggedToday[habit.id]?.let { formatMinutes(it) + " today" },
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TrackButton(TrackTarget.Habit(habit.id), runningTarget, viewModel::toggleTracking)
+        IconButton(onClick = { menuAt = null; menuOpen = true }, modifier = Modifier.alpha(if (!pointer || hovered || menuOpen) 1f else 0f)) {
+            Icon(Icons.Outlined.MoreHoriz, contentDescription = "More")
+        }
+    }
+    PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
+        DropdownMenuItem(text = { Text("Open") }, onClick = { menuOpen = false; onOpen() })
+        DropdownMenuItem(text = { Text("Move to Trash") }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) }, onClick = { menuOpen = false; viewModel.trashHabit(habit.id) })
+    }
     }
 }
 
@@ -597,29 +766,57 @@ private fun MergedList(
     viewModel: TasksHabitsViewModel,
     actions: TaskRowActions,
     onOpenReminders: (Entry) -> Unit,
+    onOpenHabit: (Habit) -> Unit,
+    selectedHabitId: Long? = null,
 ) {
     // Merged is day-shaped, so sub-tasks are folded into their parent's step count here rather
     // than listed: the steps are undated and would only lengthen a list meant to be read as a day.
     val dated = tasks.withSubtasks().filter { it.task.startDate != null && inFilterRange(it.task.startDate, filter) }
+    val timedHabits = habits.filter { it.time != null }
     if (dated.isEmpty() && habits.isEmpty()) {
         EmptyState(icon = Icons.Filled.Check, message = stringResource(Res.string.empty_tasks_message), modifier = Modifier.fillMaxSize())
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-        items(dated, key = { "task_${it.task.id}" }) { TaskRow(it.task, viewModel, actions, onOpenReminders, stepsDone = it.done, stepsTotal = it.subtasks.size) }
+    // 14f·1 — one cursor over both kinds of row: the tasks, then the timed habits.
+    val keyState = remember { ListKeyState() }
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    TypeAheadReset(keyState)
+    BackHandler(enabled = keyState.hasSomethingToClear) { keyState.clear() }
+    val taskEntries = dated.map { it.task }
+    val indexOf: (Entry) -> Int = { e -> taskEntries.indexOfFirst { it.id == e.id } }
+    val rowKeys = RowKeys(keyState, indexOf, menuFor, { menuFor = null })
+    val count = taskEntries.size + timedHabits.size
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().listKeyboard(
+            state = keyState,
+            count = { count },
+            titles = { taskEntries.map { it.title } + timedHabits.map { it.title } },
+            onOpen = { i ->
+                if (i < taskEntries.size) taskEntries[i].let { e -> actions.onSelect?.invoke(e) ?: run { menuFor = e.id } }
+                else timedHabits.getOrNull(i - taskEntries.size)?.let(onOpenHabit)
+            },
+        ),
+        contentPadding = PaddingValues(bottom = 96.dp),
+    ) {
+        items(dated, key = { "task_${it.task.id}" }) { TaskRow(it.task, viewModel, actions, onOpenReminders, stepsDone = it.done, stepsTotal = it.subtasks.size, rowKeys = rowKeys) }
         // Habits with a time get a delicate highlight to distinguish them (§3.3).
-        items(habits.filter { it.time != null }, key = { "habit_${it.id}" }) { habit ->
+        itemsIndexed(timedHabits, key = { _, it -> "habit_${it.id}" }) { i, habit ->
+            val index = taskEntries.size + i
+            val keyFocused = keyState.focused == index && keyboardCursorShown()
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
+                        .then(if (selectedHabitId == habit.id) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)) else Modifier)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { keyState.clickedRow(index); onOpenHabit(habit) }
+                        .padding(8.dp)
+                        .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.LocalFireDepartment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(start = 8.dp))
                     Column {
-                        Text(habit.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(keyedTitle(habit.title, keyState.typed, keyFocused), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                         habit.time?.let { Text(it.toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }

@@ -28,11 +28,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.components.TendrilSheet
-import com.tendril.app.AppContainer
-import com.tendril.app.R
+import com.tendril.app.ui.WorkbenchCore
+import com.tendril.app.generated.resources.Res
+import com.tendril.app.generated.resources.empty_trash_message
+import com.tendril.app.generated.resources.trash_habits_title
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
@@ -54,14 +56,14 @@ import java.time.Instant
  * supersede an in-flight tombstone from another device (§5.5.1.1) rather than losing to it.
  */
 @Composable
-fun HabitTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
-    val habits by container.database.habitDao().observeTrash().collectAsState(initial = emptyList())
+fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
+    val habits by core.database.habitDao().observeTrash().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteForever by remember { mutableStateOf<List<Habit>?>(null) }
 
     fun restore(ids: Collection<Long>) {
-        scope.launch { ids.forEach { container.database.habitDao().restore(it, Instant.now()) } }
+        scope.launch { ids.forEach { core.database.habitDao().restore(it, Instant.now()) } }
     }
 
     TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
@@ -69,7 +71,7 @@ fun HabitTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    stringResource(R.string.trash_habits_title),
+                    stringResource(Res.string.trash_habits_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -100,7 +102,7 @@ fun HabitTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
             if (habits.isEmpty()) {
                 EmptyState(
                     icon = Icons.Filled.Close,
-                    message = stringResource(R.string.empty_trash_message),
+                    message = stringResource(Res.string.empty_trash_message),
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -145,7 +147,7 @@ fun HabitTrashSheet(container: AppContainer, onDismiss: () -> Unit) {
                     scope.launch {
                         // §5.5.1.1 — the tombstone is what makes this purge stick on the other
                         // devices; without it the Habit walks back in from their habits.json.
-                        targets.forEach { container.purgeRegistry.purgeHabit(it.id) }
+                        targets.forEach { core.purgeRegistry.purgeHabit(it.id) }
                     }
                     selectedIds = selectedIds - targets.map { it.id }.toSet()
                     pendingDeleteForever = null
