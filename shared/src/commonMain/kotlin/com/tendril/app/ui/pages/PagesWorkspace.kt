@@ -174,6 +174,8 @@ fun PagesWorkspace(
                     DropdownMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
                 },
                 onClosed = { navState.back() },
+                openBeside = { shelfState.open(Shelf.Page(it)) },
+                openInWindow = popOuts?.let { h -> { id: Long -> h.open(id) } },
             )
         }
         // The workspace paints its own ground: the phone's Scaffold used to, and a pane over the

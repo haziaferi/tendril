@@ -27,4 +27,8 @@ class PaneChrome(
     val onClosed: () -> Unit,
     /** 14h·1 — the shelf: the bar is 280–560 dp wide, so the title takes `titleMedium`, not `titleLarge`. */
     val compact: Boolean = false,
+    /** B§13.6 #3 — where a hover card's Ctrl+click and Shift+click go (the tree's chords); null where
+     * there is no shelf or window to open into (a shelf, a pop-out, the phone). */
+    val openBeside: ((Long) -> Unit)? = null,
+    val openInWindow: ((Long) -> Unit)? = null,
 )

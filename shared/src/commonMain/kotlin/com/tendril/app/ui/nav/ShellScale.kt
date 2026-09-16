@@ -10,8 +10,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * site is edited; none can forget.
  *
  * The factor is the window's shorter side over 800 dp, clamped to 0.85…1.25, times a profile:
- * *Compact* 0.9 (the desktop's default, chosen in its Settings), *Comfortable* 1.0, *Touch* 1.3
- * (the phone, fixed — a finger does not get a setting). The shorter side is measured in the
+ * *Compact* 0.85 (the desktop's default, chosen in its Settings), *Comfortable* 0.95, *Touch*
+ * 1.23 (the phone, fixed — a finger does not get a setting). The three were 0.9 / 1.0 / 1.3 until
+ * 2026-09-16: beside Notion at the same window Compact read "a bit large" (the user, mid-walk of
+ * B§13.6 #3), so Compact went to 0.85 and the other two by the same ratio. The shorter side is measured in the
  * platform's own dp, before the override, or the scale would feed itself; the shell's 840 dp
  * breakpoint is then read in the *scaled* dp, since "room for a rail" is a question about
  * scaled things.
@@ -23,9 +25,9 @@ enum class DensityProfile(val factor: Float, val key: String, val label: String,
     /** The minimum interactive size a control keeps inside a dense list: 28 dp under a pointer, Material's 48 under a finger. */
     val listInteractiveMinDp: Int,
 ) {
-    COMPACT(0.9f, "compact", "Compact", rowHeightDp = 36, listInteractiveMinDp = 28),
-    COMFORTABLE(1.0f, "comfortable", "Comfortable", rowHeightDp = 44, listInteractiveMinDp = 28),
-    TOUCH(1.3f, "touch", "Touch", rowHeightDp = 56, listInteractiveMinDp = 48);
+    COMPACT(0.85f, "compact", "Compact", rowHeightDp = 36, listInteractiveMinDp = 28),
+    COMFORTABLE(0.95f, "comfortable", "Comfortable", rowHeightDp = 44, listInteractiveMinDp = 28),
+    TOUCH(1.23f, "touch", "Touch", rowHeightDp = 56, listInteractiveMinDp = 48);
 
     /** "Pointer or finger?" for copy and affordances: *· open* under a pointer, *· tap to open* on Touch (14h·2 #3). */
     val pointer: Boolean get() = this != TOUCH

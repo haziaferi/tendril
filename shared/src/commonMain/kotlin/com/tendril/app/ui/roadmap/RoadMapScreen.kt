@@ -68,6 +68,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
+import com.tendril.app.ui.components.HoverPreviewCard
+import com.tendril.app.ui.components.HoverPreviewState
+import com.tendril.app.ui.components.PreviewTarget
+import com.tendril.app.ui.components.hoverPreview
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -216,7 +220,7 @@ fun RoadMapScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                RoadMapCanvas(graph = graph, onOpenPage = onOpenPage, nodeWidth = NODE_WIDTH)
+                RoadMapCanvas(graph = graph, onOpenPage = onOpenPage, nodeWidth = NODE_WIDTH, core = core)
             }
         }
     }
@@ -339,7 +343,9 @@ private fun FocusBar(page: Page, depth: Int, onDepthChange: (Int) -> Unit, onCle
  * passes null and keeps its immediate select-then-open.
  */
 @Composable
-internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, nodeWidth: Dp, onDoubleTap: ((Long) -> Unit)? = null) {
+internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, nodeWidth: Dp, onDoubleTap: ((Long) -> Unit)? = null, core: WorkbenchCore? = null) {
+    // B§13.6 #3 — the nodes preview their pages; the canvas holds the state and draws the one card.
+    val hoverPreview = remember { HoverPreviewState() }
     val density = LocalDensity.current
     val positions = remember { mutableStateMapOf<Long, Offset>() }
     val velocities = remember { mutableMapOf<Long, Offset>() }
@@ -512,15 +518,17 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
                     nodeWidth = nodeWidth,
                     nodeWidthPx = nodeWidthPx,
                     nodeHeightPx = nodeHeightPx,
-                    onDragStart = { draggingId = page.id },
+                    onDragStart = { draggingId = page.id; hoverPreview.hide() },
                     onDragEnd = { draggingId = null; simulationTick++ },
                     onTap = {
                         if (selectedId == page.id) onOpenPage(page.id) else selectedId = page.id
                     },
                     onDoubleTap = onDoubleTap?.let { f -> { f(page.id) } },
+                    hoverPreview = hoverPreview,
                 )
             }
         }
+        if (core != null) HoverPreviewCard(core, hoverPreview, onOpenPage)
     }
 }
 
@@ -569,6 +577,7 @@ internal fun RoadMapNode(
     onDragEnd: () -> Unit,
     onTap: () -> Unit,
     onDoubleTap: (() -> Unit)? = null,
+    hoverPreview: HoverPreviewState? = null,
 ) {
     val borderWidth = (1f + min(degree, 6) * 0.5f).dp
     // 14g·2 (B§13.8.3) — a page is the lifted ground, a database a fill (the third hue's tint until
@@ -594,6 +603,7 @@ internal fun RoadMapNode(
             }
             .size(nodeWidth, NODE_HEIGHT)
             .alpha(if (dimmed) DIMMED_ALPHA else 1f)
+            .then(if (hoverPreview != null) Modifier.hoverPreview(hoverPreview, PreviewTarget.Page(page.id)) else Modifier)
             .pointerInput(page.id) {
                 awaitEachGesture {
                     val down = awaitFirstDown()

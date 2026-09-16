@@ -78,7 +78,7 @@ fun RoadMapNeighbourhood(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            RoadMapCanvas(graph = graph, onOpenPage = onOpenHere, nodeWidth = SHELF_NODE_WIDTH, onDoubleTap = onOpenInMain)
+            RoadMapCanvas(graph = graph, onOpenPage = onOpenHere, nodeWidth = SHELF_NODE_WIDTH, onDoubleTap = onOpenInMain, core = core)
         }
         // The edge key, and nothing else (the critique's #5: the click legend belongs on the node).
         Text(

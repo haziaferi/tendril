@@ -35,7 +35,10 @@ import androidx.compose.ui.unit.dp
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.Page
 import com.tendril.app.ui.WorkbenchCore
+import com.tendril.app.ui.components.HoverPreviewState
+import com.tendril.app.ui.components.PreviewTarget
 import com.tendril.app.ui.components.TendrilSheet
+import com.tendril.app.ui.components.hoverPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 
@@ -46,7 +49,7 @@ import kotlinx.coroutines.flow.flowOf
  * this device, the cached [Block.content] stands in, and the caption says so.
  */
 @Composable
-internal fun BlockReferenceCard(core: WorkbenchCore?, block: Block, onOpenPage: (Long) -> Unit) {
+internal fun BlockReferenceCard(core: WorkbenchCore?, block: Block, onOpenPage: (Long) -> Unit, hoverPreview: HoverPreviewState? = null) {
     val uid = block.referencedBlockUid
     val source by (if (core != null && uid != null) core.database.blockDao().observeByUid(uid) else flowOf(null)).collectAsState(initial = null)
     val sourcePageId = block.mentionedPageId
@@ -61,7 +64,8 @@ internal fun BlockReferenceCard(core: WorkbenchCore?, block: Block, onOpenPage: 
         onClick = { sourcePageId?.let(onOpenPage) },
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(6.dp),
-        modifier = Modifier.fillMaxWidth(),
+        // B§13.6 #3 — hover: the source line in its context, marked.
+        modifier = Modifier.fillMaxWidth().then(if (hoverPreview != null && uid != null) Modifier.hoverPreview(hoverPreview, PreviewTarget.Reference(uid, sourcePageId)) else Modifier),
     ) {
         // IntrinsicSize.Min so the accent bar is as tall as the text beside it.
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {

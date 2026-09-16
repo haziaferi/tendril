@@ -97,7 +97,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.rememberUpdatedState
+import com.tendril.app.ui.components.HOVER_DELAY_MS
+import com.tendril.app.ui.components.HoverPreviewCard
+import com.tendril.app.ui.components.HoverPreviewState
+import com.tendril.app.ui.components.PreviewTarget
+import com.tendril.app.ui.components.hoverPreview
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -282,6 +304,9 @@ fun PageDetailScreen(
         }
     }
 
+    // B§13.6 #3 — one hover-preview state per screen: the mention spans, mention blocks and
+    // block references below call `hoverPreview`; the card is drawn once at the screen's root.
+    val hoverPreview = remember { HoverPreviewState() }
     CompositionLocalProvider(LocalContentLocked provides contentLocked) {
     Scaffold(
         topBar = {
@@ -482,6 +507,7 @@ fun PageDetailScreen(
                         onRequestBlockReference = { blockReferenceAfter = entry.block },
                         onOpenPage = onOpenPage,
                         core = core,
+                        hoverPreview = hoverPreview,
                         onArmCanvas = { armedCanvasPage = it },
                         onInsertCanvas = { afterOrder -> canvasPickerAfterOrder = afterOrder },
                     )
@@ -505,6 +531,8 @@ fun PageDetailScreen(
             }
         }
     }
+
+    HoverPreviewCard(core, hoverPreview, onOpenPage, onOpenBeside = paneChrome?.openBeside, onOpenInWindow = paneChrome?.openInWindow)
 
     blockActionSheetFor?.let { block ->
         BlockActionSheet(
@@ -705,6 +733,8 @@ private fun BlockRow(
     findMarks: FindMarks? = null,
     /** The text selected in this block, reported so Ctrl+F can seed the query with it. */
     onSelection: (String) -> Unit = {},
+    /** B§13.6 #3 — the screen's hover-preview state; null where nothing previews (a picker's preview row). */
+    hoverPreview: HoverPreviewState? = null,
 ) {
     // Keyed only on block.id, not block.content: every edit round-trips through Room and
     // re-emits this same block via the Flow, and re-keying on content would reset this
@@ -737,6 +767,10 @@ private fun BlockRow(
     // 14d — the floating toolbar follows focus: a selection left in an unfocused field keeps
     // the inline toolbar (unchanged on the phone) but not a popup over the line above.
     var fieldFocused by remember { mutableStateOf(false) }
+    // B§13.6 #3 — the field's layout, so a hover over an `@mention` span can be told from a hover
+    // over the words around it; the span the card is up for wears a 1.5 dp accent outline.
+    var textLayout by remember(block.id) { mutableStateOf<TextLayoutResult?>(null) }
+    var hoveredSpan by remember(block.id) { mutableStateOf<FormattingSpan?>(null) }
 
     // 14d — inside the text the field's own right-click menu wins (as its long-press wins on
     // the phone); the block's actions ride on it as one appended item. Outside the text —
@@ -779,7 +813,7 @@ private fun BlockRow(
                         CanvasBlockCard(core, block.mentionedPageId, fallbackTitle = block.content, onArm = { block.mentionedPageId?.let(onArmCanvas) })
                     }
                 } else if (block.type == BlockType.BLOCK_REFERENCE) {
-                    BlockReferenceCard(core, block, onOpenPage)
+                    BlockReferenceCard(core, block, onOpenPage, hoverPreview)
                 } else if (block.type != BlockType.PAGE_MENTION) {
                     // §P1 — free-form, matching `Block.codeLanguage`'s own shape (the Notion
                     // importer stores a fence tag verbatim); "Plain text" is `null`, not "".
@@ -856,13 +890,17 @@ private fun BlockRow(
                             mentionBackground = MaterialTheme.colorScheme.primaryContainer,
                         ),
                         readOnly = locked,
-                        modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused },
+                        onTextLayout = { textLayout = it },
+                        modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused }
+                            .then(if (hoverPreview != null && LocalDensityProfile.current.pointer) Modifier.mentionSpanHover(hoverPreview, block, { textLayout }, hoveredSpan, { hoveredSpan = it }) else Modifier),
                     )
                 } else {
+                    // B§13.6 #3 — the mention block previews the page it names.
                     Surface(
                         onClick = { block.mentionedPageId?.let(onOpenPage) },
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(6.dp),
+                        modifier = if (hoverPreview != null) Modifier.hoverPreview(hoverPreview, block.mentionedPageId?.let { PreviewTarget.Page(it) }) else Modifier,
                     ) {
                         Text(block.content, modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.bodyMedium)
                     }
@@ -1580,4 +1618,106 @@ private fun subtreeOf(outline: List<OutlineBlock>, rootId: Long): List<OutlineBl
 @Composable
 private fun MapBackHandler(onBack: () -> Unit) {
     androidx.compose.ui.backhandler.BackHandler(enabled = true, onBack = onBack)
+}
+
+/**
+ * B§13.6 #3 — hover over an inline `@mention`: the field's `TextLayoutResult` gives the offset
+ * under the pointer, the block's spans say whether a `PageMention` covers it, and the span's
+ * glyph boxes are the card's anchor. Observed on the Initial pass and never consumed, so the
+ * caret, the selection and typing are exactly what they were — a press cancels the wait and
+ * hides the card. [hovered] is the span whose card is up; it wears the outline (the critique's
+ * #4: only while the card is up, none on the block cards).
+ */
+@Composable
+private fun Modifier.mentionSpanHover(
+    state: HoverPreviewState,
+    block: Block,
+    layout: () -> TextLayoutResult?,
+    hovered: FormattingSpan?,
+    onHovered: (FormattingSpan?) -> Unit,
+): Modifier {
+    val current = rememberUpdatedState(block)
+    val onHoveredNow = rememberUpdatedState(onHovered)
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val outline = MaterialTheme.colorScheme.primary
+    // Shared between the pointer loop and the key handler: a keystroke while the pointer rests on
+    // the span cancels the wait and drops the card — the person is writing, not reading.
+    val h = remember { SpanHoverHolder() }
+    fun leave(grace: Boolean) {
+        h.pending?.cancel(); h.pending = null; h.candidate = null
+        h.up?.let { (_, t) ->
+            h.up = null; onHoveredNow.value(null)
+            if (grace) h.scope?.launch { delay(150); state.hideIf(t) } else if (state.target == t) state.hide()
+        }
+    }
+    fun spanRect(l: TextLayoutResult, span: FormattingSpan): Rect {
+        val n = l.layoutInput.text.length
+        val a = l.getBoundingBox(span.start.coerceIn(0, n - 1))
+        val b = l.getBoundingBox((span.end - 1).coerceIn(0, n - 1))
+        return Rect(minOf(a.left, b.left), minOf(a.top, b.top), maxOf(a.right, b.right), maxOf(a.bottom, b.bottom))
+    }
+    return this
+        .onGloballyPositioned { coords = it }
+        .drawBehind {
+            val l = layout()
+            if (hovered != null && l != null && state.target != null && l.layoutInput.text.isNotEmpty()) {
+                val r = spanRect(l, hovered).inflate(2.dp.toPx())
+                drawRoundRect(color = outline, topLeft = r.topLeft, size = r.size, cornerRadius = CornerRadius(3.dp.toPx()), style = Stroke(1.5.dp.toPx()))
+            }
+        }
+        .onPreviewKeyEvent { leave(grace = false); false }
+        .pointerInput(state, block.id) {
+            coroutineScope {
+                h.scope = this
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        when (event.type) {
+                            PointerEventType.Enter, PointerEventType.Move -> {
+                                val pos = event.changes.firstOrNull()?.position
+                                val l = layout()
+                                val span = if (pos == null || l == null || event.buttons.isPrimaryPressed || l.layoutInput.text.isEmpty()) null else {
+                                    val offset = l.getOffsetForPosition(pos)
+                                    current.value.formattingSpans.firstOrNull { sp ->
+                                        sp.style is SpanStyle.PageMention && offset >= sp.start && offset < sp.end && offset < l.layoutInput.text.length &&
+                                            l.getBoundingBox(offset).let { box -> pos.x >= box.left - 2f && pos.x <= box.right + 2f && pos.y >= box.top && pos.y <= box.bottom }
+                                    }
+                                }
+                                if (span != h.candidate) {
+                                    if (span == null) leave(grace = true)
+                                    else {
+                                        h.pending?.cancel(); h.candidate = span
+                                        h.pending = launch {
+                                            delay(HOVER_DELAY_MS)
+                                            val c = coords; val lay = layout()
+                                            if (c != null && c.isAttached && lay != null) {
+                                                val r = spanRect(lay, span)
+                                                val tl = c.localToWindow(r.topLeft); val br = c.localToWindow(r.bottomRight)
+                                                val target = PreviewTarget.Page((span.style as SpanStyle.PageMention).pageId)
+                                                h.up?.let { (_, t) -> if (t != target && state.target == t) state.hide() }
+                                                h.up = span to target
+                                                onHoveredNow.value(span)
+                                                state.show(target, Rect(tl.x, tl.y, br.x, br.y))
+                                            }
+                                            h.pending = null
+                                        }
+                                    }
+                                }
+                            }
+                            PointerEventType.Exit -> leave(grace = true)
+                            PointerEventType.Press, PointerEventType.Scroll -> leave(grace = false)
+                            else -> {}
+                        }
+                    }
+                }
+            }
+        }
+}
+
+/** The span hover's in-flight state, reachable from both its pointer loop and its key handler. */
+private class SpanHoverHolder {
+    var scope: CoroutineScope? = null
+    var pending: Job? = null
+    var candidate: FormattingSpan? = null
+    var up: Pair<FormattingSpan, PreviewTarget>? = null
 }
