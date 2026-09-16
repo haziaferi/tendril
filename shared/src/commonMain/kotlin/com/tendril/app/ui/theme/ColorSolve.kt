@@ -127,6 +127,19 @@ fun tintFor(hue: Srgb, bg: Srgb, text: Srgb, share: Double, floor: Double): Srgb
     return bg
 }
 
+/** The lightness of a (hue, saturation) whose contrast on [bg] is *nearest* [target] — the
+ *  ladder's steps are placed at a contrast, not above a floor (B§13.8.1). */
+fun solveToTarget(hue: Double, saturation: Double, bg: Srgb, target: Double): Srgb {
+    var best = hslToSrgb(hue, saturation, 0.5)
+    var bestDistance = Double.MAX_VALUE
+    for (i in 0..100) {
+        val c = hslToSrgb(hue, saturation, i / 100.0)
+        val d = kotlin.math.abs(contrast(c, bg) - target)
+        if (d < bestDistance) { bestDistance = d; best = c }
+    }
+    return best
+}
+
 /** What reads on a solid [c]: the ground on a dark theme (white on a light one), then the other,
  *  then the text — the first to clear [floor]. `onAccent`'s rule, shared by every solid fill. */
 fun onColour(c: Srgb, bg: Srgb, text: Srgb, dark: Boolean, floor: Double = 4.6): Srgb =

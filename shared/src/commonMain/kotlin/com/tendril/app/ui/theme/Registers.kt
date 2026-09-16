@@ -59,6 +59,21 @@ data class Register(
     }
 }
 
+/**
+ * B§13.8.1 (14g·3) — the urgency ladder, *R-wide+*: one coral family on every ground. Each step
+ * is a hue and a saturation with its lightness solved to a contrast *target* on the actual
+ * ground (`docs/critiques/urgency-ladder-mock.md` #3: the rule reproduces the mock's hexes at
+ * dE ≤ 0.4 and re-solves on the OLED ground). Light climbs 3.0 → 13.0 (a mark's floor to a
+ * text's ceiling); dark runs pale-and-muted → saturated, 11.5 → 4.6, so urgent is the deepest
+ * step. Adjacent steps ≥ 10 dE for everyone, ≥ 8.5 under colour-vision deficiency (measured).
+ */
+object Ladder {
+    data class Step(val hue: Double, val saturation: Double, val target: Double)
+    val LIGHT = listOf(Step(10.0, 0.30, 3.0), Step(8.0, 0.50, 5.0), Step(6.0, 0.72, 7.9), Step(4.0, 0.91, 13.0))
+    val DARK = listOf(Step(12.0, 0.34, 11.5), Step(10.0, 0.55, 8.1), Step(8.0, 0.74, 6.1), Step(6.0, 0.94, 4.6))
+    fun solve(bg: Srgb, dark: Boolean): List<Srgb> = (if (dark) DARK else LIGHT).map { solveToTarget(it.hue, it.saturation, bg, it.target) }
+}
+
 /** The floors, in one place (B§13.7.1/13.7.3 with `docs/critiques/registers-mock.md`'s amendments). */
 object Floors {
     const val DIM = 4.6
@@ -123,5 +138,6 @@ fun paletteFor(register: Register, dark: Boolean, oled: Boolean = false): Tendri
         event = event.toColor(), eventSoft = mix(event, bg, tintShare).toColor(),
         habit = habit.toColor(), habitSoft = mix(habit, bg, tintShare).toColor(),
         error = error.toColor(), errorSoft = mix(error, bg, tintShare).toColor(), onError = onError.toColor(),
+        ladder = Ladder.solve(bg, dark).map { it.toColor() },
     )
 }

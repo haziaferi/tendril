@@ -88,6 +88,7 @@ class IcsImporter(
             recurrenceRule = if (startDate != null) rule else null,
             status = if (isTask) (if (completed) EntryStatus.DONE else EntryStatus.PENDING) else null,
             dueDate = if (isTask) due else null,
+            importance = if (isTask) importanceOfIcsPriority(priority) else 0,
             updatedAt = now,
         )
     }

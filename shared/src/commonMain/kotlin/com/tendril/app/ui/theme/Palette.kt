@@ -54,7 +54,12 @@ data class TendrilPalette(
     val error: Color,
     val errorSoft: Color,
     val onError: Color,
-)
+    /** The urgency ladder's four marks, low → urgent ([Ladder]); *none* draws nothing (14g·3). */
+    val ladder: List<Color>,
+) {
+    /** The mark for a level, or null for none. */
+    fun urgencyColour(level: Int): Color? = if (level <= 0) null else ladder[(level - 1).coerceIn(0, 3)]
+}
 
 /** The stored preference; [SYSTEM] follows the OS and is the default (§2.3's tri-state, closed). */
 enum class TendrilMode(val key: String, val label: String) {

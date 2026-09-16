@@ -68,7 +68,8 @@ import com.tendril.app.domain.ics.IcsImporter
 import com.tendril.app.domain.ics.IcsWriter
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
-import com.tendril.app.storage.TaskPreferences
+import com.tendril.app.ui.settings.TaskSettings
+import com.tendril.app.ui.settings.TaskSettingsSection
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
@@ -84,7 +85,6 @@ fun SettingsScreen(
     syncFolderManager: SyncFolderManager,
     secretStore: SecretStore,
     appLockPreferences: AppLockPreferences,
-    taskPreferences: TaskPreferences,
     syncStatusPreferences: SyncStatusPreferences,
     syncCoordinator: SyncCoordinator,
     portableArchive: PortableArchive,
@@ -129,7 +129,7 @@ fun SettingsScreen(
             HorizontalDivider()
             AppLockSection(appLockPreferences)
             HorizontalDivider()
-            TasksHabitsSection(taskPreferences)
+            TasksHabitsSection(core.taskSettings)
             HorizontalDivider()
         }
     }
@@ -690,22 +690,11 @@ private fun AppLockSection(prefs: AppLockPreferences) {
  * see, not features the app is withholding.
  */
 @Composable
-private fun TasksHabitsSection(prefs: TaskPreferences) {
-    val showImportance by prefs.showImportance.collectAsState()
-    val showStreaks by prefs.showHabitStreaks.collectAsState()
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Text("Tasks & Habits", style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-        AppLockToggleRow(
-            label = "Show an “important” flag on tasks",
-            checked = showImportance,
-            onCheckedChange = { prefs.setShowImportance(it) },
-        )
-        AppLockToggleRow(
-            label = "Show habit streaks",
-            checked = showStreaks,
-            onCheckedChange = { prefs.setShowHabitStreaks(it) },
-        )
+private fun TasksHabitsSection(settings: TaskSettings) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Text("Tasks & Habits", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        // 14g·3 — the shared section (the desktop pane renders the same one).
+        TaskSettingsSection(settings)
     }
 }
 

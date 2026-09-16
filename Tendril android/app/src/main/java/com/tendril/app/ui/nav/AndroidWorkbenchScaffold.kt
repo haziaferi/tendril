@@ -64,7 +64,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                     )
                 },
                 reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },
-                showImportant = container.taskPreferences.showImportance.collectAsState().value,
+                showUrgency = container.taskSettings.observeShowUrgency(),
             )
         },
         // §0.8 step 7a — Tasks & Habits is shared; Android supplies the switches and its sheets.
@@ -74,8 +74,8 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 onOpenReview = onOpenReview,
                 quickAddRequested = quickAddRequested,
                 onQuickAddConsumed = onQuickAddConsumed,
-                showImportance = container.taskPreferences.showImportance.collectAsState().value,
-                showStreaks = container.taskPreferences.showHabitStreaks.collectAsState().value,
+                showUrgency = container.taskSettings.observeShowUrgency(),
+                showStreaks = container.taskSettings.observeShowHabitStreaks(),
                 reminderSheet = { entry, onDismiss -> ReminderSheet(container = container, entry = entry, onDismiss = onDismiss) },
                 entryTrashSheet = { onDismiss -> EntryTrashSheet(core = container.workbenchCore, onDismiss = onDismiss) },
                 habitTrashSheet = { onDismiss -> HabitTrashSheet(core = container.workbenchCore, onDismiss = onDismiss) },
@@ -86,7 +86,6 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
                 syncFolderManager = container.syncFolderManager,
                 secretStore = container.secretStore,
                 appLockPreferences = container.appLockPreferences,
-                taskPreferences = container.taskPreferences,
                 syncStatusPreferences = container.syncStatusPreferences,
                 syncCoordinator = container.syncCoordinator,
                 portableArchive = container.portableArchive,

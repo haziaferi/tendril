@@ -2,6 +2,9 @@ package com.tendril.app.ui.calendar
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -94,6 +96,8 @@ internal fun WeekGridView(
     onMove: (EntryOccurrence, LocalDate, LocalTime) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onShiftWeek: (Int) -> Unit,
+    /** 14g·3 — the task blocks' urgency stripe; off hides it. */
+    showUrgency: Boolean = true,
 ) {
     val density = LocalDensity.current
     val hourPx = with(density) { HOUR_DP.dp.toPx() }
@@ -162,12 +166,19 @@ internal fun WeekGridView(
                         Column(modifier = Modifier.weight(1f).padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             val (shown, more) = visibleAllDay(col.allDay)
                             shown.forEach { o ->
+                                val chipStripe = blockStripe(o.entry, showUrgency, today)
                                 Surface(
                                     color = layerTint(if (o.entry.kind == com.tendril.app.data.entry.EntryKind.TASK) BlockKind.TASK else BlockKind.EVENT),
                                     shape = RoundedCornerShape(4.dp),
                                     modifier = Modifier.fillMaxWidth().clickable { onEdit(o.entry) },
                                 ) {
-                                    Text(o.entry.title, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                    // 14g·3 — an all-day task chip wears its urgency stripe like a timed block.
+                                    Text(
+                                        o.entry.title, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .drawBehind { chipStripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
+                                            .padding(start = if (chipStripe != null) 12.dp else 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+                                    )
                                 }
                             }
                             if (more > 0) {
@@ -217,12 +228,16 @@ internal fun WeekGridView(
                             val moving = drag?.block?.key == block.key
                             val tint = layerTint(block.kind)
                             val entry = block.occurrence?.entry
+                                val stripe = blockStripe(entry, showUrgency, today)
                             Box(
                                 modifier = Modifier
                                     .offset { IntOffset(x.roundToInt(), y.roundToInt() + 1) }
                                     .width(with(density) { (subWidth - 2f).coerceAtLeast(8f).toDp() })
                                     .height(with(density) { (h - 2).coerceAtLeast(12f).toDp() })
-                                    .background(if (moving) tint.copy(alpha = 0.4f) else tint, RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (moving) tint.copy(alpha = 0.4f) else tint)
+                                    // 14g·3 — a task block's left edge is its urgency stripe (B§13.8.1).
+                                    .drawBehind { stripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
                                     .then(if (block.estimated) Modifier.dashedBorder(MaterialTheme.colorScheme.outline) else Modifier)
                                     .then(if (entry != null) Modifier.clickable { onEdit(entry) } else Modifier)
                                     .then(
@@ -241,7 +256,8 @@ internal fun WeekGridView(
                                             )
                                         } else Modifier,
                                     )
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                    // The text clears the stripe: 4 dp of bar and 4 dp of air before the title.
+                                    .padding(start = if (stripe != null) 12.dp else 6.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                             ) {
                                 Text(
                                     block.title,

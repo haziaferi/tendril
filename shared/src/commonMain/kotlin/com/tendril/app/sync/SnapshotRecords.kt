@@ -31,7 +31,11 @@ data class EntrySnapshotRecord(
     val dueDate: String? = null,
     val parentEntryUid: String? = null,
     val estimateSeconds: Long? = null,
+    /** v19's flag, still written (as `importance >= 3`) so a peer on the older build keeps reading
+     * it; read only when [importance] is absent — a v19 record's `true` lands on 3 (high). */
     val important: Boolean = false,
+    /** 14g·3 (v20) — the ladder's set level, 0–4. */
+    val importance: Int? = null,
     /** References a Row's (Page's) [com.tendril.app.data.page.Page.uid] — resolved against
      * [PagesSyncEngine]'s page-uid map the same drop-and-self-heal way `originalEntryUid` is,
      * if the Row hasn't merged in on this device yet. */

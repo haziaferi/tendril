@@ -20,9 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -42,6 +40,16 @@ import com.tendril.app.data.habit.Habit
 import com.tendril.app.domain.TaskWithSubtasks
 import com.tendril.app.domain.plan.loggedSegment
 import com.tendril.app.domain.track.TrackTarget
+import com.tendril.app.domain.urgency.Urgency
+import com.tendril.app.domain.urgency.urgencyOf
+import com.tendril.app.ui.components.UrgencyDot
+import com.tendril.app.ui.components.UrgencyPicker
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import java.time.LocalDate
 import java.time.Period
 import com.tendril.app.ui.track.TrackButton
 
@@ -71,18 +79,36 @@ internal fun TaskDetailPane(
         DetailRow("When", listOfNotNull(entry.startDate?.toString(), entry.startTime?.toString()).joinToString(" · ").ifEmpty { null })
         DetailRow("Deadline", entry.dueDate?.toString())
         DetailRow("Repeat", (entry.recurrenceRule as? RecurrenceRule.Elastic)?.period?.let(::periodWords))
-        if (actions.showImportance) DetailRow("Importance", if (entry.important) "Important" else null, unsetWord = "not marked")
+        if (actions.showUrgency) {
+            // 14g·3 — the level shown is the greater of the set level and the deadline's pressure;
+            // when pressure is what raised it, the row says so.
+            val set = Urgency.fromLevel(entry.importance)
+            val shown = urgencyOf(entry, LocalDate.now())
+            DetailRow("Urgency", if (shown == Urgency.NONE) null else shown.label + (if (shown.level > set.level) " (the deadline)" else ""), unsetWord = "none")
+        }
         DetailRow("Tracked today", loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate), unsetWord = "nothing yet")
         Spacer(Modifier.height(14.dp))
         // The chips: the menu's items by name, plus the row's ▶ and its bell, and the Trash.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             AssistChip(onClick = { actions.onPostpone(entry) }, label = { Text("Postpone…") })
             AssistChip(onClick = { actions.onSetDeadline(entry) }, label = { Text(if (entry.dueDate == null) "Set deadline…" else "Change deadline…") })
-            if (actions.showImportance) AssistChip(
-                onClick = { viewModel.setImportant(entry.id, !entry.important) },
-                label = { Text(if (entry.important) "Not important" else "Important") },
-                leadingIcon = { Icon(if (entry.important) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = null) },
-            )
+            if (actions.showUrgency) {
+                var pick by remember { mutableStateOf(false) }
+                Box {
+                    AssistChip(
+                        onClick = { pick = true },
+                        label = { Text("Urgency…") },
+                        leadingIcon = { UrgencyDot(Urgency.fromLevel(entry.importance)) },
+                    )
+                    DropdownMenu(expanded = pick, onDismissRequest = { pick = false }) {
+                        UrgencyPicker(
+                            value = Urgency.fromLevel(entry.importance),
+                            onPick = { pick = false; viewModel.setImportance(entry.id, it.level) },
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
             val running = actions.runningTarget == TrackTarget.Entry(entry.id)
             AssistChip(
                 onClick = { viewModel.toggleTracking(TrackTarget.Entry(entry.id)) },

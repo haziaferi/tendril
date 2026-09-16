@@ -56,7 +56,7 @@ private enum class RepeatOption(val label: String) {
 @Composable
 fun AddTaskDialog(
     onDismiss: () -> Unit,
-    onAdd: (title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?, deadline: LocalDate?, estimate: Duration?, important: Boolean) -> Unit,
+    onAdd: (title: String, date: LocalDate?, time: LocalTime?, repeat: RecurrenceRule.Elastic?, deadline: LocalDate?, estimate: Duration?, importance: Int) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
     // §0.8 step 5 — the title is read as a line (`Gym every monday 7am by friday`) and its
@@ -151,7 +151,7 @@ fun AddTaskDialog(
                     RepeatOption.WEEKLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.WEEK))
                     RepeatOption.MONTHLY -> RecurrenceRule.Elastic(intervalToPeriod(1, IntervalUnit.MONTH))
                 }
-                onAdd(parsed.title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence, if (hasDeadline) deadline else null, parsed.estimate, parsed.important)
+                onAdd(parsed.title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence, if (hasDeadline) deadline else null, parsed.estimate, parsed.importance)
                 onDismiss()
             }) { Text("Add") }
         },

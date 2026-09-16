@@ -22,3 +22,11 @@ fun layerTint(kind: BlockKind): Color {
         BlockKind.OTHER -> p.thirdSoft
     }
 }
+
+/** 14g·3 — a task block's left edge is its urgency (B§13.8.1: *category fill + urgency stripe*);
+ *  null when the block is not a task, the level is none, or the switch is off. */
+@Composable
+fun blockStripe(occurrenceEntry: com.tendril.app.data.entry.Entry?, showUrgency: Boolean, today: java.time.LocalDate): Color? {
+    if (!showUrgency || occurrenceEntry == null || occurrenceEntry.kind != com.tendril.app.data.entry.EntryKind.TASK) return null
+    return LocalTendrilPalette.current.urgencyColour(com.tendril.app.domain.urgency.urgencyOf(occurrenceEntry, today).level)
+}

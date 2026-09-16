@@ -46,7 +46,8 @@ fun Entry.toSnapshot(idToUid: Map<Long, String>, rowIdToUid: Map<Long, String>):
     dueDate = dueDate?.toString(),
     parentEntryUid = parentEntryId?.let { idToUid[it] },
     estimateSeconds = estimate?.seconds,
-    important = important,
+    important = importance >= 3,
+    importance = importance,
     sourceRowUid = sourceRowId?.let { rowIdToUid[it] },
     deletedAt = deletedAt?.toEpochMilli(),
     source = source.name,
@@ -132,7 +133,7 @@ fun EntrySnapshotRecord.toEntity(uidToId: Map<String, Long>, rowUidToId: Map<Str
     // here yet reads as no parent, and the link is not guaranteed to heal on a later pass.
     parentEntryId = parentEntryUid?.let { uidToId[it] },
     estimate = estimateSeconds?.let(Duration::ofSeconds),
-    important = important,
+    importance = (importance ?: if (important) 3 else 0).coerceIn(0, 4),
     sourceRowId = sourceRowUid?.let { rowUidToId[it] },
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
     // The exception, and the precedent the rest of this sweep was measured against: `source`

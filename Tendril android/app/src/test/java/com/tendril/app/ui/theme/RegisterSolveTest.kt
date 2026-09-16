@@ -2,6 +2,7 @@ package com.tendril.app.ui.theme
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -135,6 +136,68 @@ class RegisterSolveTest {
         // Memoised: the same object comes back for the same hex on the same ground.
         val ink = paletteFor(Register.INK, dark = false)
         assertSame(labelColours("#A9708D", ink), labelColours("#A9708D", ink))
+    }
+
+    /** 14g·3 (B§13.8.1) — the ladder's four steps at their targets on every ground, adjacent steps apart. */
+    @Test
+    fun `the urgency ladder sits at its targets, deepens step by step and keeps its steps apart`() {
+        cases.forEach { c ->
+            val p = paletteFor(c.register, c.dark, c.oled)
+            val targets = (if (c.dark) Ladder.DARK else Ladder.LIGHT).map { it.target }
+            assertEquals(4, p.ladder.size)
+            p.ladder.forEachIndexed { i, step ->
+                val r = ratio(step, p.bg)
+                assertTrue("${c.name}: step $i ${"%.2f".format(r)} vs ${targets[i]}", abs(r - targets[i]) <= 0.3)
+            }
+            // Lightness falls every step — light darkens toward urgent, dark runs pale → saturated.
+            val lightness = p.ladder.map { it.toSrgb().toHsl().third }
+            lightness.zipWithNext().forEach { (a, b) -> assertTrue("${c.name}: monotone", b < a) }
+            p.ladder.zipWithNext().forEach { (a, b) -> assertTrue("${c.name}: adjacent ${deltaE(a.toSrgb(), b.toSrgb())}", deltaE(a.toSrgb(), b.toSrgb()) >= 10.0) }
+            assertNull(p.urgencyColour(0))
+            assertEquals(p.ladder[3], p.urgencyColour(4))
+        }
+    }
+
+    /** CIEDE2000 on sRGB ints — the test's own yardstick for "told apart", as the mocks measured. */
+    private fun deltaE(c1: Srgb, c2: Srgb): Double {
+        fun lab(c: Srgb): Triple<Double, Double, Double> {
+            fun lin(v: Int): Double { val x = v / 255.0; return if (x <= 0.04045) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4) }
+            val r = lin(c.r); val g = lin(c.g); val b = lin(c.b)
+            val x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047
+            val y = (r * 0.2126 + g * 0.7152 + b * 0.0722)
+            val z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883
+            fun f(t: Double) = if (t > 0.008856) Math.cbrt(t) else 7.787 * t + 16.0 / 116
+            return Triple(116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z)))
+        }
+        val (l1, a1, b1) = lab(c1); val (l2, a2, b2) = lab(c2)
+        val cm = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2
+        val gg = 0.5 * (1 - Math.sqrt(Math.pow(cm, 7.0) / (Math.pow(cm, 7.0) + Math.pow(25.0, 7.0))))
+        val a1p = (1 + gg) * a1; val a2p = (1 + gg) * a2
+        val c1p = Math.hypot(a1p, b1); val c2p = Math.hypot(a2p, b2)
+        fun hp(a: Double, b: Double): Double { if (a == 0.0 && b == 0.0) return 0.0; val h = Math.toDegrees(Math.atan2(b, a)); return if (h < 0) h + 360 else h }
+        val h1p = hp(a1p, b1); val h2p = hp(a2p, b2)
+        val dlp = l2 - l1; val dcp = c2p - c1p
+        val dhp = when {
+            c1p * c2p == 0.0 -> 0.0
+            abs(h2p - h1p) <= 180 -> h2p - h1p
+            h2p - h1p > 180 -> h2p - h1p - 360
+            else -> h2p - h1p + 360
+        }
+        val dHp = 2 * Math.sqrt(c1p * c2p) * Math.sin(Math.toRadians(dhp / 2))
+        val lm = (l1 + l2) / 2; val cmp = (c1p + c2p) / 2
+        val hm = when {
+            c1p * c2p == 0.0 -> h1p + h2p
+            abs(h1p - h2p) <= 180 -> (h1p + h2p) / 2
+            h1p + h2p < 360 -> (h1p + h2p + 360) / 2
+            else -> (h1p + h2p - 360) / 2
+        }
+        val t = 1 - 0.17 * Math.cos(Math.toRadians(hm - 30)) + 0.24 * Math.cos(Math.toRadians(2 * hm)) + 0.32 * Math.cos(Math.toRadians(3 * hm + 6)) - 0.20 * Math.cos(Math.toRadians(4 * hm - 63))
+        val dth = 30 * Math.exp(-Math.pow((hm - 275) / 25, 2.0))
+        val rc = 2 * Math.sqrt(Math.pow(cmp, 7.0) / (Math.pow(cmp, 7.0) + Math.pow(25.0, 7.0)))
+        val sl = 1 + 0.015 * Math.pow(lm - 50, 2.0) / Math.sqrt(20 + Math.pow(lm - 50, 2.0))
+        val sc = 1 + 0.045 * cmp; val sh = 1 + 0.015 * cmp * t
+        val rt = -Math.sin(Math.toRadians(2 * dth)) * rc
+        return Math.sqrt(Math.pow(dlp / sl, 2.0) + Math.pow(dcp / sc, 2.0) + Math.pow(dHp / sh, 2.0) + rt * (dcp / sc) * (dHp / sh))
     }
 
     @Test

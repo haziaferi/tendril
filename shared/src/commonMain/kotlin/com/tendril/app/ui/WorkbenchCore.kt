@@ -60,6 +60,8 @@ class WorkbenchCore(
     val checkInHabitUseCase: CheckInHabitUseCase by lazy { CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao()) }
     /** 14g·1 — the theme (register · mode · typeface · OLED) in [keyValueStore], on both platforms. */
     val themeSettings: ThemeSettings by lazy { ThemeSettings(keyValueStore) }
+    /** 14g·3 — the Tasks switches, shared (the desktop's were hardcoded off before). */
+    val taskSettings: com.tendril.app.ui.settings.TaskSettings by lazy { com.tendril.app.ui.settings.TaskSettings(keyValueStore) }
 
     /** §0.8 step 6e — `.ics` in; derived like the rest. Out is [com.tendril.app.domain.ics.IcsWriter], pure. */
     val icsImporter: IcsImporter by lazy { IcsImporter(database.entryDao(), entryScheduleCoordinator) }

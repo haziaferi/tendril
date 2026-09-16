@@ -2,7 +2,9 @@ package com.tendril.app.ui.calendar
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.clickable
@@ -79,7 +81,10 @@ internal fun PlanView(
     onEdit: (Entry) -> Unit,
     onPlace: (Entry, LocalTime) -> Unit,
     onMoveBlock: (EntryOccurrence, LocalTime) -> Unit,
+    /** 14g·3 — the task blocks' urgency stripe; off hides it. */
+    showUrgency: Boolean = true,
 ) {
+    val today = LocalDate.now()
     val density = LocalDensity.current
     val hourPx = with(density) { HOUR_DP.dp.toPx() }
     val gutterPx = with(density) { GUTTER_DP.dp.toPx() }
@@ -146,12 +151,16 @@ internal fun PlanView(
                         val moving = drag?.let { it.block?.key == block.key } == true
                         val tint = layerTint(block.kind)
                         val entry = block.occurrence?.entry
+                            val stripe = blockStripe(entry, showUrgency, today)
                         Box(
                             modifier = Modifier
                                 .offset { IntOffset(x.roundToInt() + 2, y.roundToInt() + 1) }
                                 .width(with(density) { (laneWidth - 4).toDp() })
                                 .height(with(density) { (h - 2).coerceAtLeast(12f).toDp() })
-                                .background(if (moving) tint.copy(alpha = 0.4f) else tint, RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (moving) tint.copy(alpha = 0.4f) else tint)
+                                // 14g·3 — a task block's left edge is its urgency stripe (B§13.8.1).
+                                .drawBehind { stripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
                                 .then(if (block.estimated) Modifier.dashedBorder(MaterialTheme.colorScheme.outline) else Modifier)
                                 .then(if (entry != null) Modifier.clickable { onEdit(entry) } else Modifier)
                                 .then(
@@ -169,7 +178,8 @@ internal fun PlanView(
                                         )
                                     } else Modifier,
                                 )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                // The text clears the stripe: 4 dp of bar and 4 dp of air before the title.
+                                .padding(start = if (stripe != null) 12.dp else 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
                         ) {
                             Text(
                                 block.title + (if (block.estimated && block.kind == BlockKind.TASK) "  ~${block.minutes}m" else ""),
