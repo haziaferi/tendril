@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowRight
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Dashboard
@@ -40,6 +42,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.time.LocalDate
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +61,8 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -96,17 +105,40 @@ import com.tendril.app.ui.nav.WorkbenchRoute
  * A tree click *replaces* the open page ([WorkbenchNavState.showPage]); a link inside a page
  * still pushes, so Escape returns where you came from. At the tab root the pane is the quiet
  * empty state, never a stale page. The tree's width and collapsed flag persist ([PagesTreeState]).
+ *
+ * 14h·1 — a third pane, the shelf ([ShelfPane]), at the right edge when [ShelfState.content] is
+ * set and a page is open: another page, this page's Road Map neighbourhood, or today's Journal.
+ * Opened from the page's `···` → *Show beside ▸*, the tree row's *Open beside* or Ctrl+click;
+ * closed on `×` or Ctrl+Shift+\; remembered.
  */
 @Composable
 fun PagesWorkspace(
     core: WorkbenchCore,
     navState: WorkbenchNavState,
     treeState: PagesTreeState,
+    shelfState: ShelfState,
     onOpenSwitcher: () -> Unit,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)?,
 ) {
     PagesHost(core, navState::openPage) { vm, actions, snackbarHostState ->
         val openPageId = (navState.current as? WorkbenchRoute.PageDetail)?.pageId
+        // The shelf's Journal is *today's*: the id is resolved here through the same create-or-find
+        // the Journal button uses (refused under View-Only when the day has no page yet — the
+        // button's message, and the shelf closes rather than sit empty), and re-resolved when the
+        // date turns over on a window left open.
+        var today by remember { mutableStateOf(LocalDate.now()) }
+        LaunchedEffect(Unit) { while (true) { delay(60_000); today = LocalDate.now() } }
+        var journalPageId by remember { mutableStateOf<Long?>(null) }
+        val wantsJournal = shelfState.content == Shelf.Journal
+        val scope = rememberCoroutineScope()
+        LaunchedEffect(wantsJournal, today) {
+            if (wantsJournal) vm.openJournal(
+                date = today,
+                onRefused = { scope.launch { snackbarHostState.showSnackbar(JOURNAL_LOCKED_MESSAGE) }; shelfState.close() },
+                onOpen = { journalPageId = it },
+            )
+        }
+        val shelfShown = shelfState.shown(openPageId, journalPageId)
         val paneChrome = remember(treeState.collapsed, actions) {
             PaneChrome(
                 leading = {
@@ -117,21 +149,35 @@ fun PagesWorkspace(
                     }
                 },
                 actions = { ViewOnlyButton(actions) },
-                menuItems = {
+                menuItems = { close ->
+                    // 14h·1 — the two things that can sit beside this page, as a submenu (the
+                    // 14g·3 pattern); on every kind of page, since the chrome is the workspace's.
+                    var beside by remember { mutableStateOf(false) }
+                    DropdownMenuItem(
+                        text = { Text("Show beside") },
+                        trailingIcon = { Icon(Icons.Filled.ArrowRight, contentDescription = null) },
+                        onClick = { beside = true },
+                    )
+                    DropdownMenu(expanded = beside, onDismissRequest = { beside = false }) {
+                        DropdownMenuItem(text = { Text("Road Map around this page") }, onClick = { beside = false; close(); shelfState.open(Shelf.Graph) })
+                        DropdownMenuItem(text = { Text("Today's Journal") }, onClick = { beside = false; close(); shelfState.open(Shelf.Journal) })
+                    }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("Trash…") }, onClick = actions.openTrash)
+                    DropdownMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
                 },
                 onClosed = { navState.back() },
             )
         }
         // The workspace paints its own ground: the phone's Scaffold used to, and a pane over the
         // window's default grey read as a card.
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+            val workspaceWidthDp = maxWidth.value
             Row(modifier = Modifier.fillMaxSize()) {
                 if (!treeState.collapsed) {
                     PagesTreePane(
                         vm, actions, treeState, openPageId, onOpenSwitcher,
                         onOpen = navState::showPage,
+                        onOpenBeside = { shelfState.open(Shelf.Page(it)) },
                         onShowOnRoadMap = navState::showOnRoadMap,
                         // Trashing the open page closes the pane to the tab root, as the page's own menu does.
                         onMoveToTrash = { id -> vm.moveToTrash(id); if (id == openPageId) navState.back() },
@@ -151,6 +197,18 @@ fun PagesWorkspace(
                         EmptyDetail(paneChrome, onOpenTrash = actions.openTrash)
                     }
                 }
+                if (shelfShown != null && openPageId != null) {
+                    ShelfPane(
+                        core = core,
+                        navState = navState,
+                        shelfState = shelfState,
+                        shown = shelfShown,
+                        openPageId = openPageId,
+                        journalPageId = journalPageId,
+                        widthDp = shelfState.effectiveWidthDp(workspaceWidthDp),
+                        onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
+                    )
+                }
             }
             SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
         }
@@ -166,10 +224,13 @@ private fun PagesTreePane(
     openPageId: Long?,
     onOpenSwitcher: () -> Unit,
     onOpen: (Long) -> Unit,
+    onOpenBeside: (Long) -> Unit,
     onShowOnRoadMap: (Long) -> Unit,
     onMoveToTrash: (Long) -> Unit,
 ) {
     val pages by viewModel.filteredPages.collectAsState()
+    // 14h·1 — Ctrl+click on a row opens it beside (read at the click: the modifiers are the window's).
+    val windowInfo = LocalWindowInfo.current
     val parentsWithChildren by viewModel.parentsWithChildren.collectAsState()
     val density = LocalDensity.current
     var dragStartWidth by remember { mutableStateOf(treeState.widthDp) }
@@ -232,7 +293,9 @@ private fun PagesTreePane(
             ) {
                 itemsIndexed(flat, key = { _, it -> it.page.id }) { index, entry ->
                     TreeRow(entry.page, depth = entry.depth, current = entry.page.id == openPageId, hasChildren = entry.hasChildren, expanded = entry.expanded,
-                        onClick = { keyState.clickedRow(index); onOpen(entry.page.id) }, onToggle = { if (entry.hasChildren) treeState.toggleExpanded(entry.page.id) },
+                        onClick = { keyState.clickedRow(index); if (windowInfo.keyboardModifiers.isCtrlPressed) onOpenBeside(entry.page.id) else onOpen(entry.page.id) },
+                        onToggle = { if (entry.hasChildren) treeState.toggleExpanded(entry.page.id) },
+                        onOpenBeside = { onOpenBeside(entry.page.id) },
                         onShowOnRoadMap = { onShowOnRoadMap(entry.page.id) }, onMoveToTrash = if (actions.viewOnly) null else ({ onMoveToTrash(entry.page.id) }),
                         keyFocused = keyState.focused == index && keyboardCursorShown(), typed = keyState.typed)
                 }
@@ -277,6 +340,7 @@ private fun TreeRow(
     expanded: Boolean,
     onClick: () -> Unit,
     onToggle: () -> Unit,
+    onOpenBeside: () -> Unit,
     onShowOnRoadMap: () -> Unit,
     onMoveToTrash: (() -> Unit)?,
     /** 14e — this row is the keyboard cursor: a 2 dp ring, the typed prefix underlined. */
@@ -343,7 +407,7 @@ private fun TreeRow(
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(0, rowHeightPx), onDismiss = { menuOpen = false }) {
         PageRowMenuItems(onOpen = { menuOpen = false; onClick() }, onShowOnRoadMap = { menuOpen = false; onShowOnRoadMap() },
-            onMoveToTrash = onMoveToTrash?.let { f -> { menuOpen = false; f() } })
+            onMoveToTrash = onMoveToTrash?.let { f -> { menuOpen = false; f() } }, onOpenBeside = { menuOpen = false; onOpenBeside() })
     }
     }
 }

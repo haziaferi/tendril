@@ -20,8 +20,11 @@ class PaneChrome(
     val leading: @Composable () -> Unit,
     /** Actions placed before the screen's own `···`. */
     val actions: @Composable RowScope.() -> Unit,
-    /** Items appended to the screen's `···` menu, after its own. */
-    val menuItems: @Composable ColumnScope.() -> Unit,
+    /** Items appended to the screen's `···` menu, after its own; `close` shuts that menu (a
+     * submenu's pick, 14h·1's *Show beside ▸*, would otherwise leave the parent open). */
+    val menuItems: @Composable ColumnScope.(close: () -> Unit) -> Unit,
     /** What "this page is gone" does in a pane — a trashed page closes to the tab root. */
     val onClosed: () -> Unit,
+    /** 14h·1 — the shelf: the bar is 280–560 dp wide, so the title takes `titleMedium`, not `titleLarge`. */
+    val compact: Boolean = false,
 )

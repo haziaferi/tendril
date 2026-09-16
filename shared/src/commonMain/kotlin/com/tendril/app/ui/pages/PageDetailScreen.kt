@@ -272,7 +272,7 @@ fun PageDetailScreen(
                         },
                         readOnly = contentLocked,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )
                 },
@@ -302,7 +302,7 @@ fun PageDetailScreen(
                         DropdownMenuItem(text = { Text("History") }, onClick = { showMoreMenu = false; showHistory = true })
                         DropdownMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
                         DropdownMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
-                        paneChrome?.menuItems?.invoke(this)
+                        paneChrome?.menuItems?.invoke(this) { showMoreMenu = false }
                     }
                 },
             )

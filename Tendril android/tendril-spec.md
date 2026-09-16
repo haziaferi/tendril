@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14h·1 — the shelf) | §3.1 amended: a third pane on a wide window (`ui/pages/ShelfState.kt`, `ShelfPane.kt`; `ui/roadmap/RoadMapNeighbourhood.kt` over the shared `RoadMapCanvas`); *Show beside ▸* in the workspace chrome (`PaneChrome.menuItems` gains `close`, `compact`), *Open beside* and Ctrl+click on tree rows, `PageRoute` takes `onOpenPage`/`findRequest`; `TOGGLE_SHELF` = Ctrl+Shift+\ in the keyboard table; `pages_shelf`, `pages_shelf_last`, `pages_shelf_width`. §0.10 item 14: 14h·1 shipped. Critiques: `docs/critiques/shelf-mock.md`, `shelf-function.md`. Desktop verified; the phone walk pending. Tests 759 → 765. | §3.1, §2.2, §0.10 |
 | 2026-09-16 (14g·3 — the urgency ladder) | §0.6.4 amended: `Entry.importance` 0–4 replaces the flag, **schema v20** (`MIGRATION_19_20` rebuilds `entries`, `important = 1 → 3`; `20.json`), `domain/urgency/Urgency.kt` (`timePressure`, `urgencyOf`), the ladder in the engine (`Ladder`, `solveToTarget`, `TendrilPalette.ladder`), `ui/components/UrgencyMarks.kt` (stripe, dot, picker), rows, timed blocks and all-day chips striped, the pane's row and chip, the row menu's *Urgency ▸*, the edit sheet's picker, quick add `!` / `!!`, ICS `PRIORITY`, the snapshot's two fields; `ui/settings/TaskSettings.kt` shared (`show_urgency` on by default, `show_habit_streaks`; Android's `TaskPreferences` migrated once and deleted; the desktop pane's Tasks section). §0.5.2's clause; §2.3's ladder row; §3.2, §3.3, §4 amended; §0.10 item 14: 14g done. `tools/audit.py`'s stripper now skips char literals (`'"'` had swallowed the rest of `Ics.kt`). Critiques: `docs/critiques/urgency-ladder-mock.md`, `urgency-ladder-function.md` (the stripe/text overlap seen by the user, fixed). Desktop verified on the real DB; the phone walk pending. Tests 753 → 759. | §0.6.4, §0.5.2, §2.3, §3.2, §3.3, §4, §0.10 |
 | 2026-09-16 (14g·2 — the token map) | §2.3 gains *The token map*: `fanHue` (event −120°, habit +60°, the third 180°, the second channel taking the third slot), the error family solved on its soft, `findSoft`, `TendrilPalette` +9 tokens and `dark`, `ui/theme/DataColours.kt` (`labelColours`, `calloutColours`, `CALLOUT_COLORS`; `solveHue`'s `tintShare`), `Theme.kt` maps `tertiary*`/`error*`/`secondaryContainer`; `spansVisualTransformation` takes the link and mention colours (the two hardcoded blues gone), canvas edges dim, `ui/calendar/LayerColours.kt`, the Road Map's node kinds, the Timeline's blocker and today, callouts as bar + tint, label chips coloured (§3.1.6, §3.1.1 amended). `tools/audit.py` rule 11 *hardcoded colour*. §0.10 item 14: 14g·2 shipped; the small-things list closes the `find` token and gains two. Critiques: `docs/critiques/coloured-elements-mock.md`, `coloured-elements-function.md`. Desktop verified; the phone walk pending. Tests 748 → 753. | §2.3, §3.1.1, §3.1.6, §0.10 |
 | 2026-09-16 (14g·1 — the theme model) | §2.3 rewritten as the model: ground × hue × mode, ten registers (`ui/theme/Registers.kt` — Clay, Moss and Mauve return solved on the cold ground), every token solved to a floor (`ColorSolve.kt`, `paletteFor`; text into the 9.5–13:1 band, dim/faint on both grounds, the accent by lightness alone, marks to 3:1), mode System default, `ThemeSettings` in `KeyValueStore` on both platforms with the phone's `ThemePreferences` migrated once and deleted, `ThemeSection` shared, the type scale clamped to 400/500. `Theme.kt` maps the surface-container family; the scaffold sits every route on one `Surface`. §0.10 item 14: 14g·1 shipped. Critiques: `docs/critiques/registers-mock.md`, `registers-function.md`. Desktop verified; the phone walk pending. Tests 736 → 748. | §2.3, §0.10 |
@@ -775,7 +776,12 @@ Genuinely undecided — distinct from §0.7.
     rule so no literal colour returns.* ***14g·3 shipped 2026-09-16** — the urgency ladder (§0.6.4
     as amended): `importance` 0–4 (v20, the table rebuilt), the level the greater of the set level
     and the deadline's pressure, a stripe on rows and blocks, the two Tasks switches shared and
-    the ladder on by default. **14g is done; 14h (the shelf) next.***
+    the ladder on by default. **14g is done; 14h (the shelf) next.*** ***14h·1 shipped
+    2026-09-16** — the shelf (§3.1, amended): a third pane holding another page, this page's Road
+    Map neighbourhood or today's Journal; the openers, the one-header rule, the swap, the 45 %
+    clamp, the chord; remembered. `docs/critiques/shelf-mock.md` (the pass on the mock drawn for
+    it) and `shelf-function.md` (the build: the depth control and the title size fixed).
+    **14h·2 (the small things) closes the item.***
 13. ~~**Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*~~ *Resolved 2026-09-16 (14f·1): the two Trash sheets are shared and the desktop has the button; the bell stays Android's, as the reason stands.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -905,7 +911,8 @@ navigation-paradigm question later.
   fixed set is **one table** (`ui/nav/Shortcuts.kt`), and the shortcuts card (F1, or *Keyboard
   shortcuts…* in Settings) is generated from it, so what is listed is what is bound — a test
   holds every action to one unique chord. The table: **Ctrl+1…5** the tabs · **Alt+← / Alt+→**
-  back and forward (also the mouse's side buttons) · **Ctrl+\** the tree · **Ctrl+N** new page ·
+  back and forward (also the mouse's side buttons) · **Ctrl+\** the tree · **Ctrl+Shift+\** the
+  shelf (14h·1) · **Ctrl+N** new page ·
   **Ctrl+Shift+N** new task (Tasks opens with its Add sheet — a cross-tab intent like *Show on
   Road Map*) · **Ctrl+T** today's Journal · **Ctrl+K** the switcher · **F1** the card; Esc is
   back. Every key is one a person can press on any layout without AltGr or Shift: the
@@ -1173,6 +1180,36 @@ quiet line, never a stale page; it still wears View-Only and the Trash. The phon
 `PagesScreen` over the same `PagesHost` — is what it was, to the pixel (0.06 % of sampled pixels
 differ against the previous build, the clock). Not yet: `···` on a row and hover-revealed
 controls (14d), keyboard movement in the tree (14e).)*
+
+*(**Amended 2026-09-16 — B§13.4 14h·1, the shelf.** On a wide window a **third pane** can stand
+at the workspace's right edge beside the open page, holding one of three things (decided
+2026-09-16 on `docs/mockups/shelf.html`, drawn for the pass, and its critique
+`docs/critiques/shelf-mock.md`): **another page**, **this page's Road Map neighbourhood**, or
+**today's Journal**. Opened from the page's `···` → *Show beside ▸* (*Road Map around this page* ·
+*Today's Journal* — the item is the workspace chrome's, so every kind of page has it and the
+phone never does), from a tree row's menu (*Open beside*) or a **Ctrl+click** on the row; closed
+on its `×` or **Ctrl+Shift+\** (which also reopens the last one — the tree's chord with Shift).
+**One header rule** (the critique's #1): a page in the shelf uses its *own* bar as the header —
+the kind's glyph where the back arrow would be, `⇄` and `×` before its `···`, the title at
+`titleMedium` (`PaneChrome.compact`) — so three panes share one bar height and one hairline; only
+the graph, which has no bar, gets one drawn at the same height with the depth as three 28 dp
+targets and *Open in Road Map*. **The shelf's page is editable** — the same `PageRoute` — and a
+link inside it opens *in the shelf* (a stack of one, never the main stack); Ctrl+F and Escape
+stay the main pane's. **`⇄` swaps** the two panes (a swapped-out Journal becomes that day's page).
+**A page never sits beside itself**: while the shelf's page is the open page the shelf shows its
+graph instead, and the stored content is untouched — a pin, not a redirect. **The graph**
+(`RoadMapNeighbourhood`) is the map's canvas (`RoadMapCanvas`, shared, a 120 dp node) over the
+*full* graph's `around(page, depth)` — not the map's filtered one, so a Journal page's
+neighbourhood is never empty for the Journal filter — on its own ViewModel instance; the map's
+gestures plus one: a click focuses, a click on the focused node opens it in the shelf, a
+double-click in the main pane. **Today's Journal** is stored as the kind, not a page id
+(`pages_shelf=journal`), resolved each day through the Journal button's create-or-find (refused
+under View-Only on a day with no page: the button's message, the shelf closes). **Width** 380 dp,
+280…560 (`pages_shelf_width`), the tree's handle mirrored on the left edge, and **clamped to 45 %
+of the workspace** at draw time so the main pane keeps ≥ 360 dp (the critique's #3). **Remembered**:
+`pages_shelf` (`page:<id>` · `graph` · `journal`), `pages_shelf_last`; hidden at the tab root
+(`ShelfState.shown`). The phone keeps its stack. `docs/critiques/shelf-function.md` walked the
+build.)*
 
 - Import from Notion (Markdown & CSV export format — see §7 for the full fidelity spec)
 - Full import/export of pages and projects

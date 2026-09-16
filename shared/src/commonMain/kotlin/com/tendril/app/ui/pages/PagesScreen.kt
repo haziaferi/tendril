@@ -114,7 +114,7 @@ import org.jetbrains.compose.resources.stringResource
 /** §3.1.2 — what a refused `openJournal` says out loud. Names the lock (so the tap does not read
  * as a fault), names what was refused (creating the day, not opening it), and names the way out,
  * which is one tap away in the same top bar. */
-private const val JOURNAL_LOCKED_MESSAGE =
+internal const val JOURNAL_LOCKED_MESSAGE =
     "Nothing is written for that day yet, and View-Only is on — turn it off to start it."
 
 /**
@@ -435,8 +435,10 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
  * [onMoveToTrash] null under View-Only — the item is greyed, not gone, so the lock is visible.
  */
 @Composable
-internal fun PageRowMenuItems(onOpen: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?) {
+internal fun PageRowMenuItems(onOpen: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?, onOpenBeside: (() -> Unit)? = null) {
     DropdownMenuItem(text = { Text("Open") }, onClick = onOpen)
+    // 14h·1 — the tree's rows only (the phone has no shelf); Ctrl+click on the row is the same.
+    if (onOpenBeside != null) DropdownMenuItem(text = { Text("Open beside") }, onClick = onOpenBeside)
     DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = onShowOnRoadMap)
     DropdownMenuItem(text = { Text("Move to Trash") }, onClick = onMoveToTrash ?: {}, enabled = onMoveToTrash != null)
 }

@@ -7,6 +7,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import com.tendril.app.ui.components.LabelDot
@@ -100,7 +103,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private val NODE_WIDTH = 132.dp
+internal val NODE_WIDTH = 132.dp
 private val NODE_HEIGHT = 44.dp
 private const val REPULSION = 900_000f
 private const val SPRING_STRENGTH = 0.02f
@@ -213,7 +216,7 @@ fun RoadMapScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                RoadMapCanvas(graph = graph, onOpenPage = onOpenPage)
+                RoadMapCanvas(graph = graph, onOpenPage = onOpenPage, nodeWidth = NODE_WIDTH)
             }
         }
     }
@@ -329,8 +332,14 @@ private fun FocusBar(page: Page, depth: Int, onDepthChange: (Int) -> Unit, onCle
     }
 }
 
+/**
+ * The force-directed canvas, shared with the shelf's neighbourhood (14h·1, `RoadMapNeighbourhood`):
+ * the map draws it at [NODE_WIDTH], the shelf narrower. [onDoubleTap] non-null makes a tap wait the
+ * double-tap timeout before it fires (the shelf: click here, double-click the main pane); the map
+ * passes null and keeps its immediate select-then-open.
+ */
 @Composable
-private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
+internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, nodeWidth: Dp, onDoubleTap: ((Long) -> Unit)? = null) {
     val density = LocalDensity.current
     val positions = remember { mutableStateMapOf<Long, Offset>() }
     val velocities = remember { mutableMapOf<Long, Offset>() }
@@ -339,7 +348,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var simulationTick by remember { mutableStateOf(0) }
 
-    val nodeWidthPx = with(density) { NODE_WIDTH.toPx() }
+    val nodeWidthPx = with(density) { nodeWidth.toPx() }
     val nodeHeightPx = with(density) { NODE_HEIGHT.toPx() }
     val springLengthPx = nodeWidthPx * 1.8f
     val minDistancePx = nodeWidthPx * 1.1f
@@ -500,6 +509,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                     degree = graph.degreeOf(page.id),
                     dimmed = dimmed,
                     positions = positions,
+                    nodeWidth = nodeWidth,
                     nodeWidthPx = nodeWidthPx,
                     nodeHeightPx = nodeHeightPx,
                     onDragStart = { draggingId = page.id },
@@ -507,6 +517,7 @@ private fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit) {
                     onTap = {
                         if (selectedId == page.id) onOpenPage(page.id) else selectedId = page.id
                     },
+                    onDoubleTap = onDoubleTap?.let { f -> { f(page.id) } },
                 )
             }
         }
@@ -546,16 +557,18 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArrowhead(from:
  * already-selected node opens it (second tap = confirm); a tap on any other node just selects
  * it, mirroring Obsidian Graph View's hover-to-highlight on a device with no hover. */
 @Composable
-private fun RoadMapNode(
+internal fun RoadMapNode(
     page: Page,
     degree: Int,
     dimmed: Boolean,
     positions: SnapshotStateMap<Long, Offset>,
+    nodeWidth: Dp,
     nodeWidthPx: Float,
     nodeHeightPx: Float,
     onDragStart: () -> Unit,
     onDragEnd: () -> Unit,
     onTap: () -> Unit,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val borderWidth = (1f + min(degree, 6) * 0.5f).dp
     // 14g·2 (B§13.8.3) — a page is the lifted ground, a database a fill (the third hue's tint until
@@ -579,7 +592,7 @@ private fun RoadMapNode(
                 val pos = positions[page.id] ?: Offset.Zero
                 IntOffset((pos.x - nodeWidthPx / 2f).roundToInt(), (pos.y - nodeHeightPx / 2f).roundToInt())
             }
-            .size(NODE_WIDTH, NODE_HEIGHT)
+            .size(nodeWidth, NODE_HEIGHT)
             .alpha(if (dimmed) DIMMED_ALPHA else 1f)
             .pointerInput(page.id) {
                 awaitEachGesture {
@@ -606,10 +619,26 @@ private fun RoadMapNode(
                         }
                     } while (event.changes.any { it.pressed })
                     if (started) onDragEnd()
-                    if (totalDrag.getDistance() < 12f) onTap()
+                    if (totalDrag.getDistance() < 12f) {
+                        if (onDoubleTap == null) {
+                            onTap()
+                        } else {
+                            // 14h·1 — the shelf's nodes: a second press inside the timeout is a
+                            // double-tap (the main pane); otherwise the tap fires late, as
+                            // `detectTapGestures` fires it. Same pattern, inside the one detector.
+                            val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitFirstDown() }
+                            if (second == null) {
+                                onTap()
+                            } else {
+                                second.consume()
+                                waitForUpOrCancellation()
+                                onDoubleTap()
+                            }
+                        }
+                    }
                 }
             }
-            .semantics { contentDescription = "${page.title} — tap to focus, tap again to open" },
+            .semantics { contentDescription = if (onDoubleTap == null) "${page.title} — tap to focus, tap again to open" else "${page.title} — click to focus, click again to open here, double-click to open in the main pane" },
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
             Text(page.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)

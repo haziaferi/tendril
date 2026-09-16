@@ -17,6 +17,8 @@ import com.tendril.app.ui.pages.PageDetailScreen
  * editor — routing branches on `kind` alone, not `databaseId`.
  *
  * [onBack] null means "no back arrow": the page is a pane beside the tree, and Escape closes it.
+ * 14h·1 — the shelf passes [onOpenPage] (a link inside the shelf opens in the shelf, never on the
+ * main stack) and `findRequest = 0` (Ctrl+F is the main pane's); both default to the nav state.
  */
 @Composable
 fun PageRoute(
@@ -26,32 +28,35 @@ fun PageRoute(
     navState: WorkbenchNavState,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)?,
     paneChrome: PaneChrome? = null,
+    onOpenPage: ((Long) -> Unit)? = null,
+    findRequest: Int? = null,
 ) {
     val page by core.database.pageDao().observeById(pageId).collectAsState(initial = null)
+    val open = onOpenPage ?: navState::openPage
     when (page?.kind) {
         PageKind.DATABASE -> PageDatabaseScreen(
             core = core,
             pageId = pageId,
             onBack = onBack,
-            onOpenPage = navState::openPage,
+            onOpenPage = open,
             paneChrome = paneChrome,
         )
         PageKind.CANVAS -> CanvasScreen(
             core = core,
             pageId = pageId,
             onBack = onBack,
-            onOpenPage = navState::openPage,
+            onOpenPage = open,
             paneChrome = paneChrome,
         )
         else -> PageDetailScreen(
             core = core,
             pageId = pageId,
             onBack = onBack,
-            onOpenPage = navState::openPage,
+            onOpenPage = open,
             onShowOnRoadMap = navState::showOnRoadMap,
             onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
             paneChrome = paneChrome,
-            findRequest = navState.findRequested,
+            findRequest = findRequest ?: navState.findRequested,
         )
     }
 }

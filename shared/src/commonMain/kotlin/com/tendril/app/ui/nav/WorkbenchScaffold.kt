@@ -25,6 +25,7 @@ import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
 import com.tendril.app.ui.pages.PagesScreen
 import com.tendril.app.ui.pages.PagesTreeState
+import com.tendril.app.ui.pages.ShelfState
 import com.tendril.app.ui.pages.PagesWorkspace
 import com.tendril.app.ui.track.RunningTimerBar
 import com.tendril.app.ui.track.RunningTimerRailFoot
@@ -69,6 +70,8 @@ fun WorkbenchScaffold(
     switcher: SwitcherState = remember { SwitcherState() },
     /** 14c — the tree pane's width, collapsed flag and expansions; the desktop's Ctrl+\ toggles it from `Main.kt`. */
     treeState: PagesTreeState = remember { PagesTreeState(core.keyValueStore) },
+    /** 14h·1 — the shelf beside the page (what it holds, its width); Ctrl+Shift+\ toggles it. */
+    shelfState: ShelfState = remember { ShelfState(core.keyValueStore) },
     /** 14e — the shortcuts overlay's open flag (Ctrl+/ and Settings open it) and the actions the
      * desktop's key table runs; the scaffold fills [shortcutActions] because it owns what they move. */
     shortcuts: ShortcutsState = remember { ShortcutsState() },
@@ -132,6 +135,7 @@ fun WorkbenchScaffold(
             ShortcutAction.SWITCHER -> switcher.open = true
             ShortcutAction.SHORTCUTS -> shortcuts.open = true
             ShortcutAction.TOGGLE_TREE -> treeState.toggle()
+            ShortcutAction.TOGGLE_SHELF -> shelfState.toggle()
             ShortcutAction.BACK -> navState.back()
             ShortcutAction.FORWARD -> navState.forward()
             ShortcutAction.NEW_PAGE -> pagesViewModel.createBlankPage("") { navState.openPage(it) }
@@ -159,6 +163,7 @@ fun WorkbenchScaffold(
                             core = core,
                             navState = navState,
                             treeState = treeState,
+                            shelfState = shelfState,
                             onOpenSwitcher = { switcher.open = true },
                             onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
                         )
