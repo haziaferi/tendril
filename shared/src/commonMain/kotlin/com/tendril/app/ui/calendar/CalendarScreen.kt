@@ -30,6 +30,19 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.AddCircle
 import androidx.compose.ui.backhandler.BackHandler
 import com.tendril.app.ui.nav.LocalShellLayout
+import com.tendril.app.domain.plan.trayTasks
+import com.tendril.app.ui.components.PaneHandle
+import com.tendril.app.ui.components.PaneWidthState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
 import com.tendril.app.ui.nav.ShellLayout
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -52,7 +65,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,7 +89,6 @@ import com.tendril.app.data.habit.Habit
 import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import kotlin.math.roundToInt
@@ -89,7 +100,6 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.offset
@@ -120,7 +130,6 @@ import com.tendril.app.domain.ParsedEntry
 import com.tendril.app.domain.QuickAddParser
 import com.tendril.app.domain.TokenKind
 import com.tendril.app.ui.entries.QuickAddPreview
-import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -225,6 +234,35 @@ fun CalendarScreen(
     var planMode by remember { mutableStateOf(false) }
     var pendingTimeMove by remember { mutableStateOf<PendingTimeMove?>(null) }
     val allTasks by viewModel.tasks.collectAsState()
+    // B§13.6 #5 — the task tray beside the week (a strip under the Week strip and the Month on
+    // the phone) and the drag off it: the screen owns the drag, draws the ghost, and asks the
+    // grid's geometry or the day cells where it would land. Root coordinates throughout.
+    val today = LocalDate.now()
+    val tray = remember(allTasks, today) { trayTasks(allTasks, today) }
+    val trayWidth = remember { PaneWidthState(core.keyValueStore, CALENDAR_TRAY_WIDTH_KEY, 280, 240, 360) }
+    var trayCollapsed by remember { mutableStateOf(core.keyValueStore.getBoolean(CALENDAR_TRAY_COLLAPSED_KEY, false)) }
+    fun setTrayCollapsed(v: Boolean) { trayCollapsed = v; core.keyValueStore.putBoolean(CALENDAR_TRAY_COLLAPSED_KEY, v) }
+    var trayDrag by remember { mutableStateOf<TrayDrag?>(null) }
+    var trayBounds by remember { mutableStateOf(Rect.Zero) }
+    var gridGeometry by remember { mutableStateOf<WeekGeometry?>(null) }
+    var gridDragPosition by remember { mutableStateOf<Offset?>(null) }
+    var gridDragTitle by remember { mutableStateOf<String?>(null) }
+    val dayCells = remember { mutableStateMapOf<LocalDate, Rect>() }
+    var layerOrigin by remember { mutableStateOf(Offset.Zero) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val trayShown = if (wide) view == CalendarView.WEEK else (view == CalendarView.WEEK || view == CalendarView.MONTH)
+    // Where the tray's drag would land: the grid's target on a wide window, a day cell otherwise.
+    val trayGridTarget: WeekDrop? = trayDrag?.let { d -> if (wide) gridGeometry?.let { weekDropAt(d.position, it) } else null }
+    val trayCellTarget: LocalDate? = trayDrag?.let { d -> if (!wide) dayCellAt(d.position, dayCells) else null }
+    val dropOnTray = gridDragPosition?.let { trayBounds.contains(it) } == true
+    fun dropTray(entry: Entry) {
+        when (val t = trayGridTarget) {
+            is WeekDrop.Slot -> viewModel.place(entry, t.day, t.time)
+            is WeekDrop.AllDay -> viewModel.move(entry, entry.startDate ?: t.day, t.day, MoveScope.ALL)
+            null -> trayCellTarget?.let { day -> viewModel.move(entry, entry.startDate ?: day, day, MoveScope.ALL) }
+        }
+    }
     val runningTarget by core.timeTracker.runningTargetState()
     // §0.8 step 7d — the selected day's logs and a ticking now, for Planned · Logged.
     val dayLogsNow by remember(selectedDate) { viewModel.logsOn(selectedDate) }.collectAsState(initial = emptyList<TimeLog>() to Instant.now())
@@ -274,9 +312,15 @@ fun CalendarScreen(
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             ShellTopBar(
                 title = { Text(stringResource(Res.string.nav_calendar)) },
+                navigationIcon = {
+                    if (wide && trayShown && trayCollapsed) {
+                        IconButton(onClick = { setTrayCollapsed(false) }) { Icon(Icons.Filled.ChevronRight, contentDescription = "Show the tray") }
+                    }
+                },
                 // Horizontal three-dot icon (§2.2) — never the gear, which is reserved for
                 // the main Settings tab.
                 actions = {
@@ -290,7 +334,8 @@ fun CalendarScreen(
             )
         },
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).onGloballyPositioned { layerOrigin = it.boundsInRoot().topLeft }) {
+        Column(modifier = Modifier.fillMaxSize()) {
             if (wide && quickAddOpen) {
                 QuickAddBar(today = selectedDate, onQuickAdd = { viewModel.quickAdd(it, selectedDate) }, onClose = { quickAddOpen = false })
             }
@@ -352,6 +397,24 @@ fun CalendarScreen(
             }
             val extras = remember(layers, timedHabits, dateCells, range) { extrasIn(range.first, range.second, layers, timedHabits, dateCells) }
 
+            val trayDragStart: (Entry, Offset) -> Unit = { entry, pos -> trayDrag = TrayDrag(entry, pos) }
+            val trayDragMove: (Offset) -> Unit = { delta -> trayDrag = trayDrag?.let { it.copy(position = it.position + delta) } }
+            val trayDragEnd: () -> Unit = { trayDrag?.let { dropTray(it.entry) }; trayDrag = null }
+            val trayDragCancel: () -> Unit = { trayDrag = null }
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (wide && trayShown && !trayCollapsed) {
+                Box(modifier = Modifier.fillMaxHeight().zIndex(1f)) {
+                    TaskTray(
+                        tasks = tray, today = today, showUrgency = showUrgency, draggingId = trayDrag?.entry?.id, dropHere = dropOnTray,
+                        onDragStart = trayDragStart, onDrag = trayDragMove, onDragEnd = trayDragEnd, onDragCancel = trayDragCancel,
+                        onOpen = { editTarget = it }, onCollapse = { setTrayCollapsed(true) }, onBounds = { trayBounds = it },
+                        modifier = Modifier.width(trayWidth.widthDp.dp),
+                    )
+                    PaneHandle(trayWidth, Modifier.align(Alignment.CenterEnd))
+                }
+            }
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (view) {
                 CalendarView.DAY -> DayView(
                     date = selectedDate,
@@ -382,6 +445,15 @@ fun CalendarScreen(
                 CalendarView.WEEK -> if (wide) WeekGridView(
                     weekStart = weekStart,
                     occurrences = occurrences,
+                    onGeometry = { gridGeometry = it },
+                    externalTarget = trayGridTarget,
+                    onDragPosition = { pos, title -> gridDragPosition = pos; gridDragTitle = title },
+                    outsideTargetLabel = { pos -> if (trayBounds.contains(pos)) "→ Clear When" else null },
+                    onDropOutside = { occurrence, pos ->
+                        if (trayBounds.contains(pos)) viewModel.unschedule(occurrence.entry) {
+                            scope.launch { snackbarHostState.showSnackbar("A series keeps its days — change it from its sheet") }
+                        }
+                    },
                     habitExtras = { day ->
                         extras.filterIsInstance<CalendarExtra.HabitAt>().filter { it.date == day }
                             .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
@@ -399,6 +471,8 @@ fun CalendarScreen(
                     selectedDate = selectedDate,
                     occurrences = occurrences,
                     extras = extras,
+                    onCardBounds = { day, rect -> dayCells[day] = rect },
+                    highlightDay = trayCellTarget,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
                     onMove = { occurrence, toDate ->
                         val entry = occurrence.entry
@@ -412,6 +486,8 @@ fun CalendarScreen(
                     extras = extras,
                     onSelectDate = { selectedDate = it; view = CalendarView.DAY },
                     onMonthShift = { selectedDate = selectedDate.plusMonths(it.toLong()) },
+                    onCellBounds = { day, rect -> dayCells[day] = rect },
+                    highlightDay = trayCellTarget,
                 )
                 CalendarView.AGENDA -> AgendaView(
                     from = agendaFrom,
@@ -423,9 +499,46 @@ fun CalendarScreen(
                     onOpenPage = onOpenPage,
                 )
             }
+            }
+            if (!wide && trayShown) {
+                TaskTrayStrip(
+                    tasks = tray, today = today, showUrgency = showUrgency, draggingId = trayDrag?.entry?.id,
+                    collapsed = trayCollapsed, onToggle = { setTrayCollapsed(!trayCollapsed) },
+                    onDragStart = trayDragStart, onDrag = trayDragMove, onDragEnd = trayDragEnd, onDragCancel = trayDragCancel,
+                    onOpen = { editTarget = it },
+                )
+            }
+            }
+            }
+        }
+        // A grid block over the tray: its ghost drawn here, above the tray, naming the drop.
+        if (dropOnTray) gridDragPosition?.let { pos ->
+            DragGhost(
+                title = gridDragTitle ?: "", target = "→ Clear When",
+                modifier = Modifier.offset { IntOffset((pos.x - layerOrigin.x).roundToInt() + 12, (pos.y - layerOrigin.y).roundToInt() - 18) },
+            )
+        }
+        // The ghost: the chip itself, the target named (*Thu 17 · 10:00*, *Thu 17*), over everything.
+        trayDrag?.let { d ->
+            val label = when (val t = trayGridTarget) {
+                is WeekDrop.Slot -> t.day.format(DAY_FORMAT) + " · " + t.time
+                is WeekDrop.AllDay -> t.day.format(DAY_FORMAT)
+                null -> trayCellTarget?.format(DAY_FORMAT)
+            }
+            DragGhost(
+                title = d.entry.title, target = label?.let { "→ $it" },
+                modifier = Modifier.offset { IntOffset((d.position.x - layerOrigin.x).roundToInt() + 12, (d.position.y - layerOrigin.y).roundToInt() - 18) },
+            )
+        }
         }
     }
 }
+
+/** B§13.6 #5 — a task dragged off the tray, in root coordinates. */
+private data class TrayDrag(val entry: Entry, val position: Offset)
+
+private const val CALENDAR_TRAY_WIDTH_KEY = "calendar_tray_width"
+private const val CALENDAR_TRAY_COLLAPSED_KEY = "calendar_tray_collapsed"
 
 @Composable
 private fun DayView(
@@ -673,6 +786,9 @@ private fun WeekStripView(
     extras: List<CalendarExtra>,
     onSelectDate: (LocalDate) -> Unit,
     onMove: (EntryOccurrence, LocalDate) -> Unit,
+    /** B§13.6 #5 — the cards' root bounds for the tray's drag, and the card it would land on. */
+    onCardBounds: (LocalDate, Rect) -> Unit = { _, _ -> },
+    highlightDay: LocalDate? = null,
 ) {
     val monday = selectedDate.minusDays((selectedDate.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong())
     val days = (0..6).map { monday.plusDays(it.toLong()) }
@@ -691,8 +807,10 @@ private fun WeekStripView(
                 val dayExtras = extras.filter { it.date == day }
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        .onGloballyPositioned { cardBounds[day] = it.boundsInRoot() },
-                    tonalElevation = if (hoverDay == day) 4.dp else 1.dp,
+                        .onGloballyPositioned { cardBounds[day] = it.boundsInRoot(); onCardBounds(day, it.boundsInRoot()) },
+                    tonalElevation = if (hoverDay == day || highlightDay == day) 4.dp else 1.dp,
+                    color = if (highlightDay == day) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    border = if (highlightDay == day) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                     shape = MaterialTheme.shapes.medium,
                     onClick = { onSelectDate(day) },
                 ) {
@@ -755,7 +873,12 @@ private fun WeekStripView(
 }
 
 @Composable
-private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, extras: List<CalendarExtra>, onSelectDate: (LocalDate) -> Unit, onMonthShift: (Int) -> Unit) {
+private fun MonthGridView(
+    month: YearMonth, occurrences: List<EntryOccurrence>, extras: List<CalendarExtra>, onSelectDate: (LocalDate) -> Unit, onMonthShift: (Int) -> Unit,
+    /** B§13.6 #5 — the cells' root bounds for the tray's drag, and the cell it would land on. */
+    onCellBounds: (LocalDate, Rect) -> Unit = { _, _ -> },
+    highlightDay: LocalDate? = null,
+) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -782,6 +905,8 @@ private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, 
                         modifier = Modifier
                             .size(40.dp)
                             .clip(MaterialTheme.shapes.small)
+                            .then(if (highlightDay == day) Modifier.background(MaterialTheme.colorScheme.primaryContainer).border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small) else Modifier)
+                            .onGloballyPositioned { onCellBounds(day, it.boundsInRoot()) }
                             .clickable { onSelectDate(day) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {

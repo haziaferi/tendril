@@ -122,4 +122,26 @@ class EntryEditorTest {
         assertEquals(monday.plusDays(1), moved.startDate)
         assertEquals(1, entryDao.getAll().size)
     }
+
+    @Test
+    fun `clearWhen drops the date and time and keeps the deadline`() = runBlocking {
+        val t = task("Call the library", monday, LocalTime.of(10, 0)).copy(dueDate = monday.plusDays(3))
+        entryDao.update(t)
+        val cleared = editor.clearWhen(entryDao.getById(t.id)!!, at)!!
+        assertNull(cleared.startDate)
+        assertNull(cleared.startTime)
+        assertEquals(monday.plusDays(3), cleared.dueDate)
+        assertEquals(monday.plusDays(3), entryDao.getById(t.id)!!.dueDate)
+        assertTrue(changed.any { it.id == t.id })
+    }
+
+    @Test
+    fun `clearWhen refuses a series and clears an override of one`() = runBlocking {
+        val series = task("Bins", monday).copy(recurrenceRule = RecurrenceRule.Elastic(Period.ofWeeks(2)))
+        entryDao.update(series)
+        assertNull(editor.clearWhen(entryDao.getById(series.id)!!, at))
+        assertEquals(monday, entryDao.getById(series.id)!!.startDate)
+        val override = stored(task("Bins", monday.plusDays(1)).copy(originalEntryId = series.id, originalOccurrenceDate = monday))
+        assertNull(editor.clearWhen(override, at)!!.startDate)
+    }
 }

@@ -78,6 +78,11 @@ class CalendarViewModel(
         viewModelScope.launch { entryEditor.move(entry, null, day, time, MoveScope.ALL) }
     }
 
+    /** B§13.6 #5 — a block dropped on the tray: its When cleared; a series is refused ([onRefused]). */
+    fun unschedule(entry: Entry, onRefused: () -> Unit) {
+        viewModelScope.launch { if (entryEditor.clearWhen(entry) == null) onRefused() }
+    }
+
     /** §0.8 step 7b — a block dragged to another hour; a series asks the screen first. */
     fun moveTo(entry: Entry, occurrenceDate: LocalDate, time: LocalTime, scope: MoveScope) {
         viewModelScope.launch { entryEditor.move(entry, occurrenceDate, occurrenceDate, time, scope) }
