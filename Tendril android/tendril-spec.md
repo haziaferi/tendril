@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
 | 2026-09-16 (pop-out windows) | §3.1 amended (B§13.6 #6): a page in its own OS window on the desktop — `ui/nav/WorkbenchEnvironment.kt` (the scaffold's four locals, extracted; a pop-out takes the main window's scale), `ui/nav/PopOuts.kt` (`PopOutHost`, `PopOutRegistry`), `PageRoute.onShowOnRoadMap`, `WorkbenchNavState.depth`, `WindowFrame.decode(min)`, the openers in the workspace chrome and tree rows (Shift+click), the tree's ⧉; the desktop's `PopOutWindows.kt`. §2.2 the keyboard row. §0.10 item 14's after-the-pass list: #6 done. The shelf now closes on a trashed page. Critiques: `docs/critiques/pop-out-mock.md`, `pop-out-function.md` (and the dev-database wipe by the installed preview exe, recovered). Desktop verified; the phone untouched by construction. Tests 773 → 778. | §3.1, §2.2, §0.10 |
 | 2026-09-16 (14h·2 — the small things) | Thirteen items, each at its home: §2.3 the type scale (`TypeScale`, six sizes on 1.125; `tools/audit.py` rule 12); §2.2 *Submenus and captions* (`ui/components/Submenu.kt`, `openVerb()`, `DensityProfile.rowHeightDp` / `listInteractiveMinDp`); §3.1.1 find over the whole outline with folded matches counted and unfolded on ↵ (`domain/MindMapFold.kt`), the scroll only off-screen, the mention on `accentSoft`, the ground click; §3.1 the tree's second mark, the chip row, the card's *edited* line (`domain/time/RelativeTime.kt`, `rowsLabel`); §3.4 the map's self-refresh (`PageRelationDao.observeAll`); §5.6 the Table's rows and footer. **§0.10 item 14 closed — the desktop pass is done.** Critiques: `docs/critiques/small-things-measured.md`, `small-things-function.md`. Desktop verified; the phone walk pending. Tests 765 → 773. | §2.2, §2.3, §3.1, §3.1.1, §3.4, §5.6, §0.10 |
@@ -718,7 +719,7 @@ Genuinely undecided — distinct from §0.7.
     B§13.6's ten further diffs answered the same day: right-click, back/forward and list keyboard
     folded into 14d/14e; a shelf pane as 14h; pop-out windows *(done 2026-09-16, §3.1)*, drag
     between panes (phone too) *(done 2026-09-16, §3.2, §0.6.14; the phone's strip unwalked)*, hover
-    previews, and the tray with a global hotkey (JNA is in the cache, item 20) after the pass; tabs
+    previews *(done 2026-09-16, §3.1.1, §3.4)*, and the tray with a global hotkey (JNA is in the cache, item 20) after the pass; tabs
     no; cross-block undo to item 19. The item closes when 14h ships.* ***14a shipped 2026-09-14**
     — the shell as mocked on both platforms (§2.2), the remembered window, the title, the sync
     controls into desktop Settings; reshaped mid-PR from "a Material rail behind the breakpoint"
@@ -873,9 +874,11 @@ navigation-paradigm question later.
 - **Every measurement is proportional to the screen** *(**Decided 2026-09-13, B§13.5 #4; built
   2026-09-15 as 14c·0.** One number, on both platforms: the shell multiplies `LocalDensity` by
   `shellScaleFor(shorterSideDp, profile)` = clamp(shorter side ÷ 800 dp, 0.85…1.25) × profile —
-  Compact 0.9 (the desktop's default, chosen in its Settings under *Density*, key
-  `density_profile`), Comfortable 1.0, Touch 1.3 (the phone, fixed: a finger does not get a
-  setting). Every `.dp` and `.sp` below the shell converts to pixels through that factor, so no
+  Compact 0.85 (the desktop's default, chosen in its Settings under *Density*, key
+  `density_profile`), Comfortable 0.95, Touch 1.23 (the phone, fixed: a finger does not get a
+  setting). *[Amended] 2026-09-16 — the three were 0.9 / 1.0 / 1.3; beside Notion at the same
+  728-px window Compact read "a bit large" (the user, mid-walk of B§13.6 #3), so Compact went to
+  0.85 and the other two by the same ratio; the measurements below are the original build's.* Every `.dp` and `.sp` below the shell converts to pixels through that factor, so no
   site is edited and none can forget — the rail's 84, a row's 48, the calendar's `DAY_WIDTH`, a
   slide-over's 440 all follow. The shorter side is read in the platform's own dp before the
   override (or the scale would feed itself); the 840 dp breakpoint is read in the scaled dp,
@@ -1353,6 +1356,30 @@ section should say which one a reader will actually find. The formatting toolbar
 either: it renders inline, beneath the block being edited and inside that block's own column, rather
 than as a popup over the page.)* *(**Amended 2026-09-15 — 14d.** Two homes now: floating above the
 block under a pointer profile, inline under Touch — §2.2 *Under a pointer*.)* *(**Amended
+2026-09-16 — B§13.6 #3, hover previews.** Hold the pointer on an inline `@mention`, a mention
+block, a block reference or a Road Map node (§3.4) for **500 ms** and a card shows what it points
+at — Obsidian's page preview and Notion's, without the modifier key; decided 2026-09-16 on
+`docs/mockups/hover-preview.html` and `docs/critiques/hover-preview-mock.md`. The card
+(`ui/components/HoverPreview.kt`, 320 dp): the kind's glyph, the title, *edited 2 h ago* in
+`onSurfaceVariant` (the critique's #1 — text, never the faint token), then the page's **lines**
+from `domain/preview/PagePreview.kt` — one per block in the outline's order, a heading Medium, a
+to-do as ☐/☑, a mind map's root with its subtree as *Mind map · n nodes*, a canvas block as
+*Canvas*, a mention as *→ title*, dividers and pictures skipped, each cut at 90 characters, a
+multi-line block joined with a middle dot — **up to six, as tall as its lines**, and a footer only
+when blocks were left out (*3 more blocks · click to open*). **A block reference previews its
+line in context**: the source page's title, the referenced line marked on the third hue's tint
+with the reference bar's own 3 dp mark, the line before and the line after when they exist (the
+benchmark's "better than theirs"). A database previews *Table · 3 rows · Read on, Author, Done*
+and its first row titles; a canvas *Canvas · 4 cards · 2 links* and its first cards. Placement:
+under the target's line with 8 dp of air, flipped above near the window's foot, clamped to the
+window's width, never over the target; a non-focusable popup, so typing continues. The wait is
+cancelled by a leave, a press, a scroll or **a keystroke** (the person is writing, not reading);
+the card stays while the pointer is on it and hides 150 ms after it leaves; a click on it opens
+the page (Ctrl → beside, Shift → in a window, where the workspace offers those). The hovered
+span wears a 1.5 dp accent outline only while the card is up; the block cards wear nothing (their
+lift is their hover state). One state per screen — a shelf page, a pop-out and the map each their
+own. **Desktop only** by `LocalDensityProfile.pointer`: nothing composes under Touch. No schema.
+`docs/critiques/hover-preview-function.md` walked the build.)* *(**Amended
 2026-09-16 — §0.10 item 19, find in page.** A 44 dp bar under the page's bar on both platforms —
 option A of `docs/mockups/find-in-page.html`, the browsers' and Bear's home; B's floating card
 measured as covering the first line and the `···` (`docs/critiques/find-in-page-mock.md`) — with a
@@ -1912,6 +1939,9 @@ on its chip, and the row menu's *Urgency ▸* lists the five levels — §0.6.4 
   "everything today".
 
 ### 3.4 Road Map
+
+*(B§13.6 #3, 2026-09-16: a node previews its page on hover — the card of §3.1.1's amendment, the
+map's canvas holding the state, so the shelf's neighbourhood previews too; a node's drag hides it.)*
 
 *(14h·2: the map refreshes itself when a page or a relation changes — `PageDao.observeRootPages`
 and `PageRelationDao.observeAll`, debounced 300 ms in the ViewModel; ↻ stays for mention edges,
