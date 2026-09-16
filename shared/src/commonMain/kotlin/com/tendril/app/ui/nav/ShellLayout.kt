@@ -41,13 +41,13 @@ data class WindowFrame(val w: Int, val h: Int, val x: Int, val y: Int) {
     fun encode(): String = "$w,$h,$x,$y"
 
     companion object {
-        /** Null on absent or unreadable input; a size below [MIN_WINDOW] is raised to it. */
-        fun decode(value: String?): WindowFrame? {
+        /** Null on absent or unreadable input; a size below [min] (the main window's [MIN_WINDOW]; a pop-out's own) is raised to it. */
+        fun decode(value: String?, min: WindowFrame = MIN_WINDOW): WindowFrame? {
             val parts = value?.split(',')?.map { it.trim().toIntOrNull() } ?: return null
             if (parts.size != 4 || parts.any { it == null }) return null
             val (w, h, x, y) = parts.map { it!! }
             if (w <= 0 || h <= 0) return null
-            return WindowFrame(maxOf(w, MIN_WINDOW.w), maxOf(h, MIN_WINDOW.h), x, y)
+            return WindowFrame(maxOf(w, min.w), maxOf(h, min.h), x, y)
         }
     }
 }

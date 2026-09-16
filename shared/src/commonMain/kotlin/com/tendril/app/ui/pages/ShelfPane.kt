@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,6 +131,9 @@ private fun ShelfPage(
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)?,
 ) {
     val page by core.database.pageDao().observeById(pageId).collectAsState(initial = null)
+    // The page trashed from anywhere but this pane (the tree, the main pane, a pop-out): the shelf
+    // closes rather than keep a trashed page on screen (found on the pop-out walk).
+    LaunchedEffect(page?.deletedAt) { if (page?.deletedAt != null) shelfState.close() }
     val glyph = when {
         journal -> Icons.Outlined.MenuBook
         page?.kind == PageKind.DATABASE -> Icons.Filled.TableChart
@@ -194,9 +198,9 @@ private fun ShelfGraph(core: WorkbenchCore, navState: WorkbenchNavState, shelfSt
     )
 }
 
-/** The kind's glyph in the leading slot, where a screen's back arrow would be: a mark, not a button. */
+/** The kind's glyph in the leading slot, where a screen's back arrow would be: a mark, not a button (the pop-out window's bar uses it too). */
 @Composable
-private fun ShelfGlyph(icon: ImageVector) {
+fun ShelfGlyph(icon: ImageVector) {
     Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 14.dp, end = 2.dp).size(20.dp))
 }
 

@@ -447,10 +447,12 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
  * [onMoveToTrash] null under View-Only — the item is greyed, not gone, so the lock is visible.
  */
 @Composable
-internal fun PageRowMenuItems(onOpen: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?, onOpenBeside: (() -> Unit)? = null) {
+internal fun PageRowMenuItems(onOpen: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?, onOpenBeside: (() -> Unit)? = null, onOpenInWindow: (() -> Unit)? = null) {
     DropdownMenuItem(text = { Text("Open") }, onClick = onOpen)
     // 14h·1 — the tree's rows only (the phone has no shelf); Ctrl+click on the row is the same.
     if (onOpenBeside != null) DropdownMenuItem(text = { Text("Open beside") }, onClick = onOpenBeside)
+    // B§13.6 #6 — the desktop's rows only; Shift+click on the row is the same.
+    if (onOpenInWindow != null) DropdownMenuItem(text = { Text("Open in a window") }, onClick = onOpenInWindow)
     DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = onShowOnRoadMap)
     DropdownMenuItem(text = { Text("Move to Trash") }, onClick = onMoveToTrash ?: {}, enabled = onMoveToTrash != null)
 }

@@ -48,7 +48,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import java.awt.Dimension
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import androidx.navigationevent.NavigationEventInput
+import com.tendril.app.ui.nav.PopOutRegistry
+import com.tendril.app.ui.nav.WorkbenchNavState
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.ui.switcher.SwitcherState
@@ -116,6 +117,12 @@ fun main() {
     val folderManager = DesktopSyncFolderManager()
     val escapeBack = EscapeBackInput()
     val switcher = SwitcherState()
+    // B§13.6 #6 — the main window's nav state is built here so a pop-out window can hand a page
+    // to it; the pop-outs themselves and their remembered pages (`popout_pages`).
+    val navState = WorkbenchNavState()
+    val mainWindow = MainWindowActions(navState)
+    val popOutRegistry = PopOutRegistry(core.keyValueStore)
+    val popOuts = PopOuts(core, popOutRegistry).also { it.restore() }
     // 14c — the Pages tree pane's state, here so Ctrl+\ can reach it from the window's key handler.
     val treeState = PagesTreeState(core.keyValueStore)
     // 14e — the key table's actions (filled by the scaffold) and the overlay's open flag.
@@ -154,6 +161,7 @@ fun main() {
         ) {
             LaunchedEffect(Unit) {
                 window.minimumSize = Dimension(MIN_WINDOW.w, MIN_WINDOW.h)
+                mainWindow.front = { window.toFront(); window.requestFocus() }
                 snapshotFlow { windowState.size to windowState.position }.collectLatest { (size, position) ->
                     delay(400)
                     // Only a floating frame is worth remembering: a maximised window reports the
@@ -166,26 +174,20 @@ fun main() {
             }
             val theme = core.themeSettings.observe()
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
-                App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions)
+                App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow)
             }
         }
+        // B§13.6 #6 — one window per popped-out page, after the main one.
+        PopOutWindows(core, popOuts, popOutRegistry, mainWindow)
     }
 }
 
-/**
- * tendril-spec.md §0.10 item 10 — the desktop half of Back. Compose Multiplatform's `BackHandler`
- * (the mind map and the canvas block arm through it) registers on the `NavigationEventDispatcher`
- * the skiko window already provides, but nothing on desktop ever *feeds* that dispatcher: Android
- * has the system gesture, desktop has no equivalent, so an armed map ignored Escape. This is the
- * missing input — one key, one completed back event — and nothing else: the handlers that decide
- * what Back means stay in shared code, where Android's already are.
- */
-private class EscapeBackInput : NavigationEventInput() {
-    fun back() = dispatchOnBackCompleted()
-}
-
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions) {
+    // B§13.6 #6 — the pop-outs draw at this window's scale: its shorter side, in the platform's dp.
+    val mainDensity = androidx.compose.ui.platform.LocalDensity.current
+    val mainSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    mainWindow.shorterSideDp = minOf(mainSize.width, mainSize.height) / mainDensity.density
     // The dispatcher is a composition local of the window's content, so the key input can only be
     // attached from inside it; the key event itself arrives at the window, outside. Hence the
     // input is built in `main` and joined here.
@@ -203,6 +205,8 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
         Column(modifier = Modifier.fillMaxSize()) {
             WorkbenchScaffold(
                 core = core,
+                navState = navState,
+                popOuts = popOuts,
                 switcher = switcher,
                 treeState = treeState,
                 shortcuts = shortcuts,

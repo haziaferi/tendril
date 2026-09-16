@@ -33,6 +33,9 @@ import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.VerticalSplit
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.ui.input.pointer.isShiftPressed
+import com.tendril.app.ui.nav.PopOutHost
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -119,6 +122,7 @@ fun PagesWorkspace(
     navState: WorkbenchNavState,
     treeState: PagesTreeState,
     shelfState: ShelfState,
+    popOuts: PopOutHost?,
     onOpenSwitcher: () -> Unit,
     onCheckboxOnlyUnlockRequest: ((onResult: (Boolean) -> Unit) -> Unit)?,
 ) {
@@ -143,7 +147,7 @@ fun PagesWorkspace(
         val shelfShown = shelfState.shown(openPageId, journalPageId)
         // 14h·2 — the tree marks the shelf's page too (a ring and a glyph; the graph marks nothing).
         val shelfPageId: Long? = when (val c = shelfShown) { is Shelf.Page -> c.pageId; Shelf.Journal -> journalPageId; else -> null }
-        val paneChrome = remember(treeState.collapsed, actions) {
+        val paneChrome = remember(treeState.collapsed, actions, popOuts) {
             PaneChrome(
                 leading = {
                     if (treeState.collapsed) {
@@ -160,6 +164,12 @@ fun PagesWorkspace(
                         DropdownMenuItem(text = { Text("Road Map around this page") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Graph) })
                         DropdownMenuItem(text = { Text("Today's Journal") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Journal) })
                     }
+                    // B§13.6 #6 — the page in its own window; the page stays open here too.
+                    // Read at click time: the chrome is remembered across pages, so `openPageId` above is stale here.
+                    val pageHere = (navState.current as? WorkbenchRoute.PageDetail)?.pageId
+                    if (popOuts != null && pageHere != null) {
+                        DropdownMenuItem(text = { Text("Open in a window") }, onClick = { close(); popOuts.open(pageHere) })
+                    }
                     HorizontalDivider()
                     DropdownMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
                 },
@@ -173,7 +183,7 @@ fun PagesWorkspace(
             Row(modifier = Modifier.fillMaxSize()) {
                 if (!treeState.collapsed) {
                     PagesTreePane(
-                        vm, actions, treeState, openPageId, shelfPageId, onOpenSwitcher,
+                        vm, actions, treeState, openPageId, shelfPageId, popOuts, onOpenSwitcher,
                         onOpen = navState::showPage,
                         onOpenBeside = { shelfState.open(Shelf.Page(it)) },
                         onShowOnRoadMap = navState::showOnRoadMap,
@@ -221,6 +231,7 @@ private fun PagesTreePane(
     treeState: PagesTreeState,
     openPageId: Long?,
     shelfPageId: Long?,
+    popOuts: PopOutHost?,
     onOpenSwitcher: () -> Unit,
     onOpen: (Long) -> Unit,
     onOpenBeside: (Long) -> Unit,
@@ -292,9 +303,19 @@ private fun PagesTreePane(
             ) {
                 itemsIndexed(flat, key = { _, it -> it.page.id }) { index, entry ->
                     TreeRow(entry.page, depth = entry.depth, current = entry.page.id == openPageId, inShelf = entry.page.id == shelfPageId, hasChildren = entry.hasChildren, expanded = entry.expanded,
-                        onClick = { keyState.clickedRow(index); if (windowInfo.keyboardModifiers.isCtrlPressed) onOpenBeside(entry.page.id) else onOpen(entry.page.id) },
+                        onClick = {
+                            keyState.clickedRow(index)
+                            val mods = windowInfo.keyboardModifiers
+                            when {
+                                mods.isCtrlPressed -> onOpenBeside(entry.page.id)
+                                mods.isShiftPressed && popOuts != null -> popOuts.open(entry.page.id)   // B§13.6 #6
+                                else -> onOpen(entry.page.id)
+                            }
+                        },
                         onToggle = { if (entry.hasChildren) treeState.toggleExpanded(entry.page.id) },
                         onOpenBeside = { onOpenBeside(entry.page.id) },
+                        onOpenInWindow = popOuts?.let { h -> { h.open(entry.page.id) } },
+                        inWindow = popOuts?.openPageIds?.contains(entry.page.id) == true,
                         onShowOnRoadMap = { onShowOnRoadMap(entry.page.id) }, onMoveToTrash = if (actions.viewOnly) null else ({ onMoveToTrash(entry.page.id) }),
                         keyFocused = keyState.focused == index && keyboardCursorShown(), typed = keyState.typed)
                 }
@@ -344,6 +365,10 @@ private fun TreeRow(
     onOpenBeside: () -> Unit,
     onShowOnRoadMap: () -> Unit,
     onMoveToTrash: (() -> Unit)?,
+    /** B§13.6 #6 — the desktop's *Open in a window*; null where there are no windows. */
+    onOpenInWindow: (() -> Unit)? = null,
+    /** The page is open in a pop-out window: a small ⧉ before the `···`. */
+    inWindow: Boolean = false,
     /** 14e — this row is the keyboard cursor: a 2 dp ring, the typed prefix underlined. */
     keyFocused: Boolean = false,
     typed: String = "",
@@ -408,6 +433,9 @@ private fun TreeRow(
         if (inShelf) {
             Icon(Icons.Outlined.VerticalSplit, contentDescription = "In the shelf", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
         }
+        if (inWindow) {
+            Icon(Icons.Outlined.OpenInNew, contentDescription = "Open in a window", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+        }
         IconButton(
             onClick = { menuAt = null; menuOpen = true },
             modifier = Modifier.size(TREE_MORE_TARGET).alpha(if (hovered || menuOpen) 1f else 0f),
@@ -417,7 +445,8 @@ private fun TreeRow(
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(0, rowHeightPx), onDismiss = { menuOpen = false }) {
         PageRowMenuItems(onOpen = { menuOpen = false; onClick() }, onShowOnRoadMap = { menuOpen = false; onShowOnRoadMap() },
-            onMoveToTrash = onMoveToTrash?.let { f -> { menuOpen = false; f() } }, onOpenBeside = { menuOpen = false; onOpenBeside() })
+            onMoveToTrash = onMoveToTrash?.let { f -> { menuOpen = false; f() } }, onOpenBeside = { menuOpen = false; onOpenBeside() },
+            onOpenInWindow = onOpenInWindow?.let { f -> { menuOpen = false; f() } })
     }
     }
 }

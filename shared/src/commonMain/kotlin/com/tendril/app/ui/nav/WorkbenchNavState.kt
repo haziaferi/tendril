@@ -37,6 +37,8 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
     val current: WorkbenchRoute get() = backStack.last()
     val currentTab: WorkbenchDestination get() = current.tab
     val canGoBack: Boolean get() = backStack.size > 1
+    /** How deep the stack is — a pop-out window (B§13.6 #6) seeds itself with one page over the root and lets Back stop there. */
+    val depth: Int get() = backStack.size
     val canGoForward: Boolean get() = forwardStack.isNotEmpty()
 
     fun switchTab(tab: WorkbenchDestination) {
