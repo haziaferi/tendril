@@ -9,6 +9,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.ui.components.LabelDot
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.theme.labelColours
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -277,8 +280,13 @@ private fun FilterRow(
             )
             DropdownMenu(expanded = labelMenu, onDismissRequest = { labelMenu = false }) {
                 DropdownMenuItem(text = { Text("Any label") }, onClick = { labelMenu = false; onLabel(null) })
+                val palette = LocalTendrilPalette.current
                 labels.forEach { label ->
-                    DropdownMenuItem(text = { Text("#" + label.name) }, onClick = { labelMenu = false; onLabel(label.id) })
+                    DropdownMenuItem(
+                        text = { Text("#" + label.name) },
+                        leadingIcon = { LabelDot(labelColours(label.color, palette).hue) },
+                        onClick = { labelMenu = false; onLabel(label.id) },
+                    )
                 }
             }
         }
@@ -550,16 +558,22 @@ private fun RoadMapNode(
     onTap: () -> Unit,
 ) {
     val borderWidth = (1f + min(degree, 6) * 0.5f).dp
-    val borderColor = MaterialTheme.colorScheme.primary.copy(alpha = (0.25f + min(degree, 6) * 0.1f).coerceAtMost(0.9f))
+    // 14g·2 (B§13.8.3) — a page is the lifted ground, a database a fill (the third hue's tint until
+    // the slider PR gives it its own), a canvas an outline in the third hue: a board is drawn, a
+    // database is filled. The degree still thickens the accent border on pages and databases.
+    val borderColor = when (page.kind) {
+        PageKind.CANVAS -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = (0.25f + min(degree, 6) * 0.1f).coerceAtMost(0.9f))
+    }
 
     Surface(
         color = when (page.kind) {
-            PageKind.DATABASE -> MaterialTheme.colorScheme.secondaryContainer
-            PageKind.CANVAS -> MaterialTheme.colorScheme.tertiaryContainer
+            PageKind.DATABASE -> MaterialTheme.colorScheme.tertiaryContainer
+            PageKind.CANVAS -> MaterialTheme.colorScheme.surfaceVariant
             PageKind.PAGE -> MaterialTheme.colorScheme.surfaceVariant
         },
         shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(borderWidth, borderColor),
+        border = BorderStroke(if (page.kind == PageKind.CANVAS) maxOf(borderWidth, 1.5.dp) else borderWidth, borderColor),
         modifier = Modifier
             .offset {
                 val pos = positions[page.id] ?: Offset.Zero

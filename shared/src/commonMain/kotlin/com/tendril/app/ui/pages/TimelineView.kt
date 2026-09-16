@@ -88,7 +88,8 @@ internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewMod
         hScroll.scrollTo(((ChronoUnit.DAYS.between(range.start, today) - 1).coerceAtLeast(0) * dayPx).roundToInt())
     }
     val laneOf = bars.withIndex().associate { (i, bar) -> bar.row.page.id to i }
-    val blockerInk = MaterialTheme.colorScheme.tertiary
+    // 14g·2 — a dependency line is the error family (blocked), not the third hue.
+    val blockerInk = MaterialTheme.colorScheme.error
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box(modifier = Modifier.horizontalScroll(hScroll)) {
@@ -156,7 +157,7 @@ private fun DayHeader(start: LocalDate, dayCount: Int, today: LocalDate) {
                 Text(
                     day.dayOfMonth.toString(),
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (isToday) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     day.dayOfWeek.name.take(1),

@@ -5,6 +5,7 @@ package com.tendril.app.ui.calendar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.ui.theme.LocalTendrilPalette
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -724,8 +725,13 @@ private fun WeekStripView(
                                 )
                             }
                             if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.bodySmall)
-                            dayExtras.take(3).forEach { Text("◦ ${it.title}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-                            if (dayExtras.size > 3) Text("+${dayExtras.size - 3} more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            // 14g·2 — a layer wears its own hue (B§13.8.3): a habit the habit hue, a
+                            // database date the third; the accent is reserved for today and selection.
+                            val palette = LocalTendrilPalette.current
+                            dayExtras.take(3).forEach {
+                                Text("◦ ${it.title}", style = MaterialTheme.typography.bodySmall, color = if (it is CalendarExtra.HabitAt) palette.habit else palette.thirdStrong)
+                            }
+                            if (dayExtras.size > 3) Text("+${dayExtras.size - 3} more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -781,7 +787,8 @@ private fun MonthGridView(month: YearMonth, occurrences: List<EntryOccurrence>, 
                             fontWeight = if (day == LocalDate.now()) FontWeight.Bold else FontWeight.Normal,
                         )
                         if (count > 0) {
-                            Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            // One dot for "something is on this day" until the dots PR draws one per layer — dim, not the accent.
+                            Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

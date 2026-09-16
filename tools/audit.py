@@ -22,6 +22,8 @@ Checks
  10. write-only entity field  stored and synced, never read outside the sync mappers
   9. imported-name shadowed    `viewModel.x` in a function where `viewModel` is only the
                                imported *function* of that name, never a parameter or local
+ 11. hardcoded colour          `Color(0x…)` or `Color.Gray`/`Blue`/… in shared UI outside the
+                               theme package — every colour is a solved token (B§13.8.3, 14g·2)
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -34,6 +36,7 @@ from collections import defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKIP_DIRS = {".git", "build", ".gradle", ".idea", ".claude"}
 TEST_PATH = re.compile(r"/(test|androidTest)/")
+HARD_COLOUR = re.compile(r"\bColor\s*\(\s*0x|\bColor\.(?:Gray|LightGray|DarkGray|Blue|Red|Green|Yellow|Magenta|Cyan|Black|White)\b")
 
 
 def rel(p: str) -> str:
@@ -371,6 +374,18 @@ def main() -> int:
                 if not callers:
                     rep.add("unused DAO method", f"{rel(f)}:{j+1}  {name}")
                 break
+
+    # A hardcoded colour in shared UI: two blues in the span transformation and three
+    # `Color.Gray` canvas edges survived until 14g·2 because nothing scanned for them; the
+    # theme engine (`ui/theme/`) is the one place a literal belongs, and a widget's bitmap
+    # puck (`ShadeHueWheel`) is drawn over every hue by design.
+    for f, src in srcs.items():
+        r = rel(f)
+        if "/ui/theme/" in r or TEST_PATH.search("/" + r) or "/widget/" in r or "/ui/" not in r:
+            continue
+        for i, line in enumerate(src.splitlines(), 1):
+            if HARD_COLOUR.search(line):
+                rep.add("hardcoded colour", f"{r}:{i}  {line.strip()[:90]}")
 
     return rep.emit()
 

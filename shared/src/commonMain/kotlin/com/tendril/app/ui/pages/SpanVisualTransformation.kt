@@ -20,8 +20,15 @@ import com.tendril.app.data.page.SpanStyle
 class FindMarks(val ranges: List<IntRange>, val current: IntRange?, val mark: Color, val onMark: Color, val currentMark: Color, val onCurrentMark: Color)
 
 /** Renders a block's plain-text content with its [FormattingSpan]s applied — the visual half
- * of §3.1.1's "spans over plain-text content rather than embedded markup" model. */
-fun spansVisualTransformation(spans: List<FormattingSpan>, marks: FindMarks? = null): VisualTransformation = VisualTransformation { text ->
+ * of §3.1.1's "spans over plain-text content rather than embedded markup" model. Theme-blind:
+ * [link] and [mention] are the accent (B§13.8.3 rule 1 — the two hardcoded blues went in 14g·2),
+ * passed in by the composable that has a theme. */
+fun spansVisualTransformation(
+    spans: List<FormattingSpan>,
+    marks: FindMarks? = null,
+    link: Color = Color.Unspecified,
+    mention: Color = Color.Unspecified,
+): VisualTransformation = VisualTransformation { text ->
     val builder = AnnotatedString.Builder(text.text)
     spans.forEach { span ->
         val start = span.start.coerceIn(0, text.text.length)
@@ -31,8 +38,8 @@ fun spansVisualTransformation(spans: List<FormattingSpan>, marks: FindMarks? = n
             is SpanStyle.Italic -> ComposeSpanStyle(fontStyle = FontStyle.Italic)
             is SpanStyle.Strikethrough -> ComposeSpanStyle(textDecoration = TextDecoration.LineThrough)
             is SpanStyle.InlineCode -> ComposeSpanStyle(fontFamily = FontFamily.Monospace)
-            is SpanStyle.Link -> ComposeSpanStyle(textDecoration = TextDecoration.Underline, color = Color(0xFF4A90D9))
-            is SpanStyle.PageMention -> ComposeSpanStyle(fontWeight = FontWeight.SemiBold, color = Color(0xFF4A90D9))
+            is SpanStyle.Link -> ComposeSpanStyle(textDecoration = TextDecoration.Underline, color = link)
+            is SpanStyle.PageMention -> ComposeSpanStyle(fontWeight = FontWeight.Medium, color = mention)
         }
         builder.addStyle(style, start, end)
     }

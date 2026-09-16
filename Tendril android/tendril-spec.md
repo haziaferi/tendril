@@ -99,6 +99,7 @@ second copy of the reasoning.
 | 2026-09-12 (step 7e: Review) | **§0.6.11** written and done. Schema **v15** (`page_databases.lastReviewedAt`, `MIGRATION_14_15`, in the page record, LWW-carried by touching the page). `domain/review/ReviewPlanner` (due-by-cadence, stale rows, open tasks by `sourceRowId`, Someday and past-When selection, walk order, the week's three numbers) and `Review` (loads with existing DAOs; Reviewed/Today/Someday/Done/Trash through `EntryEditor`/`ResolveEntryUseCase`). `ui/review/ReviewScreen`, `WorkbenchRoute.Review`, the checklist icon with a dot on Tasks. §0.8 step 7 complete. 653 tests. | §0.6.11, §0.8 |
 | 2026-09-12 (step 8·0: KeyValueStore) | §0.10 item 12 resolved: `data/prefs/KeyValueStore` (+ `MapKeyValueStore`, `AndroidKeyValueStore`, `PropertiesKeyValueStore`) on `WorkbenchCore`; the calendar layers persist on both platforms (`CalendarLayers.encode/decode`); `Review.cadence` reads `review_cadence_days`. §9.1 note. 658 tests. | §0.10, §9.1 |
 | 2026-09-14 (corrupt-file recovery) | §9.10's "probe would catch file-level corruption" corrected: on Android it did not — `AndroidSQLiteDriver` opens with the framework's `DefaultDatabaseErrorHandler`, which deleted the file and reopened empty before the probe ran. `KeepFileOnCorruptionDriver` (a no-op handler) closes it; `DatabaseFileTest` (Robolectric, first in the suite) proved the hole and now pins the fix; both builds then run on the OnePlus (Android 14) — `main` logs `DefaultDatabaseErrorHandler: deleting the database file`, the fix leaves `tendril.db.unopenable-<stamp>` with the bytes intact. Desktop unaffected. Tests 690 → 691. | §9.10 |
+| 2026-09-16 (14g·2 — the token map) | §2.3 gains *The token map*: `fanHue` (event −120°, habit +60°, the third 180°, the second channel taking the third slot), the error family solved on its soft, `findSoft`, `TendrilPalette` +9 tokens and `dark`, `ui/theme/DataColours.kt` (`labelColours`, `calloutColours`, `CALLOUT_COLORS`; `solveHue`'s `tintShare`), `Theme.kt` maps `tertiary*`/`error*`/`secondaryContainer`; `spansVisualTransformation` takes the link and mention colours (the two hardcoded blues gone), canvas edges dim, `ui/calendar/LayerColours.kt`, the Road Map's node kinds, the Timeline's blocker and today, callouts as bar + tint, label chips coloured (§3.1.6, §3.1.1 amended). `tools/audit.py` rule 11 *hardcoded colour*. §0.10 item 14: 14g·2 shipped; the small-things list closes the `find` token and gains two. Critiques: `docs/critiques/coloured-elements-mock.md`, `coloured-elements-function.md`. Desktop verified; the phone walk pending. Tests 748 → 753. | §2.3, §3.1.1, §3.1.6, §0.10 |
 | 2026-09-16 (14g·1 — the theme model) | §2.3 rewritten as the model: ground × hue × mode, ten registers (`ui/theme/Registers.kt` — Clay, Moss and Mauve return solved on the cold ground), every token solved to a floor (`ColorSolve.kt`, `paletteFor`; text into the 9.5–13:1 band, dim/faint on both grounds, the accent by lightness alone, marks to 3:1), mode System default, `ThemeSettings` in `KeyValueStore` on both platforms with the phone's `ThemePreferences` migrated once and deleted, `ThemeSection` shared, the type scale clamped to 400/500. `Theme.kt` maps the surface-container family; the scaffold sits every route on one `Surface`. §0.10 item 14: 14g·1 shipped. Critiques: `docs/critiques/registers-mock.md`, `registers-function.md`. Desktop verified; the phone walk pending. Tests 736 → 748. | §2.3, §0.10 |
 | 2026-09-16 (14f·2 — the Calendar's week grid) | §3.2 amended: `ui/calendar/WeekGridView.kt` (seven Plan lanes; date and time in one drag, `CalendarViewModel.moveBlock`), `domain/plan/WeekLayout.kt` (`laneAt`, `openScrollMinute`, `visibleAllDay`), `CalendarDefaultView.kt` (`calendar_default_view`, `defaultCalendarView`), `CalendarOpensOnSection` on both platforms' settings, `QuickAddBar.kt` (the strip on a wide window). §3.3's filter rows into the list column. §0.10 item 14: 14f·2 shipped — the pass's surfaces done; item 21 added (the desktop's clipboard crash). Critique: `docs/critiques/calendar-function.md` (+ the addendum in `tasks-calendar-mock.md`). Desktop verified; the phone walk pending. Tests 732 → 736. | §3.2, §3.3, §0.10 |
 | 2026-09-16 (14f·1 — Tasks on a wide window) | §3.3 amended: two panes from 840 dp (`LocalShellLayout`), `ui/taskshabits/TaskDetailPane.kt` (task and habit panes, chips = the menu by name), `ui/components/PaneHandle.kt` (`PaneWidthState`, `tasks_list_width`), rows' hover `···` / right-click / long-press, the habit row's × → its menu, `ui/trash/` shared (`EntryTrashSheet`, `HabitTrashSheet` take `WorkbenchCore`; §0.10 item 13 resolved), the keyboard on Habits, Merged and the phone's Pages list. Critiques: `docs/critiques/tasks-calendar-mock.md`, `tasks-function.md`. Desktop verified; the phone walk pending. Tests 730 → 732. | §3.3, §0.10 |
@@ -714,8 +715,10 @@ Genuinely undecided — distinct from §0.7.
     left this list for later PRs: type steps too close on the desktop (14g), the Table's touch
     row height beside 32 dp tree rows (14f), the canvas caption's 2.8:1 contrast and "tap"
     wording, the chip row's rhythm, "2 row(s)" with dashes, the phone card's kind line that
-    repeats its icon, a page-ground click that clears no focus, a `find` token per register so
-    a found word and a selected row stop sharing `accentSoft` (14g), find's scroll landing a
+    repeats its icon, a page-ground click that clears no focus, ~~a `find` token per register so
+    a found word and a selected row stop sharing `accentSoft` (14g)~~ *(done, 14g·2)*, an
+    `@mention` in Ink told from body text by weight alone (a faint underline?), the Road Map's
+    ↻ needed before a new page appears, find's scroll landing a
     match already on screen at the top, a word living only inside a mapped-away subtree not
     found (small things, to close with 14h).*
     ***14e shipped 2026-09-16** — the keyboard (§2.2 *The keyboard*): one table, the F1 card
@@ -741,8 +744,11 @@ Genuinely undecided — distinct from §0.7.
     grounds, every token solved to a floor and test-walked, mode System / Light / Dark with System
     default, the theme in `KeyValueStore` on both platforms (the phone's file migrated once), one
     shared Settings section, DM Sans 400/500 only. `docs/critiques/registers-function.md` walked
-    the build (the desktop's unpainted ground fixed in the scaffold). 14g·2 (the token map across
-    elements) and 14g·3 (the urgency ladder, v20) next, then 14h.*
+    the build (the desktop's unpainted ground fixed in the scaffold).* ***14g·2 shipped
+    2026-09-16** — the token map (§2.3 *The token map*): three data hues fanned from the accent by
+    one rule, the error family solved on its soft, the find mark, labels and callouts as stored
+    hues rendered by the register, the two hardcoded blues and the grey canvas edges gone, an audit
+    rule so no literal colour returns. 14g·3 (the urgency ladder, v20) next, then 14h.*
 13. ~~**Desktop's Tasks & Habits has no Trash button and no reminder bell** (step 7a): the Entry and Habit Trash sheets and the Reminders sheet are still Android files taking `AppContainer`; the restore/purge they need is shared already, so moving the two Trash sheets is a small follow-up. Reminders stay Android's (no alarms on desktop, §12.1 of the windows spec). *Folded into B§13's 14f (2026-09-13): the Trash sheets move once sheets are slide-overs on desktop.*~~ *Resolved 2026-09-16 (14f·1): the two Trash sheets are shared and the desktop has the button; the bell stays Android's, as the reason stands.*
 12. ~~**Calendar layer state does not persist** across app starts: it lives in the ViewModel because the app has no cross-platform preference store (`TaskPreferences` is Android `SharedPreferences`). One small `KeyValueStore` expect/actual would serve this and every later desktop setting.~~ *Resolved 2026-09-12 (step 8·0): `data/prefs/KeyValueStore` — an interface with one shared map-and-flows body and a platform `persist` (Android `SharedPreferences`, desktop a `.properties` file), on `WorkbenchCore`; the layers are its first consumer and Review's cadence its second (`review_cadence_days`, no UI yet). Not for secrets.* B§6 #6's *calendar sets* are not built; a label filter on the layer row is the cheap version if wanted.
 11. ~~**Desktop: `EnableSyncSheet`'s "Turn on" sits below the window** until the sheet is expanded from its drag handle (Tab to the handle, Space). Its `Column` is `fillMaxHeight(0.8f)` of a sheet the desktop window does not clip to; a phone never shows it. Pre-existing, found 2026-09-12 while verifying §0.6.8; a layout fix, not a design question.~~ *Resolved 2026-09-12 (step 6b): the sheet opens fully expanded (`skipPartiallyExpanded`), as does the new edit sheet. Applied to every sheet on both platforms later that day through `TendrilSheet` (§3) — the phone had the same failure on its taller sheets.*
@@ -979,9 +985,43 @@ sits every route on one `Surface`). The phone walk is pending (testing paused).
 
 **Data colour** is B§13.8: urgency is a task's colour (a five-step ladder, `Entry.important`
 becoming `importance` 0–4 — 14g·3, schema v20), category its database's or first label's hue, a
-database any hue with a mandatory icon, calendar layers dots in Month and Agenda; links and
+database any hue with a mandatory icon, calendar layers dots in Month and Agenda. ~~Links and
 `@` mentions take the accent token and find gets its own mark with the token map (14g·2). The
-recorded hardcoded-blue defect closes there.
+recorded hardcoded-blue defect closes there.~~ *Built — the token map below.*
+
+**The token map** *(Amended 2026-09-16 — 14g·2, B§13.8.3; decided on
+`docs/critiques/coloured-elements-mock.md`, walked in `coloured-elements-function.md`).* Three
+data hues come from the accent by one rule (`fanHue`, `ColorSolve.kt`): **event** at −120°,
+**habit** at +60°, the **third** at 180° — the accent's hue turned, its saturation raised to at
+least 0.40 (Ink's slate would fan to greys), solved by lightness to the floor — so every register's
+data hues sit ≥ 60° from its accent and from each other; a register's second channel (Swiss's
+yellow, Playground's orange) takes the third slot instead. The **error family** is a red at 5°
+solved on the ground *and* on its own soft (the mock's chips measured 4.1–4.3 in dark). Every
+tint is the hue at 14 % / 24 %; the **find mark** is the third at up to 30 % / 36 %, backed off
+until the text reads on it. A **stored hue** — a label's `color`, a callout's `calloutColor`, hexes
+that sync and never change — is rendered by the register (`ui/theme/DataColours.kt`): a label's
+solved to 4.6 on the ground and on its own 14 % chip (`solveHue`'s `tintShare` — the check moves
+inside the lightness loop because the tint moves with the candidate), a callout's to 3.0 as a mark;
+saturation is never raised for a stored hue, so the grey pastel stays grey. What wears what:
+
+| Element | Token |
+|---|---|
+| Selection, today, the now-line, the timer, a link (underlined), an `@mention` (Medium, no fill) | accent |
+| Find marks · the current match | `findSoft` with the text · `thirdStrong` with `onThird` |
+| Block-reference bar, related edges, a canvas node's outline, a database's fill (until the slider PR) | third · `thirdSoft` |
+| Calendar event / habit blocks and all-day chips | `eventSoft` / `habitSoft`; task blocks `accentSoft` until 14g·3 |
+| Canvas edges, mention edges, the Month's "something today" dot | dim |
+| Blocked, overdue, delete, a Timeline dependency line | error / `errorSoft` |
+| A label chip | its hue as text on its tint; solid with `onHue` when the filter is on |
+| A callout | its hue as a 3 px left bar over a 20 % / 28 % tint, the register's text on it |
+
+Material's roles follow: `tertiary*` = the third family, `error*` = the error family,
+`secondaryContainer` = `surface2` (the calendar reads its layers from the palette, not from roles).
+`tools/audit.py` fails on a `Color(0x…)` or a named `Color.Gray`-style literal in shared UI outside
+`ui/theme/` — the nearest thing to a compiler check that the map stays whole. Tested over all 30
+palettes: the fan's angles, every data hue and tint at its floor, the eight label hexes and the
+seven callout pastels (`RegisterSolveTest`); a link and a mention carry the colour they are given
+(`SpanTransformationTest`). Desktop walked; the phone pending.
 
 ### 2.4 Accessibility scope (Decided 2026-08-26)
 
@@ -1149,7 +1189,10 @@ canvases), which would be a multi-month subsystem on its own and isn't needed fo
   snapshot never carries one, so a picture still does not reach a second device at all.)*
 - Toggle (actually collapses, unlike §7.2's degraded-on-import case, which is permanently open)
 - Callout (icon + colored background — natively rendered; an *imported* callout starts as a raw-HTML
-  fallback block, per §7.2, until manually converted) *(**Two corrections, both 2026-09-06.** The
+  fallback block, per §7.2, until manually converted) *(**14g·2, 2026-09-16:** the stored
+  `calloutColor` is one of seven hues (`CALLOUT_COLORS`, `ui/theme/DataColours.kt`) and is rendered
+  by the register — the hue as a 3 px left bar over a 20 % tint the register's text reads on, §2.3
+  *The token map*; the seven picker dots show the solved hues.)* *(**Two corrections, both 2026-09-06.** The
   icon renders; the coloured background does not. `Block.calloutColor` exists in the schema and
   travels in the snapshot, but nothing writes it and no composable reads it, so a callout is visually
   a paragraph with an emoji in front of it — a rendering gap, not a data-model decision to reopen,
@@ -1436,7 +1479,10 @@ Database rows, which already have Select/multi-select properties for this purpos
 
 Tags surface as a filter-chip row in the Pages hub (filter the page list by one or more tags) and a
 small tag editor on each page itself, using the same type-to-search-or-create interaction already
-established for page mentions (§3.1.1). Deliberately flat — no tag hierarchy/nesting; Joplin's own
+established for page mentions (§3.1.1). *(**14g·2, 2026-09-16:** the label's `color` is drawn at
+last — its hue as text on a 14 % tint on the Pages filter row and the page's strip (solid when a
+filter is on), a hue dot in the Road Map's label menu and the Add-label sheet; the stored hex is
+unchanged and rendered per ground, §2.3 *The token map*.)* Deliberately flat — no tag hierarchy/nesting; Joplin's own
 nested-tag feature was considered and dropped as unneeded complexity at this build's scale.
 
 ### 3.1.7 In-app search UX (Decided 2026-08-26)

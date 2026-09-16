@@ -262,6 +262,8 @@ private fun CanvasBoard(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
+    val edgeInk = MaterialTheme.colorScheme.onSurfaceVariant
+    val draftInk = MaterialTheme.colorScheme.primary
     var linkDrag by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
     var nodeMenuFor by remember { mutableStateOf<CanvasNode?>(null) }
 
@@ -291,11 +293,11 @@ private fun CanvasBoard(
                 edges.forEach { edge ->
                     val from = nodes.find { it.id == edge.fromNodeId } ?: return@forEach
                     val to = nodes.find { it.id == edge.toNodeId } ?: return@forEach
-                    drawCanvasEdge(from, to, edge, density.density)
+                    drawCanvasEdge(from, to, edge, density.density, edgeInk)
                 }
                 linkDrag?.let { (fromNode, pointer) ->
                     val start = with(density) { Offset((fromNode.x + NODE_W / 2) * density.density, (fromNode.y + NODE_H / 2) * density.density) }
-                    drawLine(color = Color.Gray, start = start, end = pointer, strokeWidth = 3f)
+                    drawLine(color = draftInk, start = start, end = pointer, strokeWidth = 3f)
                 }
             }
 
@@ -341,19 +343,20 @@ private fun CanvasBoard(
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasEdge(from: CanvasNode, to: CanvasNode, edge: CanvasEdge, density: Float) {
+/** 14g·2 — a canvas edge is drawn in the register's dim (B§13.8.3), as the Road Map's mention edges are. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasEdge(from: CanvasNode, to: CanvasNode, edge: CanvasEdge, density: Float, ink: Color) {
     val start = Offset((from.x + NODE_W / 2) * density, (from.y + NODE_H / 2) * density)
     val end = Offset((to.x + NODE_W / 2) * density, (to.y + NODE_H / 2) * density)
-    drawLine(color = Color.Gray, start = start, end = end, strokeWidth = 3f)
+    drawLine(color = ink, start = start, end = end, strokeWidth = 3f)
     if (edge.direction == CanvasArrowDirection.ONE_WAY || edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(start, end, NODE_H * density / 2f)
+        drawCanvasArrowhead(start, end, NODE_H * density / 2f, ink)
     }
     if (edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(end, start, NODE_H * density / 2f)
+        drawCanvasArrowhead(end, start, NODE_H * density / 2f, ink)
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasArrowhead(from: Offset, to: Offset, pullBack: Float) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasArrowhead(from: Offset, to: Offset, pullBack: Float, ink: Color) {
     val delta = to - from
     val len = delta.getDistance()
     if (len < 1f) return
@@ -366,7 +369,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasArrowhead
         lineTo((tip - unit * 14f - perp * 7f).x, (tip - unit * 14f - perp * 7f).y)
         close()
     }
-    drawPath(path, color = Color.Gray)
+    drawPath(path, color = ink)
 }
 
 /** Point-to-segment distance across every edge, nearest under a small screen-space threshold

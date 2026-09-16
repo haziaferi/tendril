@@ -144,12 +144,7 @@ internal fun PlanView(
                         val y = block.startMinute / 60f * hourPx
                         val h = block.minutes / 60f * hourPx
                         val moving = drag?.let { it.block?.key == block.key } == true
-                        val tint = when (block.kind) {
-                            BlockKind.EVENT -> MaterialTheme.colorScheme.secondaryContainer
-                            BlockKind.TASK -> MaterialTheme.colorScheme.primaryContainer
-                            BlockKind.HABIT -> MaterialTheme.colorScheme.tertiaryContainer
-                            BlockKind.OTHER -> MaterialTheme.colorScheme.surfaceVariant
-                        }
+                        val tint = layerTint(block.kind)
                         val entry = block.occurrence?.entry
                         Box(
                             modifier = Modifier

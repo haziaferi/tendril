@@ -3,6 +3,13 @@
 package com.tendril.app.ui.pages
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import com.tendril.app.ui.theme.CALLOUT_COLORS
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.theme.calloutColours
+import com.tendril.app.ui.theme.labelColours
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -67,6 +74,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -321,11 +329,20 @@ fun PageDetailScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 labels.forEach { label ->
+                    // 14g·2 — the label's stored hue, rendered by the register (§3.1.6).
+                    val colours = labelColours(label.color, LocalTendrilPalette.current)
                     InputChip(
                         selected = false,
                         onClick = { viewModel.removeLabel(label) },
                         enabled = !contentLocked,
                         label = { Text(label.name) },
+                        colors = InputChipDefaults.inputChipColors(
+                            containerColor = colours.tint, labelColor = colours.hue,
+                            leadingIconColor = colours.hue, trailingIconColor = colours.hue,
+                            disabledContainerColor = colours.tint, disabledLabelColor = colours.hue,
+                            disabledLeadingIconColor = colours.hue, disabledTrailingIconColor = colours.hue,
+                        ),
+                        border = InputChipDefaults.inputChipBorder(enabled = !contentLocked, selected = false, borderColor = colours.hue.copy(alpha = 0.4f), disabledBorderColor = colours.hue.copy(alpha = 0.4f)),
                         // §0.6.8 / B§12.0 — "a bound label looks like any other, with a small mark
                         // that it brings fields."
                         leadingIcon = if (label.id in boundLabelIds) {
@@ -406,13 +423,15 @@ fun PageDetailScreen(
                 // with the inert card; the descendants are still in `outline`, just not drawn as
                 // rows. `mappedAway` is that set, computed once per outline.
                 items(outline.filter { it.block.id !in mappedAway }, key = { it.block.id }) { entry ->
-                    val markColours = MaterialTheme.colorScheme
+                    // 14g·2 — the find mark is the third hue's tint, the current match its solid: a
+                    // mark never shares `accentSoft` with the selection (`find-in-page-mock.md` #1).
+                    val palette = LocalTendrilPalette.current
                     val blockMatches = matches.filter { it.blockId == entry.block.id }
                     val findMarks = if (blockMatches.isEmpty()) null else FindMarks(
                         ranges = blockMatches.map { it.range },
                         current = findCurrent?.let { matches.getOrNull(it) }?.takeIf { it.blockId == entry.block.id }?.range,
-                        mark = markColours.primaryContainer, onMark = markColours.onPrimaryContainer,
-                        currentMark = markColours.primary, onCurrentMark = markColours.onPrimary,
+                        mark = palette.findSoft, onMark = palette.text,
+                        currentMark = palette.thirdStrong, onCurrentMark = palette.onThird,
                     )
                     BlockRow(
                         block = entry.block,
@@ -694,10 +713,16 @@ private fun BlockRow(
                 .then(
                     // §P3 — a callout always has a tinted background, even before a swatch is
                     // chosen, matching the "icon + colored background" design §3.1.1 called for.
+                    // 14g·2 — the stored hue rendered by the register: a 20 % tint the text reads
+                    // on, and the hue itself as a 3 px bar (the block reference's shape), so seven
+                    // callouts stay seven on either ground.
                     if (block.type == BlockType.CALLOUT) {
+                        val colours = calloutColours(block.calloutColor ?: CALLOUT_COLORS.first(), LocalTendrilPalette.current)
                         Modifier
-                            .background(calloutBackgroundColor(block.calloutColor), RoundedCornerShape(8.dp))
-                            .padding(8.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colours.tint)
+                            .drawBehind { drawRect(colours.bar, size = Size(3.dp.toPx(), size.height)) }
+                            .padding(start = 11.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
                     } else {
                         Modifier
                     },
@@ -788,7 +813,10 @@ private fun BlockRow(
                             }
                         },
                         textStyle = blockTextStyle(block.type).copy(color = MaterialTheme.colorScheme.onSurface),
-                        visualTransformation = spansVisualTransformation(block.formattingSpans, findMarks),
+                        visualTransformation = spansVisualTransformation(
+                            block.formattingSpans, findMarks,
+                            link = MaterialTheme.colorScheme.primary, mention = MaterialTheme.colorScheme.primary,
+                        ),
                         readOnly = locked,
                         modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused },
                     )
@@ -1067,23 +1095,6 @@ private val CODE_LANGUAGES = listOf(
     "bash", "sql", "json", "yaml", "html", "css", "c", "cpp", "csharp", "go", "rust", "ruby", "php", "markdown",
 )
 
-/** §P3 — a small fixed palette, the same shape as [com.tendril.app.data.page.LabelColors]'s,
- * rather than a full color picker; picked for card-style backgrounds (readable text over
- * them at full opacity), unlike the label palette's mid-tone hues meant to be their own swatch. */
-private val CALLOUT_COLORS = listOf(
-    "#FDE68A", "#BFDBFE", "#BBF7D0", "#FBCFE8", "#DDD6FE", "#FED7AA", "#E5E7EB",
-)
-
-private fun calloutBackgroundColor(stored: String?): Color = parseHexColor(stored ?: CALLOUT_COLORS.first())
-
-/** Parses a "#RRGGBB" hex string into a Compose [Color]. `android.graphics.Color.parseColor`
- * is Android-only and this file is `commonMain` (Android + desktop JVM both render it), so
- * this is hand-rolled rather than reused from a platform API. */
-private fun parseHexColor(hex: String): Color {
-    val clean = hex.removePrefix("#")
-    val argb = if (clean.length == 6) "FF$clean" else clean
-    return Color(argb.toLong(16).toInt())
-}
 
 @Composable
 private fun BlockActionSheet(
@@ -1133,12 +1144,13 @@ private fun BlockActionSheet(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Color", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
                 val currentColor = block.calloutColor ?: CALLOUT_COLORS.first()
+                val palette = LocalTendrilPalette.current
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CALLOUT_COLORS.forEach { hex ->
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .background(parseHexColor(hex), CircleShape)
+                                .background(calloutColours(hex, palette).bar, CircleShape)
                                 .then(
                                     if (hex == currentColor) {
                                         Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)

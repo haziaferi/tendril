@@ -68,6 +68,8 @@ object Floors {
     const val ON_ACCENT = 4.6
     const val SOFT_TEXT = 4.6
     const val MARK = 3.0
+    /** A data hue read as text — event, habit, the error red, a label's hue on its chip (14g·2). */
+    const val DATA = 4.6
 }
 
 /**
@@ -98,14 +100,28 @@ fun paletteFor(register: Register, dark: Boolean, oled: Boolean = false): Tendri
     val softText = if (contrast(softStart, soft) >= Floors.SOFT_TEXT) softStart else solveTo(text, softStart, Floors.SOFT_TEXT, listOf(soft))
     val border = mix(text, bg, if (dark) 0.14 else 0.11)
 
-    val third = second?.let { solveHue(it, bg, Floors.MARK, lighten = dark) } ?: mix(accent, text, 0.55)
-    val thirdSoft = mix(third, bg, if (dark) 0.24 else 0.14)
+    // 14g·2 — the fan (B§13.8.3, `coloured-elements-mock.md` #3): event at −120°, habit at +60°,
+    // the third at 180° — unless the register has a second channel, which takes the third slot.
+    val tintShare = if (dark) 0.24 else 0.14
+    val event = fanHue(accent, -120.0, bg, Floors.DATA, lighten = dark)
+    val habit = fanHue(accent, 60.0, bg, Floors.DATA, lighten = dark)
+    val third = second?.let { solveHue(it, bg, Floors.MARK, lighten = dark) } ?: fanHue(accent, 180.0, bg, Floors.MARK, lighten = dark)
+    val thirdStrong = solveHue(third, bg, Floors.DATA, lighten = dark)
+    val onThird = onColour(thirdStrong, bg, text, dark)
+    val findSoft = tintFor(third, bg, text, if (dark) 0.36 else 0.30, Floors.DATA)
+    // The error family: a red at 5° solved against the ground *and* its own soft (#2 of the critique).
+    val error = solveHue(hslToSrgb(5.0, 0.55, if (dark) 0.62 else 0.45), bg, Floors.DATA, lighten = dark, tintShare = tintShare)
+    val onError = onColour(error, bg, text, dark)
 
     return TendrilPalette(
-        bg = bg.toColor(), surface2 = surface2.toColor(), text = text.toColor(),
+        dark = dark, bg = bg.toColor(), surface2 = surface2.toColor(), text = text.toColor(),
         textDim = dim.toColor(), textFaint = faint.toColor(),
         accent = accent.toColor(), accentStrong = strong.toColor(), onAccent = onAccent.toColor(),
         accentSoft = soft.toColor(), accentSoftText = softText.toColor(), border = border.toColor(),
-        third = third.toColor(), thirdSoft = thirdSoft.toColor(),
+        third = third.toColor(), thirdStrong = thirdStrong.toColor(), onThird = onThird.toColor(),
+        thirdSoft = mix(third, bg, tintShare).toColor(), findSoft = findSoft.toColor(),
+        event = event.toColor(), eventSoft = mix(event, bg, tintShare).toColor(),
+        habit = habit.toColor(), habitSoft = mix(habit, bg, tintShare).toColor(),
+        error = error.toColor(), errorSoft = mix(error, bg, tintShare).toColor(), onError = onError.toColor(),
     )
 }

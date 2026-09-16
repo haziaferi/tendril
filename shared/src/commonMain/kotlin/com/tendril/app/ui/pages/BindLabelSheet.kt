@@ -5,6 +5,8 @@ package com.tendril.app.ui.pages
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.components.TendrilSheet
+import com.tendril.app.ui.components.LabelDot
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.theme.labelColours
 import com.tendril.app.data.page.Label
 
 /**
@@ -95,13 +100,17 @@ internal fun BindLabelSheet(
             if (query.isNotBlank() && candidates.none { it.name.equals(query.trim(), ignoreCase = true) }) {
                 TextButton(onClick = { onBind(query) }) { Text("Create \"${query.trim()}\" and bind") }
             }
+            val palette = LocalTendrilPalette.current
             LazyColumn {
                 items(candidates, key = { it.id }) { candidate ->
-                    Text(
-                        candidate.name,
+                    Row(
                         modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onBind(candidate.name) }).padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        LabelDot(labelColours(candidate.color, palette).hue)
+                        Spacer(Modifier.width(10.dp))
+                        Text(candidate.name, style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
         }
