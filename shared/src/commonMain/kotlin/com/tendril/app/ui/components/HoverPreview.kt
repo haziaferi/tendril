@@ -307,7 +307,7 @@ private suspend fun loadPreview(core: WorkbenchCore, target: PreviewTarget): Pai
 }
 
 /** Under the anchor with [gapPx] of air, left-aligned to it; above when the window's foot is nearer; never off the window's sides. */
-private class UnderAnchor(private val anchor: Rect, private val gapPx: Int) : PopupPositionProvider {
+internal class UnderAnchor(private val anchor: Rect, private val gapPx: Int) : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         val x = anchor.left.toInt().coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
         val below = anchor.bottom.toInt() + gapPx

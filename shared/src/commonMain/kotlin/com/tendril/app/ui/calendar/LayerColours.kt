@@ -3,6 +3,7 @@ package com.tendril.app.ui.calendar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.tendril.app.domain.plan.BlockKind
+import com.tendril.app.domain.plan.DotKind
 import com.tendril.app.ui.theme.LocalTendrilPalette
 
 /**
@@ -20,6 +21,22 @@ fun layerTint(kind: BlockKind): Color {
         BlockKind.TASK -> p.accentSoft
         BlockKind.HABIT -> p.habitSoft
         BlockKind.OTHER -> p.thirdSoft
+    }
+}
+
+/**
+ * The phone's Month dot per layer (the dots PR folded into L4, 2026-09-17; the token map's note in
+ * `docs/benchmarks.md`): a task's dot is the ladder's *none* — `textDim`, never the accent, which
+ * rule 1 reserves — an event's the event hue, a habit's the habit hue, a database date's the third.
+ */
+@Composable
+fun dotColour(kind: DotKind): Color {
+    val p = LocalTendrilPalette.current
+    return when (kind) {
+        DotKind.TASK -> p.textDim
+        DotKind.EVENT -> p.event
+        DotKind.HABIT -> p.habit
+        DotKind.DATABASE -> p.thirdStrong
     }
 }
 

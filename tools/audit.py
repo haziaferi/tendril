@@ -37,6 +37,8 @@ Checks
                                on the line is the one written-down exception
  15. bare menu                `DropdownMenu(` / `DropdownMenuItem(` outside `ui/components/` — every
                                menu goes through `TendrilMenu` so its rows take the profile's height
+ 16. second month grid        `GridCells.Fixed(7)` outside `ui/calendar/` — the Month is one composable
+                               (`MonthGrid`; the phone's dot grid beside it) with two homes, never a third
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -55,6 +57,7 @@ LITERAL_TYPE = re.compile(r"\bfontSize\s*=\s*\d|\b\d+(?:\.\d+)?\.sp\b|\bfontWeig
 TYPE_EXEMPT = ("SpanVisualTransformation.kt",)
 MATERIAL_ROLE = re.compile(r"\btypography\.(?:display|headline|title|body|label)[A-Z]\w*")
 BARE_MENU = re.compile(r"\bDropdownMenu(?:Item)?\s*\(")
+MONTH_GRID = re.compile(r"\bGridCells\.Fixed\(\s*7\s*\)")
 
 
 def rel(p: str) -> str:
@@ -422,6 +425,9 @@ def main() -> int:
             # L1 — one `TendrilMenu` under a pointer profile; a bare Material menu keeps 48 dp rows.
             if BARE_MENU.search(line) and "/ui/components/" not in r and not line.lstrip().startswith(("//", "*", "/*", "import")):
                 rep.add("bare menu", f"{r}:{i}  {line.strip()[:90]}")
+            # L4 — one Month grid: a seven-column grid outside `ui/calendar/` is a second one.
+            if MONTH_GRID.search(line) and "/ui/calendar/" not in r and not line.lstrip().startswith(("//", "*", "/*")):
+                rep.add("second month grid", f"{r}:{i}  {line.strip()[:90]}")
 
     # The audit's fixes — a text's class decides its style (`tools/type_sites.py`, `tools/type_table/table.json`).
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

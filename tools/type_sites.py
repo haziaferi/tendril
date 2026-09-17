@@ -61,9 +61,11 @@ SMALL_STYLES = {"labelSmall", "labelMedium", "caption", "eyebrow"}
 PREVIEW_COMPOSABLES = {"HoverPreviewCard"}
 ICON_LABEL_COMPOSABLES = {"ShellRail", "ShellItem", "ShellBottomBar"}
 # The calendar grids' gutters, block titles and day cells — dense by design.
-GRID_COMPOSABLES = {"PlanView", "WeekGridView", "MonthGridView", "TimelineBody"}
+GRID_COMPOSABLES = {"PlanView", "WeekGridView", "MonthGridView", "MonthGrid", "TimelineBody"}
 # The phone's week strip and the Timeline's day header: every text in them is a cell's.
-DENSE_COMPOSABLES = {"WeekStripView", "DayHeader"}
+DENSE_COMPOSABLES = {"WeekStripView", "DayHeader", "OccurrenceChip"}
+# A grid's weekday header: a DayOfWeek's short or narrow name in a grid composable is its eyebrow row.
+WEEKDAY_RE = re.compile(r"getDisplayName\(\s*TextStyle\.")
 STYLE_RE = re.compile(r"\bstyle\s*=\s*([^,()]+(?:\([^()]*\))?)")
 TYPO_RE = re.compile(r"typography\.(\w+)")
 COLOR_RE = re.compile(r"\bcolor\s*=\s*([^,()]+(?:\([^()]*\))?)")
@@ -325,7 +327,8 @@ def classify(s: Site) -> str:
     if s.content == "LITERAL" and lit.startswith(("Add ", "New ", "Choose ", "Pick ")) and len(words) <= 4 and s.container == "Row": return "ACTION_ROW"
     # 5. an empty state says what is absent
     if s.content == "LITERAL" and len(words) <= 9 and (lit.startswith(EMPTY_WORDS) or re.match(r"^\w+ needs ", lit)) and (grey or lit.endswith(".")): return "EMPTY_STATE"
-    # 6. the calendar grids' dense text: gutters, block titles, day cells
+    # 6. the calendar grids' dense text: gutters, block titles, day cells — and their weekday header row
+    if s.composable in GRID_COMPOSABLES and WEEKDAY_RE.search(s.text): return "EYEBROW"
     if s.composable in DENSE_COMPOSABLES or (s.composable in GRID_COMPOSABLES and (small or s.container == "Box")): return "GRID_DENSE"
     # 7. cells and editors (a Table's cells, a row page's property editors)
     if s.composable and ("Cell" in s.composable or (s.composable.endswith("Editor") and plain)) and s.content != "LITERAL": return "CELL"

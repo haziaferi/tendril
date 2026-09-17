@@ -194,20 +194,13 @@ internal fun WeekGridView(
                         ) {
                             val (shown, more) = visibleAllDay(col.allDay)
                             shown.forEach { o ->
-                                val chipStripe = blockStripe(o.entry, showUrgency, today)
-                                Surface(
-                                    color = layerTint(if (o.entry.kind == com.tendril.app.data.entry.EntryKind.TASK) BlockKind.TASK else BlockKind.EVENT),
-                                    shape = RoundedCornerShape(4.dp),
-                                    modifier = Modifier.fillMaxWidth().clickable { onEdit(o.entry) },
-                                ) {
-                                    // 14g·3 — an all-day task chip wears its urgency stripe like a timed block.
-                                    Text(
-                                        o.entry.title, style = MaterialTheme.typography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier
-                                            .drawBehind { chipStripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
-                                            .padding(start = if (chipStripe != null) 12.dp else 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
-                                    )
-                                }
+                                // 14g·3 — an all-day task chip wears its urgency stripe like a timed block; the chip is the Month grid's (L4).
+                                OccurrenceChip(
+                                    title = o.entry.title,
+                                    tint = layerTint(if (o.entry.kind == com.tendril.app.data.entry.EntryKind.TASK) BlockKind.TASK else BlockKind.EVENT),
+                                    stripe = blockStripe(o.entry, showUrgency, today),
+                                    onClick = { onEdit(o.entry) },
+                                )
                             }
                             if (more > 0) {
                                 Text("+$more", style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clickable { onSelectDate(col.day) }.padding(horizontal = 6.dp))

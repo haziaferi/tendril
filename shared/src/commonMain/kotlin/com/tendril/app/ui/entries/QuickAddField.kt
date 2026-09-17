@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.domain.ParsedEntry
 import com.tendril.app.domain.QuickAddParser
@@ -53,7 +54,11 @@ fun QuickAddField(
     /** The popup's focus-loss rule (blank closes, typed stays) needs to know what is in the line. */
     onTextChanged: ((String) -> Unit)? = null,
 ) {
-    var text by remember { mutableStateOf("") }
+    // A `TextFieldValue`, not a String: with the String overload the field keeps its own copy and a
+    // line typed right after Enter's reset lost every character after the second (the Month grid's
+    // walk, 2026-09-17 — *Extra two* arrived as *Ex*).
+    var value by remember { mutableStateOf(TextFieldValue("")) }
+    val text = value.text
     var ignored by remember { mutableStateOf(emptySet<TokenKind>()) }
     var kindOverride by remember { mutableStateOf<EntryKind?>(null) }
     val parsed = remember(text, ignored, kindOverride) { QuickAddParser.parse(text, today, defaultKind, ignored, kindOverride) }
@@ -64,15 +69,15 @@ fun QuickAddField(
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 textStyle = MaterialTheme.typography.body,
-                value = text,
-                onValueChange = { text = it; ignored = emptySet(); kindOverride = null; onTextChanged?.invoke(it) },
+                value = value,
+                onValueChange = { value = it; ignored = emptySet(); kindOverride = null; onTextChanged?.invoke(it.text) },
                 modifier = fieldModifier.weight(1f).focusRequester(focus),
                 placeholder = { Text(hint) },
                 leadingIcon = leadingIcon,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    if (text.isNotBlank()) { onQuickAdd(parsed); text = ""; ignored = emptySet(); kindOverride = null; onTextChanged?.invoke("") }
+                    if (text.isNotBlank()) { onQuickAdd(parsed); value = TextFieldValue(""); ignored = emptySet(); kindOverride = null; onTextChanged?.invoke("") }
                 }),
             )
             trailing?.invoke()
