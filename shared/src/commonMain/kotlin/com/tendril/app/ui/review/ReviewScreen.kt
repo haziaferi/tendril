@@ -42,6 +42,8 @@ import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.pageTitle
 
 /**
  * §0.6.11 — the weekly walk (B§6 #10): OmniFocus's review mode on a cadence, Sunsama's summary
@@ -84,7 +86,7 @@ fun ReviewScreen(core: WorkbenchCore, onBack: () -> Unit, onOpenPage: (Long) -> 
                         if (w.tasksDone > 0) "${w.tasksDone} " + (if (w.tasksDone == 1) "task done" else "tasks done") else null,
                         if (w.habitCheckIns > 0) "${w.habitCheckIns} " + (if (w.habitCheckIns == 1) "check-in" else "check-ins") else null,
                     ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 12.dp),
                 )
@@ -95,7 +97,7 @@ fun ReviewScreen(core: WorkbenchCore, onBack: () -> Unit, onOpenPage: (Long) -> 
                 else -> {
                     Text(
                         "${items!!.size - remaining.size + 1} of ${items!!.size}",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
@@ -139,14 +141,14 @@ private fun ReviewCard(
             when (item) {
                 is ReviewItem.DatabaseDue -> {
                     val r = item.review
-                    Text(r.page.title, style = MaterialTheme.typography.titleLarge)
+                    Text(r.page.title, style = MaterialTheme.typography.pageTitle)
                     Text(
                         listOfNotNull(
                             "${r.rowCount} " + (if (r.rowCount == 1) "row" else "rows"),
                             if (r.staleRows > 0) "${r.staleRows} untouched " + (r.database.lastReviewedAt?.let { "since last review" } ?: "so far") else null,
                             if (r.openTasks > 0) "${r.openTasks} open " + (if (r.openTasks == 1) "task" else "tasks") else null,
                         ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -182,10 +184,10 @@ private fun TaskCard(
     onDone: (Entry) -> Unit,
     onTrash: (Entry) -> Unit,
 ) {
-    Text(entry.title, style = MaterialTheme.typography.titleLarge)
+    Text(entry.title, style = MaterialTheme.typography.pageTitle)
     Text(
         listOfNotNull(line, entry.dueDate?.let { "due " + it.format(dayFormat) }).joinToString(" · "),
-        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(16.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

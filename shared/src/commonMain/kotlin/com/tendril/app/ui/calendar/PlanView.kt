@@ -58,6 +58,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 private const val HOUR_DP = 56
 private const val GUTTER_DP = 44
@@ -138,7 +141,7 @@ internal fun PlanView(
                     for (h in 0..23) {
                         Text(
                             "%02d".format(h),
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.caption,
                             color = labelColor,
                             modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) },
                         )
@@ -183,7 +186,7 @@ internal fun PlanView(
                         ) {
                             Text(
                                 block.title + (if (block.estimated && block.kind == BlockKind.TASK) "  ~${block.minutes}m" else ""),
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.caption,
                                 maxLines = if (block.minutes >= 45) 2 else 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -210,7 +213,7 @@ internal fun PlanView(
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Text(
                         if (unplanned.isEmpty()) "Nothing unplanned" else "Unplanned · drag onto the day",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -236,8 +239,8 @@ internal fun PlanView(
                                     },
                             ) {
                                 Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(task.title, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                                    task.estimate?.let { Text("  ${it.toMinutes()}m", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    Text(task.title, style = MaterialTheme.typography.label, maxLines = 1)
+                                    task.estimate?.let { Text("  ${it.toMinutes()}m", style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                                 }
                             }
                         }
@@ -253,7 +256,7 @@ internal fun PlanView(
             ) {
                 Text(
                     d.title + (minute?.let { "  → " + timeOfMinute(it).toString() } ?: ""),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.caption,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                 )
             }

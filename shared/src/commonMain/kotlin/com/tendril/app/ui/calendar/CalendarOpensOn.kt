@@ -13,6 +13,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.prefs.KeyValueStore
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
 
 /**
  * 14f·2 — the *Opens on* choice, one chips row for the desktop's Settings pane and the phone's
@@ -24,10 +26,10 @@ fun CalendarOpensOnSection(store: KeyValueStore, modifier: Modifier = Modifier) 
     val stored by store.observe(CALENDAR_DEFAULT_VIEW_KEY).collectAsState(initial = store.get(CALENDAR_DEFAULT_VIEW_KEY))
     val current = CalendarViewKey.fromKey(stored)
     Column(modifier = modifier.padding(16.dp)) {
-        Text("Opens on", style = MaterialTheme.typography.titleMedium)
+        Text("Opens on", style = MaterialTheme.typography.heading)
         Text(
             "The view the Calendar shows first. Unset, a wide window opens on the week and a phone on the day.",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
         )

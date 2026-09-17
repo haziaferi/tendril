@@ -38,8 +38,6 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
@@ -129,8 +127,13 @@ import com.tendril.app.ui.components.EmptyState
 import java.time.LocalDate
 import java.time.temporal.WeekFields
 import java.util.Locale
-import androidx.compose.material3.DropdownMenuItem
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.rowButtonModifier
+import com.tendril.app.ui.components.rowGlyphModifier
+import com.tendril.app.domain.label
+import com.tendril.app.ui.components.keyboardCursorRing
 
 private enum class TabSelection { TASKS, HABITS, MERGED }
 private enum class TimeFilter { TODAY, WEEK, MONTH }
@@ -314,7 +317,6 @@ private fun TasksHabitsBody(
                                             TimeFilter.MONTH -> Res.string.taskshabits_filter_month
                                         }
                                     ),
-                                    style = MaterialTheme.typography.labelMedium,
                                 )
                             }
                         }
@@ -359,7 +361,7 @@ private fun TasksHabitsBody(
                             onOpenReminders = if (reminderSheet != null) ({ reminderTarget = taskGroup.task }) else null,
                             onTrash = { viewModel.trashTask(taskGroup.task.id); selected = null },
                         )
-                        habit != null -> HabitDetailPane(habit, viewModel, showStreak = showStreaks, onTrash = { viewModel.trashHabit(habit.id); selected = null })
+                        habit != null -> HabitDetailPane(habit, viewModel, showStreak = showStreaks, runningTarget = runningTarget, onTrash = { viewModel.trashHabit(habit.id); selected = null })
                         else -> EmptyTaskPane()
                     }
                 }
@@ -490,7 +492,7 @@ private fun TasksList(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("${stringResource(Res.string.taskshabits_undated_toggle)} (${undated.size})", style = MaterialTheme.typography.labelLarge)
+                    Text("${stringResource(Res.string.taskshabits_undated_toggle)} (${undated.size})", style = MaterialTheme.typography.label)
                     Switch(checked = showUndated, onCheckedChange = onShowUndatedChange)
                 }
             }
@@ -586,7 +588,7 @@ private fun TaskRow(
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp)
                   else Modifier.padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp))
-            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
+            .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // B§13.8.1 (14g·3) — urgency is the row's colour: a 4 dp stripe, the level the greater of
@@ -612,7 +614,7 @@ private fun TaskRow(
         if (pointer) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (subtitle.isNotEmpty()) Text(subtitle, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
+                if (subtitle.isNotEmpty()) Text(subtitle, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
             }
         } else {
             Column(modifier = Modifier.weight(1f)) {
@@ -651,9 +653,9 @@ private fun TaskRow(
 @Composable
 private fun TaskMenuItems(entry: Entry, isStep: Boolean, actions: TaskRowActions, viewModel: TasksHabitsViewModel, close: () -> Unit) {
     if (!isStep) {
-        DropdownMenuItem(text = { Text("Postpone…") }, onClick = { close(); actions.onPostpone(entry) })
-        DropdownMenuItem(text = { Text("Add a step") }, onClick = { close(); actions.onAddSubtask(entry) })
-        DropdownMenuItem(
+        TendrilMenuItem(text = { Text("Postpone…") }, onClick = { close(); actions.onPostpone(entry) })
+        TendrilMenuItem(text = { Text("Add a step") }, onClick = { close(); actions.onAddSubtask(entry) })
+        TendrilMenuItem(
             text = { Text(if (entry.dueDate == null) "Set deadline…" else "Change deadline…") },
             onClick = { close(); actions.onSetDeadline(entry) },
         )
@@ -661,9 +663,11 @@ private fun TaskMenuItems(entry: Entry, isStep: Boolean, actions: TaskRowActions
     if (actions.showUrgency) {
         // 14g·3 — the level as a second menu anchored to the item: five rows, a dot each.
         val set = Urgency.fromLevel(entry.importance)
-        SubmenuItem(text = { Text("Urgency: " + set.label) }, leadingIcon = { UrgencyDot(set) }) { closeLevels ->
+        // The audit's fixes (F13): the dot rides in the text, not a leading slot, so the five labels
+        // start at one x — the page menu has no icons and this one matches it.
+        SubmenuItem(text = { Row(verticalAlignment = Alignment.CenterVertically) { Text("Urgency: " + set.label); Spacer(Modifier.width(8.dp)); UrgencyDot(set) } }) { closeLevels ->
             Urgency.entries.forEach { u ->
-                DropdownMenuItem(
+                TendrilMenuItem(
                     text = { Text(u.label) },
                     leadingIcon = { UrgencyDot(u) },
                     trailingIcon = if (u == set) ({ Icon(Icons.Filled.Check, contentDescription = null) }) else null,
@@ -672,11 +676,7 @@ private fun TaskMenuItems(entry: Entry, isStep: Boolean, actions: TaskRowActions
             }
         }
     }
-    DropdownMenuItem(
-        text = { Text("Move to Trash") },
-        leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
-        onClick = { close(); viewModel.trashTask(entry.id) },
-    )
+    TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { close(); viewModel.trashTask(entry.id) })
 }
 
 @Composable
@@ -759,7 +759,7 @@ private fun HabitRow(
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onOpen, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(horizontal = 16.dp) else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
+            .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val checkedToday = habit.lastCompletedDate == LocalDate.now()
@@ -774,7 +774,7 @@ private fun HabitRow(
         // when not. Under a pointer the line sits at the title's right (one row, the tray PR);
         // under Touch it is the second line.
         val meta = listOfNotNull(
-            "Every ${habit.frequency.count} ${habit.frequency.unit.name.lowercase()}(s)",
+            habit.frequency.label(),
             habit.time?.toString(),
             habit.duration?.let(::formatHabitDuration),
             // §0.6.6 — retired from the row by default; a plain number when asked for.
@@ -784,7 +784,7 @@ private fun HabitRow(
         if (pointer) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text(keyedTitle(habit.title, typed, keyFocused), style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Text(meta, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
+                Text(meta, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
             }
         } else {
             Column(modifier = Modifier.weight(1f)) {
@@ -800,8 +800,8 @@ private fun HabitRow(
         }
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
-        DropdownMenuItem(text = { Text("Open") }, onClick = { menuOpen = false; onOpen() })
-        DropdownMenuItem(text = { Text("Move to Trash") }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) }, onClick = { menuOpen = false; viewModel.trashHabit(habit.id) })
+        TendrilMenuItem(text = { Text("Open") }, onClick = { menuOpen = false; onOpen() })
+        TendrilMenuItem(text = { Text("Move to Trash") }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) }, onClick = { menuOpen = false; viewModel.trashHabit(habit.id) })
     }
     }
 }
@@ -858,14 +858,14 @@ private fun MergedList(
                         .then(if (selectedHabitId == habit.id) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)) else Modifier)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { keyState.clickedRow(index); onOpenHabit(habit) }
                         .padding(8.dp)
-                        .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
+                        .then(Modifier.keyboardCursorRing(keyFocused, 6)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.LocalFireDepartment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(start = 8.dp))
                     Column {
-                        Text(keyedTitle(habit.title, keyState.typed, keyFocused), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                        habit.time?.let { Text(it.toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        Text(keyedTitle(habit.title, keyState.typed, keyFocused), style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.primary)
+                        habit.time?.let { Text(it.toString(), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
             }
@@ -873,7 +873,3 @@ private fun MergedList(
     }
 }
 
-/** A row's button under a pointer: the find bar's 28 dp; Material's 40 dp under Touch. */
-private fun rowButtonModifier(pointer: Boolean): Modifier = if (pointer) Modifier.size(28.dp) else Modifier
-/** Its glyph: 18 dp under a pointer, Material's 24 under Touch. */
-private fun rowGlyphModifier(pointer: Boolean): Modifier = if (pointer) Modifier.size(18.dp) else Modifier

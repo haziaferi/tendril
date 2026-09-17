@@ -3,6 +3,7 @@ package com.tendril.app.ui.nav
 import androidx.compose.ui.input.key.Key
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 14e — the binding table: one chord per action, resolved exactly, listed as bound. */
@@ -36,5 +37,15 @@ class ShortcutsTest {
         assertEquals(SHORTCUTS.size, SHORTCUTS.map { it.first }.distinct().size)
         assertEquals(SHORTCUTS.size, SHORTCUTS.map { it.second }.distinct().size)
         assertEquals("Ctrl+Shift+N", SHORTCUTS.first { it.first == ShortcutAction.NEW_TASK }.second.label())
+    }
+
+    @Test
+    fun `the F1 card lists every bound chord`() {
+        // The audit's fixes (2026-09-17, F2): the shelf's Ctrl+Shift+\ was bound and unlisted.
+        val listed = shortcutRows().flatMap { (_, rows) -> rows.flatMap { it.keys } }.toSet()
+        SHORTCUTS.forEach { (action, chord) ->
+            val shown = if (action.tab() != null) "Ctrl+1 … 5" else chord.label()
+            assertTrue("$action as $shown", shown in listed)
+        }
     }
 }

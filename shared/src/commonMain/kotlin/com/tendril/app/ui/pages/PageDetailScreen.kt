@@ -75,8 +75,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.InputChip
@@ -163,6 +161,14 @@ import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.pageTitle
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.domain.word
+import com.tendril.app.ui.nav.FindRequestGate
 
 @Composable
 fun PageDetailScreen(
@@ -257,8 +263,11 @@ fun PageDetailScreen(
             findCurrent = nextIndex(findCurrent, matches.size, forward)
         }
     }
+    // F1 (the audit's fixes): the request is an event only when the count moves after this
+    // screen first saw it — a page opened after Ctrl+F does not inherit the bar.
+    val findGate = remember { FindRequestGate(findRequest) }
     LaunchedEffect(findRequest) {
-        if (findRequest > 0) {
+        if (findGate.accept(findRequest)) {
             if (!findOpen && lastSelection.isNotBlank()) findQuery = lastSelection.trim()
             findOpen = true
             findFocusTick++
@@ -331,7 +340,7 @@ fun PageDetailScreen(
                         },
                         readOnly = contentLocked,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.heading else MaterialTheme.typography.pageTitle).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )
                 },
@@ -344,23 +353,23 @@ fun PageDetailScreen(
                     // active, the same way the Pages hub's own eye toggle stays reachable while
                     // View-Only is on.
                     IconButton(onClick = { showMoreMenu = true }, enabled = !viewOnly) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
-                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                    TendrilMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
                         if (hasCheckboxes) {
                             if (checkboxOnlyActive) {
-                                DropdownMenuItem(text = { Text("Turn off checkbox-only") }, onClick = { showMoreMenu = false; requestTurnOffCheckboxOnly() })
+                                TendrilMenuItem(text = { Text("Turn off checkbox-only") }, onClick = { showMoreMenu = false; requestTurnOffCheckboxOnly() })
                             } else {
-                                DropdownMenuItem(
+                                TendrilMenuItem(
                                     text = { Text("Checkbox-only mode…") },
                                     enabled = !contentLocked,
                                     onClick = { showMoreMenu = false; showCheckboxOnlyConfirm = true },
                                 )
                             }
                         }
-                        DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = { showMoreMenu = false; onShowOnRoadMap(pageId) })
-                        DropdownMenuItem(text = { Text("Find in page") }, onClick = { showMoreMenu = false; findOpen = true; findFocusTick++ })
-                        DropdownMenuItem(text = { Text("History") }, onClick = { showMoreMenu = false; showHistory = true })
-                        DropdownMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
-                        DropdownMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
+                        TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showMoreMenu = false; onShowOnRoadMap(pageId) })
+                        TendrilMenuItem(text = { Text("Find in page") }, onClick = { showMoreMenu = false; findOpen = true; findFocusTick++ })
+                        TendrilMenuItem(text = { Text("History") }, onClick = { showMoreMenu = false; showHistory = true })
+                        TendrilMenuItem(text = { Text("Save as template") }, enabled = !contentLocked, onClick = { showMoreMenu = false; viewModel.saveAsTemplate() })
+                        TendrilMenuItem(text = { Text("Move to Trash") }, enabled = !contentLocked, onClick = { showMoreMenu = false; showDeleteConfirm = true })
                         paneChrome?.menuItems?.invoke(this) { showMoreMenu = false }
                     }
                 },
@@ -469,7 +478,7 @@ fun PageDetailScreen(
                                     append(membershipTitle(membership.database.pageId, viewModel))
                                     membership.viaLabel?.let { append("  ·  #").append(it.name) }
                                 },
-                                style = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.label,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             )
@@ -846,7 +855,7 @@ private fun BlockRow(
                     if (block.type == BlockType.CODE) {
                         Text(
                             block.codeLanguage?.takeIf { it.isNotBlank() } ?: "Plain text",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.description,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -909,7 +918,7 @@ private fun BlockRow(
                         shape = RoundedCornerShape(6.dp),
                         modifier = if (hoverPreview != null) Modifier.hoverPreview(hoverPreview, block.mentionedPageId?.let { PreviewTarget.Page(it) }) else Modifier,
                     ) {
-                        Text(block.content, modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.bodyMedium)
+                        Text(block.content, modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.body)
                     }
                 }
 
@@ -1041,7 +1050,7 @@ private fun BlockPrefix(block: Block, listPosition: Int, viewModel: PageDetailVi
         // §B7 — was `block.order + 1`: this block's position among every block on the page, not
         // its position within the numbered run it visually belongs to. `listPosition` comes from
         // `outlineOf`, which resets it at the start of each run (`BlockOutline.kt`'s own note).
-        BlockType.NUMBERED_LIST_ITEM -> Text("$listPosition.", modifier = Modifier.width(20.dp))
+        BlockType.NUMBERED_LIST_ITEM -> Text("$listPosition.", style = MaterialTheme.typography.editorBody, modifier = Modifier.width(20.dp))
         BlockType.QUOTE -> Box(modifier = Modifier.width(3.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
         BlockType.TOGGLE -> IconButton(
             onClick = { viewModel.setToggleExpanded(block, !block.toggleExpanded) },
@@ -1211,7 +1220,7 @@ private fun BlockActionSheet(
             // §P1 — free-form language, same shape the Notion importer already stores.
             if (block.type == BlockType.CODE) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("Language", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+                Text("Language", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
                 val currentLanguage = block.codeLanguage?.takeIf { it.isNotBlank() }
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = currentLanguage == null, onClick = { onSetLanguage(null) }, label = { Text("Plain text") })
@@ -1226,7 +1235,7 @@ private fun BlockActionSheet(
             // heavier color-picking pattern for one field.
             if (block.type == BlockType.CALLOUT) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("Color", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+                Text("Color", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
                 val currentColor = block.calloutColor ?: CALLOUT_COLORS.first()
                 val palette = LocalTendrilPalette.current
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1249,7 +1258,7 @@ private fun BlockActionSheet(
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text("Turn into", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+            Text("Turn into", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
             listOf(
                 BlockType.PARAGRAPH to "Paragraph", BlockType.HEADING_1 to "Heading 1", BlockType.HEADING_2 to "Heading 2",
                 BlockType.HEADING_3 to "Heading 3", BlockType.BULLETED_LIST_ITEM to "Bulleted list",
@@ -1286,7 +1295,7 @@ private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit
     TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Add label", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("Add label", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
             BasicTextField(
@@ -1328,7 +1337,7 @@ private fun MentionPickerDialog(viewModel: PageDetailViewModel, onDismiss: () ->
         // proportionate from small phones to tablets rather than over/under-filling.
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Mention a page", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("Mention a page", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
             BasicTextField(
@@ -1394,7 +1403,7 @@ private fun MentionSection(title: String, rows: @Composable () -> Unit) {
     ) {
         Icon(if (expanded) Icons.Filled.ExpandMore else Icons.Filled.ChevronRight, contentDescription = null)
         Spacer(Modifier.width(4.dp))
-        Text(title, style = MaterialTheme.typography.labelLarge)
+        Text(title, style = MaterialTheme.typography.label)
     }
     if (expanded) rows()
 }
@@ -1406,8 +1415,8 @@ private fun MentionRow(pageTitle: String, blockText: String, onOpen: () -> Unit,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(pageTitle, style = MaterialTheme.typography.bodyMedium)
-            Text(blockText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+            Text(pageTitle, style = MaterialTheme.typography.body)
+            Text(blockText, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
         action?.invoke()
     }
@@ -1437,7 +1446,7 @@ private fun RowPropertyEditor(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(property.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
+        Text(property.name, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
         Box(modifier = Modifier.weight(1f)) {
             when (property.id) {
                 database?.donePropertyId -> Checkbox(
@@ -1459,7 +1468,7 @@ private fun RowBoundDateEditor(entry: Entry?, viewModel: PageDetailViewModel, ro
     var showPicker by remember { mutableStateOf(false) }
     val locked = LocalContentLocked.current
     val current = if (role == BindingRole.DUE_DATE) entry?.dueDate else entry?.startDate
-    Text(current?.toString() ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }))
+    Text(current?.toString() ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }))
     if (showPicker && entry != null) {
         val state = rememberDatePickerState(initialSelectedDateMillis = (current ?: LocalDate.now()).toDatePickerMillis())
         DatePickerDialog(
@@ -1484,7 +1493,7 @@ private fun RowRecurrenceEditor(entry: Entry?, viewModel: PageDetailViewModel) {
     // raw ISO form ("P7D") rather than anything a person reads as a recurrence.
     Text(
         rule?.period?.let(::formatPeriodAsHumanInterval) ?: "—",
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.body,
         modifier = Modifier.combinedClickable(onClick = { if (entry != null && !locked) showPicker = true }),
     )
     if (showPicker && entry != null) {
@@ -1502,10 +1511,10 @@ private fun RowRecurrenceEditor(entry: Entry?, viewModel: PageDetailViewModel) {
                     )
                     Spacer(Modifier.width(12.dp))
                     Box {
-                        TextButton(onClick = { showUnitMenu = true }) { Text(unit.name.lowercase() + "(s)") }
-                        DropdownMenu(expanded = showUnitMenu, onDismissRequest = { showUnitMenu = false }) {
+                        TextButton(onClick = { showUnitMenu = true }) { Text(unit.word(2)) }
+                        TendrilMenu(expanded = showUnitMenu, onDismissRequest = { showUnitMenu = false }) {
                             IntervalUnit.entries.forEach { option ->
-                                DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { unit = option; showUnitMenu = false })
+                                TendrilMenuItem(text = { Text(option.word(2)) }, onClick = { unit = option; showUnitMenu = false })
                             }
                         }
                     }
@@ -1524,7 +1533,7 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
         PropertyType.CHECKBOX -> Checkbox(checked = storedValue == "true", onCheckedChange = { viewModel.setRowPropertyValue(property, it.toString()) }, enabled = !locked)
         PropertyType.DATE -> {
             var showPicker by remember { mutableStateOf(false) }
-            Text(storedValue ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (!locked) showPicker = true }))
+            Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showPicker = true }))
             if (showPicker) {
                 val initial = storedValue?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
                 val state = rememberDatePickerState(initialSelectedDateMillis = initial.toDatePickerMillis())
@@ -1544,10 +1553,10 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             var showMenu by remember { mutableStateOf(false) }
             val options = property.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
             Box {
-                Text(storedValue ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (!locked) showMenu = true }))
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showMenu = true }))
+                TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     options.forEach { option ->
-                        DropdownMenuItem(text = { Text(option) }, onClick = { viewModel.setRowPropertyValue(property, option); showMenu = false })
+                        TendrilMenuItem(text = { Text(option) }, onClick = { viewModel.setRowPropertyValue(property, option); showMenu = false })
                     }
                 }
             }
@@ -1557,10 +1566,10 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             val options = property.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
             val selected = storedValue?.split(",")?.filter { it.isNotBlank() }.orEmpty().toSet()
             Box {
-                Text(if (selected.isEmpty()) "—" else selected.joinToString(", "), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.combinedClickable(onClick = { if (!locked) showMenu = true }))
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                Text(if (selected.isEmpty()) "—" else selected.joinToString(", "), style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showMenu = true }))
+                TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     options.forEach { option ->
-                        DropdownMenuItem(
+                        TendrilMenuItem(
                             text = { Text((if (option in selected) "✓ " else "") + option) },
                             onClick = {
                                 val newSelected = if (option in selected) selected - option else selected + option
@@ -1581,7 +1590,7 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             LaunchedEffect(uids) { titles = viewModel.resolveRelatedTitles(uids) }
             Text(
                 if (titles.isEmpty()) "—" else titles.joinToString(", "),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.body,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -1602,7 +1611,7 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             BasicTextField(
                 value = text,
                 onValueChange = { text = it; lastWrittenValue = it; viewModel.setRowPropertyValue(property, it) },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 readOnly = locked,
                 singleLine = true,
             )

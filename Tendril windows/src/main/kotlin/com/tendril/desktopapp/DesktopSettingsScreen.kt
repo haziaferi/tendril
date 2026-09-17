@@ -28,6 +28,8 @@ import com.tendril.app.ui.settings.NotificationAreaSection
 import kotlinx.coroutines.flow.StateFlow
 import com.tendril.app.ui.settings.TaskSettingsSection
 import com.tendril.app.ui.settings.ThemeSection
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
 
 /**
  * §0.6.15 — the desktop's Settings: the shared Claude section, and a line about the rest. The
@@ -40,25 +42,25 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
     Column(modifier = modifier.fillMaxSize()) {
         ShellTopBar(title = { Text("Settings") })
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Text("Sync folder", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            Text("Sync folder", style = MaterialTheme.typography.heading, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
             syncSection()
             HorizontalDivider()
             AiSettingsSection(core.aiKeyStore, core.keyValueStore)
             HorizontalDivider()
             DensitySection(core.keyValueStore)
             HorizontalDivider()
-            Text("Theme", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            Text("Theme", style = MaterialTheme.typography.heading, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
             ThemeSection(core.themeSettings, showOled = false)
             HorizontalDivider()
             // 14f·2 — the Calendar's opening view (`calendar_default_view`), shared with the phone's sheet.
             CalendarOpensOnSection(core.keyValueStore)
             HorizontalDivider()
             // 14g·3 — the Tasks switches, shared with the phone's Settings; the ladder is on by default.
-            Text("Tasks & Habits", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            Text("Tasks & Habits", style = MaterialTheme.typography.heading, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
             TaskSettingsSection(core.taskSettings)
             HorizontalDivider()
             // 14e — the overlay's second door, so the chord is not the only way to learn the chords.
-            Text("Keyboard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+            Text("Keyboard", style = MaterialTheme.typography.heading, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
             androidx.compose.material3.TextButton(onClick = onShowShortcuts, modifier = Modifier.padding(start = 8.dp)) { Text("Keyboard shortcuts… (F1)") }
             HorizontalDivider()
             // B§13.6 #7 — the × rule and the global quick-add chord; the section is shared code the phone never draws.
@@ -66,7 +68,7 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             HorizontalDivider()
             Text(
                 "Backups are Android-only for now.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp),
             )
@@ -83,10 +85,10 @@ private fun DensitySection(store: KeyValueStore) {
     val stored by store.observe(DENSITY_PROFILE_KEY).collectAsState(initial = store.get(DENSITY_PROFILE_KEY))
     val current = DensityProfile.fromKey(stored)
     Column(modifier = Modifier.padding(16.dp)) {
-        Text("Density", style = MaterialTheme.typography.titleMedium)
+        Text("Density", style = MaterialTheme.typography.heading)
         Text(
             "Every measurement scales with the window's shorter side; this sets how much room a row gets on top of that.",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
         )

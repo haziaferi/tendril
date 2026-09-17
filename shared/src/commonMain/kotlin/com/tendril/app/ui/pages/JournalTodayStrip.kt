@@ -19,6 +19,9 @@ import com.tendril.app.domain.journal.JournalToday
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
+import com.tendril.app.domain.label
 
 private val hourMinute: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -33,7 +36,7 @@ fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewMo
     item(key = "journal_today_header") {
         Text(
             "Today",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
@@ -44,7 +47,7 @@ fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewMo
         item(key = "journal_today_empty") {
             Text(
                 "Nothing due today",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
@@ -66,7 +69,7 @@ fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewMo
             title = habit.title,
             detail = listOfNotNull(
                 habit.time?.format(hourMinute),
-                "Every " + habit.frequency.count + " " + habit.frequency.unit.name.lowercase() + "(s)",
+                habit.frequency.label(),
             ).joinToString(" · "),
         )
     }
@@ -83,7 +86,7 @@ private fun StripRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, title
         Column {
             Text(title, style = MaterialTheme.typography.body)
             if (!detail.isNullOrBlank()) {
-                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(detail, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

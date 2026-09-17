@@ -1,0 +1,371 @@
+{
+ "domain": "tendril-type-table",
+ "representation": "vector",
+ "dimensions": [
+  {
+   "name": "META",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "EXPLAINER",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "EMPTY_STATE",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "GREY_LABEL",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "SUBSECTION",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "SECTION_HEADING",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "SHEET_HEADER",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "CARD_TITLE",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "BODY_LINE",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "GRID_DENSE",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "NODE_LABEL",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "PREVIEW_LINE",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "ACTION_ROW",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "ICON_LABEL",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "ERROR_LINE",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  },
+  {
+   "name": "GROUP_HEADER",
+   "type": "categorical",
+   "values": [
+    "pageTitle",
+    "heading",
+    "body",
+    "label",
+    "description",
+    "caption",
+    "eyebrow"
+   ]
+  }
+ ],
+ "fitness_components": [
+  {
+   "name": "hierarchy",
+   "weight": 0.25,
+   "scorer": "type.hierarchy"
+  },
+  {
+   "name": "uniqueness",
+   "weight": 0.2,
+   "scorer": "type.uniqueness"
+  },
+  {
+   "name": "preservation",
+   "weight": 0.2,
+   "scorer": "type.preservation"
+  },
+  {
+   "name": "ground_ratio",
+   "weight": 0.15,
+   "scorer": "type.ground_ratio"
+  },
+  {
+   "name": "header_weight",
+   "weight": 0.1,
+   "scorer": "type.header_weight"
+  },
+  {
+   "name": "screen_budget",
+   "weight": 0.05,
+   "scorer": "type.screen_budget"
+  },
+  {
+   "name": "distinct_sizes",
+   "weight": 0.05,
+   "scorer": "type.distinct_sizes"
+  }
+ ],
+ "constraints": [
+  {
+   "expr": "META in ['description','caption']",
+   "description": "meta is a quiet second voice"
+  },
+  {
+   "expr": "EXPLAINER in ['description','body']",
+   "description": "an explainer is read, so it is never below 12.5"
+  },
+  {
+   "expr": "EMPTY_STATE in ['description','body']",
+   "description": "an empty state is read"
+  },
+  {
+   "expr": "GREY_LABEL in ['label','caption','description']",
+   "description": "a grey label is small"
+  },
+  {
+   "expr": "SUBSECTION in ['label','heading']",
+   "description": "a sub-label is Medium or SemiBold"
+  },
+  {
+   "expr": "SECTION_HEADING in ['heading','pageTitle']",
+   "description": "a section heading carries weight"
+  },
+  {
+   "expr": "SHEET_HEADER in ['heading','pageTitle']",
+   "description": "a sheet header carries weight"
+  },
+  {
+   "expr": "CARD_TITLE in ['heading','pageTitle','body']",
+   "description": "a card title is a title"
+  },
+  {
+   "expr": "BODY_LINE in ['body','description']",
+   "description": "a body line is body"
+  },
+  {
+   "expr": "GRID_DENSE in ['caption','label','description']",
+   "description": "grid text is dense"
+  },
+  {
+   "expr": "NODE_LABEL in ['caption','label','description','body']",
+   "description": "a node label fits its node"
+  },
+  {
+   "expr": "PREVIEW_LINE in ['description','caption','body']",
+   "description": "a preview line is read"
+  },
+  {
+   "expr": "ACTION_ROW in ['body','label']",
+   "description": "an action reads as a row"
+  },
+  {
+   "expr": "ICON_LABEL in ['caption','label']",
+   "description": "a rail label is small"
+  },
+  {
+   "expr": "ERROR_LINE in ['description','caption']",
+   "description": "an error line is supporting text"
+  },
+  {
+   "expr": "GROUP_HEADER in ['label','heading']",
+   "description": "a group header carries weight"
+  }
+ ],
+ "context": {
+  "ground_ratio": 0.857
+ },
+ "budget": {
+  "population": 24,
+  "seed": 11
+ },
+ "seeds": [
+  {
+   "name": "as-built-today",
+   "vector": {
+    "META": "description",
+    "EXPLAINER": "description",
+    "EMPTY_STATE": "description",
+    "GREY_LABEL": "label",
+    "SUBSECTION": "label",
+    "SECTION_HEADING": "heading",
+    "SHEET_HEADER": "heading",
+    "CARD_TITLE": "pageTitle",
+    "BODY_LINE": "body",
+    "GRID_DENSE": "caption",
+    "NODE_LABEL": "label",
+    "PREVIEW_LINE": "description",
+    "ACTION_ROW": "body",
+    "ICON_LABEL": "caption",
+    "ERROR_LINE": "description",
+    "GROUP_HEADER": "label"
+   }
+  },
+  {
+   "name": "type-pr-map",
+   "vector": {
+    "META": "caption",
+    "EXPLAINER": "description",
+    "EMPTY_STATE": "description",
+    "GREY_LABEL": "caption",
+    "SUBSECTION": "label",
+    "SECTION_HEADING": "heading",
+    "SHEET_HEADER": "pageTitle",
+    "CARD_TITLE": "heading",
+    "BODY_LINE": "body",
+    "GRID_DENSE": "caption",
+    "NODE_LABEL": "label",
+    "PREVIEW_LINE": "description",
+    "ACTION_ROW": "body",
+    "ICON_LABEL": "caption",
+    "ERROR_LINE": "description",
+    "GROUP_HEADER": "label"
+   }
+  }
+ ],
+ "scorer_paths": [
+  "./scorers.py"
+ ]
+}

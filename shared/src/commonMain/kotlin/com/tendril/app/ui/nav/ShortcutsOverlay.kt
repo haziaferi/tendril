@@ -39,6 +39,7 @@ import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.eyebrow
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.caption
 
 /**
  * 14e — the shortcut list, **generated from [SHORTCUTS]** so what is listed is what is bound
@@ -95,26 +96,35 @@ fun ShortcutsOverlay(onDismiss: () -> Unit, quickAddChordLabel: String = QuickAd
 class ShortcutRow(val label: String, val keys: List<String>)
 
 /**
- * The card's content, from the table: the five tab chords collapse to one row, Back and
- * Forward to one; then the static rows. Public so a test can hold the card to the table.
+ * The card's content, **generated from the table** — every bound action appears once, in its
+ * group, in the table's order; the five tab chords fold into one row and Back/Forward into one;
+ * then the static rows a chord does not own. The audit's fixes (2026-09-17, F2): the rows were
+ * hand-written and the shelf's Ctrl+Shift+\ never made the card; `ShortcutsTest` now holds the
+ * card to the table so an action cannot be bound and unlisted again.
  */
 fun shortcutRows(quickAddChordLabel: String = QuickAddChord.DEFAULT.label): List<Pair<ShortcutGroup, List<ShortcutRow>>> {
     val byAction = SHORTCUTS.toMap()
     fun chord(a: ShortcutAction) = byAction.getValue(a).label()
-    val navigate = buildList {
-        add(ShortcutRow("Pages · Calendar · Tasks · Road Map · Settings", listOf("Ctrl+1 … 5")))
-        add(ShortcutRow("Back · forward · the mouse's side buttons", listOf(chord(ShortcutAction.BACK), chord(ShortcutAction.FORWARD))))
-        add(ShortcutRow(ShortcutAction.TOGGLE_TREE.label, listOf(chord(ShortcutAction.TOGGLE_TREE))))
-        add(ShortcutRow("Back · close", listOf("Esc")))
-        // B§13.6 #6 — a pop-out window's own key; the table above is the main window's.
-        add(ShortcutRow("Close a pop-out window", listOf("Ctrl+W")))
+    val tabs = ShortcutAction.entries.filter { it.tab() != null }
+    val folded = tabs.toSet() + setOf(ShortcutAction.BACK, ShortcutAction.FORWARD)
+    fun rowsOf(group: ShortcutGroup): List<ShortcutRow> = buildList {
+        if (group == ShortcutGroup.NAVIGATE) {
+            add(ShortcutRow("Pages · Calendar · Tasks · Road Map · Settings", listOf("Ctrl+1 … 5")))
+            add(ShortcutRow("Back · forward · the mouse's side buttons", listOf(chord(ShortcutAction.BACK), chord(ShortcutAction.FORWARD))))
+        }
+        SHORTCUTS.map { it.first }.filter { it.group == group && it !in folded }.forEach { add(ShortcutRow(it.label, listOf(chord(it)))) }
     }
-    val create = listOf(ShortcutAction.NEW_PAGE, ShortcutAction.NEW_TASK, ShortcutAction.JOURNAL_TODAY).map { ShortcutRow(it.label, listOf(chord(it))) } +
+    val navigate = rowsOf(ShortcutGroup.NAVIGATE) + listOf(
+        ShortcutRow("Back · close", listOf("Esc")),
+        // B§13.6 #6 — a pop-out window's own key; the table above is the main window's.
+        ShortcutRow("Close a pop-out window", listOf("Ctrl+W")),
+    )
+    val create = rowsOf(ShortcutGroup.CREATE) +
         // B§13.6 #7 — the global chord is the OS's, registered by the desktop, chosen in Settings;
         // not in the table above because the window never sees it.
         ShortcutRow("Quick add from anywhere — set in Settings", listOf(quickAddChordLabel))
-    val find = listOf(ShortcutAction.SWITCHER, ShortcutAction.FIND_IN_PAGE, ShortcutAction.SHORTCUTS).map { ShortcutRow(it.label, listOf(chord(it))) }
-    val lists = listOf(
+    val find = rowsOf(ShortcutGroup.FIND)
+    val lists = rowsOf(ShortcutGroup.LISTS) + listOf(
         ShortcutRow("Move · open", listOf("↑", "↓", "↵")),
         ShortcutRow("Expand · collapse in the tree", listOf("→", "←")),
         ShortcutRow("Jump to a row by its first letters", listOf("type")),
@@ -145,7 +155,7 @@ private fun KeyChip(text: String) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(text, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface)
+            Text(text, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

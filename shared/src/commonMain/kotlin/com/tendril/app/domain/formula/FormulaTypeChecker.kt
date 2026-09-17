@@ -1,5 +1,7 @@
 package com.tendril.app.domain.formula
 
+import com.tendril.app.domain.plural
+
 /** One type or reference problem, at the exact character [position] the parser or checker saw
  * it — never a list a person has to reconcile against a still-broken expression on their own, in
  * the sense that each [FormulaError] stands alone and points somewhere specific. */
@@ -171,7 +173,7 @@ private fun checkCall(
 
     fun requireArity(min: Int, max: Int = min) {
         if (ast.args.size < min || ast.args.size > max) {
-            val expected = if (min == max) "$min argument(s)" else "$min to $max arguments"
+            val expected = if (min == max) plural(min, "argument") else "$min to $max arguments"
             errors += FormulaError("${ast.functionName}(...) needs $expected, got ${ast.args.size}", ast.position)
         }
     }

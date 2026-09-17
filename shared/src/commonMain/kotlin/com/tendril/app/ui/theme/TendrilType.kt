@@ -41,6 +41,9 @@ val Typography.editorH3: TextStyle get() = bodyLarge.copy(fontWeight = titleLarg
 val Typography.editorQuote: TextStyle get() = bodyLarge.copy(fontStyle = FontStyle.Italic)
 val Typography.editorCode: TextStyle get() = bodyMedium.copy(fontFamily = FontFamily.Monospace)
 
-/** Tabular figures, so a clock does not jitter as its digits change; at [body]'s size unless the site sizes it to [caption]. */
-val Typography.clock: TextStyle get() = bodyMedium.copy(fontFeatureSettings = "tnum")
-val Typography.clockSmall: TextStyle get() = labelMedium.copy(fontFeatureSettings = "tnum", fontWeight = labelLarge.fontWeight)
+/** Tabular figures, so a count or a clock does not jitter as its digits change — the one derivation
+ * a site may make of a style (`desktop-design-layer.md` #3: three hand-made copies were an eighth style). */
+fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")
+/** The timer's figures at [body]'s size; [clockSmall] at [caption]'s (the rail's foot). */
+val Typography.clock: TextStyle get() = body.tabular()
+val Typography.clockSmall: TextStyle get() = caption.tabular()

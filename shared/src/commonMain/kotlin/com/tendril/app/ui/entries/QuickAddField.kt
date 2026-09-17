@@ -26,6 +26,8 @@ import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.calendar_quick_add_hint
 import org.jetbrains.compose.resources.stringResource
 import java.time.LocalDate
+import com.tendril.app.ui.theme.body
+import androidx.compose.material3.MaterialTheme
 
 /**
  * B§13.6 #7 — the quick-add line and its chip preview, one composable for its two homes: the
@@ -61,6 +63,7 @@ fun QuickAddField(
     Column(modifier = modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = text,
                 onValueChange = { text = it; ignored = emptySet(); kindOverride = null; onTextChanged?.invoke(it) },
                 modifier = fieldModifier.weight(1f).focusRequester(focus),

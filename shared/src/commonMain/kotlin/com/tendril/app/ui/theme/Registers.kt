@@ -102,15 +102,16 @@ fun paletteFor(register: Register, dark: Boolean, oled: Boolean = false): Tendri
 
     val text = solveText(seed, bg)
     val surface2 = mix(text, bg, if (dark) 0.06 else 0.04)
-    val grounds = listOf(bg, surface2)
-    val dim = solveTo(text, bg, Floors.DIM, grounds)
-    val faint = solveTo(text, bg, Floors.FAINT, grounds)
-
     val accent = solveHue(hue, bg, if (dark) Floors.ACCENT_DARK else Floors.ACCENT_LIGHT, lighten = dark)
     val strong = mix(accent, text, 0.80)
     val onAccent = listOf(if (dark) bg else Srgb.WHITE, if (dark) Srgb.WHITE else bg, text)
         .firstOrNull { contrast(it, accent) >= Floors.ON_ACCENT } ?: text
     val soft = mix(accent, bg, if (dark) 0.22 else 0.12)
+    // The audit's fixes (2026-09-17, `desktop-design-layer.md` #2): dim and faint are solved on the
+    // selection's tint as well — a selected row's meta measured 3.45–4.17:1 on `accentSoft`.
+    val grounds = listOf(bg, surface2, soft)
+    val dim = solveTo(text, bg, Floors.DIM, grounds)
+    val faint = solveTo(text, bg, Floors.FAINT, grounds)
     val softStart = mix(accent, text, if (dark) 0.70 else 0.85)
     val softText = if (contrast(softStart, soft) >= Floors.SOFT_TEXT) softStart else solveTo(text, softStart, Floors.SOFT_TEXT, listOf(soft))
     val border = mix(text, bg, if (dark) 0.14 else 0.11)

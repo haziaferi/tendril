@@ -161,6 +161,7 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
+                        textStyle = MaterialTheme.typography.body,
                         value = customCount,
                         onValueChange = { if (it.all(Char::isDigit)) customCount = it },
                         modifier = Modifier.width(96.dp),

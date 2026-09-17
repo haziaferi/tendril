@@ -221,7 +221,7 @@ private fun TrayChip(
         if (showUrgency) UrgencyStripe(urgencyOf(entry, today), height = 20.dp)
         Text(entry.title, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (height > 36.dp) Modifier else Modifier.weight(1f))
         if (dueLabel != null) {
-            Text(dueLabel, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(dueLabel, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }
@@ -240,7 +240,7 @@ fun DragGhost(title: String, target: String?, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(title, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-        if (target != null) Text(target, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        if (target != null) Text(target, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 

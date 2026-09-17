@@ -25,6 +25,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import com.tendril.app.ui.theme.label
 
 /**
  * §0.8 step 5 — what the line was read as, under the field, before anything is written. One chip
@@ -67,7 +68,7 @@ private fun PreviewChip(label: String, onDrop: (() -> Unit)?) {
         selected = false,
         onClick = { onDrop?.invoke() },
         enabled = onDrop != null,
-        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+        label = { Text(label, style = MaterialTheme.typography.label) },
         trailingIcon = if (onDrop != null) {
             { Icon(Icons.Filled.Close, contentDescription = "Not that", modifier = Modifier.size(14.dp)) }
         } else null,

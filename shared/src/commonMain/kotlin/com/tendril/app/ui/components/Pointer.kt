@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -61,7 +60,7 @@ fun PointerMenu(
 ) {
     val anchor = at?.let { IntOffset(it.x.roundToInt(), it.y.roundToInt()) } ?: fallback
     Box(modifier = Modifier.offset { anchor }.size(1.dp)) {
-        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, content = items)
+        TendrilMenu(expanded = expanded, onDismissRequest = onDismiss, content = items)
     }
 }
 

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.tendril.app.ui.theme.description
 
 /**
  * §3.1.1 / P2 — decode an encoded image (PNG, JPEG, …) into something Compose can draw.
@@ -115,7 +116,7 @@ fun BlockImage(
         ) {
             Text(
                 if (path == null) "No image" else "Image not available on this device yet",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
             )

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
 
 /** 14g·3 — the urgency ladder is drawn unless this is off (decided 2026-09-16: on by default). */
 const val SHOW_URGENCY_KEY = "show_urgency"
@@ -80,7 +81,7 @@ private fun SwitchRow(label: String, caption: String?, checked: Boolean, onChang
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.body)
-            if (caption != null) Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (caption != null) Text(caption, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = onChange)

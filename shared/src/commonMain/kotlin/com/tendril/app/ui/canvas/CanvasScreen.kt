@@ -37,8 +37,6 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,6 +80,11 @@ import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.pages.LocalViewOnly
 import kotlin.math.roundToInt
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.pageTitle
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
 
 private const val NODE_W = 180f
 private const val NODE_H = 90f
@@ -139,7 +142,7 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                         onValueChange = { titleField = it; viewModel.updateTitle(it) },
                         readOnly = viewOnly,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.heading else MaterialTheme.typography.pageTitle).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )
                 },
@@ -151,7 +154,7 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                         paneChrome.actions(this)
                         Box {
                             IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
-                            DropdownMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) { showPaneMenu = false } }
+                            TendrilMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) { showPaneMenu = false } }
                         }
                     }
                 },
@@ -164,13 +167,13 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
             if (!viewOnly) {
                 Box {
                     FloatingActionButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "Add card") }
-                    DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                        DropdownMenuItem(text = { Text("Text card") }, onClick = {
+                    TendrilMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
+                        TendrilMenuItem(text = { Text("Text card") }, onClick = {
                             showAddMenu = false
                             val center = screenToContent(Offset(200f, 200f))
                             viewModel.addTextNode(center.x, center.y)
                         })
-                        DropdownMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
+                        TendrilMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
                     }
                 }
             }
@@ -515,7 +518,7 @@ private fun CanvasNodeCard(
                 when (node.type) {
                     CanvasNodeType.TEXT -> Text(
                         node.text.orEmpty().ifBlank { "Empty card — tap to edit" },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.description,
                         maxLines = 3,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -524,7 +527,7 @@ private fun CanvasNodeCard(
                         Spacer(Modifier.height(4.dp))
                         Text(
                             embeddedPage?.title ?: "…",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.body,
                             maxLines = 2,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
@@ -543,8 +546,8 @@ private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () ->
             // §3.1.2 — a reader, not an editor, while the lock is on: the field goes read-only
             // (so the full text of a card the board truncates at three lines is still legible)
             // and Save goes away, leaving one button that closes the sheet.
-            Text(if (viewOnly) "Card" else "Edit card", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
-            OutlinedTextField(value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            Text(if (viewOnly) "Card" else "Edit card", style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp))
+            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss) { Text(if (viewOnly) "Done" else "Cancel") }
@@ -566,6 +569,7 @@ private fun EdgeEditor(edge: CanvasEdge, viewOnly: Boolean, onDismiss: () -> Uni
             // line, never the text), so the field stays and turns read-only. "Change" and
             // "Delete arrow" both write, so both go.
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = label,
                 onValueChange = { label = it; onSetLabel(it) },
                 readOnly = viewOnly,
@@ -576,7 +580,7 @@ private fun EdgeEditor(edge: CanvasEdge, viewOnly: Boolean, onDismiss: () -> Uni
             )
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Direction: ${edge.direction.name.lowercase().replace('_', ' ')}", modifier = Modifier.weight(1f))
+                Text("Direction: ${edge.direction.name.lowercase().replace('_', ' ')}", style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
                 if (!viewOnly) TextButton(onClick = onCycleDirection) { Text("Change") }
             }
             Spacer(Modifier.height(12.dp))
@@ -603,10 +607,11 @@ private fun CanvasPagePickerSheet(viewModel: CanvasViewModel, onDismiss: () -> U
     TendrilSheet(onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Add a page card", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("Add a page card", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.clearPageSearch(); onDismiss() }) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = query,
                 onValueChange = { query = it; viewModel.searchPages(it) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),

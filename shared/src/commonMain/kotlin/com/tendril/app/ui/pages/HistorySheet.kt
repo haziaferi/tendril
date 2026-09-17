@@ -42,6 +42,10 @@ import kotlinx.serialization.json.Json
 import com.tendril.app.domain.time.relativeTime
 import java.time.Instant
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.pageTitle
+import com.tendril.app.domain.plural
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -62,7 +66,7 @@ internal fun HistorySheet(viewModel: PageDetailViewModel, contentLocked: Boolean
                 if (shown != null) {
                     IconButton(onClick = { open = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to the list") }
                 }
-                Text(if (shown == null) "History" else describe(shown), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(if (shown == null) "History" else describe(shown), style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 if (shown != null && !contentLocked) {
                     Button(onClick = { confirm = true }) { Text("Restore") }
                     Spacer(Modifier.width(4.dp))
@@ -82,8 +86,8 @@ internal fun HistorySheet(viewModel: PageDetailViewModel, contentLocked: Boolean
                             Column(modifier = Modifier.fillMaxWidth().clickable { open = revision }.padding(vertical = 10.dp)) {
                                 Text(describe(revision), style = MaterialTheme.typography.body)
                                 Text(
-                                    revision.title.ifBlank { "Untitled" } + " · " + revision.blockCount + " block(s)",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    revision.title.ifBlank { "Untitled" } + " · " + plural(revision.blockCount, "block"),
+                                    style = MaterialTheme.typography.description,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
@@ -116,11 +120,11 @@ private fun RevisionPreview(revision: PageRevision) {
     }
     val depthOf = remember(blocks) { depths(blocks) }
     LazyColumn {
-        item { Text(revision.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 8.dp)) }
+        item { Text(revision.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.pageTitle, modifier = Modifier.padding(vertical = 8.dp)) }
         items(blocks, key = { it.uid }) { block ->
             Text(
                 block.content.ifBlank { "·" },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.body,
                 modifier = Modifier.padding(start = (16 * (depthOf[block.uid] ?: 0)).dp, top = 4.dp, bottom = 4.dp),
             )
         }

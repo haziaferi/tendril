@@ -38,6 +38,9 @@ import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * §0.6.3 / B§9.6 — a Canvas page *in* a page, as a block. Inert, it is a card drawing the board's
@@ -81,14 +84,14 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
         if (missing) {
             Text(
                 "This canvas is not on this device",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.Center),
             )
         } else if (nodes.isEmpty()) {
             Text(
                 "Empty canvas · " + openVerb(),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -97,7 +100,7 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
         }
         Text(
             title + " · " + openVerb(),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
         )
@@ -152,14 +155,14 @@ internal fun CanvasPickerSheet(
         Column {
             Text(
                 "Shows a canvas here, inert until tapped. It stays a page of its own, so it can be opened from the Pages hub and shown in more than one place.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
-            OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, label = { Text("New canvas") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = newTitle, onValueChange = { newTitle = it }, label = { Text("New canvas") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = { onCreate(newTitle) }) { Text("Create and insert") }
             if (canvases.isNotEmpty()) {
-                Text("Or an existing one", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Text("Or an existing one", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 8.dp))
                 canvases.forEach { c ->
                     TextButton(onClick = { onPickExisting(c.id) }, modifier = Modifier.fillMaxWidth()) { Text(c.title.ifBlank { "Untitled" }) }
                 }
