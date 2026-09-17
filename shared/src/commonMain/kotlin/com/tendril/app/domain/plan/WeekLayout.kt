@@ -13,5 +13,4 @@ fun laneAt(xPx: Float, gutterPx: Float, laneWidthPx: Float, lanes: Int = 7): Int
 fun openScrollMinute(blocks: List<TimelineBlock>, morning: Int = 7 * 60): Int =
     (blocks.minOfOrNull { it.startMinute }?.let { it - 60 } ?: morning).coerceAtLeast(0)
 
-fun <T> visibleAllDay(items: List<T>, cap: Int = 3): Pair<List<T>, Int> =
-    if (items.size <= cap) items to 0 else items.take(cap - 1) to (items.size - (cap - 1))
+fun <T> visibleAllDay(items: List<T>, cap: Int = 3): Pair<List<T>, Int> = visibleInCell(items, cap)

@@ -43,6 +43,10 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.heightIn
 import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.calendar.OccurrenceChip
+import com.tendril.app.ui.calendar.MonthItem
+import com.tendril.app.ui.calendar.MonthGrid
 import com.tendril.app.domain.time.rowsLabel
 import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.PaneChrome
@@ -596,6 +600,47 @@ private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewMode
     val grouped = rows.groupBy { viewModel.valueForCell(it, datePropertyId) }
     val sortedDates = grouped.keys.filterNotNull().sorted()
     val hasUndated = grouped.containsKey(null)
+
+    // L4 (2026-09-17) - under a pointer the view is the Month grid (Notion's database calendar is
+    // this grid): rows whose Date parses as chips in the database's tint, a drag writes the cell
+    // through setDateCell (a bound When moves the task too), no ground click (a row needs a
+    // title - the Table's + New is the way), the undated rows listed under the grid as the
+    // Timeline lists them. The phone keeps the grouped list below.
+    if (LocalDensityProfile.current.pointer) {
+        val today = LocalDate.now()
+        val dated = remember(rows, datePropertyId) {
+            rows.mapNotNull { row -> viewModel.valueForCell(row, datePropertyId)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { row to it } }
+        }
+        var month by remember(view?.id) { mutableStateOf(java.time.YearMonth.from(dated.map { it.second }.filter { !it.isBefore(today) }.minOrNull() ?: today)) }
+        val tint = LocalTendrilPalette.current.thirdSoft
+        val itemsByDay = remember(dated, tint) {
+            dated.groupBy({ it.second }, { (row, _) -> MonthItem(key = "r_${row.page.id}", title = row.page.title, time = null, tint = tint, stripe = null, draggable = true, payload = row) })
+        }
+        Column(modifier = Modifier.fillMaxSize()) {
+            MonthGrid(
+                month = month,
+                itemsByDay = itemsByDay,
+                today = today,
+                onItemClick = { onOpenPage((it.payload as TableRow).page.id) },
+                onItemMove = { item, day -> viewModel.setDateCell(item.payload as TableRow, datePropertyId, day) },
+                onDayClick = { },
+                onGroundClick = null,
+                onMonthShift = { month = month.plusMonths(it.toLong()) },
+                modifier = Modifier.weight(1f),
+            )
+            val undated = grouped[null].orEmpty()
+            if (undated.isNotEmpty()) {
+                HorizontalDivider()
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("No date · ${undated.size}", style = MaterialTheme.typography.label)
+                    undated.forEach { row ->
+                        OccurrenceChip(title = row.page.title, tint = tint, stripe = null, onClick = { onOpenPage(row.page.id) }, modifier = Modifier.width(160.dp))
+                    }
+                }
+            }
+        }
+        return
+    }
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         sortedDates.forEach { date ->

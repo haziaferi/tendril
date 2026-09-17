@@ -83,6 +83,15 @@ import com.tendril.app.domain.plan.unplannedTasks
 import com.tendril.app.domain.plan.timelineBlocks
 import com.tendril.app.domain.plan.TimelineExtra
 import com.tendril.app.domain.plan.BlockKind
+import com.tendril.app.domain.plan.DotKind
+import com.tendril.app.domain.plan.monthDots
+import com.tendril.app.domain.plan.monthGridDays
+import com.tendril.app.domain.plan.monthRange
+import com.tendril.app.domain.plan.dayLabel
+import com.tendril.app.ui.theme.eyebrow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.graphics.Color
 import com.tendril.app.generated.resources.calendar_view_agenda
 import java.time.LocalTime
 import com.tendril.app.data.habit.Habit
@@ -399,7 +408,7 @@ fun CalendarScreen(
             val range = when (view) {
                 CalendarView.DAY -> selectedDate to selectedDate
                 CalendarView.WEEK -> weekStart to weekStart.plusDays(6)
-                CalendarView.MONTH -> gridMonth.atDay(1) to gridMonth.atEndOfMonth()
+                CalendarView.MONTH -> monthRange(gridMonth)   // L4 — the grid's 35 or 42 days, so adjacent-month cells carry their items
                 CalendarView.AGENDA -> agendaFrom to agendaTo
             }
             val occurrences = remember(entries, view, selectedDate) {
@@ -491,7 +500,56 @@ fun CalendarScreen(
                         else viewModel.move(entry, occurrence.startDate, toDate, MoveScope.ALL)
                     },
                 )
-                CalendarView.MONTH -> MonthGridView(
+                CalendarView.MONTH -> if (wide) {
+                    // L4 — titled cells on a wide window: occurrences and extras as the Week's chips; a
+                    // chip drags to another cell through the strip's write (the series prompt included),
+                    // an extra never lifts; the empty ground seeds the quick-add strip with the day.
+                    val palette = LocalTendrilPalette.current
+                    val taskTint = layerTint(BlockKind.TASK)
+                    val eventTint = layerTint(BlockKind.EVENT)
+                    val itemsByDay = remember(occurrences, extras, showUrgency, today, palette) {
+                        val out = mutableMapOf<LocalDate, MutableList<MonthItem>>()
+                        occurrences.forEach { o ->
+                            val stripe = if (showUrgency && o.entry.kind == EntryKind.TASK) palette.urgencyColour(com.tendril.app.domain.urgency.urgencyOf(o.entry, today).level) else null
+                            out.getOrPut(o.date) { mutableListOf() } += MonthItem(
+                                key = "o_${o.entry.id}_${o.date}", title = o.entry.title, time = o.startTime?.takeIf { o.date == o.startDate },
+                                tint = if (o.entry.kind == EntryKind.TASK) taskTint else eventTint, stripe = stripe, draggable = true, payload = o,
+                            )
+                        }
+                        extras.forEach { x ->
+                            out.getOrPut(x.date) { mutableListOf() } += when (x) {
+                                is CalendarExtra.HabitAt -> MonthItem("h_${x.habit.id}_${x.date}", x.title, x.habit.time, palette.habitSoft, null, false, x)
+                                is CalendarExtra.RowDate -> MonthItem("d_${x.cell.pageId}_${x.date}", x.title, null, palette.thirdSoft, null, false, x)
+                            }
+                        }
+                        out.values.forEach { list -> list.sortWith(compareBy({ it.time == null }, { it.time }, { it.title })) }
+                        out
+                    }
+                    MonthGrid(
+                        month = gridMonth,
+                        itemsByDay = itemsByDay,
+                        today = today,
+                        onItemClick = { item ->
+                            when (val x = item.payload) {
+                                is EntryOccurrence -> editTarget = x.entry
+                                is CalendarExtra.RowDate -> onOpenPage(x.cell.pageId)
+                                is CalendarExtra.HabitAt -> { selectedDate = x.date; view = CalendarView.DAY }
+                            }
+                        },
+                        onItemMove = { item, toDate ->
+                            (item.payload as? EntryOccurrence)?.let { occurrence ->
+                                val entry = occurrence.entry
+                                if (entry.recurrenceRule != null && entry.originalEntryId == null) pendingMove = PendingMove(occurrence, toDate)
+                                else viewModel.move(entry, occurrence.startDate, toDate, MoveScope.ALL)
+                            }
+                        },
+                        onDayClick = { selectedDate = it; view = CalendarView.DAY },
+                        onGroundClick = { selectedDate = it; quickAddOpen = true },
+                        onMonthShift = { selectedDate = selectedDate.plusMonths(it.toLong()) },
+                        onCellBounds = { day, rect -> dayCells[day] = rect },
+                        highlightDay = trayCellTarget,
+                    )
+                } else MonthGridView(
                     month = gridMonth,
                     occurrences = occurrences,
                     extras = extras,
@@ -900,34 +958,51 @@ private fun MonthGridView(
             IconButton(onClick = { onMonthShift(1) }) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next month") }
         }
 
-        val firstOfMonth = month.atDay(1)
-        val leadingBlanks = (firstOfMonth.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7
-        val totalDays = month.lengthOfMonth()
-        val cells: List<LocalDate?> = List(leadingBlanks) { null } + (1..totalDays).map { month.atDay(it) }
-
+        // L4 (2026-09-17) — the phone's form: the grid's days (adjacent-month ones dim), a weekday
+        // header, and under each number one dot per layer present that day (at most three, by
+        // precedence — `monthDots`), in the layer's hue; the accent stays today's.
+        val cells = remember(month) { monthGridDays(month) }
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            (0..6).forEach { i ->
+                Text(
+                    DayOfWeek.MONDAY.plus(i.toLong()).getDisplayName(TextStyle.NARROW, Locale.getDefault()).uppercase(Locale.getDefault()),
+                    style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f),
+                )
+            }
+        }
         LazyVerticalGrid(columns = GridCells.Fixed(7), modifier = Modifier.fillMaxSize().padding(8.dp)) {
             items(cells) { day ->
-                if (day == null) {
-                    Box(modifier = Modifier.size(40.dp))
-                } else {
-                    val count = occurrences.count { it.date == day } + extras.count { it.date == day }
-                    Column(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .then(if (highlightDay == day) Modifier.background(MaterialTheme.colorScheme.primaryContainer).border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small) else Modifier)
-                            .onGloballyPositioned { onCellBounds(day, it.boundsInRoot()) }
-                            .clickable { onSelectDate(day) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            "${day.dayOfMonth}",
-                            style = if (day == LocalDate.now()) MaterialTheme.typography.heading else MaterialTheme.typography.body,
-                        )
-                        if (count > 0) {
-                            // One dot for "something is on this day" until the dots PR draws one per layer — dim, not the accent.
-                            Text("•", style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                val outOfMonth = YearMonth.from(day) != month
+                val kinds = remember(occurrences, extras, day) {
+                    monthDots(
+                        occurrences.filter { it.date == day }.map { if (it.entry.kind == EntryKind.TASK) DotKind.TASK else DotKind.EVENT } +
+                            extras.filter { it.date == day }.map { if (it is CalendarExtra.HabitAt) DotKind.HABIT else DotKind.DATABASE }
+                    )
+                }
+                val isToday = day == LocalDate.now()
+                Column(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .then(if (highlightDay == day) Modifier.background(MaterialTheme.colorScheme.primaryContainer).border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small) else Modifier)
+                        .onGloballyPositioned { onCellBounds(day, it.boundsInRoot()) }
+                        .clickable { onSelectDate(day) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "${day.dayOfMonth}",
+                        style = MaterialTheme.typography.body,
+                        color = when {
+                            isToday -> MaterialTheme.colorScheme.onPrimary
+                            outOfMonth -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> Color.Unspecified
+                        },
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.size(24.dp).then(if (isToday) Modifier.background(MaterialTheme.colorScheme.primary, CircleShape) else Modifier).wrapContentSize(Alignment.Center),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.padding(top = 2.dp)) {
+                        kinds.forEach { kind -> Box(modifier = Modifier.size(5.dp).background(dotColour(kind), CircleShape)) }
                     }
                 }
             }

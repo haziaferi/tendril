@@ -81,3 +81,16 @@ FilterChip(selected = true, onClick = {}, label = { Text("Compact") })'''
     got = sites(src)
     v = ts.violations(got, {"TITLE": "body", "META": "caption", "SLOT_CHIP": "label"})
     assert len(v) == 1 and "META takes caption" in v[0]
+
+
+def test_a_grid_weekday_header_is_an_eyebrow_and_a_chip_is_dense():
+    src = """@Composable
+fun MonthGrid() {
+    Text(dow.getDisplayName(TextStyle.SHORT, Locale.getDefault()), style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+@Composable
+fun OccurrenceChip() {
+    Text(title, style = MaterialTheme.typography.caption, maxLines = 1)
+}"""
+    a, b = sites(src)
+    assert a.cls == "EYEBROW" and b.cls == "GRID_DENSE"
