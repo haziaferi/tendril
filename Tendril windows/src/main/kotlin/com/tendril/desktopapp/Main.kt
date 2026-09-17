@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,6 +71,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tendril.app.ui.nav.PopOutRegistry
 import com.tendril.app.ui.nav.WorkbenchNavState
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.ui.switcher.SwitcherState
 import com.tendril.app.ui.pages.PagesTreeState
@@ -449,14 +449,13 @@ internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Desk
             }
         }) { Text("Choose folder…") }
 
-        OutlinedTextField(
+        // This is the key to every snapshot in the folder, typed in whatever room the desktop
+        // happens to be in; the desktop's 36 dp field (L6). Android's two passphrase fields
+        // also offer a reveal toggle; this one doesn't yet.
+        TendrilField(
             value = passphrase,
             onValueChange = { passphrase = it },
-            label = { Text("Passphrase (optional)") },
-            singleLine = true,
-            // This is the key to every snapshot in the folder, typed in whatever room the
-            // desktop happens to be in. Android's two passphrase fields also offer a reveal
-            // toggle; this one doesn't yet.
+            placeholder = "Passphrase (optional)",
             visualTransformation = PASSPHRASE_MASK,
             modifier = Modifier.width(220.dp).padding(horizontal = 8.dp),
         )

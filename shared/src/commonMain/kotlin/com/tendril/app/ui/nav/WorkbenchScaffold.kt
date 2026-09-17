@@ -247,14 +247,17 @@ private fun switcherCommands(core: WorkbenchCore, navState: WorkbenchNavState): 
     val scope = rememberCoroutineScope()
     return remember(tasks) {
         buildList {
-            add(SwitcherCommand("New page", "create blank") { pagesViewModel.createBlankPage("") { navState.openPage(it) } })
+            add(SwitcherCommand("New page", "create blank", chord = chordLabelOf(ShortcutAction.NEW_PAGE)) { pagesViewModel.createBlankPage("") { navState.openPage(it) } })
             add(SwitcherCommand("New database", "create table") { pagesViewModel.createDatabase("", asToDoDatabase = false) { navState.openPage(it) } })
             add(SwitcherCommand("New to-do database", "create tasks") { pagesViewModel.createDatabase("", asToDoDatabase = true) { navState.openPage(it) } })
             add(SwitcherCommand("New canvas", "create board") { pagesViewModel.createCanvas("") { navState.openPage(it) } })
-            add(SwitcherCommand("Journal today", "daily note") { pagesViewModel.openJournal(LocalDate.now()) { navState.openPage(it) } })
+            add(SwitcherCommand("Journal today", "daily note", chord = chordLabelOf(ShortcutAction.JOURNAL_TODAY)) { pagesViewModel.openJournal(LocalDate.now()) { navState.openPage(it) } })
             add(SwitcherCommand("Review", "weekly walk") { navState.openReview() })
             for (destination in WorkbenchDestination.entries) {
-                add(SwitcherCommand("Go to " + destination.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, "tab") { navState.switchTab(destination) })
+                // The tab's name and chord as the F1 card prints them (L6: "Tasks", "Road Map" — not the enum's spelling).
+                val action = ShortcutAction.entries.firstOrNull { it.tab() == destination }
+                val name = action?.label ?: destination.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+                add(SwitcherCommand("Go to $name", "tab", chord = action?.let(::chordLabelOf)) { navState.switchTab(destination) })
             }
             for (task in tasks.filter { it.status == EntryStatus.PENDING && it.deletedAt == null }) {
                 add(SwitcherCommand("Start timer: " + task.title, "track time") { scope.launch { core.timeTracker.start(TrackTarget.Entry(task.id)) } })

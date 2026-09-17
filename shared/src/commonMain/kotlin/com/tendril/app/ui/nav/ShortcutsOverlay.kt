@@ -2,91 +2,58 @@
 
 package com.tendril.app.ui.nav
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import com.tendril.app.ui.components.CentredCard
+import com.tendril.app.ui.components.KeyChip
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.eyebrow
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.label
-import com.tendril.app.ui.theme.caption
 
 /**
  * 14e — the shortcut list, **generated from [SHORTCUTS]** so what is listed is what is bound
  * (`docs/critiques/keyboard-desktop.md` #2), plus the static rows for the list keys and Esc. A
  * centred card over a scrim — a reference, not a task, so not a slide-over (14b frames tasks);
- * the mock's `help()` geometry: 560 dp at most, two columns of rows from 700 dp of width, one
- * below. Key chips are `onSurface` on `surfaceVariant` at 12 sp — the mock's measured 3.08:1
+ * the frame is [CentredCard] (L6 shares it with the switcher): 560 dp at most, two columns of
+ * rows from 700 dp of width, one below. Key chips are `onSurface` on `surfaceVariant` at 12 sp — the mock's measured 3.08:1
  * (#1) is the one thing this card must not repeat. Esc, the scrim and × close it.
  */
 @Composable
 fun ShortcutsOverlay(onDismiss: () -> Unit, quickAddChordLabel: String = QuickAddChord.DEFAULT.label) {
-    Popup(properties = PopupProperties(focusable = true), onDismissRequest = onDismiss) {
-        BackHandler(enabled = true, onBack = onDismiss)
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.32f))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-            contentAlignment = Alignment.Center,
-        ) {
-            val twoColumns = maxWidth >= 700.dp
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 16.dp,
-                modifier = Modifier
-                    .padding(24.dp)
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {}),
-            ) {
-                Column(modifier = Modifier.padding(start = 26.dp, end = 14.dp, top = 14.dp, bottom = 22.dp).verticalScroll(rememberScrollState())) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Keyboard shortcuts", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
-                        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
-                    }
-                    val groups = shortcutRows(quickAddChordLabel)
-                    if (twoColumns) {
-                        val half = (groups.size + 1) / 2
-                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(end = 12.dp)) {
-                            Column(modifier = Modifier.weight(1f)) { groups.take(half).forEach { GroupBlock(it) } }
-                            Column(modifier = Modifier.weight(1f)) { groups.drop(half).forEach { GroupBlock(it) } }
-                        }
-                    } else {
-                        Column(modifier = Modifier.padding(end = 12.dp)) { groups.forEach { GroupBlock(it) } }
-                    }
+    CentredCard(onDismiss = onDismiss, top = null) { windowWidth ->
+        val twoColumns = windowWidth >= 700.dp
+        Column(modifier = Modifier.padding(start = 26.dp, end = 14.dp, top = 14.dp, bottom = 22.dp).verticalScroll(rememberScrollState())) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Keyboard shortcuts", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
+                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
+            }
+            val groups = shortcutRows(quickAddChordLabel)
+            if (twoColumns) {
+                val half = (groups.size + 1) / 2
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(end = 12.dp)) {
+                    Column(modifier = Modifier.weight(1f)) { groups.take(half).forEach { GroupBlock(it) } }
+                    Column(modifier = Modifier.weight(1f)) { groups.drop(half).forEach { GroupBlock(it) } }
                 }
+            } else {
+                Column(modifier = Modifier.padding(end = 12.dp)) { groups.forEach { GroupBlock(it) } }
             }
         }
     }
@@ -143,19 +110,6 @@ private fun GroupBlock(group: Pair<ShortcutGroup, List<ShortcutRow>>) {
                 Spacer(Modifier.width(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { row.keys.forEach { KeyChip(it) } }
             }
-        }
-    }
-}
-
-@Composable
-private fun KeyChip(text: String) {
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-    ) {
-        Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(text, style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

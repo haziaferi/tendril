@@ -85,6 +85,9 @@ val SHORTCUTS: List<Pair<ShortcutAction, Chord>> = listOf(
 fun shortcutFor(key: Key, ctrl: Boolean, shift: Boolean, alt: Boolean = false): ShortcutAction? =
     SHORTCUTS.firstOrNull { (_, chord) -> chord.key == key && chord.ctrl == ctrl && chord.shift == shift && chord.alt == alt }?.first
 
+/** The chord's label for an action — the switcher's command rows read it (L6), so the card and the F1 card agree. */
+fun chordLabelOf(action: ShortcutAction): String? = SHORTCUTS.firstOrNull { it.first == action }?.second?.label()
+
 /** The tab an action selects, for the five `TAB_*` rows the overlay prints as one line. */
 fun ShortcutAction.tab(): WorkbenchDestination? = when (this) {
     ShortcutAction.TAB_PAGES -> WorkbenchDestination.PAGES
