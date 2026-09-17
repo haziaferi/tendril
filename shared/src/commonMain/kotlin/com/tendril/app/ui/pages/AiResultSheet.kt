@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.domain.ai.AiVerb
 import com.tendril.app.ui.components.TendrilSheet
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
 
 /**
  * §0.6.15 — a verb's answer, and the choice of what to do with it. Nothing has been written
@@ -42,13 +44,13 @@ internal fun AiResultSheet(
                 result == null -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 16.dp)) {
                     CircularProgressIndicator(modifier = Modifier.width(20.dp).height(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text("Asking Claude…", style = MaterialTheme.typography.bodyMedium)
+                    Text("Asking Claude…", style = MaterialTheme.typography.body)
                 }
                 result.isSuccess -> {
                     val text = result.getOrThrow()
                     Text(
                         text,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.body,
                         modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
                     )
                     Spacer(Modifier.height(12.dp))
@@ -61,7 +63,7 @@ internal fun AiResultSheet(
                     }
                 }
                 else -> {
-                    Text(result.exceptionOrNull()?.message ?: "Request failed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                    Text(result.exceptionOrNull()?.message ?: "Request failed", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(12.dp))
                     Row {
                         Button(onClick = onRetry) { Text("Try again") }
@@ -73,7 +75,7 @@ internal fun AiResultSheet(
             Spacer(Modifier.height(12.dp))
             Text(
                 "Only the selected text and the verb's instruction were sent to Anthropic, with your own key.",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

@@ -37,6 +37,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.tabular
 
 /**
  * §0.10 item 19 — the find bar, option A of `docs/mockups/find-in-page.html` (decided
@@ -107,7 +108,7 @@ fun FindBar(
                 else -> "${(current ?: 0) + 1} of $total"
             },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.description.copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.description.tabular(),
         )
         IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(FIND_BUTTON)) {
             Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous (Shift+Enter)", modifier = Modifier.size(18.dp))

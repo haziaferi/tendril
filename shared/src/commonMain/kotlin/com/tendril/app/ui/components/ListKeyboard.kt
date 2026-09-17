@@ -8,6 +8,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -140,3 +144,12 @@ fun keyedTitle(title: String, typed: String, focused: Boolean): AnnotatedString 
         withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) { append(title.substring(0, typed.length)) }
         append(title.substring(typed.length))
     } else AnnotatedString(title)
+
+/**
+ * The keyboard cursor's ring, one for every list (the audit's fixes, 2026-09-17,
+ * `desktop-design-layer.md` #1): 2 dp in `outlineVariant` — the faint token, solved to ≥ 3:1 on
+ * both grounds — where five sites drew it in `outline`, the hairline token, at 1.2–1.4:1.
+ */
+@Composable
+fun Modifier.keyboardCursorRing(shown: Boolean, radius: Int = 6): Modifier =
+    if (shown) border(2.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(radius.dp)) else this

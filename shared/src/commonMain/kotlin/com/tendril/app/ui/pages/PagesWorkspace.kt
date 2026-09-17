@@ -36,8 +36,6 @@ import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.ui.input.pointer.isShiftPressed
 import com.tendril.app.ui.nav.PopOutHost
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,6 +94,10 @@ import com.tendril.app.ui.nav.WorkbenchNavState
 import com.tendril.app.ui.nav.WorkbenchRoute
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.keyboardCursorRing
 
 /**
  * B§13.4 14c — the Pages tab on a wide window: the tree beside the open page, the chrome split
@@ -161,17 +163,17 @@ fun PagesWorkspace(
                     // 14h·1 — the two things that can sit beside this page, as a submenu (the
                     // 14g·3 pattern); on every kind of page, since the chrome is the workspace's.
                     SubmenuItem(text = { Text("Show beside") }) { closeBeside ->
-                        DropdownMenuItem(text = { Text("Road Map around this page") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Graph) })
-                        DropdownMenuItem(text = { Text("Today's Journal") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Journal) })
+                        TendrilMenuItem(text = { Text("Road Map around this page") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Graph) })
+                        TendrilMenuItem(text = { Text("Today's Journal") }, onClick = { closeBeside(); close(); shelfState.open(Shelf.Journal) })
                     }
                     // B§13.6 #6 — the page in its own window; the page stays open here too.
                     // Read at click time: the chrome is remembered across pages, so `openPageId` above is stale here.
                     val pageHere = (navState.current as? WorkbenchRoute.PageDetail)?.pageId
                     if (popOuts != null && pageHere != null) {
-                        DropdownMenuItem(text = { Text("Open in a window") }, onClick = { close(); popOuts.open(pageHere) })
+                        TendrilMenuItem(text = { Text("Open in a window") }, onClick = { close(); popOuts.open(pageHere) })
                     }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
+                    TendrilMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
                 },
                 onClosed = { navState.back() },
                 openBeside = { shelfState.open(Shelf.Page(it)) },
@@ -395,8 +397,8 @@ private fun TreeRow(
             .background(background, RoundedCornerShape(6.dp))
             .then(
                 when {
-                    keyFocused -> Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-                    inShelf -> Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
+                    keyFocused -> Modifier.keyboardCursorRing(true)
+                    inShelf -> Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
                     else -> Modifier
                 }
             )
@@ -465,8 +467,8 @@ private fun EmptyDetail(paneChrome: PaneChrome, onOpenTrash: () -> Unit) {
                 paneChrome.actions(this)
                 Box {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(text = { Text("Trash…") }, onClick = { showMenu = false; onOpenTrash() })
+                    TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        TendrilMenuItem(text = { Text("Trash…") }, onClick = { showMenu = false; onOpenTrash() })
                     }
                 }
             },
@@ -474,8 +476,8 @@ private fun EmptyDetail(paneChrome: PaneChrome, onOpenTrash: () -> Unit) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 "Choose a page from the tree — or press Ctrl+K to find one.",
-                style = MaterialTheme.typography.body,
-                color = MaterialTheme.colorScheme.outlineVariant,
+                style = MaterialTheme.typography.description,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(24.dp),
             )
         }

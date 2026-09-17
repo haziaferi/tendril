@@ -102,6 +102,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Path
 import javax.swing.JFileChooser
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * Milestone 3 (tendril-windows-spec.md §6 step 3) — replaces Milestone 1/2's throwaway flat
@@ -360,14 +363,14 @@ private fun DesktopCalendarSettingsSheet(core: WorkbenchCore, onDismiss: () -> U
     TendrilSheet(title = "Calendar settings", onDismiss = onDismiss) {
         Column {
             Text(
-                "Google Calendar sync is Android-only (Play Services, tendril-windows-spec.md §1). Reminders arrive as Windows notifications from the notification-area icon.",
-                style = MaterialTheme.typography.bodyMedium,
+                "Google Calendar sync is Android-only — it needs Play Services. Reminders arrive as Windows notifications from the notification-area icon.",
+                style = MaterialTheme.typography.body,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            Text("Calendar (.ics)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+            Text("Calendar (.ics)", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 16.dp))
             Text(
                 "Every task and event as an iCalendar file any calendar app opens; importing one brings its events and to-dos in, updating what came from Tendril before.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
             Row {
@@ -391,7 +394,7 @@ private fun DesktopCalendarSettingsSheet(core: WorkbenchCore, onDismiss: () -> U
                     }
                 }) { Text("Import .ics") }
             }
-            status?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
+            status?.let { Text(it, style = MaterialTheme.typography.description, modifier = Modifier.padding(top = 8.dp)) }
         }
     }
 }
@@ -431,7 +434,7 @@ internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Desk
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 folderPath?.toString() ?: "No sync folder chosen",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.body,
             )
         }
         TextButton(onClick = {
@@ -491,7 +494,7 @@ internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Desk
         syncError?.let {
             Text(
                 it,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
@@ -500,7 +503,7 @@ internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Desk
     syncError?.let {
         Text(
             it,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
         )

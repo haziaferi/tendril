@@ -28,6 +28,15 @@ Checks
                                in shared UI outside the theme package — every text takes one of
                                the seven styles of `ui/theme/TendrilType.kt` (the type PR,
                                2026-09-16); the editor's span transformation is content and exempt
+ 13. material type role       `typography.bodyMedium` and the other raw Material roles in shared UI
+                               outside the theme package — the seven styles are their only spelling
+                               (the audit's fixes, 2026-09-17: 196 sites renamed onto them)
+ 14. type class               a text site whose declared style is not its class's, by
+                               `tools/type_sites.py`'s rules and `tools/type_table/table.json` —
+                               the kind of a text decides its style, never the line; `// type: X`
+                               on the line is the one written-down exception
+ 15. bare menu                `DropdownMenu(` / `DropdownMenuItem(` outside `ui/components/` — every
+                               menu goes through `TendrilMenu` so its rows take the profile's height
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -44,6 +53,8 @@ HARD_COLOUR = re.compile(r"\bColor\s*\(\s*0x|\bColor\.(?:Gray|LightGray|DarkGray
 # 14h·2 — `TypeScale.SIZES` in `ui/theme/Type.kt`, kept in step by hand (the audit cannot run Kotlin).
 LITERAL_TYPE = re.compile(r"\bfontSize\s*=\s*\d|\b\d+(?:\.\d+)?\.sp\b|\bfontWeight\s*=\s*FontWeight\.")
 TYPE_EXEMPT = ("SpanVisualTransformation.kt",)
+MATERIAL_ROLE = re.compile(r"\btypography\.(?:display|headline|title|body|label)[A-Z]\w*")
+BARE_MENU = re.compile(r"\bDropdownMenu(?:Item)?\s*\(")
 
 
 def rel(p: str) -> str:
@@ -404,6 +415,19 @@ def main() -> int:
             # text takes a style now, and a style's weight is read from the style, never typed.
             if LITERAL_TYPE.search(line) and not r.endswith(TYPE_EXEMPT) and not line.lstrip().startswith(("//", "*", "/*")):
                 rep.add("literal type", f"{r}:{i}  {line.strip()[:90]}")
+            # The audit's fixes (2026-09-17) — the seven styles are aliases of Material's roles, so a
+            # raw role name is the same style spelled a second way; one spelling per kind.
+            if MATERIAL_ROLE.search(line) and not line.lstrip().startswith(("//", "*", "/*")):
+                rep.add("material type role", f"{r}:{i}  {line.strip()[:90]}")
+            # L1 — one `TendrilMenu` under a pointer profile; a bare Material menu keeps 48 dp rows.
+            if BARE_MENU.search(line) and "/ui/components/" not in r and not line.lstrip().startswith(("//", "*", "/*", "import")):
+                rep.add("bare menu", f"{r}:{i}  {line.strip()[:90]}")
+
+    # The audit's fixes — a text's class decides its style (`tools/type_sites.py`, `tools/type_table/table.json`).
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import type_sites  # noqa: E402
+    for v in type_sites.violations(type_sites.inventory(), type_sites.load_table()):
+        rep.add("type class", "shared/src/commonMain/kotlin/com/tendril/app/ui/" + v)
 
     return rep.emit()
 

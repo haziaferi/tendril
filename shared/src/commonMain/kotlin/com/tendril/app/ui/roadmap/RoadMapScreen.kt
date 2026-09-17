@@ -92,8 +92,6 @@ import com.tendril.app.generated.resources.empty_road_map_cta
 import com.tendril.app.generated.resources.empty_road_map_message
 import com.tendril.app.generated.resources.nav_road_map
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -107,6 +105,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.domain.plural
 
 internal val NODE_WIDTH = 132.dp
 private val NODE_HEIGHT = 44.dp
@@ -214,7 +218,7 @@ fun RoadMapScreen(
                 EmptyState(
                     icon = Icons.Outlined.AccountTree,
                     message = if (focusedPage != null) {
-                        "\"${focusedPage.title}\" has no connections within ${focusDepth} hop(s)"
+                        "\"${focusedPage.title}\" has no connections within " + plural(focusDepth, "hop")
                     } else {
                         stringResource(Res.string.empty_road_map_message) + " — " + stringResource(Res.string.empty_road_map_cta)
                     },
@@ -286,11 +290,11 @@ private fun FilterRow(
                 label = { Text(if (chosen != null) "#" + chosen.name else "Any label") },
                 trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
             )
-            DropdownMenu(expanded = labelMenu, onDismissRequest = { labelMenu = false }) {
-                DropdownMenuItem(text = { Text("Any label") }, onClick = { labelMenu = false; onLabel(null) })
+            TendrilMenu(expanded = labelMenu, onDismissRequest = { labelMenu = false }) {
+                TendrilMenuItem(text = { Text("Any label") }, onClick = { labelMenu = false; onLabel(null) })
                 val palette = LocalTendrilPalette.current
                 labels.forEach { label ->
-                    DropdownMenuItem(
+                    TendrilMenuItem(
                         text = { Text("#" + label.name) },
                         leadingIcon = { LabelDot(labelColours(label.color, palette).hue) },
                         onClick = { labelMenu = false; onLabel(label.id) },
@@ -301,7 +305,7 @@ private fun FilterRow(
         Spacer(Modifier.width(12.dp))
         Text(
             "→ mention   — related",
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
@@ -321,7 +325,7 @@ private fun FocusBar(page: Page, depth: Int, onDepthChange: (Int) -> Unit, onCle
         Spacer(Modifier.width(6.dp))
         Text(
             "Focused on \"${page.title}\"",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.label,
             maxLines = 1,
             modifier = Modifier.weight(1f),
         )
@@ -652,7 +656,7 @@ internal fun RoadMapNode(
             .semantics { contentDescription = if (onDoubleTap == null) "${page.title} — tap to focus, tap again to open" else "${page.title} — click to focus, click again to open here, double-click to open in the main pane" },
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
-            Text(page.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(page.title, style = MaterialTheme.typography.label, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -670,6 +674,7 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
     TendrilSheet(title = "All Pages", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
         Column {
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -740,10 +745,11 @@ private fun PagePickerSheet(title: String, viewModel: RoadMapViewModel, excludeP
     TendrilSheet(onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(title, style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.clearPageSearch(); onDismiss() }) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = query,
                 onValueChange = { query = it; viewModel.searchPages(it, excludePageId) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),

@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowRight
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,14 +34,14 @@ fun SubmenuItem(
     var size by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
     Box {
-        DropdownMenuItem(
+        TendrilMenuItem(
             text = text,
             leadingIcon = leadingIcon,
             trailingIcon = { Icon(Icons.Filled.ArrowRight, contentDescription = null) },
             onClick = { open = true },
             modifier = Modifier.onSizeChanged { size = it },
         )
-        DropdownMenu(
+        TendrilMenu(
             expanded = open,
             onDismissRequest = { open = false },
             offset = with(density) { DpOffset(size.width.toDp(), -size.height.toDp()) },

@@ -31,8 +31,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -86,6 +84,20 @@ import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.pageTitle
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.rowButtonModifier
+import com.tendril.app.ui.components.rowGlyphModifier
+import com.tendril.app.domain.word
+import com.tendril.app.domain.label
+import com.tendril.app.domain.blurb
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.Button
 
 private val CELL_WIDTH = 160.dp
 
@@ -157,7 +169,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                         onValueChange = { titleField = it; viewModel.updateTitle(it) },
                         readOnly = viewOnly,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.heading else MaterialTheme.typography.pageTitle).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )
                 },
@@ -165,25 +177,25 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                 actions = {
                     paneChrome?.actions?.invoke(this)
                     IconButton(onClick = { showMenu = true }, enabled = !viewOnly) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         val syncOn = database?.syncToTasks == true
-                        DropdownMenuItem(
+                        TendrilMenuItem(
                             text = { Text(if (syncOn) "Turn off Sync to Tasks" else "Sync to Tasks") },
                             onClick = {
                                 showMenu = false
                                 if (syncOn) viewModel.requestDisableSync() else viewModel.requestEnableSync()
                             },
                         )
-                        DropdownMenuItem(text = { Text("Add property") }, onClick = { showMenu = false; showAddProperty = true })
+                        TendrilMenuItem(text = { Text("Add property") }, onClick = { showMenu = false; showAddProperty = true })
                         // §0.6.8 — schema on a label. One item, opt-in; until it is used the app
                         // is today's app (E12).
-                        DropdownMenuItem(
+                        TendrilMenuItem(
                             text = { Text(boundLabel?.let { "Bound to #${it.name}…" } ?: "Bind a label…") },
                             onClick = { showMenu = false; showBindLabel = true },
                         )
                         // §0.6.14 — which relation column means "blocked by".
-                        DropdownMenuItem(text = { Text("Blocked by…") }, onClick = { showMenu = false; showBlockedBy = true })
-                        DropdownMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
+                        TendrilMenuItem(text = { Text("Blocked by…") }, onClick = { showMenu = false; showBlockedBy = true })
+                        TendrilMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
                         paneChrome?.menuItems?.invoke(this) { showMenu = false }
                     }
                 },
@@ -356,13 +368,13 @@ private fun TableBody(
     // 14h·2 — the row at the profile's height (`docs/critiques/small-things-measured.md` #2):
     // the checkbox and the row menu keep a 28 dp target under a pointer, 48 under a finger.
     val profile = LocalDensityProfile.current
-    val rowPadding = if (profile.pointer) 4.dp else 10.dp
+    val rowPadding = if (profile.pointer) 2.dp else 10.dp
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides profile.listInteractiveMinDp.dp) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             Row(modifier = Modifier.horizontalScroll(hScroll).padding(top = 8.dp)) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                    Text("Title", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Title", style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 properties.forEach { property ->
                     Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
@@ -415,11 +427,11 @@ private fun TableBody(
         item {
             Row(modifier = Modifier.horizontalScroll(hScroll).padding(vertical = 6.dp)) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                    Text(rowsLabel(rows.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(rowsLabel(rows.size), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 properties.forEach { property ->
                     Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
-                        Text(footerSummaries[property.id] ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(footerSummaries[property.id] ?: "", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Box(modifier = Modifier.width(40.dp))
@@ -451,7 +463,7 @@ private fun BoardBody(
     Row(modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         columns.forEach { (option, rows) ->
             Column(modifier = Modifier.width(240.dp)) {
-                Text(option, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+                Text(option, style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(rows, key = { it.page.id }) { row ->
                         BoardCard(row, option, columns.map { it.first }, groupProperty.id, editable, viewModel, onOpenPage)
@@ -467,7 +479,7 @@ private fun EmptyBoardPrompt() {
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             "Board needs a Select property, or a formula property, to group by. Add one, then configure this view.",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -494,16 +506,16 @@ private fun BoardCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickableRow { onOpenPage(row.page.id) }) {
-                Text(row.page.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false))
+                Text(row.page.title, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f, fill = false))
                 BlockedChip(row, viewModel)
             }
             if (editable) {
                 Spacer(Modifier.height(6.dp))
                 Box {
                     TextButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) { Text("Move…") }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         allOptions.filter { it != currentOption }.forEach { option ->
-                            DropdownMenuItem(text = { Text(option) }, onClick = { viewModel.moveRowToColumn(row, groupPropertyId, option); showMenu = false })
+                            TendrilMenuItem(text = { Text(option) }, onClick = { viewModel.moveRowToColumn(row, groupPropertyId, option); showMenu = false })
                         }
                     }
                 }
@@ -529,7 +541,7 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
                         // blank, and only the empty state was ever visible.
                         val cover = covers[row.page.id]
                         if (cover == null) {
-                            Text("No image", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                            Text("No image", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
                         } else {
                             BlockImage(
                                 cover.imagePath,
@@ -543,13 +555,13 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
                     }
                     Column(modifier = Modifier.padding(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(row.page.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                            Text(row.page.title, style = MaterialTheme.typography.body, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                             BlockedChip(row, viewModel)
                         }
                         properties.take(3).forEach { property ->
                             val value = viewModel.valueForCell(row, property.id)
                             if (!value.isNullOrBlank()) {
-                                Text("${property.name}: $value", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                Text("${property.name}: $value", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                             }
                         }
                     }
@@ -575,7 +587,7 @@ private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewMode
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 "Calendar needs a Date property to plot by — configure this view to pick one.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -587,13 +599,13 @@ private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewMode
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         sortedDates.forEach { date ->
-            item { Text(date, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+            item { Text(date, style = MaterialTheme.typography.label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             items(grouped[date].orEmpty(), key = { it.page.id }) { row ->
                 Text(row.page.title, style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(row.page.id) }.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
         if (hasUndated) {
-            item { Text("No date", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+            item { Text("No date", style = MaterialTheme.typography.label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             items(grouped[null].orEmpty(), key = { it.page.id }) { row ->
                 Text(row.page.title, style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(row.page.id) }.padding(horizontal = 16.dp, vertical = 8.dp))
             }
@@ -605,26 +617,30 @@ private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewMode
 private fun AddViewSheet(onDismiss: () -> Unit, onAdd: (String, ViewType) -> Unit) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(ViewType.TABLE) }
-    var showTypeMenu by remember { mutableStateOf(false) }
 
+    // The audit's fixes (F7's cheap half, T2): the five kinds as chips with a line on what each
+    // needs, a name field with the kind's name as its placeholder, one primary button.
     TendrilSheet(title = "New view", onDismiss = onDismiss) {
         Column {
-            BasicTextField(
-                value = name,
-                onValueChange = { name = it },
-                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            )
-            Box {
-                TextButton(onClick = { showTypeMenu = true }) { Text("Type: ${type.name.lowercase()}") }
-                DropdownMenu(expanded = showTypeMenu, onDismissRequest = { showTypeMenu = false }) {
-                    ViewType.entries.forEach { option ->
-                        DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { type = option; showTypeMenu = false })
-                    }
+            Text("View type", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 4.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                ViewType.entries.forEach { option ->
+                    FilterChip(selected = type == option, onClick = { type = option }, label = { Text(option.label) })
                 }
             }
+            Text(type.blurb, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            Text("Name", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 16.dp))
+            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                if (name.isEmpty()) Text(type.label, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                BasicTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(Modifier.height(16.dp))
-            TextButton(onClick = { onAdd(name.ifBlank { type.name.lowercase().replaceFirstChar(Char::uppercase) }, type) }) { Text("Add") }
+            Button(onClick = { onAdd(name.ifBlank { type.label }, type) }) { Text("Add view") }
         }
     }
 }
@@ -670,7 +686,7 @@ private fun ViewConfigSheet(
             // TABLE/GALLERY; BOARD's cards and CALENDAR's date-grouped list have no column grid.
             if (view.viewType == ViewType.TABLE || view.viewType == ViewType.GALLERY) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("Columns", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                Text("Columns", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 4.dp))
                 val visibleIds = view.visiblePropertyIds.ifEmpty { properties.map { it.id } }.toSet()
                 properties.forEach { property ->
                     Row(
@@ -687,13 +703,13 @@ private fun ViewConfigSheet(
                     ) {
                         Checkbox(checked = property.id in visibleIds, onCheckedChange = null)
                         Spacer(Modifier.width(4.dp))
-                        Text(property.name, style = MaterialTheme.typography.bodyMedium)
+                        Text(property.name, style = MaterialTheme.typography.body)
                     }
                 }
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text("Sort", style = MaterialTheme.typography.labelLarge)
+            Text("Sort", style = MaterialTheme.typography.label)
             BindingPicker("Sort by", properties, view.sortPropertyId, allowNone = true) { id -> onUpdate(view.copy(sortPropertyId = id)) }
             if (view.sortPropertyId != null) {
                 Row {
@@ -703,7 +719,7 @@ private fun ViewConfigSheet(
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text("Filter", style = MaterialTheme.typography.labelLarge)
+            Text("Filter", style = MaterialTheme.typography.label)
             FilterEditor(view, properties, onUpdate)
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -726,9 +742,9 @@ private fun FilterEditor(view: PageDatabaseView, properties: List<Property>, onU
         var showComparatorMenu by remember { mutableStateOf(false) }
         Box {
             TextButton(onClick = { showComparatorMenu = true }) { Text(comparator.name.lowercase().replace('_', ' ')) }
-            DropdownMenu(expanded = showComparatorMenu, onDismissRequest = { showComparatorMenu = false }) {
+            TendrilMenu(expanded = showComparatorMenu, onDismissRequest = { showComparatorMenu = false }) {
                 ViewFilter.Comparator.entries.forEach { option ->
-                    DropdownMenuItem(
+                    TendrilMenuItem(
                         text = { Text(option.name.lowercase().replace('_', ' ')) },
                         onClick = {
                             comparator = option
@@ -746,7 +762,7 @@ private fun FilterEditor(view: PageDatabaseView, properties: List<Property>, onU
                     value = it
                     onUpdate(view.copy(filter = ViewFilter(propertyId!!, comparator, it)))
                 },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
         }
@@ -779,16 +795,16 @@ private fun PropertyHeaderCell(
     Box {
         Text(
             property.name,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true },
         )
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+        TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             if (canChangeType) {
-                DropdownMenuItem(text = { Text("Edit property type") }, onClick = { viewModel.requestChangeType(property); showMenu = false })
+                TendrilMenuItem(text = { Text("Edit property type") }, onClick = { viewModel.requestChangeType(property); showMenu = false })
             } else if (role != null) {
-                DropdownMenuItem(text = { Text("Change binding…") }, onClick = { showMenu = false; showRebindPicker = true })
+                TendrilMenuItem(text = { Text("Change binding…") }, onClick = { showMenu = false; showRebindPicker = true })
             }
             // §5.2.1's "post-hoc bind of a previously-unbound optional role", which
             // `DatabaseSyncManager.bindProperty` has offered since it was written and no menu
@@ -798,13 +814,13 @@ private fun PropertyHeaderCell(
             // the recurrence. Done is never offered here — it is required, so it is never unfilled.
             if (role == null && database?.syncToTasks == true) {
                 unfilledRolesFor(property.type, database).forEach { candidate ->
-                    DropdownMenuItem(
+                    TendrilMenuItem(
                         text = { Text("Bind as ${bindingRoleLabel(candidate)}") },
                         onClick = { showMenu = false; viewModel.bindProperty(candidate, property.id) },
                     )
                 }
             }
-            DropdownMenuItem(text = { Text("Delete property") }, onClick = { viewModel.requestDeleteProperty(property); showMenu = false })
+            TendrilMenuItem(text = { Text("Delete property") }, onClick = { viewModel.requestDeleteProperty(property); showMenu = false })
         }
     }
     if (showRebindPicker && role != null) {
@@ -878,11 +894,11 @@ private fun RebindPickerDialog(
             Column {
                 Text(
                     "\"${currentProperty.name}\" currently drives ${bindingRoleLabel(role)}. Pick another ${bindingTypeFor(role).name.lowercase()} property, or remove the binding.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.body,
                 )
                 Spacer(Modifier.height(8.dp))
                 if (candidates.isEmpty()) {
-                    Text("No other ${bindingTypeFor(role).name.lowercase()} property exists yet.", style = MaterialTheme.typography.bodySmall)
+                    Text("No other ${bindingTypeFor(role).name.lowercase()} property exists yet.", style = MaterialTheme.typography.body)
                 }
                 candidates.forEach { candidate ->
                     TextButton(onClick = { onPick(candidate.id) }) { Text(candidate.name) }
@@ -930,13 +946,15 @@ private fun RebindConfirm(
 @Composable
 private fun RowMenu(viaLabel: Boolean, onDelete: () -> Unit, onRemove: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
+    // The audit's fixes (L3): this button's 40 dp held the row at 50 px; the row's 28 dp now.
+    val pointer = LocalDensityProfile.current.pointer
     Box {
-        IconButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) {
-            Icon(Icons.Outlined.MoreHoriz, contentDescription = "Row options")
+        IconButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current, modifier = rowButtonModifier(pointer)) {
+            Icon(Icons.Outlined.MoreHoriz, contentDescription = "Row options", modifier = rowGlyphModifier(pointer))
         }
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            if (viaLabel) DropdownMenuItem(text = { Text("Remove label from this page") }, onClick = { showMenu = false; onRemove() })
-            else DropdownMenuItem(text = { Text("Delete row") }, onClick = { showMenu = false; onDelete() })
+        TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+            if (viaLabel) TendrilMenuItem(text = { Text("Remove label from this page") }, onClick = { showMenu = false; onRemove() })
+            else TendrilMenuItem(text = { Text("Delete row") }, onClick = { showMenu = false; onDelete() })
         }
     }
 }
@@ -994,19 +1012,19 @@ private fun ChangeTypeDialog(
         title = { Text("Edit property type") },
         text = {
             Column {
-                Text("\"${property.name}\" is currently ${property.type.name.lowercase()}.")
+                Text("\"${property.name}\" is currently ${property.type.label}.")
                 Spacer(Modifier.height(8.dp))
                 Box {
-                    TextButton(onClick = { showTypeMenu = true }) { Text("Change to: ${newType.name.lowercase()}") }
-                    DropdownMenu(expanded = showTypeMenu, onDismissRequest = { showTypeMenu = false }) {
+                    TextButton(onClick = { showTypeMenu = true }) { Text("Change to: ${newType.label}") }
+                    TendrilMenu(expanded = showTypeMenu, onDismissRequest = { showTypeMenu = false }) {
                         offeredTypes.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { newType = option; showTypeMenu = false })
+                            TendrilMenuItem(text = { Text(option.label) }, onClick = { newType = option; showTypeMenu = false })
                         }
                     }
                 }
                 if (newType != property.type) {
                     Spacer(Modifier.height(8.dp))
-                    Text(typeChangePreview(property.type, newType, affectedCount), style = MaterialTheme.typography.bodySmall)
+                    Text(typeChangePreview(property.type, newType, affectedCount), style = MaterialTheme.typography.body)
                 }
             }
         },
@@ -1085,7 +1103,7 @@ private fun BoundDateCell(entry: Entry?, viewModel: PageDatabaseViewModel, role:
     val current = if (role == BindingRole.DUE_DATE) entry?.dueDate else entry?.startDate
     Text(
         current?.toString() ?: "—",
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.body,
         modifier = Modifier.clickableRow { if (entry != null && !viewOnly) showPicker = true },
     )
     if (showPicker && entry != null) {
@@ -1117,7 +1135,7 @@ private fun RecurrenceCell(entry: Entry?, viewModel: PageDatabaseViewModel) {
         // already read "1:WEEK" via `valueForCell`'s own `formatPeriodAsInterval` call, so the
         // cell and the filter disagreed about what the same value even looked like.
         rule?.period?.let(::formatPeriodAsHumanInterval) ?: "—",
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.body,
         modifier = Modifier.clickableRow { if (entry != null && !viewOnly) showPicker = true },
     )
     if (showPicker && entry != null) {
@@ -1140,7 +1158,7 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
         )
         PropertyType.DATE -> {
             var showPicker by remember { mutableStateOf(false) }
-            Text(value ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickableRow { if (!viewOnly) showPicker = true })
+            Text(value ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.clickableRow { if (!viewOnly) showPicker = true })
             if (showPicker) {
                 val initial = value?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
                 val state = rememberDatePickerState(initialSelectedDateMillis = initial.toDatePickerMillis())
@@ -1163,10 +1181,10 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
             var showMenu by remember { mutableStateOf(false) }
             val options = property.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
             Box {
-                Text(value ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true })
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                Text(value ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true })
+                TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     options.forEach { option ->
-                        DropdownMenuItem(text = { Text(option) }, onClick = { viewModel.setCellValue(property, row.page, option); showMenu = false })
+                        TendrilMenuItem(text = { Text(option) }, onClick = { viewModel.setCellValue(property, row.page, option); showMenu = false })
                     }
                 }
             }
@@ -1176,10 +1194,10 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
             val options = property.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
             val selected = value?.split(",")?.filter { it.isNotBlank() }.orEmpty().toSet()
             Box {
-                Text(if (selected.isEmpty()) "—" else selected.joinToString(", "), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true })
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                Text(if (selected.isEmpty()) "—" else selected.joinToString(", "), style = MaterialTheme.typography.body, modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true })
+                TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     options.forEach { option ->
-                        DropdownMenuItem(
+                        TendrilMenuItem(
                             text = { Text((if (option in selected) "✓ " else "") + option) },
                             onClick = {
                                 val newSelected = if (option in selected) selected - option else selected + option
@@ -1211,7 +1229,7 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
             BasicTextField(
                 value = text,
                 onValueChange = { text = it; lastWrittenValue = it; viewModel.setCellValue(property, row.page, it) },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 readOnly = viewOnly,
                 singleLine = true,
             )
@@ -1232,7 +1250,7 @@ private fun RelationCell(property: Property, row: TableRow, viewModel: PageDatab
     LaunchedEffect(uids) { titles = viewModel.resolveRelatedTitles(uids) }
     Text(
         if (titles.isEmpty()) "—" else titles.joinToString(", ") { it.second },
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.body,
         modifier = Modifier.clickableRow { if (!viewOnly) showPicker = true },
     )
     if (showPicker) {
@@ -1264,7 +1282,7 @@ private fun RelationPickerSheet(
     TendrilSheet(title = "Relate to", onDismiss = onDismiss) {
         Column {
             if (candidates.isEmpty()) {
-                Text("No rows in the related database yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("No rows in the related database yet", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 candidates.forEach { candidate ->
                     Row(
@@ -1272,7 +1290,7 @@ private fun RelationPickerSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = candidate.uid in selectedUids, onCheckedChange = { onToggle(candidate.uid) })
-                        Text(candidate.title, style = MaterialTheme.typography.bodyMedium)
+                        Text(candidate.title, style = MaterialTheme.typography.body)
                     }
                 }
             }
@@ -1295,7 +1313,7 @@ private fun ComputedCell(property: Property, row: TableRow, viewModel: PageDatab
     LaunchedEffect(property.id, property.config, row.values) { display = viewModel.computeComputedValue(property, row) }
     Text(
         display ?: "—",
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.body,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.clickableRow { showExplain = true },
     )
@@ -1320,35 +1338,35 @@ private fun ExplainValueSheet(
     TendrilSheet(title = "Explain \"${property.name}\"", onDismiss = onDismiss) {
         Column {
             when (val e = explanation) {
-                null -> Text("Loading…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                null -> Text("Loading…", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 is PageDatabaseViewModel.ComputedExplanation.Formula -> {
-                    Text(e.expression, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(e.expression, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(12.dp))
                     if (e.inputs.isEmpty()) {
-                        Text("References no properties.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("References no properties.", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        e.inputs.forEach { (name, value) -> Text("$name = $value", style = MaterialTheme.typography.bodyMedium) }
+                        e.inputs.forEach { (name, value) -> Text("$name = $value", style = MaterialTheme.typography.body) }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("Result: ${e.result ?: "—"}", style = MaterialTheme.typography.titleSmall)
+                    Text("Result: ${e.result ?: "—"}", style = MaterialTheme.typography.body)
                 }
                 is PageDatabaseViewModel.ComputedExplanation.Rollup -> {
                     val targetSuffix = e.targetName?.let { " → \"$it\"" }.orEmpty()
                     Text(
                         "${e.aggregation.name.lowercase()} over \"${e.relationName}\"$targetSuffix",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(12.dp))
                     if (e.relatedRows.isEmpty()) {
-                        Text("No related rows.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No related rows.", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        e.relatedRows.forEach { (title, value) -> Text(title + (value?.let { " = $it" } ?: ""), style = MaterialTheme.typography.bodyMedium) }
+                        e.relatedRows.forEach { (title, value) -> Text(title + (value?.let { " = $it" } ?: ""), style = MaterialTheme.typography.body) }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("Result: ${e.result ?: "—"}", style = MaterialTheme.typography.titleSmall)
+                    Text("Result: ${e.result ?: "—"}", style = MaterialTheme.typography.body)
                 }
-                PageDatabaseViewModel.ComputedExplanation.Unavailable -> Text("Nothing to explain.", style = MaterialTheme.typography.bodyMedium)
+                PageDatabaseViewModel.ComputedExplanation.Unavailable -> Text("Nothing to explain.", style = MaterialTheme.typography.description)
             }
         }
     }
@@ -1371,10 +1389,10 @@ private fun IntervalPickerDialog(onDismiss: () -> Unit, onPick: (Int, IntervalUn
                 )
                 Spacer(Modifier.width(12.dp))
                 Box {
-                    TextButton(onClick = { showUnitMenu = true }) { Text(unit.name.lowercase() + "(s)") }
-                    DropdownMenu(expanded = showUnitMenu, onDismissRequest = { showUnitMenu = false }) {
+                    TextButton(onClick = { showUnitMenu = true }) { Text(unit.word(2)) }
+                    TendrilMenu(expanded = showUnitMenu, onDismissRequest = { showUnitMenu = false }) {
                         IntervalUnit.entries.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { unit = option; showUnitMenu = false })
+                            TendrilMenuItem(text = { Text(option.word(2)) }, onClick = { unit = option; showUnitMenu = false })
                         }
                     }
                 }
@@ -1436,32 +1454,32 @@ private fun AddPropertySheet(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
             Box {
-                TextButton(onClick = { showTypeMenu = true }) { Text("Type: ${type.name.lowercase()}") }
-                DropdownMenu(expanded = showTypeMenu, onDismissRequest = { showTypeMenu = false }) {
+                TextButton(onClick = { showTypeMenu = true }) { Text("Type: ${type.label}") }
+                TendrilMenu(expanded = showTypeMenu, onDismissRequest = { showTypeMenu = false }) {
                     offeredTypes.forEach { option ->
-                        DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { type = option; showTypeMenu = false })
+                        TendrilMenuItem(text = { Text(option.label) }, onClick = { type = option; showTypeMenu = false })
                     }
                 }
             }
             if (type == PropertyType.SELECT || type == PropertyType.MULTI_SELECT) {
-                Text("Options (comma-separated)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                Text("Options (comma-separated)", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                 BasicTextField(
                     value = optionsText,
                     onValueChange = { optionsText = it },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 )
             }
             if (type == PropertyType.RELATION) {
-                Text("Related database", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                Text("Related database", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                 if (targetDatabases.isEmpty()) {
-                    Text("No other databases yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                    Text("No other databases yet", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                 } else {
                     Box {
                         TextButton(onClick = { showTargetMenu = true }) { Text(selectedTarget?.first?.title ?: "Choose…") }
-                        DropdownMenu(expanded = showTargetMenu, onDismissRequest = { showTargetMenu = false }) {
+                        TendrilMenu(expanded = showTargetMenu, onDismissRequest = { showTargetMenu = false }) {
                             targetDatabases.forEach { option ->
-                                DropdownMenuItem(text = { Text(option.first.title) }, onClick = { selectedTarget = option; showTargetMenu = false })
+                                TendrilMenuItem(text = { Text(option.first.title) }, onClick = { selectedTarget = option; showTargetMenu = false })
                             }
                         }
                     }
@@ -1473,36 +1491,36 @@ private fun AddPropertySheet(
                     FilterChip(selected = computedMode == ComputedMode.FORMULA, onClick = { computedMode = ComputedMode.FORMULA }, label = { Text("Formula (ƒ)") })
                 }
                 if (computedMode == ComputedMode.ROLLUP) {
-                    Text("Relation to aggregate", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    Text("Relation to aggregate", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                     if (relationProperties.isEmpty()) {
-                        Text("No relation property yet — add one first", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                        Text("No relation property yet — add one first", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                     } else {
                         Box {
                             TextButton(onClick = { showRelationMenu = true }) { Text(selectedRelationProperty?.name ?: "Choose…") }
-                            DropdownMenu(expanded = showRelationMenu, onDismissRequest = { showRelationMenu = false }) {
+                            TendrilMenu(expanded = showRelationMenu, onDismissRequest = { showRelationMenu = false }) {
                                 relationProperties.forEach { option ->
-                                    DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRelationProperty = option; showRelationMenu = false })
+                                    TendrilMenuItem(text = { Text(option.name) }, onClick = { selectedRelationProperty = option; showRelationMenu = false })
                                 }
                             }
                         }
                         Box {
                             TextButton(onClick = { showAggregationMenu = true }) { Text("Aggregation: ${aggregation.name.lowercase()}") }
-                            DropdownMenu(expanded = showAggregationMenu, onDismissRequest = { showAggregationMenu = false }) {
+                            TendrilMenu(expanded = showAggregationMenu, onDismissRequest = { showAggregationMenu = false }) {
                                 RollupAggregation.entries.forEach { option ->
-                                    DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { aggregation = option; showAggregationMenu = false })
+                                    TendrilMenuItem(text = { Text(option.name.lowercase()) }, onClick = { aggregation = option; showAggregationMenu = false })
                                 }
                             }
                         }
                         if (aggregation != RollupAggregation.COUNT) {
-                            Text("Property to read from each related row", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                            Text("Property to read from each related row", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                             if (rollupTargetProperties.isEmpty()) {
-                                Text("The related database has no properties yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                                Text("The related database has no properties yet", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                             } else {
                                 Box {
                                     TextButton(onClick = { showRollupTargetMenu = true }) { Text(selectedRollupTarget?.name ?: "Choose…") }
-                                    DropdownMenu(expanded = showRollupTargetMenu, onDismissRequest = { showRollupTargetMenu = false }) {
+                                    TendrilMenu(expanded = showRollupTargetMenu, onDismissRequest = { showRollupTargetMenu = false }) {
                                         rollupTargetProperties.forEach { option ->
-                                            DropdownMenuItem(text = { Text(option.name) }, onClick = { selectedRollupTarget = option; showRollupTargetMenu = false })
+                                            TendrilMenuItem(text = { Text(option.name) }, onClick = { selectedRollupTarget = option; showRollupTargetMenu = false })
                                         }
                                     }
                                 }
@@ -1512,17 +1530,17 @@ private fun AddPropertySheet(
                 } else {
                     Text(
                         "References plain properties by name, e.g. prop(\"Score\") * 2 — not relations yet.",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                     BasicTextField(
                         value = formulaExpression,
                         onValueChange = { formulaExpression = it; formulaError = null },
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     )
-                    formulaError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    formulaError?.let { Text(it, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.error) }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -1576,12 +1594,12 @@ fun EnableSyncSheet(
         Column {
             Text(
                 "Every row becomes its own linked Task. Pick which property means Done — required — and optionally the date it is planned for, a deadline, and a recurrence.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
             if (checkboxProps.isEmpty()) {
-                Text("Add a checkbox property first — Sync to Tasks needs one to bind as Done.", style = MaterialTheme.typography.bodyMedium)
+                Text("Add a checkbox property first — Sync to Tasks needs one to bind as Done.", style = MaterialTheme.typography.body)
             } else {
                 BindingPicker("Done (required)", checkboxProps, donePropertyId) { donePropertyId = it }
                 BindingPicker("Date (optional) — when it is planned for", dateProps, deadlinePropertyId, allowNone = true) { deadlinePropertyId = it }
@@ -1591,7 +1609,7 @@ fun EnableSyncSheet(
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Rows to sync (${selectedRowIds.size}/${rows.size})", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                Text("Rows to sync (${selectedRowIds.size}/${rows.size})", style = MaterialTheme.typography.label, modifier = Modifier.weight(1f))
                 TextButton(onClick = { selectedRowIds = if (selectedRowIds.size == rows.size) emptySet() else rows.map { it.id }.toSet() }) {
                     Text(if (selectedRowIds.size == rows.size) "Select none" else "Select all")
                 }
@@ -1607,7 +1625,7 @@ fun EnableSyncSheet(
                         Checkbox(checked = row.id in selectedRowIds, onCheckedChange = { checked ->
                             selectedRowIds = if (checked) selectedRowIds + row.id else selectedRowIds - row.id
                         })
-                        Text(row.title, style = MaterialTheme.typography.bodyMedium)
+                        Text(row.title, style = MaterialTheme.typography.body)
                     }
                 }
             }
@@ -1628,7 +1646,7 @@ private fun BlockedChip(row: TableRow, viewModel: PageDatabaseViewModel) {
     if (!state.isBlocked) return
     Text(
         "Blocked",
-        style = MaterialTheme.typography.labelSmall,
+        style = MaterialTheme.typography.caption,
         color = MaterialTheme.colorScheme.onErrorContainer,
         modifier = Modifier
             .padding(start = 6.dp)
@@ -1648,13 +1666,13 @@ private fun BlockedBySheet(viewModel: PageDatabaseViewModel, onDismiss: () -> Un
             if (candidates.isEmpty()) {
                 Text(
                     "Add a Relation property that points at this database first — its cells will say which rows block which.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
                     "A row whose blockers are not done shows as Blocked on every view; the Timeline draws the dependency.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
@@ -1671,13 +1689,13 @@ private fun BindingPicker(label: String, options: List<Property>, selectedId: Lo
     var showMenu by remember { mutableStateOf(false) }
     val selectedName = options.find { it.id == selectedId }?.name ?: if (allowNone) "None" else "Pick one"
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(label, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
         Box {
             TextButton(onClick = { showMenu = true }, enabled = options.isNotEmpty() || allowNone) { Text(selectedName) }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                if (allowNone) DropdownMenuItem(text = { Text("None") }, onClick = { onSelect(null); showMenu = false })
+            TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                if (allowNone) TendrilMenuItem(text = { Text("None") }, onClick = { onSelect(null); showMenu = false })
                 options.forEach { option ->
-                    DropdownMenuItem(text = { Text(option.name) }, onClick = { onSelect(option.id); showMenu = false })
+                    TendrilMenuItem(text = { Text(option.name) }, onClick = { onSelect(option.id); showMenu = false })
                 }
             }
         }

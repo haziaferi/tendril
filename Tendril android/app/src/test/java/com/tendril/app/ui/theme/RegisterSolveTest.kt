@@ -37,10 +37,10 @@ class RegisterSolveTest {
     }
 
     @Test
-    fun `dim and faint clear their floors on the ground and on surface2`() {
+    fun `dim and faint clear their floors on the ground, on surface2 and on the selection's tint`() {
         cases.forEach { c ->
             val p = paletteFor(c.register, c.dark, c.oled)
-            listOf(p.bg, p.surface2).forEach { ground ->
+            listOf(p.bg, p.surface2, p.accentSoft).forEach { ground ->
                 assertTrue("${c.name}: dim", ratio(p.textDim, ground) >= Floors.DIM)
                 assertTrue("${c.name}: faint", ratio(p.textFaint, ground) >= Floors.FAINT)
             }

@@ -48,6 +48,7 @@ import com.tendril.app.domain.TokenKind
 import com.tendril.app.ui.entries.QuickAddPreview
 import java.time.LocalDate
 import java.time.LocalTime
+import com.tendril.app.ui.theme.body
 
 private enum class RepeatOption(val label: String) {
     NONE("None"), DAILY("Daily"), WEEKLY("Weekly"), MONTHLY("Monthly")
@@ -80,7 +81,7 @@ fun AddTaskDialog(
         title = { Text(stringResource(Res.string.taskshabits_add_task)) },
         text = {
             Column {
-                OutlinedTextField(value = title, onValueChange = { title = it; ignored = emptySet() }, label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it; ignored = emptySet() }, label = { Text("Title") }, singleLine = true)
                 if (parsed.spans.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     QuickAddPreview(parsed = parsed, onFlipKind = {}, onDrop = { ignored = ignored + it })
@@ -117,7 +118,7 @@ fun AddTaskDialog(
                         TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text("Repeats", style = MaterialTheme.typography.labelLarge)
+                    Text("Repeats", style = MaterialTheme.typography.body)
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -213,12 +214,13 @@ fun AddHabitDialog(
         title = { Text(stringResource(Res.string.taskshabits_add_habit)) },
         text = {
             Column {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
                 Spacer(Modifier.height(12.dp))
-                Text("Every", style = MaterialTheme.typography.labelLarge)
+                Text("Every", style = MaterialTheme.typography.body)
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
+                        textStyle = MaterialTheme.typography.body,
                         value = count,
                         onValueChange = { if (it.all(Char::isDigit)) count = it },
                         modifier = Modifier.weight(1f),
@@ -250,6 +252,7 @@ fun AddHabitDialog(
                     // the calendar overlay (§5.3) and the Merged tab both position a habit by its
                     // time and would have nowhere to draw a duration without one.
                     OutlinedTextField(
+                        textStyle = MaterialTheme.typography.body,
                         value = durationMinutes,
                         onValueChange = { if (it.all(Char::isDigit)) durationMinutes = it },
                         label = { Text("Duration (minutes, optional)") },

@@ -40,6 +40,8 @@ import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
 
 /**
  * §5.5.1 — Trash for Entries (Tasks and Events), the counterpart to the Page/Row Trash in
@@ -69,7 +71,7 @@ fun EntryTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     stringResource(Res.string.trash_entries_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.heading,
                     modifier = Modifier.weight(1f),
                 )
                 if (entries.isNotEmpty()) {
@@ -119,7 +121,7 @@ fun EntryTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
                                 Text(entry.title, style = MaterialTheme.typography.body)
                                 Text(
                                     entry.trashSubtitle(),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.description,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }

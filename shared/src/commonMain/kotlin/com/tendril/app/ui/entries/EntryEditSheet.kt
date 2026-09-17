@@ -51,6 +51,8 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * §0.8 step 6b / §3.2 — the edit sheet that was never built. Every field an Entry has, in the
@@ -87,7 +89,7 @@ fun EntryEditSheet(
     // window with no gesture to reach them (tendril-spec.md §0.10 item 11).
     TendrilSheet(onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
         Column {
-            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
 
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -102,7 +104,7 @@ fun EntryEditSheet(
             if (entry.recurrenceRule != null && entry.originalEntryId == null) {
                 Text(
                     "This repeats — changes here apply to every occurrence.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -132,7 +134,7 @@ fun EntryEditSheet(
                         }
                     }
                 }
-                Text("Repeats", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                Text("Repeats", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 8.dp))
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RepeatChoice.entries.forEach { choice ->
                         FilterChip(selected = repeat == choice, onClick = { repeat = choice; repeatTouched = true }, label = { Text(choice.label) })
@@ -146,6 +148,7 @@ fun EntryEditSheet(
                 }
                 if (deadline != null) TextButton(onClick = { picker = Picker.DEADLINE }) { Text(deadline.toString()) }
                 OutlinedTextField(
+                    textStyle = MaterialTheme.typography.body,
                     value = estimateMinutes,
                     onValueChange = { if (it.all(Char::isDigit)) estimateMinutes = it },
                     label = { Text("Estimate (minutes)") },

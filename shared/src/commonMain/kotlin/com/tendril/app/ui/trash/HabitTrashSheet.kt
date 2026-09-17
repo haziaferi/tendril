@@ -40,6 +40,9 @@ import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
 import java.time.Instant
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.domain.label
 
 /**
  * §5.5.1 — Trash for Habits, the third of the three and the last one still missing a *there*.
@@ -73,7 +76,7 @@ fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     stringResource(Res.string.trash_habits_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.heading,
                     modifier = Modifier.weight(1f),
                 )
                 if (habits.isNotEmpty()) {
@@ -123,7 +126,7 @@ fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
                                 Text(habit.title, style = MaterialTheme.typography.body)
                                 Text(
                                     habit.trashSubtitle(),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.description,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
@@ -163,4 +166,4 @@ fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
  * For a Habit that context is its cadence and the streak being given up — the same phrasing the
  * live list uses, so a row reads identically either side of the Trash. */
 private fun Habit.trashSubtitle(): String =
-    "Every ${frequency.count} ${frequency.unit.name.lowercase()}(s) · streak $streak"
+    frequency.label() + " · streak $streak"

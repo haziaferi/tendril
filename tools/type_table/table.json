@@ -1,0 +1,40 @@
+{
+ "chosen": "2026-09-17 \u2014 tools/type_table/spec.json run by meta-optimizer (HS, 24 candidates, converged gen 12): the best (0.7400, CARD_TITLE=heading, GRID_DENSE=label) and this table (0.7392) are a near-tie under 0.001, so the one that changes fewer sites wins (preservation 0.703 vs 0.666) \u2014 de-optimizer's rule. META=caption (the tray PR's choice) scored 0.687 against the Notion ratio and lost.",
+ "fitness": 0.7392,
+ "classes": {
+  "SLOT_CHIP": "label",
+  "SLOT_MENU": "body",
+  "SLOT_DIALOG_TITLE": "heading",
+  "SLOT_DIALOG_TEXT": "body",
+  "SLOT_FIELD_LABEL": "body",
+  "FIELD": "body",
+  "BAR_TITLE": "pageTitle",
+  "EYEBROW": "eyebrow",
+  "TITLE": "body",
+  "CELL": "body",
+  "HEADER_DATE": "heading",
+  "BADGE": "caption",
+  "PLACEHOLDER": "body",
+  "META": "description",
+  "EXPLAINER": "description",
+  "EMPTY_STATE": "description",
+  "GREY_LABEL": "label",
+  "SUBSECTION": "label",
+  "SECTION_HEADING": "heading",
+  "SHEET_HEADER": "heading",
+  "CARD_TITLE": "pageTitle",
+  "BODY_LINE": "body",
+  "GRID_DENSE": "caption",
+  "NODE_LABEL": "label",
+  "PREVIEW_LINE": "description",
+  "ACTION_ROW": "body",
+  "ICON_LABEL": "caption",
+  "ERROR_LINE": "description",
+  "GROUP_HEADER": "label"
+ },
+ "own": [
+  "CLOCK",
+  "EDITOR",
+  "GLYPH"
+ ]
+}

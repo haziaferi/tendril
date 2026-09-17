@@ -127,6 +127,7 @@ fun QuickSwitcher(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
                 OutlinedTextField(
+                    textStyle = MaterialTheme.typography.body,
                     value = text,
                     onValueChange = { text = it },
                     modifier = Modifier
@@ -170,7 +171,7 @@ fun QuickSwitcher(
                                 ResultRow(selected = index == selected, onClick = { onDismiss(); onOpenPage(hit.pageId) }) {
                                     val hitIcon = hit.icon
                                     Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-                                        if (hitIcon != null) Text(hitIcon, style = MaterialTheme.typography.titleMedium)
+                                        if (hitIcon != null) Text(hitIcon, style = MaterialTheme.typography.heading)
                                         else Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     Spacer(Modifier.width(12.dp))

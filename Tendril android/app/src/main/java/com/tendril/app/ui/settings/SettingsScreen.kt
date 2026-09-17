@@ -80,6 +80,7 @@ import com.tendril.app.ui.settings.AiSettingsSection
 import com.tendril.app.ui.settings.ThemeSection
 import com.tendril.app.ui.theme.ThemeSettings
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
 
 @Composable
 fun SettingsScreen(
@@ -169,7 +170,7 @@ private fun AppearanceSection(settings: ThemeSettings) {
                             choice.mode.label,
                             choice.typeface.label,
                         ),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -223,7 +224,7 @@ private fun SyncFolderSection(
                 val summary = folderUri?.let {
                     stringResource(R.string.settings_sync_folder_summary_set, manager.displayNameFor(it))
                 } ?: stringResource(R.string.settings_sync_folder_summary_unset)
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(summary, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.width(12.dp))
             Button(onClick = { launcher.launch(null) }) {
@@ -246,7 +247,7 @@ private fun SyncFolderSection(
                 val lastSyncedText = lastSyncedAt?.let {
                     "Last synced ${java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm").withZone(java.time.ZoneId.systemDefault()).format(it)}"
                 } ?: "Never synced"
-                Text(lastSyncedText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(lastSyncedText, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
                     enabled = !syncing,
                     // Every guard this used to hold inline — the store failing to open, the
@@ -258,7 +259,7 @@ private fun SyncFolderSection(
             }
             syncError?.let {
                 Spacer(Modifier.height(8.dp))
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(it, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -286,7 +287,7 @@ private fun AtRestEncryptionSection(secretStore: SecretStore, coordinator: SyncC
                 Text("Sync folder encryption", style = MaterialTheme.typography.body)
                 Text(
                     text = if (stored != null) "On — snapshots are encrypted at rest" else "Off — snapshots are plain JSON",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -528,7 +529,7 @@ private fun PortableBackupSection(
         Text("Full data import/export", style = MaterialTheme.typography.body)
         Text(
             "A portable .tendril package — a one-off file, separate from the continuous sync above",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
@@ -542,7 +543,7 @@ private fun PortableBackupSection(
         Text(
             "A zip of .md files any editor can open — for keeping your notes readable without " +
                 "this app. Databases and canvases export their pages, not their layout.",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
@@ -555,7 +556,7 @@ private fun PortableBackupSection(
         Text(
             "Every task and event as an iCalendar file any calendar app opens; importing one brings " +
                 "its events and to-dos in, updating what came from Tendril before.",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
@@ -569,7 +570,7 @@ private fun PortableBackupSection(
         }
         statusMessage?.let {
             Spacer(Modifier.height(8.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(it, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -613,7 +614,7 @@ private fun PortableBackupSection(
 private fun ViewOnlyReason(what: String) {
     Text(
         "$what unavailable while View-Only is on. Turn it off with the eye in the Pages toolbar.",
-        style = MaterialTheme.typography.bodySmall,
+        style = MaterialTheme.typography.description,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
@@ -661,7 +662,7 @@ private fun AppLockSection(prefs: AppLockPreferences) {
                 Text("App Lock", style = MaterialTheme.typography.body)
                 Text(
                     text = "Require your fingerprint, face, or device PIN to open Tendril",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -705,7 +706,7 @@ private fun AppLockToggleRow(label: String, checked: Boolean, onCheckedChange: (
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(label, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

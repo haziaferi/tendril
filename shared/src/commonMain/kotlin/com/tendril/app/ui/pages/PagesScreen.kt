@@ -57,8 +57,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -115,6 +113,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.keyboardCursorRing
 
 /** §3.1.2 — what a refused `openJournal` says out loud. Names the lock (so the tap does not read
  * as a fault), names what was refused (creating the day, not opening it), and names the way out,
@@ -319,12 +322,12 @@ internal fun JournalButton(actions: PagesActions, modifier: Modifier = Modifier)
         IconButton(onClick = { showJournalMenu = true }, modifier = modifier) {
             Icon(Icons.Outlined.MenuBook, contentDescription = "Journal")
         }
-        DropdownMenu(expanded = showJournalMenu, onDismissRequest = { showJournalMenu = false }) {
-            DropdownMenuItem(
+        TendrilMenu(expanded = showJournalMenu, onDismissRequest = { showJournalMenu = false }) {
+            TendrilMenuItem(
                 text = { Text("Today's journal") },
                 onClick = { showJournalMenu = false; actions.openJournalToday() },
             )
-            DropdownMenuItem(
+            TendrilMenuItem(
                 text = { Text("Pick a date…") },
                 onClick = { showJournalMenu = false; actions.pickJournalDate() },
             )
@@ -405,7 +408,7 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
             .combinedClickable(onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .padding(horizontal = 16.dp, vertical = 10.dp)
-            .then(if (keyFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp)) else Modifier),
+            .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Local val, not `page.icon` directly: a nullable property declared in a different
@@ -419,7 +422,7 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
         }
         Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
             if (pageIcon != null) {
-                Text(pageIcon, style = MaterialTheme.typography.titleMedium)
+                Text(pageIcon, style = MaterialTheme.typography.heading)
             } else if (icon != null) {
                 Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -430,7 +433,7 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
             // 14h·2 — when it was last edited; the kind is the icon's (`pages-phone.md` #1).
             Text(
                 "edited " + relativeTime(page.updatedAt),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -449,13 +452,13 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
  */
 @Composable
 internal fun PageRowMenuItems(onOpen: () -> Unit, onShowOnRoadMap: () -> Unit, onMoveToTrash: (() -> Unit)?, onOpenBeside: (() -> Unit)? = null, onOpenInWindow: (() -> Unit)? = null) {
-    DropdownMenuItem(text = { Text("Open") }, onClick = onOpen)
+    TendrilMenuItem(text = { Text("Open") }, onClick = onOpen)
     // 14h·1 — the tree's rows only (the phone has no shelf); Ctrl+click on the row is the same.
-    if (onOpenBeside != null) DropdownMenuItem(text = { Text("Open beside") }, onClick = onOpenBeside)
+    if (onOpenBeside != null) TendrilMenuItem(text = { Text("Open beside") }, onClick = onOpenBeside)
     // B§13.6 #6 — the desktop's rows only; Shift+click on the row is the same.
-    if (onOpenInWindow != null) DropdownMenuItem(text = { Text("Open in a window") }, onClick = onOpenInWindow)
-    DropdownMenuItem(text = { Text("Show on Road Map") }, onClick = onShowOnRoadMap)
-    DropdownMenuItem(text = { Text("Move to Trash") }, onClick = onMoveToTrash ?: {}, enabled = onMoveToTrash != null)
+    if (onOpenInWindow != null) TendrilMenuItem(text = { Text("Open in a window") }, onClick = onOpenInWindow)
+    TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = onShowOnRoadMap)
+    TendrilMenuItem(text = { Text("Move to Trash") }, onClick = onMoveToTrash ?: {}, enabled = onMoveToTrash != null)
 }
 
 @Composable
@@ -472,6 +475,7 @@ private fun NewPageSheet(
     TendrilSheet(title = "New", onDismiss = onDismiss) {
         Column {
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = title,
                 onValueChange = { title = it },
                 label = { Text("Title") },
@@ -488,7 +492,7 @@ private fun NewPageSheet(
             NewOptionRow(Icons.Filled.Dashboard, "Canvas") { onCanvas(title) }
             if (templates.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Text("From template", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("From template", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 templates.forEach { template ->
                     val icon = if (template.kind == PageKind.DATABASE) Icons.Filled.TableChart else Icons.Outlined.Description
                     NewOptionRow(icon, template.title) { onFromTemplate(template, title) }
@@ -533,7 +537,7 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
         // proportionate from small phones to tablets rather than over/under-filling.
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("Trash", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("Trash", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 if (pages.isNotEmpty()) {
                     TextButton(onClick = { selectedIds = if (selectedIds.size == pages.size) emptySet() else pages.map { it.id }.toSet() }) {
                         Text(if (selectedIds.size == pages.size) "Select none" else "Select all")
@@ -576,7 +580,7 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
                                 Text(page.title, style = MaterialTheme.typography.body)
                                 Text(
                                     trashLocation(core, page),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.description,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }

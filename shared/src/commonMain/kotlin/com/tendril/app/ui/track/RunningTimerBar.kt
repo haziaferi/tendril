@@ -41,6 +41,7 @@ import com.tendril.app.ui.theme.caption
 import com.tendril.app.ui.theme.clock
 import com.tendril.app.ui.theme.clockSmall
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.description
 
 /**
  * §0.6.5 / §0.8 step 7c — the "now": one strip above the bottom bar, on every route on both
@@ -74,7 +75,7 @@ fun RunningTimerBar(core: WorkbenchCore, modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 stringResource(Res.string.track_stop),
-                style = MaterialTheme.typography.label,
+                style = MaterialTheme.typography.body,
                 color = colour,
                 modifier = Modifier.clickable { scope.launch { core.timeTracker.stop() } }.padding(vertical = 8.dp),
             )
@@ -100,7 +101,7 @@ fun RunningTimerRailFoot(core: WorkbenchCore, modifier: Modifier = Modifier) {
         ) {
             Text(
                 "▶ " + (timer.title ?: "…"),
-                style = MaterialTheme.typography.caption,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
@@ -111,7 +112,7 @@ fun RunningTimerRailFoot(core: WorkbenchCore, modifier: Modifier = Modifier) {
             )
             Text(
                 stringResource(Res.string.track_stop),
-                style = MaterialTheme.typography.caption,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable { scope.launch { core.timeTracker.stop() } }.padding(horizontal = 8.dp, vertical = 2.dp),
             )

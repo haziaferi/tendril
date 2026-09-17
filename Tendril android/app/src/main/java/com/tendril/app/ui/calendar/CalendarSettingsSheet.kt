@@ -35,6 +35,8 @@ import com.tendril.app.googlecalendar.SyncOutcome
 import com.tendril.app.storage.GoogleCalendarPreferences
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
 
 /**
  * Google Calendar sync connect/disconnect (§3.2, §9.5) — lives in Calendar's own settings,
@@ -89,14 +91,14 @@ fun CalendarSettingsSheet(
         Column {
             // 14f·2 — the view the Calendar opens on; the desktop's Settings pane has the same row.
             CalendarOpensOnSection(keyValueStore, modifier = Modifier.padding(0.dp))
-            Text("Google Calendar sync", style = MaterialTheme.typography.bodyMedium)
+            Text("Google Calendar sync", style = MaterialTheme.typography.body)
             Text(
                 if (isConnected) "Connected" else "Not connected",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             errorMessage?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(it, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(8.dp))
             if (isConnected) {
@@ -104,7 +106,7 @@ fun CalendarSettingsSheet(
                     val lastSyncedText = lastSyncedAt?.let {
                         "Last synced ${DateTimeFormatter.ofPattern("MMM d, HH:mm").withZone(java.time.ZoneId.systemDefault()).format(it)}"
                     } ?: "Never synced"
-                    Text(lastSyncedText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(lastSyncedText, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(enabled = !syncing, onClick = { runSync() }) { Text(if (syncing) "Syncing…" else "Sync now") }
                 }
                 Spacer(Modifier.height(8.dp))

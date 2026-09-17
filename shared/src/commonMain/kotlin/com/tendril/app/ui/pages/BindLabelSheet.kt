@@ -35,6 +35,8 @@ import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.theme.labelColours
 import com.tendril.app.data.page.Label
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
 
 /**
  * §0.6.8 — a database's "Bind a label…". The same type-to-search-or-create the page's label
@@ -61,7 +63,7 @@ internal fun BindLabelSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (current == null) "Bind a label" else "Bound to #${current.name}",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.heading,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
@@ -74,7 +76,7 @@ internal fun BindLabelSheet(
                     if (syncToTasks) append(", and become tasks, because this database syncs to Tasks")
                     append(".")
                 },
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
@@ -82,7 +84,7 @@ internal fun BindLabelSheet(
                 TextButton(onClick = onUnbind) { Text("Unbind #${current.name}") }
                 Text(
                     "Unbinding takes the labelled pages out of the views and their tasks to Trash; their values stay with them until the database is deleted forever.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )

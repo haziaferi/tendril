@@ -15,8 +15,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +37,9 @@ import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.domain.ai.AI_MODEL_KEY
 import com.tendril.app.domain.ai.AiModels
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.TendrilMenuItem
 
 /**
  * §0.6.15 / §3.5 — the Anthropic key (masked, reveal, Save, Clear) and the model. Saving a
@@ -62,7 +63,7 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
                 Text("Claude (opt-in)", style = MaterialTheme.typography.body)
                 Text(
                     text = if (storedKey != null) "Key saved — Rewrite, Expand and Summarise appear on a selection" else "No key — nothing is sent anywhere",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -70,6 +71,7 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
+                textStyle = MaterialTheme.typography.body,
                 value = draft,
                 onValueChange = { draft = it },
                 modifier = Modifier.weight(1f),
@@ -94,16 +96,16 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Model", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("Model", style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
             Box {
                 AssistChip(
                     onClick = { modelMenu = true },
                     label = { Text(model) },
                     trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
                 )
-                DropdownMenu(expanded = modelMenu, onDismissRequest = { modelMenu = false }) {
+                TendrilMenu(expanded = modelMenu, onDismissRequest = { modelMenu = false }) {
                     AiModels.forEach { id ->
-                        DropdownMenuItem(text = { Text(id) }, onClick = { keyValueStore.put(AI_MODEL_KEY, id); modelMenu = false })
+                        TendrilMenuItem(text = { Text(id) }, onClick = { keyValueStore.put(AI_MODEL_KEY, id); modelMenu = false })
                     }
                 }
             }
@@ -112,7 +114,7 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
         Text(
             "What is sent: only the text you selected and the verb's instruction, to Anthropic, with this key. " +
                 "Never the page title, other blocks, or anything about you. Nothing leaves the device until you press a verb.",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

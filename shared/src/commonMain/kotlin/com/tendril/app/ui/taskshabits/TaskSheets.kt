@@ -48,6 +48,8 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * §0.6.4's Postpone — the presets from [PostponeAmount.PRESETS] as one tap each, then a
@@ -64,7 +66,7 @@ internal fun PostponeSheet(entry: Entry, onPostpone: (PostponeAmount) -> Unit, o
             Text(
                 if (entry.startDate == null) "This will give it a date — from today."
                 else "Moves when you plan to do it. A deadline, if there is one, stays where it is.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
@@ -74,10 +76,11 @@ internal fun PostponeSheet(entry: Entry, onPostpone: (PostponeAmount) -> Unit, o
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Text("Custom", style = MaterialTheme.typography.labelLarge)
+            Text("Custom", style = MaterialTheme.typography.label)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
+                    textStyle = MaterialTheme.typography.body,
                     value = customAmount,
                     onValueChange = { customAmount = it.filter(Char::isDigit).take(3) },
                     modifier = Modifier.width(80.dp),
@@ -114,9 +117,9 @@ internal fun SubtaskDialog(parent: Entry, onAdd: (String) -> Unit, onDismiss: ()
         title = { Text("Add a step") },
         text = {
             Column {
-                Text("Under “${parent.title}”", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Under “${parent.title}”", style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Step") }, singleLine = true)
+                OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it }, label = { Text("Step") }, singleLine = true)
             }
         },
         confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { onAdd(title); onDismiss() }) { Text("Add") } },
@@ -173,7 +176,7 @@ internal fun HabitDetailContent(habit: Habit, viewModel: TasksHabitsViewModel, s
             if (p == null || (p.lastDate == null && p.timesThisMonth == 0 && loggedMinutes == 0)) {
                 Text(
                     "Here whenever you want it.",
-                    style = MaterialTheme.typography.body,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
@@ -207,7 +210,7 @@ private fun TimeOfDay.word(): String = when (this) {
 private fun MonthOfDots(days: Set<LocalDate>, month: java.time.YearMonth) {
     Text(
         month.month.getDisplayName(TextStyle.FULL, Locale.getDefault()),
-        style = MaterialTheme.typography.labelLarge,
+        style = MaterialTheme.typography.label,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(8.dp))

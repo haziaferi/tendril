@@ -42,7 +42,6 @@ import com.tendril.app.domain.urgency.Urgency
 import com.tendril.app.domain.urgency.urgencyOf
 import com.tendril.app.ui.components.UrgencyDot
 import com.tendril.app.ui.components.UrgencyPicker
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +52,12 @@ import com.tendril.app.ui.track.TrackButton
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.eyebrow
 import com.tendril.app.ui.theme.pageTitle
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.domain.label
+import com.tendril.app.domain.plural
+import com.tendril.app.data.habit.formatHabitDuration
 
 /**
  * B§13.4 14f·1 — the right pane of the Tasks tab on a wide window: a task read in full, with
@@ -101,7 +106,7 @@ internal fun TaskDetailPane(
                         label = { Text("Urgency…") },
                         leadingIcon = { UrgencyDot(Urgency.fromLevel(entry.importance)) },
                     )
-                    DropdownMenu(expanded = pick, onDismissRequest = { pick = false }) {
+                    TendrilMenu(expanded = pick, onDismissRequest = { pick = false }) {
                         UrgencyPicker(
                             value = Urgency.fromLevel(entry.importance),
                             onPick = { pick = false; viewModel.setImportance(entry.id, it.level) },
@@ -121,11 +126,11 @@ internal fun TaskDetailPane(
         }
         Spacer(Modifier.height(18.dp))
         HorizontalDivider()
-        Text("Steps".uppercase(), style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+        Text("Steps".uppercase(), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
         group.subtasks.forEach { step ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Checkbox(checked = step.status == EntryStatus.DONE, onCheckedChange = { viewModel.setDone(step.id, it) })
-                Text(step.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text(step.title, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
                 TrackButton(TrackTarget.Entry(step.id), actions.runningTarget, viewModel::toggleTracking)
             }
         }
@@ -134,13 +139,13 @@ internal fun TaskDetailPane(
             modifier = Modifier.fillMaxWidth().clickable { actions.onAddSubtask(entry) }.padding(vertical = 8.dp),
         ) {
             Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp))
-            Text("Add a step", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            Text("Add a step", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body)
         }
         if (entry.sourceRowId != null) {
             Spacer(Modifier.height(10.dp))
             Text(
-                "This task is a database row's — its When and Done are the row's cells (§0.6.14); a \"Blocked by\" relation, where the database has one, lives on the row.",
-                style = MaterialTheme.typography.bodySmall,
+                "This task is a database row's — its When and Done are the row's cells; a \"Blocked by\" relation, where the database has one, lives on the row.",
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -149,13 +154,39 @@ internal fun TaskDetailPane(
 
 /** A habit read in full: the presence sentences and the month of dots the sheet shows, inline. */
 @Composable
-internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onTrash: () -> Unit) {
+internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, runningTarget: TrackTarget?, onTrash: () -> Unit) {
+    // The audit's fixes (2026-09-17, F3): the pane read only §0.6.5's presence — *Here whenever
+    // you want it.* on a habit with no completions — so it looked like a stub. The habit's own
+    // facts come first, the presence and the month of dots stay, and the row's verbs are chips
+    // by name, as the task pane's are. No Reminders chip: the shared sheet is an Entry's; a
+    // habit fires at its own time (`habitFiring`).
+    val doneToday = habit.lastCompletedDate == LocalDate.now()
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 18.dp)) {
-        Text(habit.title, style = MaterialTheme.typography.pageTitle)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = doneToday, onCheckedChange = { if (it) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id) })
+            Text(habit.title, style = MaterialTheme.typography.pageTitle, modifier = Modifier.weight(1f).padding(start = 4.dp))
+        }
         Spacer(Modifier.height(10.dp))
+        DetailRow("Repeats", habit.frequency.label())
+        DetailRow("At", habit.time?.toString(), unsetWord = "any time")
+        DetailRow("For", habit.duration?.let(::formatHabitDuration), unsetWord = "no length")
+        if (showStreak) DetailRow("Streak", if (habit.streak > 0) plural(habit.streak, "day") else null)
+        Spacer(Modifier.height(14.dp))
         HabitDetailContent(habit, viewModel, showStreak)
         Spacer(Modifier.height(14.dp))
-        AssistChip(onClick = onTrash, label = { Text("Move to Trash") })
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistChip(
+                onClick = { if (doneToday) viewModel.undoCheckInHabit(habit.id) else viewModel.checkInHabit(habit.id) },
+                label = { Text(if (doneToday) "Undo today's check-in" else "Check in today") },
+            )
+            val running = runningTarget == TrackTarget.Habit(habit.id)
+            AssistChip(
+                onClick = { viewModel.toggleTracking(TrackTarget.Habit(habit.id)) },
+                label = { Text(if (running) "Stop timer" else "Start timer") },
+                leadingIcon = { Icon(if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null) },
+            )
+            AssistChip(onClick = onTrash, label = { Text("Move to Trash") })
+        }
     }
 }
 
@@ -165,8 +196,8 @@ internal fun EmptyTaskPane() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             "Choose a task or a habit — or press Ctrl+Shift+N for a new task.",
-            style = MaterialTheme.typography.body,
-            color = MaterialTheme.colorScheme.outlineVariant,
+            style = MaterialTheme.typography.description,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(24.dp),
         )
     }
@@ -175,9 +206,9 @@ internal fun EmptyTaskPane() {
 @Composable
 private fun DetailRow(label: String, value: String?, unsetWord: String = "none") {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
-        if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium)
-        else Text(unsetWord, style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
+        if (value != null) Text(value, style = MaterialTheme.typography.body)
+        else Text(unsetWord, style = MaterialTheme.typography.description, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

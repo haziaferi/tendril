@@ -33,6 +33,8 @@ import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.components.EmptyState
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.domain.plural
 
 /**
  * 14h·1 — the Road Map's local graph around one page, drawn in the shelf: [RoadMapCanvas] with a
@@ -74,7 +76,7 @@ fun RoadMapNeighbourhood(
         if (graph.nodes.size <= 1) {
             EmptyState(
                 icon = Icons.Outlined.AccountTree,
-                message = "No connections within $depth hop(s)",
+                message = "No connections within " + plural(depth, "hop"),
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -83,7 +85,7 @@ fun RoadMapNeighbourhood(
         // The edge key, and nothing else (the critique's #5: the click legend belongs on the node).
         Text(
             "→ mention   — related",
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 8.dp),
@@ -109,9 +111,9 @@ fun DepthChips(depth: Int, onDepthChange: (Int) -> Unit) {
                     .semantics { contentDescription = "Depth $d" },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
+                Text(  // type: BADGE — the depth chip; the fill says which is chosen
                     "$d",
-                    style = if (selected) MaterialTheme.typography.label else MaterialTheme.typography.description,
+                    style = MaterialTheme.typography.caption,
                     color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

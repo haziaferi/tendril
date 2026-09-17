@@ -53,6 +53,9 @@ import com.tendril.app.domain.MindMapLayout
 import com.tendril.app.domain.OutlineBlock
 import com.tendril.app.domain.estimateNodeSize
 import com.tendril.app.domain.layoutMindMap
+import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * §0.6.2 / B§9.6 — one map at two sizes.
@@ -97,7 +100,7 @@ internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
         }
         Text(
             "Mind map · " + openVerb(),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
         )
@@ -157,7 +160,7 @@ internal fun MindMapFullScreen(
             if (selected == null) {
                 Text(
                     if (locked) "Read-only while locked" else "Tap a node to edit it, add a child, or delete it",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.label,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
                 )
@@ -228,9 +231,9 @@ private fun MapLayer(layout: MindMapLayout, scale: Float, pan: Offset, selectedI
                     .then(if (interactive && onTapNode != null) Modifier.clickable { onTapNode(node.block.id) } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
+                Text(  // type: TITLE — a node shows its block's text
                     node.block.content.ifBlank { "…" },
-                    style = if (isRoot) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                    style = if (isRoot) MaterialTheme.typography.body else MaterialTheme.typography.description,
                     color = textColor,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -247,7 +250,7 @@ private fun NodeTextDialog(title: String, initial: String, onDismiss: () -> Unit
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { OutlinedTextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
+        text = { OutlinedTextField(textStyle = MaterialTheme.typography.body, value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("OK") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

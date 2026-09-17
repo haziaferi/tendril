@@ -42,6 +42,8 @@ import com.tendril.app.ui.components.hoverPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.heading
 
 /**
  * §0.6.12 — a BLOCK_REFERENCE block: the source block's live text behind an accent bar (the
@@ -72,8 +74,8 @@ internal fun BlockReferenceCard(core: WorkbenchCore?, block: Block, onOpenPage: 
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
             Box(modifier = Modifier.width(3.dp).fillMaxHeight().background(MaterialTheme.colorScheme.tertiary))
             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                Text(text.ifBlank { "(empty block)" }, style = MaterialTheme.typography.bodyMedium)
-                Text(caption, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text.ifBlank { "(empty block)" }, style = MaterialTheme.typography.body)
+                Text(caption, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -92,7 +94,7 @@ internal fun BlockReferencePickerDialog(viewModel: PageDetailViewModel, onDismis
     TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Reference a block", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("Reference a block", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
             BasicTextField(
@@ -102,13 +104,13 @@ internal fun BlockReferencePickerDialog(viewModel: PageDetailViewModel, onDismis
                 textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
             )
             if (query.isBlank()) {
-                Text("Type a few words of the block", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Type a few words of the block", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             LazyColumn {
                 items(results, key = { it.second.id }) { (page, candidate) ->
                     Column(modifier = Modifier.fillMaxWidth().clickable { onPick(candidate) }.padding(vertical = 8.dp)) {
                         Text(candidate.content, style = MaterialTheme.typography.body, maxLines = 2)
-                        Text(page.title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(page.title, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

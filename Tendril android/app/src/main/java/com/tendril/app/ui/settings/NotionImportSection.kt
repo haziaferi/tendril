@@ -37,6 +37,7 @@ import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.ui.pages.EnableSyncSheet
 import kotlinx.coroutines.launch
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
 
 /**
  * Settings → Notion import (§7): a one-shot additive import from a Notion Markdown & CSV
@@ -87,7 +88,7 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
                 Text(
                     "A Notion Markdown & CSV export .zip — pages and databases are added " +
                         "alongside your existing ones, nothing here is replaced.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -99,7 +100,7 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
 
         importError?.let {
             Spacer(Modifier.height(12.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            Text(it, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.error)
         }
 
         summary?.let { result ->
@@ -107,7 +108,7 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
             Text(
                 "Imported ${result.pagesImported} page(s), ${result.databasesImported.size} database(s) " +
                     "(${result.rowsImported} row(s) total), ${result.assetsImported} image/file(s).",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.body,
             )
             result.databasesImported.forEach { db ->
                 Row(
@@ -115,9 +116,9 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(db.name, style = MaterialTheme.typography.bodyMedium)
+                    Text(db.name, style = MaterialTheme.typography.body)
                     if (db.databaseId in boundDatabaseIds) {
-                        Text("Synced to Tasks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Synced to Tasks", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         TextButton(onClick = { pendingBind = db }) { Text("Sync to Tasks…") }
                     }
@@ -125,7 +126,7 @@ fun NotionImportSection(importer: NotionImporter, databaseSyncManager: DatabaseS
             }
             Spacer(Modifier.height(8.dp))
             result.notices.forEach { notice ->
-                Text("• $notice", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("• $notice", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

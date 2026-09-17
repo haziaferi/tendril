@@ -46,6 +46,8 @@ import com.tendril.app.ui.theme.resolveDark
 import com.tendril.app.ui.theme.caption
 import com.tendril.app.ui.theme.eyebrow
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 /**
  * 14g·1 — the one theme section both Settings homes render (the phone's Appearance disclosure,
@@ -60,7 +62,7 @@ fun ThemeSection(settings: ThemeSettings, showOled: Boolean, modifier: Modifier 
     val choice = settings.observe()
     val dark = choice.mode.resolveDark()
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text("Register", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+        Text("Register", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Register.ALL.forEach { register ->
                 RegisterSwatch(
@@ -73,13 +75,13 @@ fun ThemeSection(settings: ThemeSettings, showOled: Boolean, modifier: Modifier 
         }
         Text(
             choice.register.use.replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
 
         Spacer(Modifier.height(16.dp))
-        Text("Mode", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+        Text("Mode", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
         SingleChoiceSegmentedButtonRow {
             TendrilMode.entries.forEachIndexed { index, m ->
                 SegmentedButton(
@@ -91,7 +93,7 @@ fun ThemeSection(settings: ThemeSettings, showOled: Boolean, modifier: Modifier 
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Typeface", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 8.dp))
+        Text("Typeface", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
         SingleChoiceSegmentedButtonRow {
             TendrilTypeface.entries.forEachIndexed { index, t ->
                 SegmentedButton(
@@ -109,7 +111,7 @@ fun ThemeSection(settings: ThemeSettings, showOled: Boolean, modifier: Modifier 
                     Text("Deeper blacks", style = MaterialTheme.typography.body)
                     Text(
                         "For an OLED screen: the dark ground at 4 %, every colour re-solved on it.",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -144,9 +146,9 @@ private fun RegisterSwatch(register: Register, dark: Boolean, selected: Boolean,
         ) {
             Box(Modifier.size(20.dp).clip(CircleShape).background(palette.accent))
         }
-        Text(
+        Text(  // type: ICON_LABEL — the name under a swatch, the rail's kind
             register.label,
-            style = if (selected) MaterialTheme.typography.eyebrow.copy(letterSpacing = MaterialTheme.typography.caption.letterSpacing) else MaterialTheme.typography.caption,
+            style = MaterialTheme.typography.caption,
             textAlign = TextAlign.Center,
             maxLines = 1,
             softWrap = false,

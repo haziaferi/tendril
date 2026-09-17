@@ -138,6 +138,16 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.components.ListInteractiveMinimum
+import com.tendril.app.ui.components.TitleAndMeta
+import com.tendril.app.ui.components.listRow
+import com.tendril.app.ui.components.rowButtonModifier
+import com.tendril.app.ui.components.rowGlyphModifier
+import com.tendril.app.ui.nav.LocalDensityProfile
 
 private enum class CalendarView { DAY, WEEK, MONTH, AGENDA }
 
@@ -572,7 +582,7 @@ private fun DayView(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             IconButton(onClick = onPrev) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous day") }
-            Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")), style = MaterialTheme.typography.titleMedium)
+            Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")), style = MaterialTheme.typography.heading)
             IconButton(onClick = onNext) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next day") }
         }
         // §0.6.5 — compare: two numbers side by side, no score and no colour (§0.5.2). Absent
@@ -589,7 +599,7 @@ private fun DayView(
                     if (planned > 0) "Planned " + formatMinutes(planned) else null,
                     if (logged > 0) "Logged " + formatMinutes(logged) else null,
                 ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp),
             )
@@ -604,6 +614,7 @@ private fun DayView(
             QuickAddParser.parse(quickAddText, LocalDate.now(), EntryKind.EVENT, ignored, kindOverride)
         }
         if (showQuickAdd) OutlinedTextField(
+            textStyle = MaterialTheme.typography.body,
             value = quickAddText,
             onValueChange = { quickAddText = it; ignored = emptySet(); kindOverride = null },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -640,15 +651,20 @@ private fun DayView(
         } else if (occurrences.isEmpty() && extras.isEmpty()) {
             EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing scheduled", modifier = Modifier.fillMaxSize())
         } else {
-            LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+            // The audit's fixes (L2, 2026-09-17): the tray PR's one-line row — measured 65 px here
+            // against the Tasks list's 30 — through `ui/components/RowControls.kt`.
+            val profile = LocalDensityProfile.current
+            ListInteractiveMinimum { LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
                 // Already ordered by EntryOccurrences.expand (by time, untimed last, then
                 // title) — the order this list was sorting into by hand. The key carries the
                 // occurrence's start date as well as the row id: one series contributes many
                 // occurrences, all sharing the base row's id.
                 items(occurrences, key = { "${it.entry.id}:${it.startDate}" }) { occurrence ->
                     val entry = occurrence.entry
+                    val button = rowButtonModifier(profile.pointer)
+                    val glyph = rowGlyphModifier(profile.pointer)
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().listRow(profile),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (entry.status != null) {
@@ -658,23 +674,20 @@ private fun DayView(
                             )
                         }
                         // §3.2 — the row itself opens the edit sheet (it had no tap target before 6b).
-                        Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
-                            Text(entry.title, style = MaterialTheme.typography.body)
-                            Text(
-                                listOfNotNull(occurrenceSubtitle(occurrence, date), loggedSegment(loggedPerEntry[entry.id] ?: 0, entry.estimate)).joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        TitleAndMeta(
+                            entry.title,
+                            listOfNotNull(occurrenceSubtitle(occurrence, date), loggedSegment(loggedPerEntry[entry.id] ?: 0, entry.estimate)).joinToString(" · "),
+                            modifier = Modifier.weight(1f).clickable { onEdit(entry) },
+                        )
                         // §0.6.5 — start/stop here too: the Day view is where the day is worked from.
-                        TrackButton(TrackTarget.Entry(entry.id), runningTarget, onToggleTracking)
-                        if (onOpenReminders != null) IconButton(onClick = { onOpenReminders(entry) }) {
-                            Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open))
+                        TrackButton(TrackTarget.Entry(entry.id), runningTarget, onToggleTracking, modifier = button, iconModifier = glyph)
+                        if (onOpenReminders != null) IconButton(onClick = { onOpenReminders(entry) }, modifier = button) {
+                            Icon(Icons.Filled.Notifications, contentDescription = stringResource(Res.string.reminders_open), modifier = glyph)
                         }
                     }
                 }
                 items(extras, key = { extraKey(it) }) { ExtraRow(it, onOpenPage) }
-            }
+            } }
         }
     }
 }
@@ -689,20 +702,19 @@ private fun extraKey(extra: CalendarExtra): String = when (extra) {
 @Composable
 private fun ExtraRow(extra: CalendarExtra, onOpenPage: (Long) -> Unit) {
     val open: (() -> Unit)? = (extra as? CalendarExtra.RowDate)?.let { { onOpenPage(it.cell.pageId) } }
+    val profile = LocalDensityProfile.current
     Row(
-        modifier = Modifier.fillMaxWidth().then(if (open != null) Modifier.clickable { open() } else Modifier).padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().then(if (open != null) Modifier.clickable { open() } else Modifier).listRow(profile),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             if (extra is CalendarExtra.HabitAt) Icons.Filled.LocalFireDepartment else Icons.Filled.TableChart,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
+            modifier = rowGlyphModifier(profile.pointer),
         )
         Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(extra.title, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.primary)
-            Text(extra.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        TitleAndMeta(extra.title, extra.subtitle, modifier = Modifier.weight(1f), titleColor = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -727,30 +739,28 @@ private fun AgendaView(
         EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing in the next $AGENDA_DAYS days", modifier = Modifier.fillMaxSize())
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+    val profile = LocalDensityProfile.current
+    ListInteractiveMinimum { LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         days.forEach { (day, lists) ->
             item(key = "day_$day") {
                 Text(
                     if (day == LocalDate.now()) "Today · " + day.format(DateTimeFormatter.ofPattern("EEE d MMM")) else day.format(DateTimeFormatter.ofPattern("EEEE d MMM")),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.label,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
             items(lists.first, key = { "occ_${it.entry.id}:${it.startDate}:$day" }) { occurrence ->
                 val entry = occurrence.entry
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().listRow(profile), verticalAlignment = Alignment.CenterVertically) {
                     if (entry.status != null) Checkbox(checked = entry.status == EntryStatus.DONE, onCheckedChange = { onSetDone(entry.id, it) })
-                    Column(modifier = Modifier.weight(1f).clickable { onEdit(entry) }) {
-                        Text(entry.title, style = MaterialTheme.typography.body)
-                        Text(occurrenceSubtitle(occurrence, day), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    TitleAndMeta(entry.title, occurrenceSubtitle(occurrence, day), modifier = Modifier.weight(1f).clickable { onEdit(entry) })
                 }
             }
             items(lists.second, key = { extraKey(it) }) { ExtraRow(it, onOpenPage) }
             item(key = "div_$day") { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
         }
-    }
+    } }
 }
 
 /**
@@ -821,13 +831,13 @@ private fun WeekStripView(
                             style = if (day == LocalDate.now()) MaterialTheme.typography.heading else MaterialTheme.typography.body,
                         )
                         if (dayEntries.isEmpty() && dayExtras.isEmpty()) {
-                            Text("—", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("—", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             dayEntries.take(3).forEach { occurrence ->
                                 var lineOrigin by remember(occurrence) { mutableStateOf(Offset.Zero) }
                                 Text(
                                     "• ${occurrence.entry.title}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.caption,
                                     modifier = Modifier.onGloballyPositioned { lineOrigin = it.boundsInRoot().topLeft }.pointerInput(occurrence) {
                                         detectDragGesturesAfterLongPress(
                                             onDragStart = { start ->
@@ -846,14 +856,14 @@ private fun WeekStripView(
                                     },
                                 )
                             }
-                            if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.bodySmall)
+                            if (dayEntries.size > 3) Text("+${dayEntries.size - 3} more", style = MaterialTheme.typography.caption)
                             // 14g·2 — a layer wears its own hue (B§13.8.3): a habit the habit hue, a
                             // database date the third; the accent is reserved for today and selection.
                             val palette = LocalTendrilPalette.current
                             dayExtras.take(3).forEach {
-                                Text("◦ ${it.title}", style = MaterialTheme.typography.bodySmall, color = if (it is CalendarExtra.HabitAt) palette.habit else palette.thirdStrong)
+                                Text("◦ ${it.title}", style = MaterialTheme.typography.caption, color = if (it is CalendarExtra.HabitAt) palette.habit else palette.thirdStrong)
                             }
-                            if (dayExtras.size > 3) Text("+${dayExtras.size - 3} more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (dayExtras.size > 3) Text("+${dayExtras.size - 3} more", style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -866,7 +876,7 @@ private fun WeekStripView(
                 shadowElevation = 6.dp,
                 shape = MaterialTheme.shapes.small,
             ) {
-                Text(d.entry.title, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                Text(d.entry.title, style = MaterialTheme.typography.caption, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
             }
         }
     }
@@ -886,7 +896,7 @@ private fun MonthGridView(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             IconButton(onClick = { onMonthShift(-1) }) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous month") }
-            Text(month.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " ${month.year}", style = MaterialTheme.typography.titleMedium)
+            Text(month.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " ${month.year}", style = MaterialTheme.typography.heading)
             IconButton(onClick = { onMonthShift(1) }) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next month") }
         }
 
@@ -916,7 +926,7 @@ private fun MonthGridView(
                         )
                         if (count > 0) {
                             // One dot for "something is on this day" until the dots PR draws one per layer — dim, not the accent.
-                            Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("•", style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

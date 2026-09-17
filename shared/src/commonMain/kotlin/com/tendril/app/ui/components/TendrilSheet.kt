@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.nav.SheetForm
 import com.tendril.app.ui.nav.sheetFormFor
+import com.tendril.app.ui.theme.heading
 
 /**
  * The one frame every bottom sheet in the app uses (2026-09-12). Before this, each of the 29
@@ -65,7 +66,7 @@ fun TendrilSheet(
                 .padding(bottom = sheetBottomRoom()),
         ) {
             if (title != null) {
-                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
+                Text(title, style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp))
             }
             content()
         }

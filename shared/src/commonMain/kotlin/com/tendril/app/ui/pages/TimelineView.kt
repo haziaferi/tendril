@@ -55,6 +55,9 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 
 private val DAY_WIDTH = 36.dp
 private val LANE_HEIGHT = 40.dp
@@ -74,7 +77,7 @@ internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewMod
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 "Timeline needs a Date property for the bars' start — configure this view to pick one.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -167,7 +170,7 @@ internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewMod
         if (undated.isNotEmpty()) {
             Text(
                 if (viewOnly) "No date" else "No date · " + (if (pointer) "drag onto a day" else "hold and drag onto a day"),
-                style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
             undated.forEach { row ->
                 var origin by remember(row.page.id) { mutableStateOf(Offset.Zero) }
@@ -213,18 +216,18 @@ private fun DayHeader(start: LocalDate, dayCount: Int, today: LocalDate) {
             Column(modifier = Modifier.width(DAY_WIDTH), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     if (day.dayOfMonth == 1 || i == 0) day.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() } else "",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
                 Text(
                     day.dayOfMonth.toString(),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.caption,
                     color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     day.dayOfWeek.name.take(1),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -257,7 +260,7 @@ private fun TimelineBarRow(
     var dragPx by remember(bar.row.page.id, bar.start) { mutableStateOf(0f) }
     val container = if (isBlocked) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
     val ink = if (isBlocked) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
-    val style = MaterialTheme.typography.labelMedium
+    val style = MaterialTheme.typography.caption
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val spanWidth = DAY_WIDTH * bar.days.toInt()

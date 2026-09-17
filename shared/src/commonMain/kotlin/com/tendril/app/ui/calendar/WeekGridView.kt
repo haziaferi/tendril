@@ -71,6 +71,8 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.label
 
 private const val HOUR_DP = 56
 private const val GUTTER_DP = 44
@@ -151,7 +153,7 @@ internal fun WeekGridView(
             // The week's own bar: ‹ 14 – 20 September 2026 ›
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onShiftWeek(-1) }) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous week") }
-                Text(weekLabel(days.first(), days.last()), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(weekLabel(days.first(), days.last()), style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 IconButton(onClick = { onShiftWeek(1) }) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next week") }
             }
             // Day headers: the Day view's per column. B§13.6 #5 — a drop target too (the day, no time).
@@ -169,10 +171,10 @@ internal fun WeekGridView(
                             .clickable { onSelectDate(col.day) }
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                     ) {
-                        Text(col.day.format(DateTimeFormatter.ofPattern("EEE d")), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                        Text(col.day.format(DateTimeFormatter.ofPattern("EEE d")), style = MaterialTheme.typography.label, maxLines = 1)
                         Text(
                             if (col.planned > 0) "Planned ${formatMinutes(col.planned)}" else " ",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                         )
@@ -255,7 +257,7 @@ internal fun WeekGridView(
                         }
                     }
                     for (h in 0..23) {
-                        Text("%02d".format(h), style = MaterialTheme.typography.labelSmall, color = labelColor, modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) })
+                        Text("%02d".format(h), style = MaterialTheme.typography.caption, color = labelColor, modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) })
                     }
                     perDay.forEachIndexed { i, col ->
                         val laneX = gutterPx + i * laneWidthPx
@@ -305,7 +307,7 @@ internal fun WeekGridView(
                             ) {
                                 Text(
                                     block.title,
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.caption,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = if (block.minutes >= 45) 2 else 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -327,7 +329,7 @@ internal fun WeekGridView(
                 modifier = Modifier.offset { IntOffset((d.position.x - boxOrigin.x).roundToInt() + 12, (d.position.y - boxOrigin.y).roundToInt() - 18) },
                 tonalElevation = 6.dp, shadowElevation = 6.dp, shape = RoundedCornerShape(6.dp),
             ) {
-                Text(d.block.title + (target?.let { "  → $it" } ?: ""), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                Text(d.block.title + (target?.let { "  → $it" } ?: ""), style = MaterialTheme.typography.caption, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
             }
         }
     }
