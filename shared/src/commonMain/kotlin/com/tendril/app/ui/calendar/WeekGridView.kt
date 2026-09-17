@@ -58,13 +58,13 @@ import com.tendril.app.domain.plan.TimelineBlock
 import com.tendril.app.domain.plan.TimelineExtra
 import com.tendril.app.domain.plan.laneAt
 import com.tendril.app.domain.plan.openScrollMinute
+import com.tendril.app.domain.plan.plannedLabel
 import com.tendril.app.domain.plan.plannedMinutes
 import com.tendril.app.domain.plan.snapMinute
 import com.tendril.app.domain.plan.timeOfMinute
 import com.tendril.app.domain.plan.timelineBlocks
 import com.tendril.app.domain.plan.visibleAllDay
 import com.tendril.app.domain.recurrence.EntryOccurrence
-import com.tendril.app.domain.track.formatMinutes
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalTime
@@ -174,12 +174,15 @@ internal fun WeekGridView(
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                     ) {
                         Text(col.day.format(DateTimeFormatter.ofPattern("EEE d")), style = MaterialTheme.typography.label, maxLines = 1)
+                        // L8 — the minutes only from a 90 dp lane (`plannedLabel`); the lane's width is what the grid measured.
+                        val laneWidthDp = with(density) { laneWidthState.toDp().value }
                         Text(
-                            if (col.planned > 0) "Planned ${formatMinutes(col.planned)}" else " ",
+                            plannedLabel(col.planned, laneWidthDp).ifEmpty { " " },
                             style = MaterialTheme.typography.caption,
                             // On today's tint `onSurfaceVariant` measures 3.45 : 1 (`calendar-chrome-mock.md` #1): the register's text there.
                             color = if (isToday) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }

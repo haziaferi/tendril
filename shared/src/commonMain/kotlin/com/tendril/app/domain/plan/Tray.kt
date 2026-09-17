@@ -25,3 +25,9 @@ fun trayTasks(tasks: List<Entry>, today: LocalDate): TrayTasks {
     val overdue = candidates.filter { it.startDate != null && it.startDate!! < today }.sortedWith(compareBy({ it.startDate }, { it.title.lowercase() }))
     return TrayTasks(unscheduled, overdue)
 }
+
+/** L8 — the tray's drawn width: the remembered width, never more than [maxShare] of the pane (the shelf's rule at 45 %). The share wins even under the handle's 240 dp floor: the week's lanes come first. */
+fun trayDrawnWidthDp(rememberedDp: Int, paneWidthDp: Float, maxShare: Float = TRAY_MAX_SHARE): Int =
+    minOf(rememberedDp, (paneWidthDp * maxShare).toInt())
+
+const val TRAY_MAX_SHARE = 0.30f

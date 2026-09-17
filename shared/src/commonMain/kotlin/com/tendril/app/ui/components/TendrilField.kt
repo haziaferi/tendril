@@ -12,7 +12,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -20,6 +26,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -47,6 +55,35 @@ fun TendrilField(
     focusRequester: FocusRequester? = null,
     onPreviewKeyEvent: ((KeyEvent) -> Boolean)? = null,
 ) {
+    // The String form keeps the selection beside the text (the recommended pattern), so a caller
+    // that resets the text to "" resets the caret too — `QuickAddField` lost characters after a
+    // reset on Material's String overload (the Month grid's walk).
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+    val current = if (fieldValue.text == value) fieldValue else TextFieldValue(value, TextRange(value.length))
+    TendrilField(
+        value = current,
+        onValueChange = { fieldValue = it; if (it.text != value) onValueChange(it.text) },
+        modifier = modifier, placeholder = placeholder, height = height, leading = leading, trailing = trailing,
+        visualTransformation = visualTransformation, focusRequester = focusRequester, onPreviewKeyEvent = onPreviewKeyEvent,
+    )
+}
+
+/** The `TextFieldValue` form — a caller that owns the selection (the quick-add line) uses it directly. */
+@Composable
+fun TendrilField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    height: Dp = 36.dp,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    focusRequester: FocusRequester? = null,
+    onPreviewKeyEvent: ((KeyEvent) -> Boolean)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+) {
     val rowHeight = if (LocalDensityProfile.current.pointer) height else maxOf(height, 48.dp)
     Row(
         modifier = modifier
@@ -59,7 +96,7 @@ fun TendrilField(
     ) {
         leading?.invoke()
         Box(modifier = Modifier.weight(1f)) {
-            if (value.isEmpty() && placeholder != null) {
+            if (value.text.isEmpty() && placeholder != null) {
                 Text( // type: PLACEHOLDER — the field's own text at the field's size
                     placeholder, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
@@ -73,6 +110,8 @@ fun TendrilField(
                 textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 visualTransformation = visualTransformation,
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
                 modifier = fieldModifier,
             )
         }

@@ -129,6 +129,7 @@ internal fun QuickAddWindow(core: WorkbenchCore, state: QuickAddState, main: Mai
                                 },
                                 placeholder = "Dentist fri 14:30 !",
                                 defaultKind = EntryKind.TASK,
+                                fieldHeight = 36.dp, // L7 — the switcher's field; the chips under it
                                 leadingIcon = { Icon(Icons.Outlined.AddCircleOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
                                 previewModifier = Modifier.padding(top = 8.dp),
                                 onTextChanged = { text = it },
