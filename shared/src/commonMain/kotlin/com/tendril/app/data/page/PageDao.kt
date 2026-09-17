@@ -32,6 +32,10 @@ interface PageDao {
     @Query("SELECT * FROM pages")
     suspend fun getAll(): List<Page>
 
+    /** L6 — the switcher's Recents: live, non-template pages, the most recently edited first. */
+    @Query("SELECT * FROM pages WHERE deletedAt IS NULL AND isTemplate = 0 ORDER BY updatedAt DESC LIMIT :limit")
+    suspend fun getRecentlyEdited(limit: Int): List<Page>
+
     /** The "relate to" database picker (§5.4/DB1) — every database in the app, by its own
      * defining page. `:kind` binds through the existing [PageKind] converter, so this stays a
      * parameterized query rather than a raw enum-name literal that would silently drift if the

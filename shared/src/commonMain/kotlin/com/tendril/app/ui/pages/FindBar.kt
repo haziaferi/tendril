@@ -1,16 +1,12 @@
 package com.tendril.app.ui.pages
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -27,15 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
-import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.tabular
 
@@ -74,31 +68,21 @@ fun FindBar(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-                .padding(horizontal = 8.dp, vertical = 5.dp),
-        ) {
-            if (query.isEmpty()) Text("Find in page", style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focus)
-                    .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (event.key) {
-                            Key.Enter, Key.NumPadEnter -> { if (event.isShiftPressed) onPrevious() else onNext(); true }
-                            else -> false
-                        }
-                    },
-            )
-        }
+        TendrilField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = "Find in page",
+            height = FIND_BUTTON,
+            focusRequester = focus,
+            onPreviewKeyEvent = { event ->
+                if (event.type != KeyEventType.KeyDown) return@TendrilField false
+                when (event.key) {
+                    Key.Enter, Key.NumPadEnter -> { if (event.isShiftPressed) onPrevious() else onNext(); true }
+                    else -> false
+                }
+            },
+            modifier = Modifier.weight(1f),
+        )
         Text(
             when {
                 query.isEmpty() -> ""

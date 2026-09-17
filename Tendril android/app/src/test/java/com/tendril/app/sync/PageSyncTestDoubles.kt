@@ -129,6 +129,9 @@ class FakePageDao(private val store: FakePageStore) : PageDao {
     override suspend fun getByUid(uid: String): Page? = store.pages.values.firstOrNull { it.uid == uid }
     override suspend fun getAll(): List<Page> = store.pages.values.toList()
 
+    override suspend fun getRecentlyEdited(limit: Int): List<Page> =
+        store.pages.values.filter { it.deletedAt == null && !it.isTemplate }.sortedByDescending { it.updatedAt }.take(limit)
+
     override suspend fun getRowsOf(databaseId: Long): List<Page> =
         store.pages.values.filter { it.databaseId == databaseId && it.deletedAt == null }
 

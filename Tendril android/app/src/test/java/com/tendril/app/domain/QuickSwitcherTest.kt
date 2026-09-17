@@ -47,6 +47,50 @@ class QuickSwitcherTest {
         assertTrue(rankPageHits("", listOf(books), fts).isEmpty())
     }
 
+    // ---- L6: the card's sections
+
+    private val cmds = listOf(
+        SwitcherCommand("New page", "create blank", chord = "Ctrl+N") {}, SwitcherCommand("New canvas", "create board") {},
+        SwitcherCommand("Go to Calendar", "tab", chord = "Ctrl+2") {}, SwitcherCommand("Go to Tasks", "tab", chord = "Ctrl+3") {},
+        SwitcherCommand("Review", "weekly walk") {},
+    )
+    private fun hit(title: String) = PageSearchHit(nextId++, title, null, "")
+
+    @Test
+    fun `a blank query lists Recent with each page's age, and nothing else`() {
+        val recents = listOf(hit("Escape test") to "just now", hit("Trip") to "6 Sep")
+        val sections = switcherSections(SwitcherMode.Pages(""), hits = listOf(hit("ignored")), recents = recents, commands = cmds)
+        assertEquals(listOf("Recent"), sections.map { it.label })
+        assertEquals(listOf("just now", "6 Sep"), sections.single().items.map { (it as SwitcherItem.Hit).meta })
+    }
+
+    @Test
+    fun `a query lists the pages, then at most three matching commands under their own label`() {
+        val sections = switcherSections(SwitcherMode.Pages("e"), hits = listOf(hit("Escape test")), recents = emptyList(), commands = cmds)
+        assertEquals(listOf("Pages", "Commands"), sections.map { it.label })
+        assertEquals(3, sections[1].items.size) // five commands carry an "e"; the tail is capped
+        assertEquals(4, sections.flat().size)
+        assertTrue(switcherSections(SwitcherMode.Pages("zq"), emptyList(), emptyList(), cmds).isEmpty())
+    }
+
+    @Test
+    fun `an angle bracket lists every matching command alone, with its chord`() {
+        val sections = switcherSections(SwitcherMode.Commands("go"), hits = listOf(hit("Go west")), recents = emptyList(), commands = cmds)
+        assertEquals(listOf("Commands"), sections.map { it.label })
+        val listed = sections.single().items.map { (it as SwitcherItem.Cmd).command }
+        assertEquals(listOf("Go to Calendar", "Go to Tasks"), listed.map { it.title })
+        assertEquals(listOf("Ctrl+2", "Ctrl+3"), listed.map { it.chord })
+        assertEquals(null, cmds.first { it.title == "New canvas" }.chord)
+    }
+
+    @Test
+    fun `the typed prefix is found at a title's start only`() {
+        assertEquals(0..1, prefixRange("Call the library", "ca"))
+        assertEquals(0..1, prefixRange("Call the library", " CA "))
+        assertEquals(null, prefixRange("Call the library", "lib"))
+        assertEquals(null, prefixRange("Call the library", ""))
+    }
+
     @Test
     fun `a page is found by its title, and by its new title after a rename`() = runBlocking {
         val store = FakePageStore()

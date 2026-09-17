@@ -1,5 +1,6 @@
 package com.tendril.app.ui.settings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,17 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,6 +33,9 @@ import com.tendril.app.domain.ai.AI_MODEL_KEY
 import com.tendril.app.domain.ai.AiModels
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.components.BarPillButton
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
 
@@ -69,30 +67,19 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                textStyle = MaterialTheme.typography.body,
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // L6 — the desktop's 36 dp field (the switcher's frame); the label leads inside the hairline.
+            TendrilField(
                 value = draft,
                 onValueChange = { draft = it },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                label = { Text("Anthropic API key") },
+                placeholder = "sk-ant-…",
+                leading = { Text("API key", style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(72.dp)) },
                 visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { revealed = !revealed }) {
-                        Icon(
-                            imageVector = if (revealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                            contentDescription = if (revealed) "Hide key" else "Show key",
-                        )
-                    }
-                },
+                modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(12.dp))
-            Button(onClick = { aiKeyStore.set(draft) }, enabled = draft.trim() != (storedKey ?: "")) { Text("Save") }
-            if (storedKey != null) {
-                Spacer(Modifier.width(4.dp))
-                TextButton(onClick = { aiKeyStore.set(null); draft = "" }) { Text("Clear") }
-            }
+            BarPillButton(label = if (revealed) "Hide" else "Reveal", onClick = { revealed = !revealed })
+            if (draft.trim() != (storedKey ?: "")) BarPillButton(label = "Save", onClick = { aiKeyStore.set(draft) })
+            if (storedKey != null) BarPillButton(label = "Clear", onClick = { aiKeyStore.set(null); draft = "" })
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
