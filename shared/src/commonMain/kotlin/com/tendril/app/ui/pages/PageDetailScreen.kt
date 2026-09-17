@@ -88,6 +88,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.ShellTopBar
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.widthIn
+import com.tendril.app.ui.nav.LocalTitleBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -339,7 +342,10 @@ fun PageDetailScreen(
                             viewModel.updateTitle(it)
                         },
                         readOnly = contentLocked,
-                        modifier = Modifier.fillMaxWidth(),
+                        // L5 — under the window's own title bar the field takes its text's width, not the
+                        // slot's: the slot's rest is the bar's ground, which drags the window (a pop-out
+                        // has no other). A full-width field would leave a pop-out nothing to drag by.
+                        modifier = if (LocalTitleBar.current != null) Modifier.widthIn(min = 160.dp).width(IntrinsicSize.Min) else Modifier.fillMaxWidth(),
                         textStyle = (if (paneChrome?.compact == true) MaterialTheme.typography.heading else MaterialTheme.typography.pageTitle).copy(color = MaterialTheme.colorScheme.onSurface),
                         singleLine = true,
                     )

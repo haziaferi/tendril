@@ -109,6 +109,11 @@ import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.label
 import com.tendril.app.ui.components.TendrilMenu
+import androidx.compose.material3.HorizontalDivider
+import com.tendril.app.ui.nav.ShellLayout
+import com.tendril.app.ui.nav.LocalShellLayout
+import com.tendril.app.ui.components.MenuCheck
+import com.tendril.app.ui.components.BarMenuButton
 import com.tendril.app.ui.components.TendrilMenuItem
 import com.tendril.app.domain.plural
 
@@ -175,9 +180,18 @@ fun RoadMapScreen(
         modifier = modifier,
         topBar = {
             Column {
+                val wide = LocalShellLayout.current == ShellLayout.RAIL
                 ShellTopBar(
                     title = { Text(stringResource(Res.string.nav_road_map)) },
                     actions = {
+                        // L5 (C1) — on a wide window the filter row folds into a `Filter ▾` check-menu.
+                        if (wide) FilterMenuButton(
+                            filter = filter,
+                            labels = labels,
+                            onHideJournal = { viewModel.setHideJournal(it) },
+                            onToggleKind = { viewModel.toggleKind(it) },
+                            onLabel = { viewModel.setLabel(it) },
+                        )
                         // The only control on this screen that writes anything. Hidden rather
                         // than disabled while View-Only is on, matching the Pages hub's own
                         // create FAB — refresh, focus and "All Pages" stay, so the app bar does
@@ -195,7 +209,7 @@ fun RoadMapScreen(
                         }
                     },
                 )
-                FilterRow(
+                if (!wide) FilterRow(
                     filter = filter,
                     labels = labels,
                     onHideJournal = { viewModel.setHideJournal(it) },
@@ -226,6 +240,16 @@ fun RoadMapScreen(
                 )
             } else {
                 RoadMapCanvas(graph = graph, onOpenPage = onOpenPage, nodeWidth = NODE_WIDTH, core = core)
+            }
+            // L5 — the edge legend at the canvas's foot on a wide window (the filter row carried it).
+            if (LocalShellLayout.current == ShellLayout.RAIL) {
+                Text(
+                    "→ mention   — related",
+                    style = MaterialTheme.typography.label,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 8.dp),
+                )
             }
         }
     }
@@ -309,6 +333,43 @@ private fun FilterRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
+    }
+}
+
+/**
+ * L5 (C1) — the filter row as a check-menu in the bar: the Journal, the three kinds (a kind
+ * refuses to be the last one unchecked, as `toggleKind` does), then the labels one at a time
+ * (8c's rule). The menu stays open while toggling.
+ */
+@Composable
+private fun FilterMenuButton(
+    filter: com.tendril.app.domain.roadmap.RoadMapFilter,
+    labels: List<Label>,
+    onHideJournal: (Boolean) -> Unit,
+    onToggleKind: (PageKind) -> Unit,
+    onLabel: (Long?) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val chosen = labels.find { it.id == filter.labelId }
+    Box {
+        BarMenuButton(if (chosen != null) "Filter · #" + chosen.name else "Filter", open = open, onClick = { open = true })
+        TendrilMenu(expanded = open, onDismissRequest = { open = false }) {
+            TendrilMenuItem(text = { Text("Journal") }, trailingIcon = { MenuCheck(!filter.hideJournal) }, onClick = { onHideJournal(!filter.hideJournal) })
+            for ((kind, name) in listOf(PageKind.PAGE to "Pages", PageKind.DATABASE to "Databases", PageKind.CANVAS to "Canvases")) {
+                TendrilMenuItem(text = { Text(name) }, trailingIcon = { MenuCheck(kind in filter.kinds) }, onClick = { onToggleKind(kind) })
+            }
+            HorizontalDivider()
+            TendrilMenuItem(text = { Text("Any label") }, trailingIcon = { MenuCheck(filter.labelId == null) }, onClick = { onLabel(null) })
+            val palette = LocalTendrilPalette.current
+            labels.forEach { label ->
+                TendrilMenuItem(
+                    text = { Text("#" + label.name) },
+                    leadingIcon = { LabelDot(labelColours(label.color, palette).hue) },
+                    trailingIcon = { MenuCheck(filter.labelId == label.id) },
+                    onClick = { onLabel(label.id) },
+                )
+            }
+        }
     }
 }
 

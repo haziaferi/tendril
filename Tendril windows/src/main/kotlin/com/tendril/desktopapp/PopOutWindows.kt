@@ -40,6 +40,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
+import com.tendril.app.ui.nav.LocalTitleBarInstaller
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigationevent.NavigationEventInput
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -187,8 +188,12 @@ internal fun PopOutWindows(core: WorkbenchCore, popOuts: PopOuts, registry: PopO
                     }
                 }
                 val theme = core.themeSettings.observe()
+                // L5 — a pop-out's page bar is its title bar, the same way.
+                val titleBarInstaller = remember(window) { DesktopTitleBarInstaller(window) }
+                CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
                 TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
                     PopOutContent(core, p, popOuts, main, main.shorterSideDp, kind = page?.kind)
+                }
                 }
             }
         }

@@ -123,6 +123,8 @@ fun MonthGrid(
     onCellBounds: (LocalDate, Rect) -> Unit = { _, _ -> },
     highlightDay: LocalDate? = null,
     firstDay: DayOfWeek = DayOfWeek.MONDAY,
+    /** L5 — false where the bar above carries ‹ month › (the Calendar tab); the database view keeps its row. */
+    showNav: Boolean = true,
 ) {
     val days = remember(month, firstDay) { monthGridDays(month, firstDay) }
     val rows = days.size / 7
@@ -138,8 +140,8 @@ fun MonthGrid(
     val targetOutline = MaterialTheme.colorScheme.primary
 
     Column(modifier = modifier.fillMaxSize().onGloballyPositioned { gridOrigin = it.boundsInRoot().topLeft }) {
-        // The month's own bar: ‹ September 2026 › — the Week's pattern.
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The month's own bar: ‹ September 2026 › — the Week's pattern — unless the tab's bar carries it (L5).
+        if (showNav) Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { onMonthShift(-1) }) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous month") }
             Text(
                 month.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " ${month.year}",

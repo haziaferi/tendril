@@ -70,6 +70,10 @@ import com.tendril.app.domain.plan.loggedSegment
 import com.tendril.app.ui.track.TrackButton
 import com.tendril.app.ui.track.runningTargetState
 import androidx.compose.material3.FloatingActionButton
+import com.tendril.app.ui.components.PaneTab
+import com.tendril.app.ui.components.PaneHeader
+import com.tendril.app.ui.components.MenuCheck
+import com.tendril.app.ui.components.BarMenuButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -129,6 +133,7 @@ import java.time.temporal.WeekFields
 import java.util.Locale
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
 import com.tendril.app.ui.components.rowButtonModifier
 import com.tendril.app.ui.components.rowGlyphModifier
@@ -266,11 +271,15 @@ private fun TasksHabitsBody(
                     if (entryTrashSheet != null || habitTrashSheet != null) IconButton(onClick = { showTrash = true }) {
                         Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.trash_entries_open))
                     }
+                    // L5 (item 22's L9, the Tasks half) — on a wide window *new* lives in the bar; the FAB is the phone's.
+                    if (wide) IconButton(onClick = { showAddDialog = true }) {
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(if (tab == TabSelection.HABITS) Res.string.taskshabits_add_habit else Res.string.taskshabits_add_task))
+                    }
                 },
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            if (!wide) FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = stringResource(
                     if (tab == TabSelection.HABITS) Res.string.taskshabits_add_habit else Res.string.taskshabits_add_task
                 ))
@@ -325,6 +334,31 @@ private fun TasksHabitsBody(
                 }
             }
             if (!wide) filters()
+            // L5 (C1) — on a wide window the two rows fold into the list column's 52 dp header,
+            // the tree header's twin: the kind as three tabs, the range as `Today ▾` at its right.
+            val paneHeader: @Composable () -> Unit = {
+                PaneHeader {
+                    TabSelection.entries.forEach { t ->
+                        PaneTab(
+                            stringResource(when (t) { TabSelection.TASKS -> Res.string.taskshabits_tab_tasks; TabSelection.HABITS -> Res.string.taskshabits_tab_habits; TabSelection.MERGED -> Res.string.taskshabits_tab_merged }),
+                            selected = tab == t, onClick = { setTab(t) },
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (tab != TabSelection.HABITS) {
+                        var rangeOpen by remember { mutableStateOf(false) }
+                        fun label(f: TimeFilter) = when (f) { TimeFilter.TODAY -> Res.string.taskshabits_filter_today; TimeFilter.WEEK -> Res.string.taskshabits_filter_week; TimeFilter.MONTH -> Res.string.taskshabits_filter_month }
+                        Box {
+                            BarMenuButton(stringResource(label(filter)), open = rangeOpen, onClick = { rangeOpen = true })
+                            TendrilMenu(expanded = rangeOpen, onDismissRequest = { rangeOpen = false }) {
+                                TimeFilter.entries.forEach { f ->
+                                    TendrilMenuItem(text = { Text(stringResource(label(f))) }, trailingIcon = { MenuCheck(filter == f) }, onClick = { rangeOpen = false; setFilter(f) })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             val listsInner: @Composable () -> Unit = {
                 when (tab) {
                     TabSelection.TASKS -> TasksList(
@@ -342,7 +376,7 @@ private fun TasksHabitsBody(
             val lists: @Composable () -> Unit = { androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalMinimumInteractiveComponentSize provides listMin) { listsInner() } }
             if (!wide) lists() else Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.width(listWidth.widthDp.dp).fillMaxHeight()) {
-                    Column(modifier = Modifier.fillMaxSize()) { filters(); lists() }
+                    Column(modifier = Modifier.fillMaxSize()) { paneHeader(); lists() }
                     PaneHandle(listWidth, modifier = Modifier.align(Alignment.CenterEnd))
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {

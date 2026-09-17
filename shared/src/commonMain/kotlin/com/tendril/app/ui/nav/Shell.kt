@@ -64,9 +64,18 @@ fun ShellRail(navState: WorkbenchNavState, foot: @Composable () -> Unit) {
                 .fillMaxHeight()
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .windowInsetsPadding(shellInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start))
-                .padding(vertical = 8.dp),
+                .padding(top = if (LocalTitleBar.current != null) 0.dp else 8.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // L5 — with the bar as the title bar, the rail's top 52 dp is the same row: the app's
+            // mark on it, and its ground drags the window like the bar's (`TitleBar.kt`).
+            if (LocalTitleBar.current != null) {
+                val placement = rememberTitleBarPlacement()
+                Box(modifier = Modifier.width(RAIL_WIDTH).height(TOP_BAR_HEIGHT).titleBarPlacement(placement), contentAlignment = Alignment.Center) {
+                    TitleBarGround(placement)
+                    Box(modifier = Modifier.size(18.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)))
+                }
+            }
             WorkbenchDestination.entries.forEach { destination ->
                 ShellItem(
                     icon = destination.icon,
@@ -162,25 +171,32 @@ fun ShellTopBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    Column(modifier = modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(shellInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
-                .height(TOP_BAR_HEIGHT)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            navigationIcon()
-            Box(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                ProvideTextStyle(
-                    MaterialTheme.typography.pageTitle.copy(color = MaterialTheme.colorScheme.onSurface),
-                ) { title() }
+    // L5 — a bar at the window's top edge is the window's title bar (`TitleBar.kt`): its ground
+    // drags the window, and its actions end before the OS's caption buttons when it reaches the
+    // window's right edge. Both are read from where the bar lies; a bar lower down is only a bar.
+    val placement = rememberTitleBarPlacement()
+    Column(modifier = modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).titleBarPlacement(placement)) {
+        Box {
+            TitleBarGround(placement)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(shellInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+                    .height(TOP_BAR_HEIGHT)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                navigationIcon()
+                Box(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                    ProvideTextStyle(
+                        MaterialTheme.typography.pageTitle.copy(color = MaterialTheme.colorScheme.onSurface),
+                    ) { title() }
+                }
+                // A nested Row, as Material's `TopAppBar` has: a `DropdownMenu` in the actions anchors
+                // to its parent node, and the parent must be the actions' own box, not the whole bar.
+                Row(verticalAlignment = Alignment.CenterVertically) { actions(); TitleBarEndInset(placement) }
             }
-            // A nested Row, as Material's `TopAppBar` has: a `DropdownMenu` in the actions anchors
-            // to its parent node, and the parent must be the actions' own box, not the whole bar.
-            Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
     }

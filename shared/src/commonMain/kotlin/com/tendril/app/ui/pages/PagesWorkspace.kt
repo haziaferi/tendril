@@ -73,6 +73,9 @@ import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.nav.PageRoute
 import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.TOP_BAR_HEIGHT
+import com.tendril.app.ui.nav.TitleBarGround
+import com.tendril.app.ui.nav.rememberTitleBarPlacement
+import com.tendril.app.ui.nav.titleBarPlacement
 import com.tendril.app.ui.components.PointerMenu
 import com.tendril.app.ui.components.SubmenuItem
 import com.tendril.app.ui.components.onSecondaryClick
@@ -255,6 +258,11 @@ private fun PagesTreePane(
     // border the same way. Dragged in the platform's pixels, stored in dp.
     Box(modifier = Modifier.fillMaxHeight().zIndex(1f)) {
         Column(modifier = Modifier.width(treeState.widthDp.dp).fillMaxHeight()) {
+            // L5 — the header sits on the window's top row beside the page bar, so its ground is
+            // title-bar area too (`TitleBar.kt`); the buttons stay buttons.
+            val placement = rememberTitleBarPlacement()
+            Box(modifier = Modifier.titleBarPlacement(placement)) {
+            TitleBarGround(placement)
             Row(
                 modifier = Modifier.fillMaxWidth().height(TREE_HEADER_HEIGHT).padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -266,6 +274,7 @@ private fun PagesTreePane(
                 IconButton(onClick = onOpenSwitcher, modifier = Modifier.size(TREE_ICON_BUTTON)) { Icon(Icons.Filled.Search, contentDescription = "Search pages", modifier = Modifier.size(18.dp)) }
                 JournalButton(actions, modifier = Modifier.size(TREE_ICON_BUTTON))
                 IconButton(onClick = treeState::toggle, modifier = Modifier.size(TREE_ICON_BUTTON)) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Hide tree (Ctrl+\\)", modifier = Modifier.size(18.dp)) }
+            }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             LabelFilterRow(viewModel, horizontalPadding = 18.dp, listTopPadding = 6.dp)   // the row's content start: 6 dp margin + 12 dp padding
