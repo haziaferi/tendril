@@ -80,3 +80,14 @@ fun loggedSegment(loggedMinutes: Int, estimate: Duration?): String? {
     val est = estimate?.toMinutes()?.toInt()
     return if (est != null && est > 0) "${formatMinutes(loggedMinutes)} of ~${formatMinutes(est)}" else "${formatMinutes(loggedMinutes)} logged"
 }
+
+/**
+ * L8 — the Week header's second line: nothing for zero; *Planned* alone when the lane is
+ * narrower than [minLaneForMinutes] dp (the minutes would clip — the audit's #8; at the user's
+ * window a 30 % tray leaves 82 dp lanes); *Planned 1h 45m* from there up.
+ */
+fun plannedLabel(minutes: Int, laneWidthDp: Float, minLaneForMinutes: Float = 90f): String = when {
+    minutes <= 0 -> ""
+    laneWidthDp < minLaneForMinutes -> "Planned"
+    else -> "Planned " + formatMinutes(minutes)
+}

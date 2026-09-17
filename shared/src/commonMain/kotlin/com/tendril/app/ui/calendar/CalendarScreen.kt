@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.AddCircle
 import androidx.compose.ui.backhandler.BackHandler
 import com.tendril.app.ui.nav.LocalShellLayout
+import com.tendril.app.domain.plan.trayDrawnWidthDp
 import com.tendril.app.domain.plan.trayTasks
 import com.tendril.app.ui.components.PaneHandle
 import com.tendril.app.ui.components.PaneWidthState
@@ -68,6 +69,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.domain.plan.loggedByEntry
 import com.tendril.app.domain.plan.loggedSegment
@@ -440,14 +443,17 @@ fun CalendarScreen(
             val trayDragMove: (Offset) -> Unit = { delta -> trayDrag = trayDrag?.let { it.copy(position = it.position + delta) } }
             val trayDragEnd: () -> Unit = { trayDrag?.let { dropTray(it.entry) }; trayDrag = null }
             val trayDragCancel: () -> Unit = { trayDrag = null }
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // L8 — the tray draws at most 30 % of the pane (`trayDrawnWidthDp`); the handle still remembers 240–360.
+            var paneWidthDp by remember { mutableStateOf(0f) }
+            val density = LocalDensity.current
+            Row(modifier = Modifier.weight(1f).fillMaxWidth().onSizeChanged { paneWidthDp = with(density) { it.width.toDp().value } }) {
             if (wide && trayShown && !trayCollapsed) {
                 Box(modifier = Modifier.fillMaxHeight().zIndex(1f)) {
                     TaskTray(
                         tasks = tray, today = today, showUrgency = showUrgency, draggingId = trayDrag?.entry?.id, dropHere = dropOnTray,
                         onDragStart = trayDragStart, onDrag = trayDragMove, onDragEnd = trayDragEnd, onDragCancel = trayDragCancel,
                         onOpen = { editTarget = it }, onCollapse = { setTrayCollapsed(true) }, onBounds = { trayBounds = it },
-                        modifier = Modifier.width(trayWidth.widthDp.dp),
+                        modifier = Modifier.width((if (paneWidthDp > 0f) trayDrawnWidthDp(trayWidth.widthDp, paneWidthDp) else trayWidth.widthDp).dp),
                     )
                     PaneHandle(trayWidth, Modifier.align(Alignment.CenterEnd))
                 }

@@ -40,11 +40,16 @@ fun QuickAddPreview(
     onDrop: (TokenKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val kinds = parsed.spans.map { it.kind }.toSet()
     Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    ) { QuickAddChips(parsed, onFlipKind, onDrop) }
+}
+
+/** The chips alone, as loose children — L7's strip lays them in a `FlowRow` beside the field; the preview's Row above wraps them for the phone and the popup. */
+@Composable
+fun QuickAddChips(parsed: ParsedEntry, onFlipKind: () -> Unit, onDrop: (TokenKind) -> Unit) {
+    val kinds = parsed.spans.map { it.kind }.toSet()
         InputChip(
             selected = true,
             onClick = onFlipKind,
@@ -59,7 +64,6 @@ fun QuickAddPreview(
         parsed.recurrence?.let { PreviewChip(repeatLabel(it)) { onDrop(TokenKind.REPEAT) } }
         parsed.deadline?.let { PreviewChip("by ${dateLabel(it)}") { onDrop(TokenKind.DEADLINE) } }
         if (parsed.importance > 0) PreviewChip(Urgency.fromLevel(parsed.importance).label) { onDrop(TokenKind.IMPORTANT) }
-    }
 }
 
 @Composable
