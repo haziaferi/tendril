@@ -7,11 +7,21 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(21)
+    // L5 (2026-09-17) — a JetBrains Runtime, not any JDK 21: the borderless window's custom title
+    // bar is a JBR service (`TitleBar.kt`). Android Studio's JBR is registered in
+    // `gradle.properties` (`org.gradle.java.installations.paths`); jpackage bundles the same
+    // runtime, so the installed app has the service too. On a plain JDK everything still runs —
+    // the window keeps the OS title bar.
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(JvmVendorSpec.JETBRAINS)
+    }
 }
 
 dependencies {
     implementation("com.tendril:shared")
+    // L5 — the JBR API (compile-time only; the runtime provides the service, or not).
+    implementation("org.jetbrains.runtime:jbr-api:1.9.0")
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     // Milestone 3 (tendril-windows-spec.md §6 step 3) — the ported Workbench UI needs the
@@ -32,6 +42,12 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.tendril.desktopapp.MainKt"
+        // L5 — `run` and jpackage use the toolchain's JBR, not the JVM running Gradle (Temurin):
+        // the custom title bar is that runtime's service (`TitleBar.kt`).
+        javaHome = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+            vendor.set(JvmVendorSpec.JETBRAINS)
+        }.get().metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
             // Without a target format there is no installer task output at all: the block

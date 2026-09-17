@@ -74,13 +74,13 @@ import com.tendril.app.ui.theme.caption
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.label
 
-private const val HOUR_DP = 56
-private const val GUTTER_DP = 44
+private const val HOUR_DP = CalendarGeometry.HOUR_DP
+private const val GUTTER_DP = CalendarGeometry.GUTTER_DP
 private const val DAY_MINUTES = 24 * 60
 
 /**
  * B§13.4 14f·2 — the Week as a time grid on a wide window (decided 2026-09-16): seven of the
- * Day view's Plan lanes under one scroll and one header — the same 56 dp hour, 44 dp gutter,
+ * Day view's Plan lanes under one scroll and one header — the same hour and gutter (`CalendarGeometry`),
  * `timelineBlocks`, now-line and quarter-hour snap (`PlanView`), so the week has the day's shape
  * rather than the strip's seven bulleted cards. The header is the Day view's per column: day and
  * date, today tinted, *Planned Nm* as a quiet second line; a click opens the Day. The all-day
@@ -99,6 +99,8 @@ internal fun WeekGridView(
     onMove: (EntryOccurrence, LocalDate, LocalTime) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onShiftWeek: (Int) -> Unit,
+    /** L5 — false where the bar above carries ‹ range › (the Calendar tab); the row stays for any other home. */
+    showNav: Boolean = true,
     /** 14g·3 — the task blocks' urgency stripe; off hides it. */
     showUrgency: Boolean = true,
     /** B§13.6 #5 — the grid's geometry for the screen's own drags (the tray's), root coordinates. */
@@ -150,8 +152,8 @@ internal fun WeekGridView(
 
     Box(modifier = Modifier.fillMaxSize().onGloballyPositioned { boxOrigin = it.boundsInRoot().topLeft }) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // The week's own bar: ‹ 14 – 20 September 2026 ›
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The week's own bar: ‹ 14 – 20 September 2026 › — unless the tab's bar carries it (L5).
+            if (showNav) Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onShiftWeek(-1) }) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous week") }
                 Text(weekLabel(days.first(), days.last()), style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 IconButton(onClick = { onShiftWeek(1) }) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next week") }
@@ -175,7 +177,8 @@ internal fun WeekGridView(
                         Text(
                             if (col.planned > 0) "Planned ${formatMinutes(col.planned)}" else " ",
                             style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            // On today's tint `onSurfaceVariant` measures 3.45 : 1 (`calendar-chrome-mock.md` #1): the register's text there.
+                            color = if (isToday) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                         )
                     }
@@ -332,10 +335,6 @@ internal fun WeekGridView(
 private class DayColumn(val day: LocalDate, val blocks: List<TimelineBlock>, val allDay: List<EntryOccurrence>, val planned: Int)
 
 private data class GridDrag(val block: TimelineBlock, val position: Offset)
-
-private fun weekLabel(first: LocalDate, last: LocalDate): String =
-    if (first.month == last.month) "${first.dayOfMonth} – ${last.format(DateTimeFormatter.ofPattern("d MMMM yyyy"))}"
-    else "${first.format(DateTimeFormatter.ofPattern("d MMM"))} – ${last.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}"
 
 private fun Modifier.dashedBorder(color: Color): Modifier = drawBehind {
     val stroke = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))

@@ -38,6 +38,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.tendril.app.ui.nav.LocalTitleBarInstaller
 import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
 import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
@@ -240,8 +241,12 @@ fun main() {
                 }
             }
             val theme = core.themeSettings.observe()
+            // L5 — the bar is the title bar; the scaffold installs it once it knows its scale.
+            val titleBarInstaller = remember(window) { DesktopTitleBarInstaller(window) }
+            CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
                 App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
+            }
             }
         }
         // B§13.6 #6 — one window per popped-out page, after the main one.

@@ -1,5 +1,7 @@
 package com.tendril.app.ui.nav
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -37,7 +39,15 @@ fun WorkbenchEnvironment(
     val side = shorterSideDp ?: (minOf(containerSize.width, containerSize.height) / baseDensity.density)
     val scale = shellScaleFor(side, profile)
     val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
-    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile) {
+    // L5 — the window's title bar is the bar (`TitleBar.kt`): installed here, where every window's
+    // content passes (the main scaffold and each pop-out), once the scaled density is known — the
+    // bar's 52 dp in device px — and re-installed when the ground's darkness changes so the OS's
+    // caption glyphs follow the register. Null where the platform has none.
+    val titleBarInstaller = LocalTitleBarInstaller.current
+    val barPx = with(scaledDensity) { TOP_BAR_HEIGHT.toPx() }
+    val darkGround = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val titleBar = remember(titleBarInstaller, barPx, darkGround) { titleBarInstaller?.install(barPx, darkGround) }
+    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile, LocalTitleBar provides titleBar) {
         if (wide == null) content()
         else CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR, content = content)
     }

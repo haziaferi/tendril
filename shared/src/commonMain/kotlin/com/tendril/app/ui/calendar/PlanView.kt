@@ -62,8 +62,8 @@ import com.tendril.app.ui.theme.caption
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.label
 
-private const val HOUR_DP = 56
-private const val GUTTER_DP = 44
+private const val HOUR_DP = CalendarGeometry.HOUR_DP
+private const val GUTTER_DP = CalendarGeometry.GUTTER_DP
 private const val DAY_MINUTES = 24 * 60
 
 /**
