@@ -17,5 +17,5 @@ dependencyResolutionManagement {
 rootProject.name = "Tendril windows"
 
 // §12.5 — shared KMP domain/data/sync-merge core, consumed via composite build (a sibling
-// folder, not nested under this project — see tendril-spec.md §11 in "Tendril android").
+// folder, not nested under this project — see tendril-spec.md §11 at the repository root).
 includeBuild("../shared")
