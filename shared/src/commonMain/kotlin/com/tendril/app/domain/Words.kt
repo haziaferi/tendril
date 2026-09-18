@@ -28,10 +28,10 @@ val ViewType.label: String get() = name.lowercase().replaceFirstChar(Char::upper
 /** One line on what a view needs, under the chosen kind in the New view sheet. */
 val ViewType.blurb: String get() = when (this) {
     ViewType.TABLE -> "Rows and columns; every property a cell."
-    ViewType.BOARD -> "Cards in columns, grouped by a Select property."
+    ViewType.BOARD -> "Cards in columns, grouped by a Select property — a Status property is added when the database has none."
     ViewType.GALLERY -> "Cards with a cover, one per row."
-    ViewType.CALENDAR -> "Rows on the day of a Date property."
-    ViewType.TIMELINE -> "Bars from a start date to an end date."
+    ViewType.CALENDAR -> "Rows on the day of a Date property — one is added when the database has none."
+    ViewType.TIMELINE -> "Bars from a start date to an end date — a Date property is added when the database has none."
 }
 
 /** The property kind as a person names it. */

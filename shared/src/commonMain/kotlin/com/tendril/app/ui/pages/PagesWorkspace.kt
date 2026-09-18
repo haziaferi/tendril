@@ -177,7 +177,8 @@ fun PagesWorkspace(
                         TendrilMenuItem(text = { Text("Open in a window") }, onClick = { close(); popOuts.open(pageHere) })
                     }
                     HorizontalDivider()
-                    TendrilMenuItem(text = { Text("Trash…") }, onClick = { close(); actions.openTrash() })
+                    // F8 (PR C): one verb per word — *Move to Trash* trashes, *Open Trash…* opens the sheet.
+                    TendrilMenuItem(text = { Text("Open Trash…") }, onClick = { close(); actions.openTrash() })
                 },
                 onClosed = { navState.back() },
                 openBeside = { shelfState.open(Shelf.Page(it)) },
@@ -482,7 +483,7 @@ private fun EmptyDetail(paneChrome: PaneChrome, onOpenTrash: () -> Unit) {
                 Box {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                     TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        TendrilMenuItem(text = { Text("Trash…") }, onClick = { showMenu = false; onOpenTrash() })
+                        TendrilMenuItem(text = { Text("Open Trash…") }, onClick = { showMenu = false; onOpenTrash() })
                     }
                 }
             },

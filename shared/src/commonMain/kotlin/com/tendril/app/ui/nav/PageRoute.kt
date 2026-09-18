@@ -42,6 +42,7 @@ fun PageRoute(
             onBack = onBack,
             onOpenPage = open,
             paneChrome = paneChrome,
+            onShowOnRoadMap = onShowOnRoadMap ?: navState::showOnRoadMap,
         )
         PageKind.CANVAS -> CanvasScreen(
             core = core,

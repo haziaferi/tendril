@@ -71,16 +71,10 @@ private val HEADER_HEIGHT = 54.dp
  * the bar they hold up. One scale; the grid scrolls sideways and starts at today.
  */
 @Composable
-internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewModel: PageDatabaseViewModel, onOpenPage: (Long) -> Unit) {
+internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewModel: PageDatabaseViewModel, onOpenPage: (Long) -> Unit, needs: ViewNeeds) {
     val startId = view?.datePropertyId
     if (view == null || startId == null) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "Timeline needs a Date property for the bars' start — configure this view to pick one.",
-                style = MaterialTheme.typography.description,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        ViewNeedsPrompt("Nothing to plot by yet", "Timeline draws bars from a Date property's day.", "Add a Date property", needs)
         return
     }
     val endId = view.endDatePropertyId

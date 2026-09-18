@@ -26,7 +26,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePickerDialog
@@ -41,6 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.heightIn
+import com.tendril.app.ui.components.TendrilField
+import com.tendril.app.ui.components.BarPillButton
 import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.nav.LocalDensityProfile
 import com.tendril.app.ui.theme.LocalTendrilPalette
@@ -107,7 +111,7 @@ import androidx.compose.material3.Button
 private val CELL_WIDTH = 160.dp
 
 @Composable
-fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpenPage: (Long) -> Unit, paneChrome: PaneChrome? = null) {
+fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpenPage: (Long) -> Unit, paneChrome: PaneChrome? = null, onShowOnRoadMap: ((Long) -> Unit)? = null) {
     val viewModel: PageDatabaseViewModel = viewModel(
         key = "database_$pageId",
         factory = viewModelFactory {
@@ -163,6 +167,10 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
     var showAddProperty by remember { mutableStateOf(false) }
     var showAddView by remember { mutableStateOf(false) }
     var showViewConfig by remember { mutableStateOf(false) }
+    // F5 / F4 (PR C): the active chip's ▾ opens the view's two verbs; *Delete view…* asks first.
+    var viewMenuOpen by remember { mutableStateOf(false) }
+    var showDeleteView by remember { mutableStateOf(false) }
+    var showTrashDatabase by remember { mutableStateOf(false) }
     val hScroll = rememberScrollState()
 
     Scaffold(
@@ -183,14 +191,14 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                     paneChrome?.actions?.invoke(this)
                     IconButton(onClick = { showMenu = true }, enabled = !viewOnly) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                     TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        // F8 (PR C): the page's verbs first (Show on Road Map · Save as template), then the
+                        // kind's, then Move to Trash — the order a page's `···` has, so the shared half reads
+                        // the same on both kinds; the chrome appends *Show beside ▸ · Open in a window · Open Trash…*.
                         val syncOn = database?.syncToTasks == true
-                        TendrilMenuItem(
-                            text = { Text(if (syncOn) "Turn off Sync to Tasks" else "Sync to Tasks") },
-                            onClick = {
-                                showMenu = false
-                                if (syncOn) viewModel.requestDisableSync() else viewModel.requestEnableSync()
-                            },
-                        )
+                        onShowOnRoadMap?.let { show -> TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showMenu = false; show(pageId) }) }
+                        TendrilMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
+                        HorizontalDivider()
+                        TendrilMenuItem(text = { Text("Configure this view…") }, onClick = { showMenu = false; showViewConfig = true })
                         TendrilMenuItem(text = { Text("Add property") }, onClick = { showMenu = false; showAddProperty = true })
                         // §0.6.8 — schema on a label. One item, opt-in; until it is used the app
                         // is today's app (E12).
@@ -200,7 +208,15 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                         )
                         // §0.6.14 — which relation column means "blocked by".
                         TendrilMenuItem(text = { Text("Blocked by…") }, onClick = { showMenu = false; showBlockedBy = true })
-                        TendrilMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
+                        TendrilMenuItem(
+                            text = { Text(if (syncOn) "Turn off Sync to Tasks" else "Sync to Tasks") },
+                            onClick = {
+                                showMenu = false
+                                if (syncOn) viewModel.requestDisableSync() else viewModel.requestEnableSync()
+                            },
+                        )
+                        HorizontalDivider()
+                        TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { showMenu = false; showTrashDatabase = true })
                         paneChrome?.menuItems?.invoke(this) { showMenu = false }
                     }
                 },
@@ -216,22 +232,33 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
             ) {
                 views.forEach { view ->
                     val selected = view.id == (selectedView?.id ?: views.firstOrNull()?.id)
-                    androidx.compose.material3.FilterChip(
-                        selected = selected,
-                        onClick = { if (selected) { if (!viewOnly) showViewConfig = true } else viewModel.selectView(view.id) },
-                        label = { Text(view.name) },
-                    )
+                    // F5 (PR C): the active chip says its second click does something — a ▾ — and the
+                    // click opens the view's two verbs instead of the configure sheet at once. Notion
+                    // draws no ▾ (its click is the affordance); the audit found the second click by accident.
+                    Box {
+                        androidx.compose.material3.FilterChip(
+                            selected = selected,
+                            onClick = { if (selected) { if (!viewOnly) viewMenuOpen = true } else viewModel.selectView(view.id) },
+                            label = { Text(view.name) },
+                            trailingIcon = if (selected && !viewOnly) ({ Icon(Icons.Filled.ArrowDropDown, contentDescription = "View options", modifier = Modifier.size(16.dp)) }) else null,
+                        )
+                        if (selected) TendrilMenu(expanded = viewMenuOpen, onDismissRequest = { viewMenuOpen = false }) {
+                            TendrilMenuItem(text = { Text("Configure view…") }, onClick = { viewMenuOpen = false; showViewConfig = true })
+                            TendrilMenuItem(text = { Text("Delete view…") }, enabled = views.size > 1, onClick = { viewMenuOpen = false; showDeleteView = true })
+                        }
+                    }
                 }
                 if (!viewOnly) {
                     AssistChip(onClick = { showAddView = true }, label = { Text("Add view") }, leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp)) })
                 }
             }
             HorizontalDivider()
+            val needs = ViewNeeds(onAddProperty = { showAddProperty = true }, onConfigure = { showViewConfig = true }, enabled = !viewOnly)
             when (selectedView?.viewType) {
-                ViewType.BOARD -> BoardBody(boardColumns, properties, selectedView, viewModel, onOpenPage)
+                ViewType.BOARD -> BoardBody(boardColumns, properties, selectedView, viewModel, onOpenPage, needs)
                 ViewType.GALLERY -> GalleryBody(displayedRows, visibleProperties, rowCovers, viewModel, onOpenPage)
-                ViewType.CALENDAR -> CalendarBody(displayedRows, selectedView, viewModel, onOpenPage)
-                ViewType.TIMELINE -> TimelineBody(displayedRows, selectedView, viewModel, onOpenPage)
+                ViewType.CALENDAR -> CalendarBody(displayedRows, selectedView, viewModel, onOpenPage, needs)
+                ViewType.TIMELINE -> TimelineBody(displayedRows, selectedView, viewModel, onOpenPage, needs)
                 else -> TableBody(displayedRows, visibleProperties, properties, database, hScroll, viewModel, onOpenPage)
             }
         }
@@ -278,9 +305,35 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                 properties = properties,
                 onDismiss = { showViewConfig = false },
                 onUpdate = { viewModel.updateView(it) },
-                onDelete = { viewModel.deleteView(view); showViewConfig = false },
+                onDelete = { showViewConfig = false; showDeleteView = true },
+                canDelete = views.size > 1,
             )
         }
+    }
+
+    // F4 (PR C, decided 2026-09-18): a view carries its filters, sorts and column choices, so
+    // deleting one asks — as a row's and a page's trash do; Notion's *Delete this view?* measured.
+    if (showDeleteView) {
+        selectedView?.let { view ->
+            AlertDialog(
+                onDismissRequest = { showDeleteView = false },
+                title = { Text("Delete the \"${view.name}\" view?", style = MaterialTheme.typography.heading) },
+                text = { Text("Its filters, sorts and column choices go with it. The rows stay.") },
+                confirmButton = { TextButton(onClick = { viewModel.deleteView(view); showDeleteView = false }) { Text("Delete view", color = MaterialTheme.colorScheme.error) } },
+                dismissButton = { TextButton(onClick = { showDeleteView = false }) { Text("Cancel") } },
+            )
+        }
+    }
+
+    // F8 (PR C): *Move to Trash* from the database's own `···` — the same question the page's asks.
+    if (showTrashDatabase) {
+        AlertDialog(
+            onDismissRequest = { showTrashDatabase = false },
+            title = { Text("Move this database to Trash?", style = MaterialTheme.typography.heading) },
+            text = { Text("Its rows go with it; everything can be restored from Trash.") },
+            confirmButton = { TextButton(onClick = { showTrashDatabase = false; viewModel.trashDatabase { paneChrome?.onClosed?.invoke() ?: onBack?.invoke() } }) { Text("Move to Trash", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { showTrashDatabase = false }) { Text("Cancel") } },
+        )
     }
 
     if (pendingEnable) {
@@ -448,15 +501,16 @@ private fun TableBody(
 
 @Composable
 private fun BoardBody(
-    columns: List<Pair<String, List<TableRow>>>,
+    columns: List<BoardColumn>,
     properties: List<Property>,
     view: PageDatabaseView?,
     viewModel: PageDatabaseViewModel,
     onOpenPage: (Long) -> Unit,
+    needs: ViewNeeds,
 ) {
     val groupProperty = properties.find { it.id == view?.groupByPropertyId }
     if (groupProperty == null) {
-        EmptyBoardPrompt()
+        ViewNeedsPrompt("Nothing to group by yet", "Board groups rows by a Select property, or a formula's result.", "Add a Select property", needs)
         return
     }
     // §5.4/DB5 — a formula-grouped column has no cell to move a card *into*: a `COMPUTED`
@@ -466,12 +520,12 @@ private fun BoardBody(
     // between its stored, reassignable value and everything else.
     val editable = groupProperty.type != PropertyType.COMPUTED
     Row(modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        columns.forEach { (option, rows) ->
+        columns.forEach { column ->
             Column(modifier = Modifier.width(240.dp)) {
-                Text(option, style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
+                Text(column.label, style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(rows, key = { it.page.id }) { row ->
-                        BoardCard(row, option, columns.map { it.first }, groupProperty.id, editable, viewModel, onOpenPage)
+                    items(column.rows, key = { it.page.id }) { row ->
+                        BoardCard(row, column.key, columns, groupProperty.id, editable, viewModel, onOpenPage)
                     }
                 }
             }
@@ -479,14 +533,26 @@ private fun BoardBody(
     }
 }
 
+/** F6 (PR C) — what a view's empty state can do: open the Add property sheet, or the view's configuration. */
+class ViewNeeds(val onAddProperty: () -> Unit, val onConfigure: () -> Unit, val enabled: Boolean)
+
+/**
+ * F6 (PR C, 2026-09-18): a view that lacks the property it plots by says so at the pane's centre
+ * with the two verbs that fix it — never a sentence at the top-left with no button
+ * (`docs/critiques/database-views-mock.md` #1). A *new* view never lands here (the ViewModel makes
+ * the property with the view); this is the state a later deletion leaves.
+ */
 @Composable
-private fun EmptyBoardPrompt() {
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            "Board needs a Select property, or a formula property, to group by. Add one, then configure this view.",
-            style = MaterialTheme.typography.description,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+internal fun ViewNeedsPrompt(title: String, line: String, addLabel: String, needs: ViewNeeds) {
+    Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(title, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(line, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        if (needs.enabled) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
+                BarPillButton(label = addLabel, onClick = needs.onAddProperty)
+                BarPillButton(label = "Configure view", onClick = needs.onConfigure)
+            }
+        }
     }
 }
 
@@ -494,7 +560,7 @@ private fun EmptyBoardPrompt() {
 private fun BoardCard(
     row: TableRow,
     currentOption: String,
-    allOptions: List<String>,
+    allOptions: List<BoardColumn>,
     groupPropertyId: Long,
     editable: Boolean,
     viewModel: PageDatabaseViewModel,
@@ -519,8 +585,8 @@ private fun BoardCard(
                 Box {
                     TextButton(onClick = { showMenu = true }, enabled = !LocalViewOnly.current) { Text("Move…") }
                     TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        allOptions.filter { it != currentOption }.forEach { option ->
-                            TendrilMenuItem(text = { Text(option) }, onClick = { viewModel.moveRowToColumn(row, groupPropertyId, option); showMenu = false })
+                        allOptions.filter { it.key != currentOption }.forEach { column ->
+                            TendrilMenuItem(text = { Text(column.label) }, onClick = { viewModel.moveRowToColumn(row, groupPropertyId, column.key); showMenu = false })
                         }
                     }
                 }
@@ -586,16 +652,10 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
 }
 
 @Composable
-private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewModel: PageDatabaseViewModel, onOpenPage: (Long) -> Unit) {
+private fun CalendarBody(rows: List<TableRow>, view: PageDatabaseView?, viewModel: PageDatabaseViewModel, onOpenPage: (Long) -> Unit, needs: ViewNeeds) {
     val datePropertyId = view?.datePropertyId
     if (datePropertyId == null) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "Calendar needs a Date property to plot by — configure this view to pick one.",
-                style = MaterialTheme.typography.description,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        ViewNeedsPrompt("Nothing to plot by yet", "Calendar puts rows on the day of a Date property.", "Add a Date property", needs)
         return
     }
     val grouped = rows.groupBy { viewModel.valueForCell(it, datePropertyId) }
@@ -666,27 +726,25 @@ private fun AddViewSheet(onDismiss: () -> Unit, onAdd: (String, ViewType) -> Uni
 
     // The audit's fixes (F7's cheap half, T2): the five kinds as chips with a line on what each
     // needs, a name field with the kind's name as its placeholder, one primary button.
+    // F7 (PR C, 2026-09-18 — Notion's New view panel measured: the name field first, the layouts
+    // as tiles with the chosen one marked): the name on the 36 dp field, the five kinds as chips,
+    // one line under the chosen kind on what it needs and what the sheet will add, the sheet's foot.
     TendrilSheet(title = "New view", onDismiss = onDismiss) {
         Column {
-            Text("View type", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 4.dp))
+            Text("Name", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
+            TendrilField(value = name, onValueChange = { name = it }, placeholder = type.label, modifier = Modifier.fillMaxWidth())
+            Text("Layout", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 16.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                 ViewType.entries.forEach { option ->
                     FilterChip(selected = type == option, onClick = { type = option }, label = { Text(option.label) })
                 }
             }
-            Text(type.blurb, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
-            Text("Name", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 16.dp))
-            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                if (name.isEmpty()) Text(type.label, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                BasicTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            Text(type.blurb, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { onAdd(name.ifBlank { type.label }, type) }) { Text("Add view") }
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = { onAdd(name.ifBlank { type.label }, type) }) { Text("Add") }
+            }
         }
     }
 }
@@ -698,6 +756,8 @@ private fun ViewConfigSheet(
     onDismiss: () -> Unit,
     onUpdate: (PageDatabaseView) -> Unit,
     onDelete: () -> Unit,
+    /** F4 — the last view stays (Notion's rule too): the button is not offered. */
+    canDelete: Boolean = true,
 ) {
     TendrilSheet(title = "Configure \"${view.name}\"", onDismiss = onDismiss) {
         Column {
@@ -768,8 +828,10 @@ private fun ViewConfigSheet(
             Text("Filter", style = MaterialTheme.typography.label)
             FilterEditor(view, properties, onUpdate)
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            TextButton(onClick = onDelete) { Text("Delete view") }
+            if (canDelete) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                TextButton(onClick = onDelete) { Text("Delete view…", color = MaterialTheme.colorScheme.error) }
+            }
         }
     }
 }
