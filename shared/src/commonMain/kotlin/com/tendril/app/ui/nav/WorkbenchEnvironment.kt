@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Density
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
+import com.tendril.app.ui.theme.touchTypography
 
 /**
  * What every Workbench surface reads from its surroundings, provided once: View-Only, the scaled
@@ -47,8 +48,13 @@ fun WorkbenchEnvironment(
     val barPx = with(scaledDensity) { TOP_BAR_HEIGHT.toPx() }
     val darkGround = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val titleBar = remember(titleBarInstaller, barPx, darkGround) { titleBarInstaller?.install(barPx, darkGround) }
+    // T·P1 (the phone's second fix PR): under Touch every chrome role steps one size up the scale —
+    // the phone read two to three points under every app beside it (`touchTypography`).
+    val typography = if (profile == DensityProfile.TOUCH) touchTypography(MaterialTheme.typography) else MaterialTheme.typography
     CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile, LocalTitleBar provides titleBar) {
-        if (wide == null) content()
-        else CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR, content = content)
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = typography) {
+            if (wide == null) content()
+            else CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR, content = content)
+        }
     }
 }

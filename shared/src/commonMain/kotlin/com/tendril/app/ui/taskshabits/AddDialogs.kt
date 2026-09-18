@@ -51,6 +51,7 @@ import com.tendril.app.domain.TokenKind
 import com.tendril.app.ui.entries.QuickAddPreview
 import com.tendril.app.ui.entries.quickAddTokensTransformation
 import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.domain.dayLabel
 import java.time.LocalDate
 import java.time.LocalTime
 import com.tendril.app.ui.theme.body
@@ -122,7 +123,7 @@ fun AddTaskDialog(
                 Switch(checked = hasDate, onCheckedChange = { hasDate = it })
             }
             if (hasDate) {
-                TextButton(onClick = { showDatePicker = true }) { Text("Date: $date") }
+                TextButton(onClick = { showDatePicker = true }) { Text("Date: " + dayLabel(date, LocalDate.now())) }
                 // Nested under `hasDate`: AlarmScheduler anchors an Entry's alarms to
                 // start_date + start_time, so a time without a date has nothing to fire on.
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -155,7 +156,7 @@ fun AddTaskDialog(
                 Switch(checked = hasDeadline, onCheckedChange = { hasDeadline = it })
             }
             if (hasDeadline) {
-                TextButton(onClick = { showDeadlinePicker = true }) { Text("Deadline: $deadline") }
+                TextButton(onClick = { showDeadlinePicker = true }) { Text("Deadline: " + dayLabel(deadline, LocalDate.now())) }
             }
         }
         Spacer(Modifier.height(16.dp))

@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.nav.LocalDensityProfile
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -61,7 +62,7 @@ fun FindBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(FIND_BAR_HEIGHT)
+            .height(findBarHeight())
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -72,7 +73,7 @@ fun FindBar(
             value = query,
             onValueChange = onQueryChange,
             placeholder = "Find in page",
-            height = FIND_BUTTON,
+            height = findButton(),
             focusRequester = focus,
             onPreviewKeyEvent = { event ->
                 if (event.type != KeyEventType.KeyDown) return@TendrilField false
@@ -94,13 +95,13 @@ fun FindBar(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.description.tabular(),
         )
-        IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(FIND_BUTTON)) {
+        IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(findButton())) {
             Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous (Shift+Enter)", modifier = Modifier.size(18.dp))
         }
-        IconButton(onClick = onNext, enabled = total > 0 || hidden > 0, modifier = Modifier.size(FIND_BUTTON)) {
+        IconButton(onClick = onNext, enabled = total > 0 || hidden > 0, modifier = Modifier.size(findButton())) {
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Next (Enter)", modifier = Modifier.size(18.dp))
         }
-        IconButton(onClick = onClose, modifier = Modifier.size(FIND_BUTTON)) {
+        IconButton(onClick = onClose, modifier = Modifier.size(findButton())) {
             Icon(Icons.Filled.Close, contentDescription = "Close (Esc)", modifier = Modifier.size(18.dp))
         }
     }
@@ -108,5 +109,11 @@ fun FindBar(
 }
 
 private val FIND_BAR_HEIGHT = 44.dp
+
+/** L·P3 (the phone's second fix PR, 2026-09-18): 44 / 28 under a pointer; 56 / 48 under Touch — the bar's three buttons measured 36 dp wide on the phone. */
+@Composable
+private fun findBarHeight() = if (LocalDensityProfile.current.pointer) FIND_BAR_HEIGHT else 56.dp
+@Composable
+private fun findButton() = if (LocalDensityProfile.current.pointer) FIND_BUTTON else 48.dp
 /** The tree's `···` target (14d): 23.8 px at the scale's floor. */
 private val FIND_BUTTON = 28.dp

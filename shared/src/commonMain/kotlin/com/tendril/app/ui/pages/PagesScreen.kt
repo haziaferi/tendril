@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -412,7 +413,9 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            // L·P1 — the profile's row (56 under Touch), not the content's.
+            .heightIn(min = LocalDensityProfile.current.rowHeightDp.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
             .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -508,7 +511,7 @@ private fun NewPageSheet(
 @Composable
 private fun NewOptionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null)

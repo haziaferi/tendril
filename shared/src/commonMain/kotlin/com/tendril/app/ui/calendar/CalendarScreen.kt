@@ -55,9 +55,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.tendril.app.ui.nav.ShellTopBar
@@ -88,6 +85,7 @@ import com.tendril.app.domain.plan.TimelineExtra
 import com.tendril.app.domain.plan.BlockKind
 import com.tendril.app.domain.plan.DotKind
 import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.SubmenuItem
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.MenuCheck
 import com.tendril.app.ui.components.BarPillButton
@@ -103,7 +101,6 @@ import androidx.compose.ui.graphics.Color
 import com.tendril.app.generated.resources.calendar_view_agenda
 import java.time.LocalTime
 import com.tendril.app.data.habit.Habit
-import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.foundation.rememberScrollState
@@ -359,15 +356,23 @@ fun CalendarScreen(
                 // Horizontal three-dot icon (§2.2) — never the gear, which is reserved for
                 // the main Settings tab.
                 actions = {
-                    if (wide) {
-                        ViewMenuButton(view, onView = { view = it }, planMode = planMode, onPlanMode = { planMode = it })
-                        LayersMenuButton(layers, onLayers = viewModel::setLayers)
-                    }
+                    ViewMenuButton(view, onView = { view = it }, planMode = planMode, onPlanMode = { planMode = it }, planInMenu = wide)
+                    if (wide) LayersMenuButton(layers, onLayers = viewModel::setLayers)
                     if (wide) IconButton(onClick = { quickAddOpen = !quickAddOpen }) {
                         Icon(Icons.Outlined.AddCircle, contentDescription = "Quick add")
                     }
-                    IconButton(onClick = { showSettings = true }) {
+                    if (wide) IconButton(onClick = { showSettings = true }) {
                         Icon(Icons.Outlined.MoreHoriz, contentDescription = "Calendar settings")
+                    }
+                    else Box {
+                        var moreOpen by remember { mutableStateOf(false) }
+                        IconButton(onClick = { moreOpen = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
+                        TendrilMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                            SubmenuItem(text = { Text("Layers") }) { _ -> LayersMenuItems(layers, onLayers = viewModel::setLayers) }
+                            if (view == CalendarView.DAY) TendrilMenuItem(text = { Text("Plan the day") }, trailingIcon = { MenuCheck(planMode) }, onClick = { planMode = !planMode })
+                            HorizontalDivider()
+                            TendrilMenuItem(text = { Text("Calendar settings…") }, onClick = { moreOpen = false; showSettings = true })
+                        }
                     }
                 },
             )
@@ -378,45 +383,9 @@ fun CalendarScreen(
             if (wide && quickAddOpen) {
                 QuickAddBar(today = selectedDate, onQuickAdd = { viewModel.quickAdd(it, selectedDate) }, onClose = { quickAddOpen = false })
             }
-            // L5 — the segmented row and the layer chips are the phone's form; a wide window's
-            // bar holds both (`ViewMenuButton`, `LayersMenuButton`).
-            if (!wide) {
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                CalendarView.entries.forEachIndexed { index, v ->
-                    SegmentedButton(
-                        selected = view == v,
-                        onClick = { view = v },
-                        shape = SegmentedButtonDefaults.itemShape(index, CalendarView.entries.size),
-                    ) {
-                        Text(
-                            stringResource(
-                                when (v) {
-                                    CalendarView.DAY -> Res.string.calendar_view_day
-                                    CalendarView.WEEK -> Res.string.calendar_view_week
-                                    CalendarView.MONTH -> Res.string.calendar_view_month
-                                    CalendarView.AGENDA -> Res.string.calendar_view_agenda
-                                }
-                            )
-                        )
-                    }
-                }
-            }
-            // §0.8 step 6d — layers. Tasks and Events on by default; Habits and Database dates
-            // opt-in, so the Calendar is today's until someone asks for more on it (E12).
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(selected = layers.tasks, onClick = { viewModel.setLayers(layers.copy(tasks = !layers.tasks)) }, label = { Text("Tasks") })
-                FilterChip(selected = layers.events, onClick = { viewModel.setLayers(layers.copy(events = !layers.events)) }, label = { Text("Events") })
-                FilterChip(selected = layers.habits, onClick = { viewModel.setLayers(layers.copy(habits = !layers.habits)) }, label = { Text("Habits") })
-                FilterChip(selected = layers.databaseDates, onClick = { viewModel.setLayers(layers.copy(databaseDates = !layers.databaseDates)) }, label = { Text("Database dates") })
-                if (view == CalendarView.DAY) {
-                    // §0.6.5 — the day as a timeline, with a rail of what is not placed yet.
-                    FilterChip(selected = planMode, onClick = { planMode = !planMode }, label = { Text("Plan") })
-                }
-            }
-            }
+            // L·P2 (the phone's second fix PR, 2026-09-18): the phone's segmented row and layer chips are
+            // gone — the bar carries `Week ▾` on both forms and the phone's `···` holds *Layers ▸* (a pushed
+            // level) and *Plan the day*; ≈ 200 dp of chrome before the first row became ≈ 100.
 
             // §4.1 — the stored rows are expanded into occurrences before anything is drawn:
             // a recurring EVENT contributes one per occurrence in the window, and a multi-day
@@ -1015,7 +984,7 @@ private fun MonthGridView(
                 val isToday = day == LocalDate.now()
                 Column(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(if (LocalDensityProfile.current.pointer) 40.dp else 48.dp)   // L·P3 — a 42 dp cell was under the finger's 48
                         .clip(MaterialTheme.shapes.small)
                         .then(if (highlightDay == day) Modifier.background(MaterialTheme.colorScheme.primaryContainer).border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small) else Modifier)
                         .onGloballyPositioned { onCellBounds(day, it.boundsInRoot()) }
@@ -1065,7 +1034,7 @@ private fun CalendarBarTitle(view: CalendarView, anchor: LocalDate, onShift: (In
 
 /** `Week ▾`: the four views; on the Day, *Plan the day* (§0.6.5) at the menu's foot as a check item. */
 @Composable
-private fun ViewMenuButton(view: CalendarView, onView: (CalendarView) -> Unit, planMode: Boolean, onPlanMode: (Boolean) -> Unit) {
+private fun ViewMenuButton(view: CalendarView, onView: (CalendarView) -> Unit, planMode: Boolean, onPlanMode: (Boolean) -> Unit, planInMenu: Boolean = true) {
     var open by remember { mutableStateOf(false) }
     fun label(v: CalendarView) = when (v) {
         CalendarView.DAY -> Res.string.calendar_view_day
@@ -1079,7 +1048,7 @@ private fun ViewMenuButton(view: CalendarView, onView: (CalendarView) -> Unit, p
             CalendarView.entries.forEach { v ->
                 TendrilMenuItem(text = { Text(stringResource(label(v))) }, trailingIcon = { MenuCheck(view == v) }, onClick = { open = false; onView(v) })
             }
-            if (view == CalendarView.DAY) {
+            if (view == CalendarView.DAY && planInMenu) {
                 HorizontalDivider()
                 TendrilMenuItem(text = { Text("Plan the day") }, trailingIcon = { MenuCheck(planMode) }, onClick = { onPlanMode(!planMode) })
             }
@@ -1091,14 +1060,18 @@ private fun ViewMenuButton(view: CalendarView, onView: (CalendarView) -> Unit, p
 @Composable
 private fun LayersMenuButton(layers: CalendarLayers, onLayers: (CalendarLayers) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    @Composable fun dot(kind: DotKind) { Box(modifier = Modifier.size(8.dp).background(dotColour(kind), CircleShape)) }
     Box {
         BarMenuButton("Layers", open = open, onClick = { open = true })
-        TendrilMenu(expanded = open, onDismissRequest = { open = false }) {
-            TendrilMenuItem(text = { Text("Tasks") }, leadingIcon = { dot(DotKind.TASK) }, trailingIcon = { MenuCheck(layers.tasks) }, onClick = { onLayers(layers.copy(tasks = !layers.tasks)) })
-            TendrilMenuItem(text = { Text("Events") }, leadingIcon = { dot(DotKind.EVENT) }, trailingIcon = { MenuCheck(layers.events) }, onClick = { onLayers(layers.copy(events = !layers.events)) })
-            TendrilMenuItem(text = { Text("Habits") }, leadingIcon = { dot(DotKind.HABIT) }, trailingIcon = { MenuCheck(layers.habits) }, onClick = { onLayers(layers.copy(habits = !layers.habits)) })
-            TendrilMenuItem(text = { Text("Database dates") }, leadingIcon = { dot(DotKind.DATABASE) }, trailingIcon = { MenuCheck(layers.databaseDates) }, onClick = { onLayers(layers.copy(databaseDates = !layers.databaseDates)) })
-        }
+        TendrilMenu(expanded = open, onDismissRequest = { open = false }) { LayersMenuItems(layers, onLayers) }
     }
+}
+
+/** The four layer rows — the wide bar's `Layers ▾` and the phone's `··· › Layers` share them (L·P2). */
+@Composable
+private fun LayersMenuItems(layers: CalendarLayers, onLayers: (CalendarLayers) -> Unit) {
+    @Composable fun dot(kind: DotKind) { Box(modifier = Modifier.size(8.dp).background(dotColour(kind), CircleShape)) }
+    TendrilMenuItem(text = { Text("Tasks") }, leadingIcon = { dot(DotKind.TASK) }, trailingIcon = { MenuCheck(layers.tasks) }, onClick = { onLayers(layers.copy(tasks = !layers.tasks)) })
+    TendrilMenuItem(text = { Text("Events") }, leadingIcon = { dot(DotKind.EVENT) }, trailingIcon = { MenuCheck(layers.events) }, onClick = { onLayers(layers.copy(events = !layers.events)) })
+    TendrilMenuItem(text = { Text("Habits") }, leadingIcon = { dot(DotKind.HABIT) }, trailingIcon = { MenuCheck(layers.habits) }, onClick = { onLayers(layers.copy(habits = !layers.habits)) })
+    TendrilMenuItem(text = { Text("Database dates") }, leadingIcon = { dot(DotKind.DATABASE) }, trailingIcon = { MenuCheck(layers.databaseDates) }, onClick = { onLayers(layers.copy(databaseDates = !layers.databaseDates)) })
 }

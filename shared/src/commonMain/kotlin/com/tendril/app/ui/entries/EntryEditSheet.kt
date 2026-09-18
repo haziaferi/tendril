@@ -47,6 +47,7 @@ import com.tendril.app.data.entry.intervalToPeriod
 import com.tendril.app.ui.components.datePickerMillisToLocalDate
 import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.Duration
+import com.tendril.app.domain.dayLabel
 import java.time.LocalDate
 import java.time.LocalTime
 import com.tendril.app.ui.theme.body
@@ -116,7 +117,8 @@ fun EntryEditSheet(
             }
             if (date != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { picker = Picker.DATE }) { Text(date.toString()) }
+                    // F·P4 (the phone's second fix PR): the last ISO date on the phone — the tray's day form (`dayLabel`), the month outside this one.
+                    TextButton(onClick = { picker = Picker.DATE }) { Text(dayLabel(date ?: LocalDate.now(), LocalDate.now())) }
                     TextButton(onClick = { picker = Picker.TIME }) { Text(time?.toString() ?: "Add time") }
                     if (time != null) TextButton(onClick = { time = null; endTime = null }) { Text("All day") }
                 }

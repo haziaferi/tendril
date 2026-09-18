@@ -129,3 +129,29 @@ fun typographyFor(typeface: TendrilTypeface): Typography {
         labelSmall = style(TypeScale.CAPTION, FontWeight.Medium, letterSpacing = 0.06f),
     )
 }
+
+/**
+ * The phone's second fix PR (T·P1, 2026-09-18) — **the Touch type scale.** The vocabulary was cut
+ * against Notion's desktop (14 / 12.5 measured there) and the phone inherited it; on the phone every
+ * ground sets its primary text at 16–17 sp and its second line at 14 (Todoist, TickTick, Notion,
+ * `docs/critiques/phone-type-full.md`). Under Touch each chrome role steps **one size up the same
+ * scale** — body 16 · description and label 14 · caption and eyebrow 12.5 · heading 16 · pageTitle
+ * 20 — and the editor's three (`bodyLarge`, `headlineMedium`, `headlineSmall`) stay: the page's
+ * text was already 16. Provided by `WorkbenchEnvironment` where the profile is known, so a sheet
+ * or a popup inherits it like any other `MaterialTheme` value; the seven styles keep reading off
+ * the roles and the type-class audit sees no new site. A remap of the theme's own typography,
+ * so the family and weights travel with it.
+ */
+fun touchTypography(base: Typography): Typography {
+    fun TextStyle.at(size: Float) = copy(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
+    return base.copy(
+        titleLarge = base.titleLarge.at(TypeScale.EDITOR_H2),
+        titleMedium = base.titleMedium.at(TypeScale.EDITOR_BODY),
+        titleSmall = base.titleSmall.at(TypeScale.BODY),
+        bodyMedium = base.bodyMedium.at(TypeScale.EDITOR_BODY),
+        bodySmall = base.bodySmall.at(TypeScale.BODY),
+        labelLarge = base.labelLarge.at(TypeScale.BODY),
+        labelMedium = base.labelMedium.at(TypeScale.LABEL),
+        labelSmall = base.labelSmall.at(TypeScale.LABEL),
+    )
+}

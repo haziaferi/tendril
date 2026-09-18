@@ -80,9 +80,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import com.tendril.app.ui.nav.ShellTopBar
@@ -289,53 +286,8 @@ private fun TasksHabitsBody(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            // 14f·2 (·1's walk, #2) — the two filter rows belong to the list: on a wide window
-            // they sit over the list column, so the pane starts at the bar.
-            val filters: @Composable () -> Unit = {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    TabSelection.entries.forEachIndexed { index, t ->
-                        SegmentedButton(
-                            selected = tab == t,
-                            onClick = { setTab(t) },
-                            shape = SegmentedButtonDefaults.itemShape(index, TabSelection.entries.size),
-                        ) {
-                            Text(
-                                stringResource(
-                                    when (t) {
-                                        TabSelection.TASKS -> Res.string.taskshabits_tab_tasks
-                                        TabSelection.HABITS -> Res.string.taskshabits_tab_habits
-                                        TabSelection.MERGED -> Res.string.taskshabits_tab_merged
-                                    }
-                                )
-                            )
-                        }
-                    }
-                }
-
-                if (tab != TabSelection.HABITS) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                        TimeFilter.entries.forEachIndexed { index, f ->
-                            SegmentedButton(
-                                selected = filter == f,
-                                onClick = { setFilter(f) },
-                                shape = SegmentedButtonDefaults.itemShape(index, TimeFilter.entries.size),
-                            ) {
-                                Text(
-                                    stringResource(
-                                        when (f) {
-                                            TimeFilter.TODAY -> Res.string.taskshabits_filter_today
-                                            TimeFilter.WEEK -> Res.string.taskshabits_filter_week
-                                            TimeFilter.MONTH -> Res.string.taskshabits_filter_month
-                                        }
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-            if (!wide) filters()
+            // L·P2 (the phone's second fix PR, 2026-09-18): the phone's two segmented rows are gone —
+            // the pane header below (L5's C1) is the phone's too: the kind as tabs, the range as a menu.
             // L5 (C1) — on a wide window the two rows fold into the list column's 52 dp header,
             // the tree header's twin: the kind as three tabs, the range as `Today ▾` at its right.
             val paneHeader: @Composable () -> Unit = {
@@ -376,7 +328,7 @@ private fun TasksHabitsBody(
             // rule for the Table): a task row measured 65 px beside Notion's one-line 30.
             val listMin = LocalDensityProfile.current.listInteractiveMinDp.dp
             val lists: @Composable () -> Unit = { androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalMinimumInteractiveComponentSize provides listMin) { listsInner() } }
-            if (!wide) lists() else Row(modifier = Modifier.fillMaxSize()) {
+            if (!wide) { paneHeader(); lists() } else Row(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.width(listWidth.widthDp.dp).fillMaxHeight()) {
                     Column(modifier = Modifier.fillMaxSize()) { paneHeader(); lists() }
                     PaneHandle(listWidth, modifier = Modifier.align(Alignment.CenterEnd))
@@ -627,7 +579,8 @@ private fun TaskRow(
             )
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp)
-                  else Modifier.padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp))
+                  // L·P1 (the phone's second fix PR): the profile's row on Touch too — six pitches (53–71) had grown from per-site padding.
+                  else Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp))
             .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -802,7 +755,7 @@ private fun HabitRow(
             .cursorOnFocus(onKeyboardFocus)
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onOpen, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
-            .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(horizontal = 16.dp) else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(horizontal = 16.dp) else Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(horizontal = 16.dp, vertical = 4.dp))
             .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -902,7 +855,8 @@ private fun MergedList(
                         .then(if (selectedHabitId == habit.id) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)) else Modifier)
                         .cursorOnFocus { keyState.focused = index }
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { keyState.clickedRow(index); onOpenHabit(habit) }
-                        .padding(8.dp)
+                        .heightIn(min = LocalDensityProfile.current.rowHeightDp.dp - 8.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                         .then(Modifier.keyboardCursorRing(keyFocused, 6)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
