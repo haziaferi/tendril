@@ -1,5 +1,6 @@
 package com.tendril.app.domain
 
+import com.tendril.app.domain.canvas.canvasEmbedHeightDp
 import com.tendril.app.domain.canvas.contentAtPaneCentre
 import com.tendril.app.domain.canvas.fitToCards
 import org.junit.Assert.assertEquals
@@ -43,5 +44,18 @@ class CanvasViewTest {
         // forward: screen = content × density × scale + pan, for the card's centre
         assertEquals(500f, (x + w / 2f) * 2f * 0.5f + 120f, 1e-3f)
         assertEquals(300f, (y + h / 2f) * 2f * 0.5f - 40f, 1e-3f)
+    }
+
+    @Test
+    fun `the inert card's height follows the board's shape at the column width, clamped`() {
+        // §0.10 item 7 — one 180 × 90 card in a 328 dp column: the inner 280 wide → 140 tall + margins = 188.
+        assertEquals(188f, canvasEmbedHeightDp(listOf(0f to 0f), 180f, 90f, 328f), 0.01f)
+        // Two cards side by side (a 380 × 90 box) → 280 × 90/380 + 48 = 114 → the 160 floor.
+        assertEquals(160f, canvasEmbedHeightDp(listOf(0f to 0f, 200f to 0f), 180f, 90f, 328f), 0.01f)
+        // A tall column of cards (a 180 × 690 box) would be 1121 → the 320 ceiling.
+        assertEquals(320f, canvasEmbedHeightDp(listOf(0f to 0f, 0f to 600f), 180f, 90f, 328f), 0.01f)
+        // No cards, or no width yet: the floor.
+        assertEquals(160f, canvasEmbedHeightDp(emptyList(), 180f, 90f, 328f), 0.01f)
+        assertEquals(160f, canvasEmbedHeightDp(listOf(0f to 0f), 180f, 90f, 0f), 0.01f)
     }
 }
