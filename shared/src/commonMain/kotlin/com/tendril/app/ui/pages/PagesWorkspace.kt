@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.ui.input.pointer.isShiftPressed
+import com.tendril.app.domain.journal.displayTitle
 import com.tendril.app.ui.components.cursorOnFocus
 import com.tendril.app.ui.nav.PopOutHost
 import androidx.compose.material3.HorizontalDivider
@@ -303,7 +304,7 @@ private fun PagesTreePane(
                 modifier = Modifier.fillMaxSize().listKeyboard(
                     state = keyState,
                     count = { flat.size },
-                    titles = { flat.map { it.page.title } },
+                    titles = { flat.map { displayTitle(it.page.title) } },
                     onOpen = { i -> flat.getOrNull(i)?.let { onOpen(it.page.id) } },
                     onExpand = { i, expand ->
                         val entry = flat.getOrNull(i) ?: return@listKeyboard
@@ -448,7 +449,7 @@ private fun TreeRow(
                 modifier = Modifier.size(18.dp),
             )
         }
-        Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.body, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(keyedTitle(displayTitle(page.title), typed, keyFocused), style = MaterialTheme.typography.body, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (inShelf) {
             Icon(Icons.Outlined.VerticalSplit, contentDescription = "In the shelf", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
         }

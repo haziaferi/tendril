@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
+import com.tendril.app.ui.components.TendrilField
+import com.tendril.app.ui.components.LabelDot
 import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.theme.CALLOUT_COLORS
 import com.tendril.app.ui.theme.LocalTendrilPalette
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -1297,36 +1300,27 @@ private fun SheetActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector
 private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
     val candidates by viewModel.labelCandidates.collectAsState()
+    // F9 (small things III): the sheet lists every label the page lacks before a letter is typed.
+    LaunchedEffect(Unit) { viewModel.searchLabelCandidates("") }
+    val palette = LocalTendrilPalette.current
+    val rowHeight = LocalDensityProfile.current.rowHeightDp.dp
 
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
+    TendrilSheet(title = "Add label", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Add label", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
-            }
-            BasicTextField(
-                value = query,
-                onValueChange = { query = it; viewModel.searchLabelCandidates(it) },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
-                singleLine = true,
-                // A bare field was invisible until typed into — on desktop, where no keyboard
-                // rises to say "type here", there was nothing to aim a click at.
-                decorationBox = { inner ->
-                    if (query.isEmpty()) Text("Label name", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    inner()
-                },
-            )
+            TendrilField(value = query, onValueChange = { query = it; viewModel.searchLabelCandidates(it) }, placeholder = "Label name", modifier = Modifier.fillMaxWidth())
             if (query.isNotBlank() && candidates.none { it.name.equals(query.trim(), ignoreCase = true) }) {
-                TextButton(onClick = { onPick(query) }) { Text("Create \"$query\"") }
+                TextButton(onClick = { onPick(query) }) { Text("Create \"${query.trim()}\"") }
             }
-            LazyColumn {
+            LazyColumn(modifier = Modifier.padding(top = 4.dp)) {
                 items(candidates, key = { it.id }) { candidate ->
-                    Text(
-                        candidate.name,
-                        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onPick(candidate.name) }).padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.body,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = rowHeight).clip(RoundedCornerShape(6.dp)).combinedClickable(onClick = { onPick(candidate.name) }).padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        LabelDot(labelColours(candidate.color, palette).hue)
+                        Spacer(Modifier.width(10.dp))
+                        Text(candidate.name, style = MaterialTheme.typography.body)
+                    }
                 }
             }
         }

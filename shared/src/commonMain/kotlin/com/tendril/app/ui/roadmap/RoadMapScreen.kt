@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.domain.journal.displayTitle
 import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.LabelDot
 import com.tendril.app.ui.theme.LocalTendrilPalette
@@ -64,6 +65,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import kotlin.math.abs
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -386,7 +389,7 @@ private fun FocusBar(page: Page, depth: Int, onDepthChange: (Int) -> Unit, onCle
         Icon(Icons.Filled.GpsFixed, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
         Text(
-            "Focused on \"${page.title}\"",
+            "Focused on \"${displayTitle(page.title)}\"",
             style = MaterialTheme.typography.label,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -417,6 +420,10 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
     val positions = remember { mutableStateMapOf<Long, Offset>() }
     val velocities = remember { mutableMapOf<Long, Offset>() }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    // F14 (small things III): the first frames of the force layout are the seed circle, nodes on
+    // top of each other in a 280 dp shelf; nothing is drawn until the layout has settled once.
+    var revealed by remember { mutableStateOf(false) }
+    val revealAlpha by animateFloatAsState(if (revealed) 1f else 0f, label = "reveal")
     var draggingId by remember { mutableStateOf<Long?>(null) }
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var simulationTick by remember { mutableStateOf(0) }
@@ -425,6 +432,7 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
     val nodeHeightPx = with(density) { NODE_HEIGHT.toPx() }
     val springLengthPx = nodeWidthPx * 1.8f
     val minDistancePx = nodeWidthPx * 1.1f
+    val gapPx = with(density) { 8.dp.toPx() }
     val settleThresholdPx = with(density) { SETTLE_THRESHOLD_DP_PER_S.dp.toPx() }
     // REPULSION is a dp-space constant; a 1/d² force in px space scales by density³ (two for
     // the distance, one for the px-per-dp of the resulting acceleration). Without it the phone's
@@ -539,6 +547,20 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
                 // (found on the desktop, step 8c; the phone hid it behind the first drag).
                 frames++
                 if (frames > SETTLE_WARMUP_FRAMES && ids.isNotEmpty() && totalSpeed / ids.size < settleThresholdPx) settled = true
+                // F14 — a hard separation after the forces: two nodes whose boxes overlap are
+                // pushed apart along the axis of least penetration, so the map never rests with
+                // one card over another (the tab's *Call the library* over *Escape test*).
+                val minDx = nodeWidthPx + gapPx; val minDy = nodeHeightPx + gapPx
+                for (i in ids.indices) for (j in i + 1 until ids.size) {
+                    val a = positions[ids[i]] ?: continue; val b = positions[ids[j]] ?: continue
+                    val dx = b.x - a.x; val dy = b.y - a.y
+                    if (abs(dx) < minDx && abs(dy) < minDy) {
+                        val px = minDx - abs(dx); val py = minDy - abs(dy)
+                        val push = if (px < py) Offset(if (dx >= 0) px / 2 else -px / 2, 0f) else Offset(0f, if (dy >= 0) py / 2 else -py / 2)
+                        positions[ids[i]] = a - push; positions[ids[j]] = b + push
+                    }
+                }
+                if (settled || frames > SETTLE_WARMUP_FRAMES * 3) revealed = true
             }
             if (settled) break
         }
@@ -558,6 +580,8 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
         // arrowhead in the neutral ink, a manual "Relate to" line takes the tertiary hue.
         val mentionInk = MaterialTheme.colorScheme.onSurfaceVariant
         val relatedInk = MaterialTheme.colorScheme.tertiary
+        // F14 — edges and nodes fade in together once the layout has settled (see `revealed`).
+        Box(modifier = Modifier.fillMaxSize().alpha(revealAlpha)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             graph.edges.forEach { edge ->
                 val from = positions[edge.fromPageId]
@@ -599,6 +623,7 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
                     hoverPreview = hoverPreview,
                 )
             }
+        }
         }
         if (core != null) HoverPreviewCard(core, hoverPreview, onOpenPage)
     }
@@ -723,7 +748,7 @@ internal fun RoadMapNode(
             .semantics { contentDescription = if (onDoubleTap == null) "${page.title} — tap to focus, tap again to open" else "${page.title} — click to focus, click again to open here, double-click to open in the main pane" },
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
-            Text(page.title, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(displayTitle(page.title), style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -761,7 +786,7 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(page.title, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(displayTitle(page.title), style = MaterialTheme.typography.body, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             AssistChip(
                                 onClick = { onFocus(page.id) },
                                 label = { Text("Focus") },

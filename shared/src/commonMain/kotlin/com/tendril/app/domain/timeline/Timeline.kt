@@ -36,6 +36,18 @@ fun <R> timelineRange(bars: List<TimelineBar<R>>, today: LocalDate): ClosedRange
     return first.minusDays(TIMELINE_PAD_BEFORE)..last.plusDays(TIMELINE_PAD_AFTER)
 }
 
+/**
+ * L13 (small things III, 2026-09-18): the column the Timeline opens scrolled to — today three
+ * columns in, so the days just gone are visible, and never past the day before the earliest
+ * bar (the report's *Call the library* opened clipped at the pane's left edge). In days from the range's start.
+ */
+fun <R> timelineInitialColumn(range: ClosedRange<LocalDate>, bars: List<TimelineBar<R>>, today: LocalDate): Long {
+    val todayColumn = ChronoUnit.DAYS.between(range.start, today)
+    val firstBarColumn = bars.minOfOrNull { ChronoUnit.DAYS.between(range.start, it.start) } ?: todayColumn
+    // A day of margin before the first bar: its title is drawn from the bar's start leftwards.
+    return minOf(todayColumn - 3, firstBarColumn - 1).coerceAtLeast(0)
+}
+
 /** The drag: start and end move together, by whole days. */
 fun <R> TimelineBar<R>.shifted(days: Long): TimelineBar<R> = copy(start = start.plusDays(days), end = end.plusDays(days))
 

@@ -23,6 +23,22 @@ const val JOURNAL_TITLE_PREFIX = "journal/"
  * `journal/YYYY-MM-DD`. The root is passed in rather than looked up here so the check costs one
  * string parse on every page open, and a page that merely *mentions* a date is not a Journal.
  */
+/**
+ * L12 (small things III, 2026-09-18): what a row, a header, a hover card or a switcher row
+ * shows for a page — a Journal day's stored title is `journal/2026-09-13` (the storage name;
+ * `PagesViewModel.openJournal` writes it and [journalDayOf] parses it), which read as a
+ * repeated prefix under a parent already called Journal. The title string is untouched; the
+ * date is the display: *13 Sep 2026*. Any other title is returned as it is.
+ */
+fun displayTitle(title: String): String {
+    val m = JOURNAL_TITLE.matchEntire(title.trim()) ?: return title
+    val day = runCatching { LocalDate.parse(m.groupValues[1]) }.getOrNull() ?: return title
+    return day.format(JOURNAL_DISPLAY)
+}
+
+private val JOURNAL_TITLE = Regex("journal/(\\d{4}-\\d{2}-\\d{2})")
+private val JOURNAL_DISPLAY: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu", java.util.Locale.ENGLISH)
+
 fun journalDayOf(page: Page, journalRoot: Page?): LocalDate? {
     if (journalRoot == null || page.parentId != journalRoot.id) return null
     if (!page.title.startsWith(JOURNAL_TITLE_PREFIX)) return null

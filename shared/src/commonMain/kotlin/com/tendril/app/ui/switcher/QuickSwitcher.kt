@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.tendril.app.domain.journal.displayTitle
 import com.tendril.app.data.page.PageSearchHit
 import com.tendril.app.data.page.SEARCH_HL_CLOSE
 import com.tendril.app.data.page.SEARCH_HL_OPEN
@@ -300,7 +301,7 @@ private fun CardRow(item: SwitcherItem, selected: Boolean, query: String, rowHei
                     else Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(highlightPrefix(item.hit.title, query), style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(highlightPrefix(displayTitle(item.hit.title), query), style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (item.hit.snippet.isNotBlank()) {
                         Text( // type: META — the FTS snippet after the title, one line
                             highlightMatches(item.hit.snippet, MaterialTheme.typography.heading.fontWeight), style = MaterialTheme.typography.description, color = meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -391,7 +392,7 @@ private fun SwitcherOverlay(
                                             }
                                             Spacer(Modifier.width(12.dp))
                                             Column(modifier = Modifier.weight(1f)) {
-                                                Text(entry.hit.title, style = MaterialTheme.typography.body)
+                                                Text(displayTitle(entry.hit.title), style = MaterialTheme.typography.body)
                                                 if (entry.hit.snippet.isNotBlank()) {
                                                     Text(highlightMatches(entry.hit.snippet, MaterialTheme.typography.heading.fontWeight), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }

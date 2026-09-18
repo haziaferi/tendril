@@ -522,12 +522,15 @@ private fun TasksList(
     ) {
         if (undated.isNotEmpty()) {
             item {
+                // F10 (small things III): *Someday (2)* over a switch read as a section header above
+                // rows that were today's. It is the filter's label — right-aligned beside its switch.
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onShowUndatedChange(!showUndated) }.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().clickable { onShowUndatedChange(!showUndated) }.padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("${stringResource(Res.string.taskshabits_undated_toggle)} (${undated.size})", style = MaterialTheme.typography.label)
+                    Text("Show ${stringResource(Res.string.taskshabits_undated_toggle)} · ${undated.size}", style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(8.dp))
                     Switch(checked = showUndated, onCheckedChange = onShowUndatedChange)
                 }
             }
@@ -841,7 +844,7 @@ private fun HabitRow(
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
         TendrilMenuItem(text = { Text("Open") }, onClick = { menuOpen = false; onOpen() })
-        TendrilMenuItem(text = { Text("Move to Trash") }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) }, onClick = { menuOpen = false; viewModel.trashHabit(habit.id) })
+        TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { menuOpen = false; viewModel.trashHabit(habit.id) })
     }
     }
 }

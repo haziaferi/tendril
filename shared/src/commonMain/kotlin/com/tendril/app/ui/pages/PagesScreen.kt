@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.domain.journal.displayTitle
 import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.theme.LocalTendrilPalette
@@ -431,7 +432,7 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
         }
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(keyedTitle(page.title, typed, keyFocused), style = MaterialTheme.typography.body)
+            Text(keyedTitle(displayTitle(page.title), typed, keyFocused), style = MaterialTheme.typography.body)
             // 14h·2 — when it was last edited; the kind is the icon's (`pages-phone.md` #1).
             Text(
                 "edited " + relativeTime(page.updatedAt),
