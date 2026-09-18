@@ -160,6 +160,9 @@ fun Habit.toSnapshot(): HabitSnapshotRecord = HabitSnapshotRecord(
     lastCompletedDate = lastCompletedDate?.toString(),
     previousStreak = previousStreak,
     previousCompletedDate = previousCompletedDate?.toString(),
+    unit = unit,
+    amountPerCheckIn = amountPerCheckIn,
+    dailyAmount = dailyAmount,
     deletedAt = deletedAt?.toEpochMilli(),
     createdAt = createdAt.toEpochMilli(),
     updatedAt = updatedAt.toEpochMilli(),
@@ -188,6 +191,9 @@ fun HabitSnapshotRecord.toEntity(): Habit {
         lastCompletedDate = lastCompletedDate?.let(LocalDate::parse),
         previousStreak = previousStreak,
         previousCompletedDate = previousCompletedDate?.let(LocalDate::parse),
+        unit = this.unit,   // the record's unit — the local `unit` above is the frequency's
+        amountPerCheckIn = amountPerCheckIn,
+        dailyAmount = dailyAmount,
         deletedAt = deletedAt?.let(Instant::ofEpochMilli),
         createdAt = Instant.ofEpochMilli(createdAt),
         updatedAt = Instant.ofEpochMilli(updatedAt),
@@ -294,6 +300,7 @@ fun HabitCompletion.toSnapshot(habitUid: String): HabitCompletionSnapshotRecord 
         habitUid = habitUid,
         date = date.toString(),
         checkedAt = checkedAt.toEpochMilli(),
+        value = value,
         deletedAt = deletedAt?.toEpochMilli(),
     )
 
@@ -303,6 +310,7 @@ fun HabitCompletionSnapshotRecord.toEntity(habitId: Long): HabitCompletion = Hab
     habitId = habitId,
     date = runCatching { LocalDate.parse(date) }.getOrElse { undecodable("habit completion date", date) },
     checkedAt = Instant.ofEpochMilli(checkedAt),
+    value = value,
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
 )
 

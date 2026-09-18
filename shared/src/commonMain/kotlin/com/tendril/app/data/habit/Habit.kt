@@ -64,6 +64,13 @@ data class Habit(
      * lastCompletedDate actually was. Cleared back to defaults once consumed by an undo. */
     val previousStreak: Int = 0,
     val previousCompletedDate: LocalDate? = null,
+    /** §0.10 item 3 (v21, 2026-09-19) — a habit that **counts**: the unit as the person typed it
+     * (*cups*, never pluralised by the app), the amount one tap on the row adds, and the number
+     * they set for a day if any — shown once, as a sentence, never a fraction (§0.6.6). Null
+     * [amountPerCheckIn] means a plain habit: one check a day, nothing counted. */
+    val unit: String? = null,
+    val amountPerCheckIn: Double? = null,
+    val dailyAmount: Double? = null,
     val deletedAt: Instant? = null,
     val createdAt: Instant,
     val updatedAt: Instant,

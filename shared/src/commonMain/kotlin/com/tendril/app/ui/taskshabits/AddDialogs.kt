@@ -21,6 +21,8 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.padding
+import com.tendril.app.ui.theme.description
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -215,9 +217,14 @@ fun AddTaskDialog(
     @Composable
     fun AddHabitDialog(
         onDismiss: () -> Unit,
-        onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?) -> Unit,
+        onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?, unit: String?, amountPerCheckIn: Double?, dailyAmount: Double?) -> Unit,
     ) {
         var title by remember { mutableStateOf("") }
+        // §0.10 item 3 — a habit that counts something: the unit, what a tap adds, and the optional number for a day.
+        var counts by remember { mutableStateOf(false) }
+        var countUnit by remember { mutableStateOf("") }
+        var perCheckIn by remember { mutableStateOf("1") }
+        var perDay by remember { mutableStateOf("") }
         var count by remember { mutableStateOf("1") }
         var unit by remember { mutableStateOf(IntervalUnit.DAY) }
         var hasTime by remember { mutableStateOf(false) }
@@ -272,6 +279,23 @@ fun AddTaskDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Counts something", style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().weight(1f))
+                    Switch(checked = counts, onCheckedChange = { counts = it })
+                }
+                if (counts) {
+                    Spacer(Modifier.height(8.dp))
+                    TendrilField(value = countUnit, onValueChange = { countUnit = it.take(24) }, placeholder = "Unit, as you would write it after a number — cups, km, pages", modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    TendrilField(value = perCheckIn, onValueChange = { perCheckIn = it.filter { c -> c.isDigit() || c == '.' || c == ',' }.take(8) }, placeholder = "Each check-in adds", modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    TendrilField(value = perDay, onValueChange = { perDay = it.filter { c -> c.isDigit() || c == '.' || c == ',' }.take(8) }, placeholder = "A day, if you like", modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "A number you set for yourself. The row and the sheet count what you did; the number is shown once, in the sheet, and never as a fraction, a bar or a percentage.",
+                        style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
@@ -283,6 +307,9 @@ fun AddTaskDialog(
                     if (hasTime) time else null,
                     // A blank or zero box means "no duration", not a zero-length habit.
                     durationMinutes.toLongOrNull()?.takeIf { hasTime && it > 0 }?.let(Duration::ofMinutes),
+                    if (counts) countUnit.trim().takeIf { it.isNotEmpty() } else null,
+                    if (counts) (perCheckIn.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0) else null,
+                    if (counts) perDay.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } else null,
                 )
                 onDismiss()
             }) { Text("Add") }

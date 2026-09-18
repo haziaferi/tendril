@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.tendril.app.domain.amountLabel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
@@ -166,19 +167,21 @@ internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, show
     val doneToday = habit.lastCompletedDate == LocalDate.now()
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = doneToday, onCheckedChange = { if (it) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id) })
+            HabitCheck(habit, doneToday = doneToday, onCheckIn = { viewModel.checkInHabit(habit.id) }, onUndo = { viewModel.undoCheckInHabit(habit.id) })
             Text(habit.title, style = MaterialTheme.typography.pageTitle, modifier = Modifier.weight(1f).padding(start = 4.dp))
         }
         Spacer(Modifier.height(10.dp))
         DetailRow("Repeats", habit.frequency.label())
         DetailRow("At", habit.time?.toString(), unsetWord = "any time")
         DetailRow("For", habit.duration?.let(::formatHabitDuration), unsetWord = "no length")
+        // §0.10 item 3 — what a tap adds; the number set for a day is a sentence in the presence, not a row here.
+        if (habit.counts) DetailRow("Counts", (habit.unit ?: "").ifBlank { "an amount" } + ", " + amountLabel(habit.amountPerCheckIn ?: 1.0, null) + " a check-in")
         if (showStreak) DetailRow("Streak", if (habit.streak > 0) plural(habit.streak, "day") else null)
         Spacer(Modifier.height(14.dp))
         HabitDetailContent(habit, viewModel, showStreak)
         Spacer(Modifier.height(14.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            AssistChip(
+            if (!habit.counts) AssistChip(
                 onClick = { if (doneToday) viewModel.undoCheckInHabit(habit.id) else viewModel.checkInHabit(habit.id) },
                 label = { Text(if (doneToday) "Undo today's check-in" else "Check in today") },
             )

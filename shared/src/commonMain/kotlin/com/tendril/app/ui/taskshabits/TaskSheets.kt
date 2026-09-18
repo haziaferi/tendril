@@ -24,6 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import com.tendril.app.domain.plural
+import com.tendril.app.domain.amountLabel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -189,7 +191,11 @@ internal fun HabitDetailContent(habit: Habit, viewModel: TasksHabitsViewModel, s
                 )
             } else {
                 val lines = buildList {
-                    if (p.timesThisMonth > 0) add(
+                    // §0.10 item 3 — a counting habit's presence is its amounts: *2 cups today*, *41 cups this
+                    // month, on 12 days*. A sum of things done, never a share of a number.
+                    if (habit.counts && p.amountToday != null) add(amountLabel(p.amountToday, habit.unit) + " today")
+                    if (habit.counts && p.amountThisMonth != null) add(amountLabel(p.amountThisMonth, habit.unit) + " this month, on " + plural(p.timesThisMonth, "day"))
+                    else if (p.timesThisMonth > 0) add(
                         if (p.timesThisMonth == 1) "Once this month" else "${p.timesThisMonth} times this month",
                     )
                     p.usualTime?.let { add("Usually ${it.word()}") }
@@ -199,9 +205,44 @@ internal fun HabitDetailContent(habit: Habit, viewModel: TasksHabitsViewModel, s
                     perSession?.let { add("About ${formatMinutes(it)} each") }
                 }
                 lines.forEach { Text(it, style = MaterialTheme.typography.body) }
+                // The number the person set, once and last, as a sentence in the dim colour — never a
+                // fraction, a bar or a rate (§0.6.6; the critique's #3 puts it after the count).
+                habit.dailyAmount?.let {
+                    Text(amountLabel(it, habit.unit) + " a day is what you set", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                }
                 Spacer(Modifier.height(16.dp))
                 MonthOfDots(days = p.daysThisMonth, month = p.month)
             }
+            if (habit.counts) CountingHabitVerbs(habit, viewModel)
+        }
+    }
+}
+
+/**
+ * §0.10 item 3 — a counting habit's verbs, on the sheet and the pane: *+ 1 cup* (the row's tap),
+ * *Undo the last cup*, and the manual entry the user asked for — **collapsed by default** behind
+ * *Log an amount…*, a number typed and logged as one check-in of that value.
+ */
+@Composable
+private fun CountingHabitVerbs(habit: Habit, viewModel: TasksHabitsViewModel) {
+    var logOpen by remember { mutableStateOf(false) }
+    var typed by remember { mutableStateOf("") }
+    val unit = habit.unit?.takeIf { it.isNotBlank() }
+    val doneToday = habit.lastCompletedDate == LocalDate.now()
+    Spacer(Modifier.height(12.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The unit is the person's word as typed (*cups*), so the chips carry the number alone — *+ 1*,
+        // *Undo the last one* — and the sentences above carry the unit where the number fits it.
+        AssistChip(onClick = { viewModel.checkInHabit(habit.id) }, label = { Text("+ " + amountLabel(habit.amountPerCheckIn ?: 1.0, null)) })
+        if (doneToday) AssistChip(onClick = { viewModel.undoCheckInHabit(habit.id) }, label = { Text("Undo the last one") })
+        AssistChip(onClick = { logOpen = !logOpen }, label = { Text(if (logOpen) "Log an amount ▴" else "Log an amount…") })
+    }
+    if (logOpen) {
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TendrilField(value = typed, onValueChange = { typed = it.filter { c -> c.isDigit() || c == '.' || c == ',' }.take(8) }, placeholder = unit ?: "amount", modifier = Modifier.width(120.dp))
+            val value = typed.replace(',', '.').toDoubleOrNull()
+            TextButton(enabled = value != null && value > 0, onClick = { viewModel.checkInHabit(habit.id, value); typed = ""; logOpen = false }) { Text("Log") }
         }
     }
 }

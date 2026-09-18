@@ -19,6 +19,10 @@ interface HabitCompletionDao {
     @Query("SELECT * FROM habit_completions WHERE habitId = :habitId AND date = :date AND deletedAt IS NULL")
     suspend fun getLiveForDay(habitId: Long, date: LocalDate): List<HabitCompletion>
 
+    /** §0.10 item 3 — every habit's live check-ins on one day, for the rows' *2 cups today*. */
+    @Query("SELECT * FROM habit_completions WHERE date = :date AND deletedAt IS NULL")
+    fun observeLiveForDay(date: LocalDate): Flow<List<HabitCompletion>>
+
     /** Every row, tombstoned ones included — unfiltered for the reason
      * [com.tendril.app.data.reminder.ReminderDao.getAll] gives: §9.4's write pass rewrites the
      * file in full from these rows, and a tombstone that stopped travelling would let the

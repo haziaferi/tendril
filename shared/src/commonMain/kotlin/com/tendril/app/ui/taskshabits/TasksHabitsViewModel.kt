@@ -62,6 +62,11 @@ class TasksHabitsViewModel(
         combine(timeTracker.logsOn(LocalDate.now()), minuteTicker()) { logs, now -> loggedByEntry(logs, now) to loggedByHabit(logs, now) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap<Long, Int>() to emptyMap())
 
+    /** §0.10 item 3 — today's logged amount per counting habit, for the rows' meta (*2 cups today*). */
+    val amountsToday: StateFlow<Map<Long, Double>> = habitCompletionDao.observeLiveForDay(LocalDate.now())
+        .map { rows -> rows.filter { it.value != null }.groupBy { it.habitId }.mapValues { (_, r) -> r.sumOf { it.value!! } } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** The habit's mean session, for the presence sheet's "about N min each". */
     fun habitMinutesPerSession(habitId: Long): Flow<Int?> = timeTracker.logsForHabit(habitId).map { minutesPerSession(it) }
 
@@ -139,7 +144,7 @@ class TasksHabitsViewModel(
     fun habitPresence(habitId: Long): Flow<HabitPresence> =
         habitCompletionDao.observeForHabit(habitId).map { habitPresenceOf(it, LocalDate.now()) }
 
-    fun addHabit(title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration? = null) {
+    fun addHabit(title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration? = null, unit: String? = null, amountPerCheckIn: Double? = null, dailyAmount: Double? = null) {
         if (title.isBlank()) return
         viewModelScope.launch {
             val now = Instant.now()
@@ -149,6 +154,9 @@ class TasksHabitsViewModel(
                     time = time,
                     duration = duration,
                     frequency = frequency,
+                    unit = unit?.trim()?.takeIf { it.isNotEmpty() },
+                    amountPerCheckIn = amountPerCheckIn,
+                    dailyAmount = dailyAmount,
                     createdAt = now,
                     updatedAt = now,
                 )
@@ -177,8 +185,8 @@ class TasksHabitsViewModel(
 
     /** §6.1's "no backlog" test — see [CheckInHabitUseCase], shared with the Habits widget
      * (§8) so both surfaces use the exact same streak math. */
-    fun checkInHabit(habitId: Long) {
-        viewModelScope.launch { checkInHabitUseCase.checkIn(habitId); rearm(habitId) }
+    fun checkInHabit(habitId: Long, value: Double? = null) {
+        viewModelScope.launch { checkInHabitUseCase.checkIn(habitId, value = value); rearm(habitId) }
     }
 
     /** §8.1.1 — reverts today's check-in via the same shared use case the widget's undo

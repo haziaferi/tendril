@@ -66,6 +66,11 @@ data class HabitSnapshotRecord(
      * Defaulted, so a snapshot written before this field existed still decodes. */
     val previousStreak: Int = 0,
     val previousCompletedDate: String? = null,
+    /** §0.10 item 3 (v21) — a counting habit's unit, amount per check-in and the number set for a day;
+     * nullable and defaulted, so an older peer's record decodes and an older peer ignores these. */
+    val unit: String? = null,
+    val amountPerCheckIn: Double? = null,
+    val dailyAmount: Double? = null,
     val deletedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long,
@@ -136,6 +141,8 @@ data class HabitCompletionSnapshotRecord(
     val habitUid: String,
     val date: String,
     val checkedAt: Long,
+    /** §0.10 item 3 — the amount this check-in logged; null on a plain habit's. */
+    val value: Double? = null,
     val deletedAt: Long? = null,
 )
 

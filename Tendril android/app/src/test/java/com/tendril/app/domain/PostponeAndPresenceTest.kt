@@ -128,4 +128,21 @@ class PostponeAndPresenceTest {
         assertNull(p.lastDate)
         assertNull(p.usualTime)
     }
+
+    @Test
+    fun `a counting habit's presence sums what was logged today and this month`() {
+        // §0.10 item 3 — a sum of things done; null where nothing carried a value.
+        val today = LocalDate.of(2026, 9, 19)
+        val rows = listOf(
+            checkIn(today, 8).copy(value = 1.0), checkIn(today, 9).copy(value = 1.5),
+            checkIn(today.minusDays(3), 8).copy(value = 2.0),
+            checkIn(today.minusDays(40), 8).copy(value = 9.0),
+        )
+        val p = habitPresenceOf(rows, today, ZoneId.of("UTC"))
+        assertEquals(2.5, p.amountToday!!, 0.001)
+        assertEquals(4.5, p.amountThisMonth!!, 0.001)
+        assertEquals(2, p.timesThisMonth)
+        assertEquals(null, habitPresenceOf(listOf(checkIn(today, 8)), today, ZoneId.of("UTC")).amountToday)
+        assertEquals("2 cups", amountLabel(2.0, "cups")); assertEquals("2.5 km", amountLabel(2.5, "km")); assertEquals("3", amountLabel(3.0, null))
+    }
 }

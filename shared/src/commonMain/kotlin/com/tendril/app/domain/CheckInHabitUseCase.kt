@@ -22,16 +22,26 @@ class CheckInHabitUseCase(
     private val habitDao: HabitDao,
     private val habitCompletionDao: HabitCompletionDao,
 ) {
-    suspend fun checkIn(habitId: Long, today: LocalDate = LocalDate.now()) {
+    /**
+     * §0.10 item 3 — a **counting** habit ([Habit.amountPerCheckIn] set) logs every tap: a new
+     * completion carrying [value] (the amount typed) or the habit's amount per check-in, as many
+     * times a day as it is tapped; the day still counts once for the streak and
+     * `lastCompletedDate`. A plain habit keeps its one check a day.
+     */
+    suspend fun checkIn(habitId: Long, today: LocalDate = LocalDate.now(), value: Double? = null) {
         val habit = habitDao.getById(habitId) ?: return
-        if (habit.lastCompletedDate == today) return // already checked in today
+        val counting = habit.amountPerCheckIn != null
+        if (counting) {
+            habitCompletionDao.insert(HabitCompletion(habitId = habitId, date = today, checkedAt = Instant.now(), value = value ?: habit.amountPerCheckIn))
+            if (habit.lastCompletedDate == today) return // the day already counts; only the amount grew
+        } else if (habit.lastCompletedDate == today) return // already checked in today
 
         // §0.6.6 — the log, written first and unconditionally on a fresh check-in. A new row rather
         // than a revived one even when today was checked in and undone earlier: the tombstone
         // stays, and §9.4's "deleted wins" merge stays a rule with no exceptions. Guarded on
         // "no live row for today" so a stale second tap cannot log the same day twice from one
         // device; two devices offline can, and every read tolerates that (see [HabitCompletion]).
-        if (habitCompletionDao.getLiveForDay(habitId, today).isEmpty()) {
+        if (!counting && habitCompletionDao.getLiveForDay(habitId, today).isEmpty()) {
             habitCompletionDao.insert(HabitCompletion(habitId = habitId, date = today, checkedAt = Instant.now()))
         }
 
@@ -59,9 +69,15 @@ class CheckInHabitUseCase(
         val habit = habitDao.getById(habitId) ?: return
         if (habit.lastCompletedDate != today) return // nothing to undo
 
-        // §0.6.6 — tombstone today's live rows (plural only after an offline double-check-in).
         val now = Instant.now()
-        for (row in habitCompletionDao.getLiveForDay(habitId, today)) habitCompletionDao.softDelete(row.id, now)
+        val live = habitCompletionDao.getLiveForDay(habitId, today)
+        if (habit.amountPerCheckIn != null && live.size > 1) {
+            // Item 3 — a counting habit undoes its *last* cup; the day still stands on the rest.
+            habitCompletionDao.softDelete(live.maxByOrNull { it.checkedAt }!!.id, now)
+            return
+        }
+        // §0.6.6 — tombstone today's live rows (plural only after an offline double-check-in).
+        for (row in live) habitCompletionDao.softDelete(row.id, now)
 
         habitDao.update(
             habit.copy(

@@ -44,6 +44,8 @@ data class HabitCompletion(
     val date: LocalDate,
     /** When the tap happened. Presence, not performance: this is what "usually mornings" reads. */
     val checkedAt: Instant,
+    /** §0.10 item 3 (v21) — the amount this check-in logged for a counting habit; null on a plain one. */
+    val value: Double? = null,
     /** Soft-delete: set by undo, never cleared — see the class comment for why a redo inserts
      * instead. Null means the check-in stands. */
     val deletedAt: Instant? = null,
