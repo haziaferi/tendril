@@ -101,7 +101,6 @@ class AppWidgetConfigureActivity : ComponentActivity() {
                             ContrastRole.TEXT_DIM -> palette.textDim
                             ContrastRole.TEXT_FAINT -> palette.textFaint
                             ContrastRole.ACCENT -> palette.accent
-                            ContrastRole.ACCENT_STRONG -> palette.accentStrong
                             // auditContrast() always overrides ACCENT2 with currentAccent2()
                             // internally — this branch exists only for when-exhaustiveness
                             // and is never actually read.

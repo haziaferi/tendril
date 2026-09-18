@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.backhandler.BackHandler
+import com.tendril.app.ui.components.cursorOnFocus
 import com.tendril.app.ui.components.ListKeyState
 import com.tendril.app.ui.components.TypeAheadReset
 import com.tendril.app.ui.components.listKeyboard
@@ -614,6 +615,7 @@ private fun TaskRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+            .cursorOnFocus { if (index >= 0) rowKeys?.state?.focused = index }
             .combinedClickable(
                 interactionSource = interaction, indication = null,
                 onClick = { if (index >= 0) rowKeys?.state?.clickedRow(index); actions.onSelect?.invoke(entry) },
@@ -751,6 +753,7 @@ private fun HabitsList(
             HabitRow(
                 habit, viewModel, showStreaks, runningTarget, loggedToday,
                 onOpen = { keyState.clickedRow(index); onOpen(habit) },
+                onKeyboardFocus = { keyState.focused = index },
                 keyFocused = keyState.focused == index && keyboardCursorShown(),
                 typed = keyState.typed,
                 selected = selectedId == habit.id,
@@ -775,6 +778,8 @@ private fun HabitRow(
     loggedToday: Map<Long, Int>,
     onOpen: () -> Unit,
     keyFocused: Boolean = false,
+    /** The design layer — Tab landed here: the list's cursor moves to this row. */
+    onKeyboardFocus: () -> Unit = {},
     typed: String = "",
     selected: Boolean = false,
 ) {
@@ -790,6 +795,7 @@ private fun HabitRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+            .cursorOnFocus(onKeyboardFocus)
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onOpen, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(horizontal = 16.dp) else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -890,6 +896,7 @@ private fun MergedList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(if (selectedHabitId == habit.id) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp)) else Modifier)
+                        .cursorOnFocus { keyState.focused = index }
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { keyState.clickedRow(index); onOpenHabit(habit) }
                         .padding(8.dp)
                         .then(Modifier.keyboardCursorRing(keyFocused, 6)),

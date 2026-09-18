@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.keyboardFocusRing
 import com.tendril.app.ui.theme.Register
 import com.tendril.app.ui.theme.TendrilMode
 import com.tendril.app.ui.theme.TendrilTypeface
@@ -133,6 +134,7 @@ private fun RegisterSwatch(register: Register, dark: Boolean, selected: Boolean,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .defaultMinSize(minWidth = 52.dp)
+            .keyboardFocusRing(6, MaterialTheme.colorScheme.primary)
             .clickable(interactionSource = interaction, indication = null, role = Role.RadioButton, onClick = onClick)
             .semantics { this.selected = selected; contentDescription = register.label + " register" },
     ) {

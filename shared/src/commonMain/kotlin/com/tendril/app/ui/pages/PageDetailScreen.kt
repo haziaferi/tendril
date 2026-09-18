@@ -515,7 +515,7 @@ fun PageDetailScreen(
                         ranges = blockMatches.map { it.range },
                         current = findCurrent?.let { matches.getOrNull(it) }?.takeIf { it.blockId == entry.block.id }?.range,
                         mark = palette.findSoft, onMark = palette.text,
-                        currentMark = palette.thirdStrong, onCurrentMark = palette.onThird,
+                        currentMark = palette.third, onCurrentMark = palette.onThird,
                     )
                     BlockRow(
                         block = entry.block,

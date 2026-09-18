@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.ui.input.pointer.isShiftPressed
+import com.tendril.app.ui.components.cursorOnFocus
 import com.tendril.app.ui.nav.PopOutHost
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -330,7 +331,8 @@ private fun PagesTreePane(
                         onOpenInWindow = popOuts?.let { h -> { h.open(entry.page.id) } },
                         inWindow = popOuts?.openPageIds?.contains(entry.page.id) == true,
                         onShowOnRoadMap = { onShowOnRoadMap(entry.page.id) }, onMoveToTrash = if (actions.viewOnly) null else ({ onMoveToTrash(entry.page.id) }),
-                        keyFocused = keyState.focused == index && keyboardCursorShown(), typed = keyState.typed)
+                        keyFocused = keyState.focused == index && keyboardCursorShown(), typed = keyState.typed,
+                        onKeyboardFocus = { keyState.focused = index })
                 }
             }
         }
@@ -385,6 +387,8 @@ private fun TreeRow(
     /** 14e — this row is the keyboard cursor: a 2 dp ring, the typed prefix underlined. */
     keyFocused: Boolean = false,
     typed: String = "",
+    /** The design layer — Tab landed on this row: the list's cursor moves here (one ring, the cursor's). */
+    onKeyboardFocus: () -> Unit = {},
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
@@ -411,6 +415,7 @@ private fun TreeRow(
                     else -> Modifier
                 }
             )
+            .cursorOnFocus(onKeyboardFocus)
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = { menuAt = null; menuOpen = true })
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .padding(start = 12.dp + (TREE_INDENT * depth), end = 2.dp),

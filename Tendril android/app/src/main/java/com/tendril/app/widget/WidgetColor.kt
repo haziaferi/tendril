@@ -119,11 +119,11 @@ fun worstCaseContrast(textRgb: Rgb, widgetBg: Rgb, opacityPct: Int): Double {
     return min(overWhite, overBlack)
 }
 
-/** Role thresholds — port of the prototype's `ROLE_THRESHOLD`: accent2/text/textDim/accentStrong
+/** Role thresholds — port of the prototype's `ROLE_THRESHOLD`: accent2/text/textDim
  * are legitimate small-text uses (4.5:1); textFaint and accent are only ever used at large-text
  * sizes in these widgets (the date number, single-letter weekday headers) — 3:1 applies. */
 enum class ContrastRole(val threshold: Double) {
-    TEXT(4.5), TEXT_DIM(4.5), TEXT_FAINT(3.0), ACCENT(3.0), ACCENT_STRONG(4.5), ACCENT2(4.5),
+    TEXT(4.5), TEXT_DIM(4.5), TEXT_FAINT(3.0), ACCENT(3.0), ACCENT2(4.5),
 }
 
 data class ContrastResult(val role: ContrastRole, val ratio: Double, val pass: Boolean)
