@@ -1,5 +1,9 @@
 package com.tendril.app.domain
 
+import com.tendril.app.data.canvas.CanvasEdgeDao
+import com.tendril.app.data.canvas.CanvasNodeDao
+import com.tendril.app.data.canvas.PageCanvas
+import com.tendril.app.data.canvas.PageCanvasDao
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.Page
@@ -24,6 +28,9 @@ class TemplateManager(
     private val blockDao: BlockDao,
     private val pageDatabaseDao: PageDatabaseDao,
     private val propertyDao: PropertyDao,
+    private val pageCanvasDao: PageCanvasDao,
+    private val canvasNodeDao: CanvasNodeDao,
+    private val canvasEdgeDao: CanvasEdgeDao,
 ) {
     suspend fun saveAsTemplate(source: Page): Long {
         val now = Instant.now()
@@ -54,6 +61,21 @@ class TemplateManager(
             val newDbId = pageDatabaseDao.insert(PageDatabase(pageId = targetPageId, syncToTasks = false, createdAt = now, updatedAt = now))
             propertyDao.getForDatabase(sourceDb.id).forEach { property ->
                 propertyDao.insert(property.copy(id = 0, uid = UUID.randomUUID().toString(), databaseId = newDbId))
+            }
+        } else if (source.kind == PageKind.CANVAS) {
+            // §0.10 item 15 (2026-09-18) — a canvas template is its board: every node (a card, a
+            // frame, a page card still pointing at its page — a board of the same pages, again)
+            // and every arrow, ids remapped so the arrows join the clones. A canvas has no blocks.
+            val sourceCanvas = pageCanvasDao.getByPageId(source.id) ?: return
+            val newCanvasId = pageCanvasDao.insert(PageCanvas(pageId = targetPageId, createdAt = now, updatedAt = now))
+            val idMap = mutableMapOf<Long, Long>()
+            canvasNodeDao.getForCanvas(sourceCanvas.id).forEach { node ->
+                idMap[node.id] = canvasNodeDao.insert(node.copy(id = 0, uid = UUID.randomUUID().toString(), canvasId = newCanvasId, createdAt = now, updatedAt = now))
+            }
+            canvasEdgeDao.getForCanvas(sourceCanvas.id).forEach { edge ->
+                val from = idMap[edge.fromNodeId] ?: return@forEach
+                val to = idMap[edge.toNodeId] ?: return@forEach
+                canvasEdgeDao.insert(edge.copy(id = 0, uid = UUID.randomUUID().toString(), canvasId = newCanvasId, fromNodeId = from, toNodeId = to))
             }
         } else {
             cloneBlocks(source.id, targetPageId)

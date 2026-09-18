@@ -4,6 +4,8 @@ import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.data.canvas.PageCanvas
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_W
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
 import com.tendril.app.data.completion.EntryCompletion
 import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.Entry
@@ -118,7 +120,7 @@ class ViewOnlySurfacesGuardTest {
 
     private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
     private val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
-    private val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao)
+    private val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
     private val databaseSyncManager =
         DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase)
     private val purgeRegistry =
@@ -150,8 +152,11 @@ class ViewOnlySurfacesGuardTest {
             canvasEdgeDao = edgeDao,
             viewLockState = viewLockState,
             pageContentRepository = contentRepository,
+            templateManager = templateManager,
         )
         backgroundScope.launch { viewModel.canvas.collect { } }
+        backgroundScope.launch { viewModel.nodes.collect { } }
+        backgroundScope.launch { viewModel.page.collect { } }   // `saveAsTemplate` reads `page.value`, WhileSubscribed too
         testScheduler.advanceUntilIdle()
         return viewModel
     }
@@ -193,6 +198,11 @@ class ViewOnlySurfacesGuardTest {
         return SeededCanvas(page, canvasDao.insert(PageCanvas(pageId = page.id, createdAt = t0, updatedAt = t0)))
     }
 
+    private suspend fun seedFrame(canvasId: Long, x: Float, y: Float): CanvasNode {
+        val id = nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.FRAME, x = x, y = y, width = FRAME_DEFAULT_W, height = FRAME_DEFAULT_H, text = "Beds", createdAt = t0, updatedAt = t0))
+        return nodeDao.getForCanvas(canvasId).first { it.id == id }
+    }
+
     private suspend fun seedNode(canvasId: Long, text: String, x: Float = 0f, y: Float = 0f): CanvasNode {
         val id = nodeDao.insert(
             CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = x, y = y, text = text, createdAt = t0, updatedAt = t0)
@@ -232,6 +242,79 @@ class ViewOnlySurfacesGuardTest {
             nodeDao.getForCanvas(seeded.canvasId).size,
         )
         assertPageUntouched(seeded.page)
+    }
+
+    @Test
+    fun `a frame cannot be added, moved or resized while View-Only is on`() = runTest(mainDispatcher) {
+        // §0.10 item 15 (2026-09-18) — the three frame writes ride `launchAndTouch` like every other.
+        val seeded = seedCanvas()
+        val frame = seedFrame(seeded.canvasId, x = 0f, y = 0f)
+        val viewModel = canvasViewModel(seeded.page.id)
+        assertNotNull(viewModel.canvas.value)
+        lockEverything()
+
+        viewModel.addFrame(300f, 300f)
+        viewModel.moveFrame(frame, 50f, 60f)
+        viewModel.resizeFrame(frame, 600f, 600f)
+        var saved = false
+        viewModel.saveAsTemplate { saved = true }
+
+        val after = nodeDao.getForCanvas(seeded.canvasId)
+        assertEquals("a frame added under the lock", 1, after.size)
+        assertEquals("a frame moved under the lock", 0f, after.single().x)
+        assertEquals("a frame resized under the lock", FRAME_DEFAULT_W, after.single().width)
+        assertEquals("a template saved under the lock", false, saved)
+        assertPageUntouched(seeded.page)
+    }
+
+    @Test
+    fun `a frame carries what lies wholly inside it and leaves the rest`() = runTest(mainDispatcher) {
+        // Geometry, no parent (Obsidian's group, measured on both platforms): the card inside moves
+        // by the frame's delta, the card straddling the edge and the card outside stay.
+        val seeded = seedCanvas()
+        val frame = seedFrame(seeded.canvasId, x = 0f, y = 0f)              // 388 × 212
+        val inside = seedNode(seeded.canvasId, "in", x = 20f, y = 20f)       // 20…200 × 20…110
+        val straddling = seedNode(seeded.canvasId, "edge", x = 300f, y = 20f) // 300…480: past the frame's 388
+        val outside = seedNode(seeded.canvasId, "out", x = 600f, y = 600f)
+        val viewModel = canvasViewModel(seeded.page.id)
+        testScheduler.advanceUntilIdle()
+
+        viewModel.moveFrame(frame, 100f, 50f)
+        testScheduler.advanceUntilIdle()
+
+        val after = nodeDao.getForCanvas(seeded.canvasId).associateBy { it.id }
+        assertEquals(100f to 50f, after.getValue(frame.id).let { it.x to it.y })
+        assertEquals(120f to 70f, after.getValue(inside.id).let { it.x to it.y })
+        assertEquals(300f to 20f, after.getValue(straddling.id).let { it.x to it.y })
+        assertEquals(600f to 600f, after.getValue(outside.id).let { it.x to it.y })
+    }
+
+    @Test
+    fun `a canvas saved as a template keeps its frames, cards and arrows with the arrows rejoined`() = runTest(mainDispatcher) {
+        val seeded = seedCanvas()
+        val frame = seedFrame(seeded.canvasId, x = 0f, y = 0f)
+        val a = seedNode(seeded.canvasId, "a", x = 20f, y = 20f)
+        val b = seedNode(seeded.canvasId, "b", x = 200f, y = 20f)
+        edgeDao.insert(CanvasEdge(canvasId = seeded.canvasId, fromNodeId = a.id, toNodeId = b.id, label = "then"))
+        val viewModel = canvasViewModel(seeded.page.id)
+        testScheduler.advanceUntilIdle()
+        var templateId: Long? = null
+
+        viewModel.saveAsTemplate { templateId = it }
+        testScheduler.advanceUntilIdle()
+
+        val template = pageDao.getById(templateId!!)!!
+        assertEquals(true, template.isTemplate)
+        assertEquals(PageKind.CANVAS, template.kind)
+        val clonedCanvas = canvasDao.getByPageId(template.id)!!
+        val clonedNodes = nodeDao.getForCanvas(clonedCanvas.id)
+        assertEquals(3, clonedNodes.size)
+        assertEquals(1, clonedNodes.count { it.type == CanvasNodeType.FRAME })
+        assertEquals(setOf("a", "b", frame.text), clonedNodes.map { it.text }.toSet())
+        val clonedEdge = edgeDao.getForCanvas(clonedCanvas.id).single()
+        assertEquals("then", clonedEdge.label)
+        assertTrue("the arrow joins the clones, not the originals", clonedNodes.any { it.id == clonedEdge.fromNodeId } && clonedNodes.any { it.id == clonedEdge.toNodeId })
+        assertEquals("the source board is untouched", 3, nodeDao.getForCanvas(seeded.canvasId).size)
     }
 
     @Test

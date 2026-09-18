@@ -20,9 +20,21 @@ fun fitToCards(
     marginDp: Float = 24f,
     maxScale: Float = 1f,
 ): CanvasFit {
-    if (cards.isEmpty() || paneWidthPx <= 0f || paneHeightPx <= 0f) return CanvasFit(1f, 0f, 0f)
-    val left = cards.minOf { it.first }; val top = cards.minOf { it.second }
-    val right = cards.maxOf { it.first } + nodeW; val bottom = cards.maxOf { it.second } + nodeH
+    return fitToBoxes(cards.map { NodeBox(it.first, it.second, nodeW, nodeH) }, paneWidthPx, paneHeightPx, density, marginDp, maxScale)
+}
+
+/** [fitToCards] over boxes of any size — a frame's own (item 15), a card's fixed. */
+fun fitToBoxes(
+    boxes: List<NodeBox>,
+    paneWidthPx: Float,
+    paneHeightPx: Float,
+    density: Float,
+    marginDp: Float = 24f,
+    maxScale: Float = 1f,
+): CanvasFit {
+    if (boxes.isEmpty() || paneWidthPx <= 0f || paneHeightPx <= 0f) return CanvasFit(1f, 0f, 0f)
+    val left = boxes.minOf { it.x }; val top = boxes.minOf { it.y }
+    val right = boxes.maxOf { it.right }; val bottom = boxes.maxOf { it.bottom }
     val boxW = (right - left) * density; val boxH = (bottom - top) * density
     val margin = marginDp * density
     val scale = minOf(maxScale, (paneWidthPx - 2 * margin) / boxW, (paneHeightPx - 2 * margin) / boxH).coerceAtLeast(0.05f)
@@ -61,9 +73,14 @@ fun canvasEmbedHeightDp(
     minDp: Float = 160f,
     maxDp: Float = 320f,
 ): Float {
-    if (cards.isEmpty() || columnWidthDp <= 0f) return minDp
-    val boxW = cards.maxOf { it.first } + nodeW - cards.minOf { it.first }
-    val boxH = cards.maxOf { it.second } + nodeH - cards.minOf { it.second }
+    return embedHeightForBoxes(cards.map { NodeBox(it.first, it.second, nodeW, nodeH) }, columnWidthDp, marginDp, minDp, maxDp)
+}
+
+/** [canvasEmbedHeightDp] over boxes of any size. */
+fun embedHeightForBoxes(boxes: List<NodeBox>, columnWidthDp: Float, marginDp: Float = 24f, minDp: Float = 160f, maxDp: Float = 320f): Float {
+    if (boxes.isEmpty() || columnWidthDp <= 0f) return minDp
+    val boxW = boxes.maxOf { it.right } - boxes.minOf { it.x }
+    val boxH = boxes.maxOf { it.bottom } - boxes.minOf { it.y }
     val inner = (columnWidthDp - 2 * marginDp).coerceAtLeast(1f)
     return (inner * boxH / boxW + 2 * marginDp).coerceIn(minDp, maxDp)
 }

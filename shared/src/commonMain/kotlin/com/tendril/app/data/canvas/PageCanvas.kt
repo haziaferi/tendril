@@ -35,7 +35,10 @@ data class PageCanvas(
     val updatedAt: Instant,
 )
 
-enum class CanvasNodeType { TEXT, PAGE_EMBED }
+/** §0.10 item 15 (2026-09-18) — [FRAME]: a labelled region under the cards, its `width` / `height`
+ * its own and its `text` the label; nothing points at it — a node is inside a frame while its box
+ * is (`domain/canvas/Frames.kt`). A peer from before quarantines the unknown name as it does every enum. */
+enum class CanvasNodeType { TEXT, PAGE_EMBED, FRAME }
 
 @Entity(
     tableName = "canvas_nodes",

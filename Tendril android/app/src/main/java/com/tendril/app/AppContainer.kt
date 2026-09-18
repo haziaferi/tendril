@@ -119,7 +119,7 @@ class AppContainer(context: Context) {
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
         database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,
     )
-    val templateManager = TemplateManager(database.pageDao(), database.blockDao(), database.pageDatabaseDao(), database.propertyDao())
+    val templateManager = TemplateManager(database.pageDao(), database.blockDao(), database.pageDatabaseDao(), database.propertyDao(), database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao())
     val notionImporter = NotionImporter(
         context, database.pageDao(), database.blockDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), pageContentRepository,

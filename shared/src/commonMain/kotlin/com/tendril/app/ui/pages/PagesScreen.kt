@@ -500,7 +500,7 @@ private fun NewPageSheet(
                 Spacer(Modifier.height(8.dp))
                 Text("From template", style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 templates.forEach { template ->
-                    val icon = if (template.kind == PageKind.DATABASE) Icons.Filled.TableChart else Icons.Outlined.Description
+                    val icon = when (template.kind) { PageKind.DATABASE -> Icons.Filled.TableChart; PageKind.CANVAS -> Icons.Filled.Dashboard; else -> Icons.Outlined.Description } // item 15 — a canvas template
                     NewOptionRow(icon, template.title) { onFromTemplate(template, title) }
                 }
             }
