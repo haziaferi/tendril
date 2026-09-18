@@ -364,10 +364,12 @@ internal fun LabelFilterRow(
         // 14h·2 — 12 dp of *visible* air above and below (measured 14 / 20 px before: the chip's
         // invisible 48 dp target inset made the two unequal); under a pointer the chip is its
         // 32 dp, on Touch it keeps the target. The caller's padding is the row's content start.
+        // The phone catch-up (2026-09-18): on Touch 4 − 8 dp went negative and `padding` threw on every
+        // launch with a label in the store (since 14h·2) — clamped; the 48 dp target's own inset is the air there.
         val profile = LocalDensityProfile.current
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides if (profile.pointer) 32.dp else 48.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = horizontalPadding, end = horizontalPadding, top = if (profile.pointer) 12.dp else 4.dp, bottom = (if (profile.pointer) 12.dp else 4.dp) - listTopPadding),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = horizontalPadding, end = horizontalPadding, top = if (profile.pointer) 12.dp else 4.dp, bottom = ((if (profile.pointer) 12.dp else 4.dp) - listTopPadding).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             allLabels.forEach { label ->
