@@ -29,6 +29,14 @@ fun WorkbenchEnvironment(
     fixedDensityProfile: DensityProfile? = null,
     shorterSideDp: Float? = null,
     wide: Boolean? = null,
+    /**
+     * True where the platform already applied [shellScaleFor] to its own density (Android's
+     * `MainActivity`, T·P3 of item 23's Lows, 2026-09-18): a dialog, a menu or a sheet there is
+     * its own window and starts from the platform's density, not this composition's — so the
+     * phone drew every sheet 4.6 % smaller than the page behind it (one style, two heights).
+     * The desktop's windows inherit the composition's density and keep scaling here.
+     */
+    platformScaled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val viewOnly by core.viewLockState.viewOnly.collectAsState()
@@ -38,7 +46,7 @@ fun WorkbenchEnvironment(
     val storedProfile by core.keyValueStore.observe(DENSITY_PROFILE_KEY).collectAsState(initial = core.keyValueStore.get(DENSITY_PROFILE_KEY))
     val profile = fixedDensityProfile ?: DensityProfile.fromKey(storedProfile)
     val side = shorterSideDp ?: (minOf(containerSize.width, containerSize.height) / baseDensity.density)
-    val scale = shellScaleFor(side, profile)
+    val scale = if (platformScaled) 1f else shellScaleFor(side, profile)
     val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
     // L5 — the window's title bar is the bar (`TitleBar.kt`): installed here, where every window's
     // content passes (the main scaffold and each pop-out), once the scaled density is known — the

@@ -59,6 +59,7 @@ fun FindBar(
 ) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusTick) { runCatching { focus.requestFocus() } }
+    val pointer = LocalDensityProfile.current.pointer // P9 — the hints name keys under a pointer only
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -96,13 +97,13 @@ fun FindBar(
             style = MaterialTheme.typography.description.tabular(),
         )
         IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(findButton())) {
-            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Previous (Shift+Enter)", modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = if (pointer) "Previous (Shift+Enter)" else "Previous", modifier = Modifier.size(18.dp))
         }
         IconButton(onClick = onNext, enabled = total > 0 || hidden > 0, modifier = Modifier.size(findButton())) {
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Next (Enter)", modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = if (pointer) "Next (Enter)" else "Next", modifier = Modifier.size(18.dp))
         }
         IconButton(onClick = onClose, modifier = Modifier.size(findButton())) {
-            Icon(Icons.Filled.Close, contentDescription = "Close (Esc)", modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.Close, contentDescription = if (pointer) "Close (Esc)" else "Close", modifier = Modifier.size(18.dp))
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outline)

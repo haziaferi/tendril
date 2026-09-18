@@ -19,7 +19,6 @@ import androidx.compose.foundation.background
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.TendrilMenu
+import com.tendril.app.ui.components.MenuCheck
+import com.tendril.app.ui.components.BarMenuButton
 import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilSheet
@@ -84,9 +87,16 @@ internal fun PostponeSheet(entry: Entry, onPostpone: (PostponeAmount) -> Unit, o
                     onValueChange = { customAmount = it.filter(Char::isDigit).take(3) },
                     modifier = Modifier.width(80.dp),
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PostponeUnit.entries.forEach { unit ->
-                        FilterChip(selected = customUnit == unit, onClick = { customUnit = unit }, label = { Text(unit.name.lowercase() + "s") })
+                // L·P5 (item 23's Lows, 2026-09-18) — five unit chips wrapped beside the count on the phone and
+                // scrolled on the desktop; every ground's custom offset is a number and a unit menu (Google
+                // Calendar's, Todoist's, TickTick's). The bar's menu button, so it is 40 dp under Touch.
+                var unitOpen by remember { mutableStateOf(false) }
+                Box {
+                    BarMenuButton(label = customUnit.name.lowercase() + "s", open = unitOpen, onClick = { unitOpen = true })
+                    TendrilMenu(expanded = unitOpen, onDismissRequest = { unitOpen = false }) {
+                        PostponeUnit.entries.forEach { unit ->
+                            TendrilMenuItem(text = { Text(unit.name.lowercase() + "s") }, trailingIcon = { MenuCheck(customUnit == unit) }, onClick = { customUnit = unit; unitOpen = false })
+                        }
                     }
                 }
             }

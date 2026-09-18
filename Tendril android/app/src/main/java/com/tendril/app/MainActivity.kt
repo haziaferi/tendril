@@ -1,6 +1,8 @@
 package com.tendril.app
 
 import android.Manifest
+import android.content.Context
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,9 +25,12 @@ import com.tendril.app.applock.LockScreen
 import com.tendril.app.applock.showAppUnlockPrompt
 import com.tendril.app.notifications.reconcileAlarms
 import com.tendril.app.ui.nav.AndroidWorkbenchScaffold
+import com.tendril.app.ui.nav.DensityProfile
+import com.tendril.app.ui.nav.shellScaleFor
 import com.tendril.app.ui.theme.TendrilTheme
 import com.tendril.app.ui.theme.resolveDark
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * `FragmentActivity`, not plain `ComponentActivity` — `BiometricPrompt` (§3.6) needs a
@@ -38,6 +43,22 @@ class MainActivity : FragmentActivity() {
     // Cleared (locked) on backgrounding only when lock-on-background is actually on;
     // otherwise this stays true across the whole process lifetime once first unlocked.
     private val isUnlockedForSession = mutableStateOf(true)
+
+    /**
+     * The shell's scale (`shellScaleFor`, B§13.5 #4 — every measurement proportional to the
+     * screen) applied to the activity's own density, so every window the app opens — a sheet, a
+     * menu, a dialog, each an Android window starting from the platform's density — draws at the
+     * same scale as the page behind it. `WorkbenchEnvironment` then scales nothing on Android
+     * (`platformScaled`); it had scaled the composition alone, and the phone's sheets measured
+     * 4.6 % under its rows (T·P3 of §0.10 item 23, 2026-09-18). The shorter side is the
+     * configuration's, rotation-independent, in the platform's dp as the shell reads it.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        val config = Configuration(newBase.resources.configuration)
+        val scale = shellScaleFor(config.smallestScreenWidthDp.toFloat(), DensityProfile.TOUCH)
+        config.densityDpi = (config.densityDpi * scale).roundToInt()
+        super.attachBaseContext(newBase.createConfigurationContext(config))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must precede super.onCreate so the splash theme is swapped for Theme.Tendril

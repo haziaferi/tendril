@@ -36,4 +36,10 @@ class CalendarTitlesTest {
         assertEquals(LocalDate.of(2026, 9, 14), weekStartOf(thu))
         assertEquals(LocalDate.of(2026, 9, 14), weekStartOf(LocalDate.of(2026, 9, 20)))
     }
+
+    @Test
+    fun `the day's title keeps the locale's order`() {
+        // P10 — the phone's Day header read *venerdì, settembre 18* from a hand-written pattern; it is this title now.
+        assertEquals("venerdì 18 settembre", rangeTitle(CalendarView.DAY, LocalDate.of(2026, 9, 18), Locale.ITALIAN))
+    }
 }

@@ -51,3 +51,11 @@ fun dayLabel(day: LocalDate, locale: Locale = Locale.getDefault()): String =
 enum class DotKind { TASK, EVENT, HABIT, DATABASE }
 
 fun monthDots(kinds: Collection<DotKind>, cap: Int = 3): List<DotKind> = kinds.distinct().sortedBy { it.ordinal }.take(cap)
+
+/**
+ * A weekday's one-letter initial in the phone's language (T·P4 / F·P3, item 23's Lows, 2026-09-18):
+ * the Timeline spelled *S M T W T F S* from the enum's English name on an Italian phone whose Month
+ * header read *L M M G V S D*. One spelling — `TextStyle.NARROW`, upper-cased — for both.
+ */
+fun weekdayInitial(day: DayOfWeek, locale: Locale = Locale.getDefault()): String =
+    day.getDisplayName(TextStyle.NARROW, locale).uppercase(locale)

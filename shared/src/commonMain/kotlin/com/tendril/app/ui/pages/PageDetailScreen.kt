@@ -902,7 +902,10 @@ private fun BlockRow(
                                 lastWrittenContent = stripped
                                 viewModel.updateBlockContent(block, stripped, remapSpans(block.formattingSpans, block.content, stripped))
                                 onRequestMention(stripped)
-                            } else {
+                            } else if (text != lastWrittenContent) {
+                                // F·P2 (item 23's Lows, 2026-09-18): a long-press or a double-click selects a word and the
+                                // field reports the same text with a new selection — that is not an edit, and writing it
+                                // captured a History revision and re-stamped the page on both platforms.
                                 lastWrittenContent = text
                                 viewModel.updateBlockContent(block, text, remapSpans(block.formattingSpans, block.content, text))
                             }

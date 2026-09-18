@@ -79,6 +79,8 @@ fun WorkbenchScaffold(
      * one that lets the person choose (the desktop, in Settings) passes null and the store's
      * `density_profile` is read. */
     fixedDensityProfile: DensityProfile? = null,
+    /** The platform applied the shell's scale to its own density already (Android) — see `WorkbenchEnvironment`. */
+    platformScaled: Boolean = false,
     /** B§13.6 #6 — pop-out windows; null where there are no windows (the phone): no opener is composed. */
     popOuts: PopOutHost? = null,
     calendarContent: @Composable (onOpenPage: (Long) -> Unit) -> Unit,
@@ -137,7 +139,7 @@ fun WorkbenchScaffold(
 
     // B§13.5 #4 — one scale for every measurement below this point (`WorkbenchEnvironment`,
     // shared with the pop-out windows, which take this window's scale rather than their own).
-    WorkbenchEnvironment(core, fixedDensityProfile) {
+    WorkbenchEnvironment(core, fixedDensityProfile, platformScaled = platformScaled) {
         // The route content, identical under either shell — only the chrome around it differs.
         // 14c: on a wide window the Pages tab, root or page, is the workspace (tree + page).
         val content: @Composable (wide: Boolean) -> Unit = { wide ->

@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.tendril.app.domain.plan.weekdayInitial
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -221,7 +222,7 @@ private fun DayHeader(start: LocalDate, dayCount: Int, today: LocalDate) {
                     color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    day.dayOfWeek.name.take(1),
+                    weekdayInitial(day.dayOfWeek),
                     style = MaterialTheme.typography.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -2,7 +2,9 @@ package com.tendril.app.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontVariation
@@ -104,12 +106,31 @@ object TypeScale {
  *
  * The display roles keep Material's sizes (nothing draws them).
  */
+/**
+ * One chrome style: the family, the scale's size and its line height — and **T·P3 (item 23's Lows,
+ * 2026-09-18): the line height applies to a single line too.** A `TextStyle` without a
+ * `LineHeightStyle` trims the first and last lines to the font's own ascent and descent, so a
+ * one-line `Text` measured ~1.21 em (22 dp for `pageTitle` at 18, 24 at 20) while a text field
+ * measured 25 / 27 — the same style at two heights, on both platforms. Material's roles carry
+ * `LineHeightStyle(Center, None)`; these do now, so a line is its style's line height everywhere.
+ */
+fun chromeStyle(family: FontFamily, size: Float, weight: FontWeight = FontWeight.Normal, letterSpacing: Float = 0f, platformStyle: PlatformTextStyle? = null): TextStyle = TextStyle(
+    fontFamily = family,
+    fontWeight = weight,
+    fontSize = size.sp,
+    lineHeight = TypeScale.lineHeightFor(size).sp,
+    letterSpacing = letterSpacing.em,
+    lineHeightStyle = LineHeightStyle(alignment = LineHeightStyle.Alignment.Center, trim = LineHeightStyle.Trim.None),
+    // Material's own platform style (no font padding on Android) — without it the bar's title
+    // still measured 27 dp against the sheet's 26; the constructor that says so is Android-only.
+    platformStyle = platformStyle,
+)
+
 @Composable
 fun typographyFor(typeface: TendrilTypeface): Typography {
     val family = fontFamilyFor(typeface)
     val base = Typography()
-    fun style(size: Float, weight: FontWeight = FontWeight.Normal, letterSpacing: Float = 0f) =
-        TextStyle(fontFamily = family, fontWeight = weight, fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp, letterSpacing = letterSpacing.em)
+    fun style(size: Float, weight: FontWeight = FontWeight.Normal, letterSpacing: Float = 0f) = chromeStyle(family, size, weight, letterSpacing, base.bodyLarge.platformStyle)
     fun TextStyle.withFamily() = copy(fontFamily = family, fontWeight = eyePassWeight(fontWeight))
     return Typography(
         displayLarge = base.displayLarge.withFamily(),
