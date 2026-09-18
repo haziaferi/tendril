@@ -89,6 +89,9 @@ import java.util.UUID
  * label, not trashing the page. */
 data class TableRow(val page: Page, val values: Map<Long, PropertyValue>, val linkedEntry: Entry?, val viaLabel: Boolean = false)
 
+/** A Board column: [key] is what a card moved here is set to ("" clears the cell), [label] what the header says. */
+data class BoardColumn(val key: String, val label: String, val rows: List<TableRow>)
+
 class PageDatabaseViewModel(
     private val pageId: Long,
     private val pageDao: PageDao,
@@ -211,15 +214,43 @@ class PageDatabaseViewModel(
         }
     }
 
+    /**
+     * F6 (PR C, 2026-09-18 — Notion's, measured): a new view never opens empty. A Board with no
+     * Select property to group by gets a *Status* Select (Not started · In progress · Done) made
+     * for it and grouped by at once; a Calendar or Timeline with no Date property gets a *Date*.
+     * Where the database already has one, the first is bound. The two-button empty state stays
+     * for the state a later deletion leaves.
+     */
     fun addView(name: String, type: ViewType) {
         if (locked()) return
-        val db = database.value ?: return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         launchAndTouch(pageId) {
-            val order = (views.value.maxOfOrNull { it.order } ?: -1) + 1
-            val id = pageDatabaseViewDao.insert(PageDatabaseView(databaseId = db.id, name = trimmed, viewType = type, order = order))
+            // Fetched, not read from the cold StateFlows (`addProperty`'s note): a direct call has no collector.
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouch
+            val order = (pageDatabaseViewDao.getForDatabase(db.id).maxOfOrNull { it.order } ?: -1) + 1
+            val props = propertyDao.getForDatabase(db.id)
+            var view = PageDatabaseView(databaseId = db.id, name = trimmed, viewType = type, order = order)
+            when (type) {
+                ViewType.BOARD -> view = view.copy(groupByPropertyId = props.firstOrNull { it.type == PropertyType.SELECT }?.id
+                    ?: propertyDao.insert(Property(databaseId = db.id, name = "Status", type = PropertyType.SELECT, config = "Not started,In progress,Done", order = (props.maxOfOrNull { it.order } ?: -1) + 1)))
+                ViewType.CALENDAR, ViewType.TIMELINE -> view = view.copy(datePropertyId = props.firstOrNull { it.type == PropertyType.DATE }?.id
+                    ?: propertyDao.insert(Property(databaseId = db.id, name = "Date", type = PropertyType.DATE, order = (props.maxOfOrNull { it.order } ?: -1) + 1)))
+                else -> {}
+            }
+            val id = pageDatabaseViewDao.insert(view)
             _selectedViewId.value = id
+        }
+    }
+
+    /** F8 (PR C) — *Move to Trash* from the database's own `···`: the same write the tree row makes (`PagesViewModel.moveToTrash`). */
+    fun trashDatabase(onDone: () -> Unit) {
+        if (locked()) return
+        viewModelScope.launch {
+            val now = Instant.now()
+            entryDao.getBySourceRowId(pageId)?.let { resolveEntryUseCase.trash(it.id, now) }
+            pageDao.softDelete(pageId, now)
+            onDone()
         }
     }
 
@@ -302,19 +333,24 @@ class PageDatabaseViewModel(
      * so its columns are instead every distinct non-empty value the formula actually produced
      * across the currently displayed rows, sorted for a stable column order across
      * recompositions. Either way a row
-     * with no value for the group property (a blank `SELECT` cell, or a formula that evaluated to
-     * [FormulaValue.Empty]) has no column of its own — the same "no silent fallback" rule, not a
-     * bug specific to one group-property kind. */
-    val boardColumns: StateFlow<List<Pair<String, List<TableRow>>>> = combine(displayedRows, selectedView, properties) { rowsList, view, props ->
+     * with a value matching no option has no column of its own — the same "no silent fallback"
+     * rule, not a bug specific to one group-property kind. **A blank `SELECT` cell is not a
+     * mismatch, it is unset** (PR C, 2026-09-18): those rows sit in a named first column, *No
+     * Status*, so a Board made on an existing database (F6 makes the property with the view)
+     * shows every row at once and a card dragged out of that column takes its option; dragged
+     * back in, the cell is cleared. A formula's `Empty` stays dropped — nothing could be set. */
+    val boardColumns: StateFlow<List<BoardColumn>> = combine(displayedRows, selectedView, properties) { rowsList, view, props ->
         if (view?.viewType != ViewType.BOARD) return@combine emptyList()
         val groupProperty = props.find { it.id == view.groupByPropertyId } ?: return@combine emptyList()
         val valueOf: (TableRow) -> String? = { row -> groupPropertyValue(groupProperty, row, props) }
-        val columns = if (groupProperty.type == PropertyType.COMPUTED) {
-            rowsList.mapNotNull(valueOf).distinct().sorted()
+        if (groupProperty.type == PropertyType.COMPUTED) {
+            rowsList.mapNotNull(valueOf).distinct().sorted().map { option -> BoardColumn(option, option, rowsList.filter { valueOf(it) == option }) }
         } else {
-            groupProperty.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
+            val options = groupProperty.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
+            val unset = rowsList.filter { valueOf(it).isNullOrBlank() }
+            val named = options.map { option -> BoardColumn(option, option, rowsList.filter { valueOf(it) == option }) }
+            if (unset.isEmpty()) named else listOf(BoardColumn("", "No ${groupProperty.name}", unset)) + named
         }
-        columns.map { option -> option to rowsList.filter { valueOf(it) == option } }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** A Board group property's value for one row — [valueForCell] for everything already

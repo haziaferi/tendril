@@ -342,6 +342,31 @@ class WritePathSyncTest {
         assertEquals(listOf("after"), b.propertyValueDao.getForRow(b.pageIdOf(seeded.row.uid)).map { it.value })
     }
 
+    /** F6 (PR C, 2026-09-18 — Notion's, measured): a new view never opens empty. The seeded
+     * database has a TEXT "Status" and no Select, so a Board gets a Select *Status* made for it
+     * and grouped by; a Calendar gets a *Date*; a second Calendar binds the Date that now exists. */
+    @Test
+    fun `a new Board or Calendar view gets the property it plots by`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val vm = a.database(seeded.databasePage.id)
+        val dbId = seeded.property.databaseId
+
+        vm.addView("Board", ViewType.BOARD)
+        val status = a.propertyDao.getForDatabase(dbId).single { it.type == PropertyType.SELECT }
+        assertEquals("Status", status.name)
+        assertEquals("Not started,In progress,Done", status.config)
+        assertEquals(status.id, a.viewDao.getForDatabase(dbId).single { it.viewType == ViewType.BOARD }.groupByPropertyId)
+
+        vm.addView("Calendar", ViewType.CALENDAR)
+        val date = a.propertyDao.getForDatabase(dbId).single { it.type == PropertyType.DATE }
+        assertEquals("Date", date.name)
+        assertEquals(date.id, a.viewDao.getForDatabase(dbId).single { it.viewType == ViewType.CALENDAR }.datePropertyId)
+
+        vm.addView("Plan", ViewType.TIMELINE)
+        assertEquals("the existing Date is bound, not a second one made", 1, a.propertyDao.getForDatabase(dbId).count { it.type == PropertyType.DATE })
+        assertEquals(date.id, a.viewDao.getForDatabase(dbId).single { it.viewType == ViewType.TIMELINE }.datePropertyId)
+    }
+
     /** Schema rather than content: it merges in Pass 3, off the *database* page's record, so it
      * needs the database page bumped and no row would do. */
     @Test
@@ -812,9 +837,22 @@ class WritePathSyncTest {
 
         val columns = vm.boardColumns.first()
 
-        assertEquals(setOf("High", "Low"), columns.map { it.first }.toSet())
-        assertEquals(listOf(highRow.title), columns.single { it.first == "High" }.second.map { it.page.title })
-        assertEquals(listOf(lowRow.title), columns.single { it.first == "Low" }.second.map { it.page.title })
+        assertEquals(setOf("High", "Low"), columns.map { it.label }.toSet())
+        assertEquals(listOf(highRow.title), columns.single { it.label == "High" }.rows.map { it.page.title })
+        assertEquals(listOf(lowRow.title), columns.single { it.label == "Low" }.rows.map { it.page.title })
+    }
+
+    /** PR C (2026-09-18): a blank Select cell is unset, not a mismatch — its rows sit in a named
+     * first column whose key is "", so a card moved out of it takes an option and one moved in is cleared. */
+    @Test
+    fun `rows with a blank Select value sit in a named first column of the Board`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val vm = a.database(seeded.databasePage.id)
+        vm.addView("Board", ViewType.BOARD)
+        val columns = vm.boardColumns.first()
+        assertEquals(listOf("No Status", "Not started", "In progress", "Done"), columns.map { it.label })
+        assertEquals("", columns.first().key)
+        assertEquals(listOf("A row"), columns.first().rows.map { it.page.title })
     }
 
     @Test
