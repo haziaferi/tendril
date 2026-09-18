@@ -38,8 +38,25 @@ read before and after each step). Measured and judged kept apart.*
 ## Cannot verify
 - The hover states (a synthetic pointer raises none); Obsidian's resize on the phone (its Android canvas is read-mostly).
 
+
+## Ground on the phone (added the same evening — Obsidian 1.13 on the OnePlus, the same canvas pushed into the phone's vault as a new file, screencaps pixel-read; the `.canvas` file pulled after each gesture)
+
+| | measured on the phone |
+|---|---|
+| the drawing | the same node, the same form: the label in a pill above the top-left corner, the group's rounded rectangle with a 2 % fill and a 1 px border, the card inside — everything scales with the canvas zoom (the group 400 units → 980 px at the fit; the label's glyphs 48 px tall at that zoom), so no size here is a dp |
+| selection | a tap on the label selects: a 2 px accent ring, **eight resize handles** (square at the corners, round at the edges' middles) and a six-button toolbar above (delete · colour · zoom-to · align · edit · background) — the desktop's four plus align and background |
+| the drag | **a swipe on the label pans the canvas** (the file unchanged after a 200 px swipe); **a long press then a drag moves the group** — the file read `x: 60 → 120` and the card inside `139 → 199`, the same +60: geometry containment holds on the phone too |
+| what transfers from the desktop | the model (a node with no parent; geometry; the label as the handle; delete keeps the cards); what does **not**: the touch gesture — the phone lifts a node on a long press and pans on a swipe, where Tendril's cards today drag on press-and-move (the tray already follows the long-press rule under Touch, B§13.6 #5) |
+
+The desktop numbers in the mock (22 dp label pill, 14 dp handle, 28 dp targets) are the pointer profile's; under Touch the frame takes the phone's own rules — 48 dp targets, the label 14/500 in a 26 dp pill, a 20 dp handle, the badges always shown — measured on Tendril itself in #110, not carried over from a desktop grab.
+
+## Registry ground (obsidian-releases, `community-plugin-stats.json`)
+The most-installed canvas plugin, **Advanced Canvas** (830 k), adds what the stock group lacks and people want: **collapsible groups** and **encapsulate selection** (a selection moved to a new canvas with a link card left behind — Tendril's nested canvas, made from a frame). Collapse is a fifth decision below; encapsulate waits for item 6.
+
 ## Decisions for the user (in one batch, before the build)
 1. Containment — geometry (Obsidian's; no schema) or an explicit parent column.
 2. The handle — the label alone (the body pans) or the whole body (Obsidian's; a large frame blocks panning on the phone).
 3. Deleting a frame — the cards stay (Obsidian's) or go with it.
 4. A canvas template's page cards — keep pointing at their pages, or become text cards with the title.
+5. Collapsible frames — a frame folds to its label (Advanced Canvas's), Tendril-only in the file (JSON Canvas has no such field; the export writes it open).
+6. The phone's drag — a long press lifts a card or a frame and a swipe pans (Obsidian mobile's, the tray's rule under Touch), or press-and-move drags as Tendril's cards do today.
