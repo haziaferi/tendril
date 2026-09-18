@@ -15,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,7 +47,7 @@ fun PaneTab(label: String, selected: Boolean, onClick: () -> Unit) {
         label,
         style = MaterialTheme.typography.heading,
         color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
+        maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .height(28.dp)
             .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))

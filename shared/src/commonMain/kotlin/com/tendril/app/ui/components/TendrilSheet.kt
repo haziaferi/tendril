@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.nav.SheetForm
 import com.tendril.app.ui.nav.sheetFormFor
-import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.theme.pageTitle
 
 /**
  * The one frame every bottom sheet in the app uses (2026-09-12). Before this, each of the 29
@@ -66,7 +66,8 @@ fun TendrilSheet(
                 .padding(bottom = sheetBottomRoom()),
         ) {
             if (title != null) {
-                Text(title, style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp))
+                // T5 — the sheet's title at the page title's size on both forms (the slide-over's header is the same title).
+                Text(title, style = MaterialTheme.typography.pageTitle, modifier = Modifier.padding(bottom = 12.dp)) // type: BAR_TITLE
             }
             content()
         }

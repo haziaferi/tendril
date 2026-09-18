@@ -35,7 +35,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -43,6 +42,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -294,14 +294,13 @@ private fun AtRestEncryptionSection(secretStore: SecretStore, coordinator: SyncC
         }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedTextField(
+            TendrilField(
                 value = draft,
                 onValueChange = { draft = it },
                 modifier = Modifier.weight(1f),
-                singleLine = true,
-                label = { Text("Passphrase") },
+                placeholder = "Passphrase",
                 visualTransformation = if (revealed) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
+                trailing = {
                     IconButton(onClick = { revealed = !revealed }) {
                         Icon(
                             imageVector = if (revealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,

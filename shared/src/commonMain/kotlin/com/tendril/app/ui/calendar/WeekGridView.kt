@@ -173,7 +173,7 @@ internal fun WeekGridView(
                             .clickable { onSelectDate(col.day) }
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                     ) {
-                        Text(col.day.format(DateTimeFormatter.ofPattern("EEE d")), style = MaterialTheme.typography.label, maxLines = 1)
+                        Text(col.day.format(DateTimeFormatter.ofPattern("EEE d")), style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         // L8 — the minutes only from a 90 dp lane (`plannedLabel`); the lane's width is what the grid measured.
                         val laneWidthDp = with(density) { laneWidthState.toDp().value }
                         Text(

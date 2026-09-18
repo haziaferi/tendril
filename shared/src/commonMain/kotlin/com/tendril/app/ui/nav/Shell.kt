@@ -32,6 +32,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -157,7 +158,7 @@ private fun ShellItem(
         ) {
             Icon(icon, contentDescription = null, tint = colour, modifier = Modifier.size(iconSize))
         }
-        Text(label, style = MaterialTheme.typography.caption, color = colour, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.caption, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

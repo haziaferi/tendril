@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -54,6 +56,11 @@ fun TendrilField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     focusRequester: FocusRequester? = null,
     onPreviewKeyEvent: ((KeyEvent) -> Boolean)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    readOnly: Boolean = false,
+    /** > 1 makes the field grow with its text from this many lines (the card editor's) — the one multi-line form. */
+    minLines: Int = 1,
 ) {
     // The String form keeps the selection beside the text (the recommended pattern), so a caller
     // that resets the text to "" resets the caret too — `QuickAddField` lost characters after a
@@ -65,6 +72,7 @@ fun TendrilField(
         onValueChange = { fieldValue = it; if (it.text != value) onValueChange(it.text) },
         modifier = modifier, placeholder = placeholder, height = height, leading = leading, trailing = trailing,
         visualTransformation = visualTransformation, focusRequester = focusRequester, onPreviewKeyEvent = onPreviewKeyEvent,
+        keyboardOptions = keyboardOptions, keyboardActions = keyboardActions, readOnly = readOnly, minLines = minLines,
     )
 }
 
@@ -83,22 +91,27 @@ fun TendrilField(
     onPreviewKeyEvent: ((KeyEvent) -> Boolean)? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    readOnly: Boolean = false,
+    minLines: Int = 1,
 ) {
     val rowHeight = if (LocalDensityProfile.current.pointer) height else maxOf(height, 48.dp)
+    val multiline = minLines > 1
     Row(
         modifier = modifier
-            .height(rowHeight)
+            // A multi-line field (PR B, L6b — the card editor) keeps the frame and grows from its
+            // minimum; every other field is one row at the frame's height.
+            .then(if (multiline) Modifier.heightIn(min = rowHeight) else Modifier.height(rowHeight))
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 12.dp, vertical = if (multiline) 8.dp else 0.dp),
+        verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         leading?.invoke()
         Box(modifier = Modifier.weight(1f)) {
             if (value.text.isEmpty() && placeholder != null) {
                 Text( // type: PLACEHOLDER — the field's own text at the field's size
-                    placeholder, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    placeholder, style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             var fieldModifier = Modifier.fillMaxWidth()
             if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
@@ -106,7 +119,9 @@ fun TendrilField(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                singleLine = true,
+                singleLine = !multiline,
+                minLines = minLines,
+                readOnly = readOnly,
                 textStyle = MaterialTheme.typography.body.copy(color = MaterialTheme.colorScheme.onSurface),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 visualTransformation = visualTransformation,

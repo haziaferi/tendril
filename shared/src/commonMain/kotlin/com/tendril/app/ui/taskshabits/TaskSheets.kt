@@ -18,11 +18,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -35,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.TendrilDatePicker
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.habit.Habit
@@ -79,12 +79,10 @@ internal fun PostponeSheet(entry: Entry, onPostpone: (PostponeAmount) -> Unit, o
             Text("Custom", style = MaterialTheme.typography.label)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    textStyle = MaterialTheme.typography.body,
+                TendrilField(
                     value = customAmount,
                     onValueChange = { customAmount = it.filter(Char::isDigit).take(3) },
                     modifier = Modifier.width(80.dp),
-                    singleLine = true,
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     PostponeUnit.entries.forEach { unit ->
@@ -119,7 +117,7 @@ internal fun SubtaskDialog(parent: Entry, onAdd: (String) -> Unit, onDismiss: ()
             Column {
                 Text("Under “${parent.title}”", style = MaterialTheme.typography.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it }, label = { Text("Step") }, singleLine = true)
+                TendrilField(value = title, onValueChange = { title = it }, placeholder = "Step", modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { onAdd(title); onDismiss() }) { Text("Add") } },
@@ -146,7 +144,7 @@ internal fun DeadlineDialog(current: LocalDate?, onSet: (LocalDate?) -> Unit, on
                 TextButton(onClick = onDismiss) { Text("Cancel") }
             }
         },
-    ) { DatePicker(state = state) }
+    ) { TendrilDatePicker(state = state) }
 }
 
 /**

@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.openVerb
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -159,7 +159,7 @@ internal fun CanvasPickerSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
-            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = newTitle, onValueChange = { newTitle = it }, label = { Text("New canvas") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            TendrilField(value = newTitle, onValueChange = { newTitle = it }, placeholder = "New canvas", modifier = Modifier.fillMaxWidth())
             TextButton(onClick = { onCreate(newTitle) }) { Text("Create and insert") }
             if (canvases.isNotEmpty()) {
                 Text("Or an existing one", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 8.dp))

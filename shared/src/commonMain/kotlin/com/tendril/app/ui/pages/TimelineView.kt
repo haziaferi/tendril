@@ -218,7 +218,7 @@ private fun DayHeader(start: LocalDate, dayCount: Int, today: LocalDate) {
                     if (day.dayOfMonth == 1 || i == 0) day.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() } else "",
                     style = MaterialTheme.typography.caption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     day.dayOfMonth.toString(),
@@ -264,7 +264,7 @@ private fun TimelineBarRow(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val spanWidth = DAY_WIDTH * bar.days.toInt()
-    val titleWidthPx = remember(bar.row.page.title, style) { measurer.measure(bar.row.page.title, style, maxLines = 1).size.width }
+    val titleWidthPx = remember(bar.row.page.title, style) { measurer.measure(bar.row.page.title, style, maxLines = 1, overflow = TextOverflow.Ellipsis).size.width }
     val titleWidth = with(density) { titleWidthPx.toDp() } + 16.dp
     val remaining = with(density) { ((dayCount - offsetDays).coerceAtLeast(1L) * dayPx).toDp() }
     val barWidth = maxOf(spanWidth, titleWidth).coerceAtMost(remaining)

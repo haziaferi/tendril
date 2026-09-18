@@ -11,11 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,9 +25,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.jetbrains.compose.resources.stringResource
+import com.tendril.app.ui.components.TendrilDatePicker
+import com.tendril.app.ui.components.TendrilSheet
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.taskshabits_add_habit
 import com.tendril.app.generated.resources.taskshabits_add_task
@@ -49,6 +51,7 @@ import com.tendril.app.ui.entries.QuickAddPreview
 import java.time.LocalDate
 import java.time.LocalTime
 import com.tendril.app.ui.theme.body
+import com.tendril.app.ui.theme.label
 
 private enum class RepeatOption(val label: String) {
     NONE("None"), DAILY("Daily"), WEEKLY("Weekly"), MONTHLY("Monthly")
@@ -76,75 +79,76 @@ fun AddTaskDialog(
     var showTimePicker by remember { mutableStateOf(false) }
     var repeat by remember { mutableStateOf(RepeatOption.NONE) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.taskshabits_add_task)) },
-        text = {
-            Column {
-                OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it; ignored = emptySet() }, label = { Text("Title") }, singleLine = true)
-                if (parsed.spans.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
-                    QuickAddPreview(parsed = parsed, onFlipKind = {}, onDrop = { ignored = ignored + it })
-                }
-                // Each parsed field lands on its control once, when it appears or changes; the
-                // person can still change the control afterwards without the line fighting back.
-                LaunchedEffect(parsed.date) { parsed.date?.let { hasDate = true; date = it } }
-                LaunchedEffect(parsed.time) { parsed.time?.let { hasTime = true; time = it } }
-                LaunchedEffect(parsed.deadline) { parsed.deadline?.let { hasDeadline = true; deadline = it } }
-                LaunchedEffect(parsed.recurrence) {
-                    (parsed.recurrence as? RecurrenceRule.Elastic)?.period?.let { p ->
-                        repeat = when {
-                            p.days == 1 -> RepeatOption.DAILY
-                            p.days == 7 -> RepeatOption.WEEKLY
-                            p.months == 1 -> RepeatOption.MONTHLY
-                            else -> repeat
-                        }
+    // L15 + T3 (PR B, 2026-09-18): the one modal that was neither a slide-over nor a picker is a
+    // `TendrilSheet` now — a slide-over on a wide window, a bottom sheet on the phone — with the
+    // edit sheet's frame, the 36 dp field and the sheet's title style.
+    TendrilSheet(onDismiss = onDismiss, title = stringResource(Res.string.taskshabits_add_task)) {
+        Column {
+            TendrilField(value = title, onValueChange = { title = it; ignored = emptySet() }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
+            if (parsed.spans.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                QuickAddPreview(parsed = parsed, onFlipKind = {}, onDrop = { ignored = ignored + it })
+            }
+            // Each parsed field lands on its control once, when it appears or changes; the
+            // person can still change the control afterwards without the line fighting back.
+            LaunchedEffect(parsed.date) { parsed.date?.let { hasDate = true; date = it } }
+            LaunchedEffect(parsed.time) { parsed.time?.let { hasTime = true; time = it } }
+            LaunchedEffect(parsed.deadline) { parsed.deadline?.let { hasDeadline = true; deadline = it } }
+            LaunchedEffect(parsed.recurrence) {
+                (parsed.recurrence as? RecurrenceRule.Elastic)?.period?.let { p ->
+                    repeat = when {
+                        p.days == 1 -> RepeatOption.DAILY
+                        p.days == 7 -> RepeatOption.WEEKLY
+                        p.months == 1 -> RepeatOption.MONTHLY
+                        else -> repeat
                     }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Has date", modifier = Modifier.fillMaxWidth().weight(1f))
-                    Switch(checked = hasDate, onCheckedChange = { hasDate = it })
-                }
-                if (hasDate) {
-                    TextButton(onClick = { showDatePicker = true }) { Text("Date: $date") }
-                    // Nested under `hasDate`: AlarmScheduler anchors an Entry's alarms to
-                    // start_date + start_time, so a time without a date has nothing to fire on.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Has time", modifier = Modifier.fillMaxWidth().weight(1f))
-                        Switch(checked = hasTime, onCheckedChange = { hasTime = it })
-                    }
-                    if (hasTime) {
-                        TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text("Repeats", style = MaterialTheme.typography.body)
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        RepeatOption.entries.forEach { option ->
-                            FilterChip(
-                                selected = repeat == option,
-                                onClick = { repeat = option },
-                                label = { Text(option.label, maxLines = 1) },
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                // Outside the `hasDate` block on purpose: a Someday task may carry a deadline.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Has deadline", modifier = Modifier.fillMaxWidth().weight(1f))
-                    Switch(checked = hasDeadline, onCheckedChange = { hasDeadline = it })
-                }
-                if (hasDeadline) {
-                    TextButton(onClick = { showDeadlinePicker = true }) { Text("Deadline: $deadline") }
                 }
             }
-        },
-        confirmButton = {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Has date", style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().weight(1f))
+                Switch(checked = hasDate, onCheckedChange = { hasDate = it })
+            }
+            if (hasDate) {
+                TextButton(onClick = { showDatePicker = true }) { Text("Date: $date") }
+                // Nested under `hasDate`: AlarmScheduler anchors an Entry's alarms to
+                // start_date + start_time, so a time without a date has nothing to fire on.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Has time", style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().weight(1f))
+                    Switch(checked = hasTime, onCheckedChange = { hasTime = it })
+                }
+                if (hasTime) {
+                    TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Repeats", style = MaterialTheme.typography.label)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RepeatOption.entries.forEach { option ->
+                        FilterChip(
+                            selected = repeat == option,
+                            onClick = { repeat = option },
+                            label = { Text(option.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            // Outside the `hasDate` block on purpose: a Someday task may carry a deadline.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Has deadline", style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().weight(1f))
+                Switch(checked = hasDeadline, onCheckedChange = { hasDeadline = it })
+            }
+            if (hasDeadline) {
+                TextButton(onClick = { showDeadlinePicker = true }) { Text("Deadline: $deadline") }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
             TextButton(onClick = {
                 val recurrence = when (repeat) {
                     RepeatOption.NONE -> null
@@ -155,9 +159,8 @@ fun AddTaskDialog(
                 onAdd(parsed.title, if (hasDate) date else null, if (hasDate && hasTime) time else null, recurrence, if (hasDeadline) deadline else null, parsed.estimate, parsed.importance)
                 onDismiss()
             }) { Text("Add") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+    }
 
     if (showDatePicker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = date.toDatePickerMillis())
@@ -165,66 +168,64 @@ fun AddTaskDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    state.selectedDateMillis?.let { date = datePickerMillisToLocalDate(it) }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = state) }
+                        state.selectedDateMillis?.let { date = datePickerMillisToLocalDate(it) }
+                        showDatePicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+            ) { TendrilDatePicker(state = state) }
+        }
+
+        if (showTimePicker) {
+            TimeOfDayDialog(
+                initial = time,
+                onDismiss = { showTimePicker = false },
+                onConfirm = { time = it; showTimePicker = false },
+            )
+        }
+
+        if (showDeadlinePicker) {
+            val state = rememberDatePickerState(initialSelectedDateMillis = deadline.toDatePickerMillis())
+            DatePickerDialog(
+                onDismissRequest = { showDeadlinePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        state.selectedDateMillis?.let { deadline = datePickerMillisToLocalDate(it) }
+                        showDeadlinePicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = { TextButton(onClick = { showDeadlinePicker = false }) { Text("Cancel") } },
+            ) { TendrilDatePicker(state = state) }
+        }
     }
 
-    if (showTimePicker) {
-        TimeOfDayDialog(
-            initial = time,
-            onDismiss = { showTimePicker = false },
-            onConfirm = { time = it; showTimePicker = false },
-        )
-    }
+    @Composable
+    fun AddHabitDialog(
+        onDismiss: () -> Unit,
+        onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?) -> Unit,
+    ) {
+        var title by remember { mutableStateOf("") }
+        var count by remember { mutableStateOf("1") }
+        var unit by remember { mutableStateOf(IntervalUnit.DAY) }
+        var hasTime by remember { mutableStateOf(false) }
+        var time by remember { mutableStateOf(DEFAULT_TIME_OF_DAY) }
+        var showTimePicker by remember { mutableStateOf(false) }
+        var durationMinutes by remember { mutableStateOf("") }
 
-    if (showDeadlinePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = deadline.toDatePickerMillis())
-        DatePickerDialog(
-            onDismissRequest = { showDeadlinePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { deadline = datePickerMillisToLocalDate(it) }
-                    showDeadlinePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton(onClick = { showDeadlinePicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = state) }
-    }
-}
-
-@Composable
-fun AddHabitDialog(
-    onDismiss: () -> Unit,
-    onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?) -> Unit,
-) {
-    var title by remember { mutableStateOf("") }
-    var count by remember { mutableStateOf("1") }
-    var unit by remember { mutableStateOf(IntervalUnit.DAY) }
-    var hasTime by remember { mutableStateOf(false) }
-    var time by remember { mutableStateOf(DEFAULT_TIME_OF_DAY) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var durationMinutes by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.taskshabits_add_habit)) },
-        text = {
+        // L15 + T3 (PR B, 2026-09-18): the one modal that was neither a slide-over nor a picker is a
+        // `TendrilSheet` now — a slide-over on a wide window, a bottom sheet on the phone — with the
+        // edit sheet's frame, the 36 dp field and the sheet's title style.
+        TendrilSheet(onDismiss = onDismiss, title = stringResource(Res.string.taskshabits_add_habit)) {
             Column {
-                OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
+                TendrilField(value = title, onValueChange = { title = it }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
                 Text("Every", style = MaterialTheme.typography.body)
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        textStyle = MaterialTheme.typography.body,
+                    TendrilField(
                         value = count,
                         onValueChange = { if (it.all(Char::isDigit)) count = it },
                         modifier = Modifier.weight(1f),
-                        singleLine = true,
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -233,7 +234,7 @@ fun AddHabitDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     IntervalUnit.entries.forEach { u ->
-                        FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u.name.lowercase(), maxLines = 1) })
+                        FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u.name.lowercase(), maxLines = 1, overflow = TextOverflow.Ellipsis) })
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -241,7 +242,7 @@ fun AddHabitDialog(
                 // the habits that have one (§3.3). Optional, since a habit with no particular
                 // hour is still a habit.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Has time", modifier = Modifier.fillMaxWidth().weight(1f))
+                    Text("Has time", style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().weight(1f))
                     Switch(checked = hasTime, onCheckedChange = { hasTime = it })
                 }
                 if (hasTime) {
@@ -251,18 +252,18 @@ fun AddHabitDialog(
                     // time, because a length with no start is not something any surface can place:
                     // the calendar overlay (§5.3) and the Merged tab both position a habit by its
                     // time and would have nowhere to draw a duration without one.
-                    OutlinedTextField(
-                        textStyle = MaterialTheme.typography.body,
+                    TendrilField(
                         value = durationMinutes,
                         onValueChange = { if (it.all(Char::isDigit)) durationMinutes = it },
-                        label = { Text("Duration (minutes, optional)") },
-                        singleLine = true,
+                        placeholder = "Duration (minutes, optional)",
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = {
                 onAdd(
                     title,
                     HabitFrequency(count.toIntOrNull() ?: 1, unit),
@@ -272,9 +273,8 @@ fun AddHabitDialog(
                 )
                 onDismiss()
             }) { Text("Add") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+    }
 
     if (showTimePicker) {
         TimeOfDayDialog(

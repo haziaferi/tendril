@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -155,7 +156,7 @@ fun MonthGrid(
                 val dow = firstDay.plus(i.toLong())
                 Text(
                     dow.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(Locale.getDefault()),
-                    style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                 )
             }
@@ -298,7 +299,7 @@ private fun MonthDay(
                         outOfMonth -> MaterialTheme.colorScheme.onSurfaceVariant
                         else -> Color.Unspecified
                     },
-                    maxLines = 1,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .then(if (isToday) Modifier.size(NUMBER_ROW_DP.dp).background(MaterialTheme.colorScheme.primary, CircleShape) else Modifier.height(NUMBER_ROW_DP.dp))

@@ -52,7 +52,7 @@ fun OccurrenceChip(
                 .drawBehind { stripe?.let { drawRect(it, size = Size(4.dp.toPx(), size.height)) } }
                 .padding(start = if (stripe != null) 10.dp else 6.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
         ) {
-            if (time != null) Text(time.toString(), style = MaterialTheme.typography.caption.tabular(), maxLines = 1, modifier = Modifier.padding(end = 4.dp))
+            if (time != null) Text(time.toString(), style = MaterialTheme.typography.caption.tabular(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 4.dp))
             Text(title, style = MaterialTheme.typography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }

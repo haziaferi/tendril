@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import com.tendril.app.ui.components.TendrilDatePicker
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.domain.urgency.Urgency
 import com.tendril.app.ui.components.UrgencyPicker
 import androidx.compose.foundation.layout.Spacer
@@ -16,11 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -89,7 +89,7 @@ fun EntryEditSheet(
     // window with no gesture to reach them (tendril-spec.md §0.10 item 11).
     TendrilSheet(onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
         Column {
-            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            TendrilField(value = title, onValueChange = { title = it }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
 
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -147,12 +147,10 @@ fun EntryEditSheet(
                     Switch(checked = deadline != null, onCheckedChange = { on -> deadline = if (on) (deadline ?: date ?: LocalDate.now()) else null })
                 }
                 if (deadline != null) TextButton(onClick = { picker = Picker.DEADLINE }) { Text(deadline.toString()) }
-                OutlinedTextField(
-                    textStyle = MaterialTheme.typography.body,
+                TendrilField(
                     value = estimateMinutes,
                     onValueChange = { if (it.all(Char::isDigit)) estimateMinutes = it },
-                    label = { Text("Estimate (minutes)") },
-                    singleLine = true,
+                    placeholder = "Estimate (minutes)",
                     modifier = Modifier.width(200.dp).padding(top = 8.dp),
                 )
                 if (showUrgency) {
@@ -270,7 +268,7 @@ private fun DateDialog(initial: LocalDate, onPick: (LocalDate) -> Unit, onDismis
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = { state.selectedDateMillis?.let { onPick(datePickerMillisToLocalDate(it)) }; onDismiss() }) { Text("OK") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    ) { DatePicker(state = state) }
+    ) { TendrilDatePicker(state = state) }
 }
 
 @Composable
