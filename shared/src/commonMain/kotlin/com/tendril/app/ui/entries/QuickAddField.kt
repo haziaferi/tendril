@@ -36,6 +36,7 @@ import com.tendril.app.generated.resources.calendar_quick_add_hint
 import org.jetbrains.compose.resources.stringResource
 import java.time.LocalDate
 import com.tendril.app.ui.components.TendrilField
+import com.tendril.app.ui.theme.LocalTendrilPalette
 
 /**
  * B§13.6 #7 — the quick-add line and its chip preview, one composable for its two homes: the
@@ -45,7 +46,8 @@ import com.tendril.app.ui.components.TendrilField
  * is the day the line means when it names none; [placeholder] defaults to the strip's hint.
  * [trailing] sits at the field's right (the strip's ×); [leadingIcon] inside its left (the
  * popup's + glyph). The field takes focus when it appears. L7 (2026-09-17): the field is
- * `TendrilField` — 28 dp in the strip with the chips inline, 36 dp in the popup.
+ * `TendrilField` — 28 dp in the strip with the chips inline, 36 dp in the popup. L7b (2026-09-18): the
+ * recognised runs are tinted in the line through [quickAddTokensTransformation]; the chips stay.
  */
 @Composable
 fun QuickAddField(
@@ -77,6 +79,7 @@ fun QuickAddField(
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val hint = placeholder ?: stringResource(Res.string.calendar_quick_add_hint)
+    val tint = LocalTendrilPalette.current.findSoft
     fun submit() {
         if (text.isNotBlank()) { onQuickAdd(parsed); value = TextFieldValue(""); ignored = emptySet(); kindOverride = null; onTextChanged?.invoke("") }
     }
@@ -86,6 +89,7 @@ fun QuickAddField(
             onValueChange = { value = it; ignored = emptySet(); kindOverride = null; onTextChanged?.invoke(it.text) },
             placeholder = hint,
             height = fieldHeight,
+            visualTransformation = remember(parsed.spans, tint) { quickAddTokensTransformation(parsed.spans, tint) },
             leading = leadingIcon,
             focusRequester = focus,
             // The desktop's Enter; the phone's Done action below.

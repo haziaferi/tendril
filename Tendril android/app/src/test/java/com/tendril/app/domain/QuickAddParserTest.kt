@@ -170,8 +170,10 @@ class QuickAddParserTest {
         // `by` as a preposition stays in the title.
         assertNull(task("Call by phone tomorrow").deadline)
         assertEquals("Call by phone", task("Call by phone tomorrow").title)
-        // An event has no deadline.
+        // An event has no deadline — and keeps the words (L7b, 2026-09-18: a consumed run with no chip was a silent loss).
         assertNull(event("Party by friday").deadline)
+        assertEquals("Party by friday", event("Party by friday").title)
+        assertTrue(event("Party by friday").spans.none { it.kind == TokenKind.DEADLINE })
     }
 
     @Test
