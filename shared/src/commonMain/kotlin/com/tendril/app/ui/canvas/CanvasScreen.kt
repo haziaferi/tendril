@@ -123,7 +123,15 @@ private const val MAX_SCALE = 2.5f
  * and edges always stay aligned to each other regardless of zoom level.
  */
 @Composable
-fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpenPage: (Long) -> Unit, paneChrome: PaneChrome? = null) {
+fun CanvasScreen(
+    core: WorkbenchCore,
+    pageId: Long,
+    onBack: (() -> Unit)?,
+    onOpenPage: (Long) -> Unit,
+    paneChrome: PaneChrome? = null,
+    /** P5 — the phone's canvas menu: *Show on Road Map*; null hides the item. */
+    onShowOnRoadMap: ((Long) -> Unit)? = null,
+) {
     val viewModel: CanvasViewModel = viewModel(
         key = "canvas_$pageId",
         factory = viewModelFactory {
@@ -145,6 +153,8 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var showAddMenu by remember { mutableStateOf(false) }
     var showPagePicker by remember { mutableStateOf(false) }
+    var showOwnMenu by remember { mutableStateOf(false) }
+    var showTrashCanvas by remember { mutableStateOf(false) }
     var editingNode by remember { mutableStateOf<CanvasNode?>(null) }
     var editingEdge by remember { mutableStateOf<CanvasEdge?>(null) }
 
@@ -213,7 +223,15 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                             addMenu()
                         }
                     }
-                    // The canvas has no menu of its own; as a pane it gains the workspace's (View-Only, Trash…).
+                    // As a pane the canvas gains the workspace's menu (View-Only, Trash…); on its own — the
+                    // phone — it carries the page's two verbs (the phone's fix PR, P5: it had no `···` at all).
+                    if (paneChrome == null) Box {
+                        IconButton(onClick = { showOwnMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
+                        TendrilMenu(expanded = showOwnMenu, onDismissRequest = { showOwnMenu = false }) {
+                            if (onShowOnRoadMap != null) TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showOwnMenu = false; onShowOnRoadMap(pageId) })
+                            if (!viewOnly) TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { showOwnMenu = false; showTrashCanvas = true })
+                        }
+                    }
                     if (paneChrome != null) {
                         var showPaneMenu by remember { mutableStateOf(false) }
                         paneChrome.actions(this)
@@ -316,6 +334,17 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
     // Not `takeIf`-guarded like the delete dialog but `&&`-guarded for the same reason: the FAB
     // that opens it is gone under the lock, and a pick made after a mid-flow toggle would add a
     // card.
+    // P5 — the same question the page's and the database's `···` ask.
+    if (showTrashCanvas) {
+        AlertDialog(
+            onDismissRequest = { showTrashCanvas = false },
+            title = { Text("Move this canvas to Trash?", style = MaterialTheme.typography.heading) },
+            text = { Text("Its cards go with it; everything can be restored from Trash.") },
+            confirmButton = { TextButton(onClick = { showTrashCanvas = false; viewModel.trashPage { onBack?.invoke() } }) { Text("Move to Trash", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { showTrashCanvas = false }) { Text("Cancel") } },
+        )
+    }
+
     if (showPagePicker && !viewOnly) {
         CanvasPagePickerSheet(
             viewModel = viewModel,
@@ -725,7 +754,7 @@ private fun CanvasPagePickerSheet(viewModel: CanvasViewModel, onDismiss: () -> U
     var query by remember { mutableStateOf("") }
     val results by viewModel.pageSearchResults.collectAsState()
 
-    TendrilSheet(onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
+    TendrilSheet(scrolls = false, onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Add a page card", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))

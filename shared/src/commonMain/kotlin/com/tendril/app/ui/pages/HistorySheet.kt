@@ -60,7 +60,7 @@ internal fun HistorySheet(viewModel: PageDetailViewModel, contentLocked: Boolean
     var confirm by remember { mutableStateOf(false) }
 
     val shown = open
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (shown != null) {

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
@@ -87,7 +86,7 @@ fun EntryEditSheet(
 
     // Fully expanded from the start: on desktop a half-open sheet's buttons sit below the
     // window with no gesture to reach them (tendril-spec.md §0.10 item 11).
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+    TendrilSheet(onDismiss = onDismiss) {
         Column {
             TendrilField(value = title, onValueChange = { title = it }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))

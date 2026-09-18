@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -55,6 +57,7 @@ import com.tendril.app.ui.theme.pageTitle
 internal fun SlideOver(
     onDismiss: () -> Unit,
     title: String?,
+    scrolls: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shown = remember { MutableTransitionState(false).apply { targetState = true } }
@@ -107,13 +110,14 @@ internal fun SlideOver(
                                 Icon(Icons.Filled.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        // Bounded height and no scroll of its own — as `ModalBottomSheet`'s content column
-                        // has none — so a sheet that is a `LazyColumn` (History, the Trash sheets) measures
-                        // against a real height instead of infinity, which is a crash.
+                        // Bounded height; the body scrolls unless the sheet is itself a `LazyColumn`
+                        // (History, the Trash sheets), which measures against a real height instead of
+                        // infinity — the pairing `TendrilSheet` documents and rule 20 checks (P2).
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
+                                .then(if (scrolls) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                                 .padding(start = 20.dp, end = 20.dp, top = if (title != null) 4.dp else 16.dp, bottom = 20.dp),
                             content = content,
                         )

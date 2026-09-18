@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
@@ -111,7 +110,7 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
     // Scrolls: with reminders listed, the offset chips, the all-day anchor row and the
     // Add button together run past the sheet's height, and an unscrollable Column just
     // clips the button off the bottom.
-    TendrilSheet(title = stringResource(Res.string.reminders_title), onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+    TendrilSheet(title = stringResource(Res.string.reminders_title), onDismiss = onDismiss) {
         Column {
             Text(entry.title, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))

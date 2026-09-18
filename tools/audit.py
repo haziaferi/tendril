@@ -69,6 +69,8 @@ RADIUS = re.compile(r"\bRoundedCornerShape\(\s*(\d+(?:\.\d+)?)\.dp\s*\)")
 RADIUS_FAMILY = {"2", "4", "6", "8", "10", "12"}
 MATERIAL_FIELD = re.compile(r"\b(?:Outlined)?TextField\s*\(")
 MAX_LINES_ONE = re.compile(r"\bmaxLines = 1\b")
+SHEET_CALL = re.compile(r"\bTendrilSheet\s*\(")
+LAZY_LIST = re.compile(r"\bLazy(?:Column|VerticalGrid|Row)\s*[({]")
 
 
 def call_span(src: str, pos: int) -> tuple[int, int]:
@@ -88,6 +90,30 @@ def call_span(src: str, pos: int) -> tuple[int, int]:
             depth -= 1
         j += 1
     return max(i, 0), j
+
+
+def sheet_spans(src: str, pos: int) -> tuple[str, str]:
+    """For a `TendrilSheet(` at pos: the argument text inside its parens and its trailing lambda's body."""
+    i = src.index("(", pos); depth = 0; j = i
+    while j < len(src):
+        if src[j] == "(": depth += 1
+        elif src[j] == ")":
+            depth -= 1
+            if depth == 0: break
+        j += 1
+    args = src[i + 1:j]
+    k = j + 1
+    while k < len(src) and src[k] in " \t\r\n": k += 1
+    if k >= len(src) or src[k] != "{":
+        return args, ""
+    depth = 0; m = k
+    while m < len(src):
+        if src[m] == "{": depth += 1
+        elif src[m] == "}":
+            depth -= 1
+            if depth == 0: break
+        m += 1
+    return args, src[k:m]
 
 
 def rel(p: str) -> str:
@@ -475,6 +501,21 @@ def main() -> int:
             a, b = call_span(src, m.start())
             if "overflow" not in src[a:b]:
                 rep.add("clip", f"{r}:{src.count(chr(10), 0, m.start()) + 1}  {src[m.start():m.start() + 60].splitlines()[0]}")
+
+    # The phone's fix PR (P2, 2026-09-18) — a sheet scrolls unless its content is a lazy list: the two
+    # must pair, a `LazyColumn` inside a scrolling frame measures against infinity (a crash), a plain
+    # column inside a bounded frame squashes when the keyboard is up (`phone-catch-up.md` #2).
+    for f, src in srcs.items():
+        r = rel(f)
+        if "/ui/" not in r or TEST_PATH.search("/" + r) or r.endswith("TendrilSheet.kt"):
+            continue
+        for m in SHEET_CALL.finditer(src):
+            args, body = sheet_spans(src, m.start())
+            lazy = bool(LAZY_LIST.search(body))
+            owns = "scrolls = false" in args
+            if lazy != owns:
+                line = src.count(chr(10), 0, m.start()) + 1
+                rep.add("sheet scroll", f"{r}:{line}  " + ("a lazy list inside a scrolling sheet - pass scrolls = false" if lazy else "scrolls = false on a sheet with no lazy list"))
 
     # The audit's fixes — a text's class decides its style (`tools/type_sites.py`, `tools/type_table/table.json`).
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

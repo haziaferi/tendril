@@ -62,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Checkbox
 import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.domain.urgency.Urgency
+import com.tendril.app.domain.taskRowMeta
 import com.tendril.app.domain.urgency.urgencyOf
 import com.tendril.app.ui.components.UrgencyDot
 import com.tendril.app.ui.components.SubmenuItem
@@ -626,7 +627,7 @@ private fun TaskRow(
             )
             .onSecondaryClick { menuAt = it; menuOpen = true }
             .then(if (pointer) Modifier.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp)
-                  else Modifier.padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp))
+                  else Modifier.padding(start = if (isStep) 32.dp else 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp))
             .then(Modifier.keyboardCursorRing(keyFocused, 6)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -642,13 +643,11 @@ private fun TaskRow(
         // that has passed is information, not an alarm (§0.5.2). Under a pointer the meta sits
         // at the title's right as a caption (Things' date tag, Notion's list view — the tray PR,
         // 2026-09-16: one line, Notion's row); under Touch it stays the second line.
-        val subtitle = listOfNotNull(
-            entry.startDate?.toString(),
-            entry.startTime?.toString(),
-            entry.dueDate?.let { "due $it" },
-            if (stepsTotal > 0) "$stepsDone/$stepsTotal steps" else null,
-            loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate),
-        ).joinToString(" · ")
+        // The phone's fix PR (P6, 2026-09-18): one formatter (`taskRowMeta`, tested) — *sab 12 · 08:00 ·
+        // due sab 12 · 0/1 steps*, the tray's day form — where raw ISO dates had wrapped the phone's rows
+        // to 86 dp; the month is named only when it is not this month.
+        val subtitle = taskRowMeta(entry.startDate, entry.startTime, entry.dueDate, stepsDone, stepsTotal,
+            loggedSegment(actions.loggedToday[entry.id] ?: 0, entry.estimate), LocalDate.now())
         val title = keyedTitle(entry.title, rowKeys?.state?.typed.orEmpty(), keyFocused)
         if (pointer) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -656,10 +655,12 @@ private fun TaskRow(
                 if (subtitle.isNotEmpty()) Text(subtitle, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
             }
         } else {
+            // Under Touch: two lines at most, each one line (Todoist's row, measured on the phone: a 17 sp
+            // title over a 14 sp date, 57 dp); the row's 8 dp of padding became 4 with it (67 → ≈ 59 dp).
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.body)
+                Text(title, style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle.isNotEmpty()) {
-                    Text(subtitle, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(subtitle, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

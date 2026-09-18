@@ -70,7 +70,7 @@ fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
         scope.launch { ids.forEach { core.database.habitDao().restore(it, Instant.now()) } }
     }
 
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
         // Same proportional height as the Entry and Page/Row sheets.
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {

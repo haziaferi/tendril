@@ -91,7 +91,7 @@ internal fun BlockReferencePickerDialog(viewModel: PageDetailViewModel, onDismis
         delay(150)
         viewModel.searchBlocks(query) { results = it }
     }
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Reference a block", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))

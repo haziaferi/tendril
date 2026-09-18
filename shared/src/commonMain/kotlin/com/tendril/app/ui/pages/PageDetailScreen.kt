@@ -25,7 +25,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -1026,7 +1025,7 @@ private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit
     // simply clipped whatever did not fit, and what did not fit was the last entry --
     // "Image". The type was in this list all along and could not be picked, which is how
     // §3.1.1's Image block came to be "offered" and yet impossible to insert.
-    TendrilSheet(title = "Insert block", onDismiss = onDismiss, modifier = Modifier.verticalScroll(rememberScrollState())) {
+    TendrilSheet(title = "Insert block", onDismiss = onDismiss) {
         Column {
             listOf(
                 BlockType.PARAGRAPH to "Paragraph", BlockType.HEADING_1 to "Heading 1", BlockType.HEADING_2 to "Heading 2",
@@ -1305,7 +1304,7 @@ private fun AddLabelDialog(viewModel: PageDetailViewModel, onDismiss: () -> Unit
     val palette = LocalTendrilPalette.current
     val rowHeight = LocalDensityProfile.current.rowHeightDp.dp
 
-    TendrilSheet(title = "Add label", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
+    TendrilSheet(scrolls = false, title = "Add label", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         Column {
             TendrilField(value = query, onValueChange = { query = it; viewModel.searchLabelCandidates(it) }, placeholder = "Label name", modifier = Modifier.fillMaxWidth())
             if (query.isNotBlank() && candidates.none { it.name.equals(query.trim(), ignoreCase = true) }) {
@@ -1332,7 +1331,7 @@ private fun MentionPickerDialog(viewModel: PageDetailViewModel, onDismiss: () ->
     var query by remember { mutableStateOf("") }
     val candidates by viewModel.mentionCandidates.collectAsState()
 
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.5f)) {
         // A fraction of the current screen's height, not a flat dp figure — stays
         // proportionate from small phones to tablets rather than over/under-filling.
         Column {

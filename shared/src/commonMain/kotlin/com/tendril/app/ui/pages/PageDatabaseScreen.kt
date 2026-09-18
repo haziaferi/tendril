@@ -1698,7 +1698,7 @@ fun EnableSyncSheet(
     var selectedRowIds by remember { mutableStateOf(rows.map { it.id }.toSet()) }
 
     // §0.10 item 11 — fully expanded, so "Turn on" is reachable on desktop.
-    TendrilSheet(title = "Sync to Tasks", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.8f)) {
+    TendrilSheet(scrolls = false, title = "Sync to Tasks", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.8f)) {
         Column {
             Text(
                 "Every row becomes its own linked Task. Pick which property means Done — required — and optionally the date it is planned for, a deadline, and a recurrence.",

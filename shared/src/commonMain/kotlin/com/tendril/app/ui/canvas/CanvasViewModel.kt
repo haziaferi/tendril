@@ -111,6 +111,17 @@ class CanvasViewModel(
         }
     }
 
+    /** The phone's fix PR (P5, 2026-09-18): the canvas page's own *Move to Trash* — the database's
+     * write (`PageDatabaseViewModel.trashDatabase`) without the row-linked entry a canvas never has;
+     * refused under the lock like every write here. */
+    fun trashPage(onDone: () -> Unit) {
+        if (locked()) return
+        viewModelScope.launch {
+            pageDao.softDelete(pageId, Instant.now())
+            onDone()
+        }
+    }
+
     /**
      * §9.4 — see [PageDao.touch]. Nodes and edges travel *inside* this Canvas page's snapshot,
      * and the merge decides whether to apply them by looking at the page row alone: a node moved

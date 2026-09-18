@@ -22,7 +22,9 @@ import org.robolectric.annotation.Config
  * helper and false of the app.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+// `application = Application::class`: with `isIncludeAndroidResources` (P11, 2026-09-18) Robolectric reads the real
+// manifest and would start `TendrilApp`, whose container opens the database before this test corrupts the file.
+@Config(sdk = [36], application = android.app.Application::class)
 class DatabaseFileTest {
 
     @Test

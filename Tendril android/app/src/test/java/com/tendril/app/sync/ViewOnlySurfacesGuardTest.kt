@@ -39,6 +39,7 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -230,6 +231,21 @@ class ViewOnlySurfacesGuardTest {
             0,
             nodeDao.getForCanvas(seeded.canvasId).size,
         )
+        assertPageUntouched(seeded.page)
+    }
+
+    @Test
+    fun `a canvas page cannot be moved to Trash while View-Only is on`() = runTest(mainDispatcher) {
+        // The phone's fix PR (P5, 2026-09-18): the canvas page's own `···` gained *Move to Trash*.
+        val seeded = seedCanvas()
+        val viewModel = canvasViewModel(seeded.page.id)
+        lockEverything()
+        var done = false
+
+        viewModel.trashPage { done = true }
+
+        assertEquals("the lock must refuse the trash write", false, done)
+        assertNull("a canvas trashed under View-Only", pageDao.getById(seeded.page.id)?.deletedAt)
         assertPageUntouched(seeded.page)
     }
 
