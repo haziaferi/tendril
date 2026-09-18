@@ -1,8 +1,14 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.tendril.app.ui.reminders
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.ui.components.MenuCheck
+import com.tendril.app.domain.reminders.reminderFiresAt
 import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.generated.resources.Res
@@ -138,24 +148,34 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
-            Text("Remind me", style = MaterialTheme.typography.label)
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReminderOffset.Preset.entries.forEach { option ->
-                    FilterChip(
-                        selected = !useCustomOffset && preset == option,
-                        onClick = { useCustomOffset = false; preset = option },
-                        label = { Text(option.label(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    )
+            // L14 / F12 (small things III): the presets as a list, never a row that scrolls off the
+            // panel (*Custom* sat past *1 day*); each row names the offset and the moment it would
+            // fire — TickTick's list measured (*1 day early (9:00 AM)*). The eyebrow says *before*.
+            Text("REMIND ME … BEFORE", style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            val rowHeight = LocalDensityProfile.current.rowHeightDp.dp
+            ReminderOffset.Preset.entries.forEach { option ->
+                val on = !useCustomOffset && preset == option
+                val at = reminderFiresAt(entry.startDate, entry.startTime, anchor, option.duration)
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = rowHeight).clip(RoundedCornerShape(6.dp))
+                        .selectable(selected = on, role = Role.RadioButton, onClick = { useCustomOffset = false; preset = option })
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MenuCheck(on)
+                    Text(option.label(), style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
+                    if (at != null) Text(at.format(FIRES_AT_FORMAT), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant) // type: META
                 }
-                FilterChip(
-                    selected = useCustomOffset,
-                    onClick = { useCustomOffset = true },
-                    label = { Text("Custom", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = rowHeight).clip(RoundedCornerShape(6.dp))
+                    .selectable(selected = useCustomOffset, role = Role.RadioButton, onClick = { useCustomOffset = true })
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MenuCheck(useCustomOffset)
+                Text("Custom…", style = MaterialTheme.typography.body, modifier = Modifier.weight(1f))
             }
 
             if (useCustomOffset) {
@@ -191,9 +211,10 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                // L14 — the anchor presets wrap too (the walk found *Custom* cut off at the panel's edge here as well).
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     AllDayAnchorPreset.entries.forEach { option ->
                         val time = LocalTime.of(option.hour, option.minute)
@@ -269,3 +290,6 @@ private fun ReminderOffset.label(): String = when (this) {
     is ReminderOffset.FromPreset -> "${preset.label()} before"
     is ReminderOffset.Custom -> "$count ${unit.name.lowercase()}${if (count == 1) "" else "s"} before"
 }
+
+/** *Thu 17 · 08:00* — the moment a preset would fire, beside its row. */
+private val FIRES_AT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d · HH:mm")

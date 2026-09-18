@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import com.tendril.app.domain.timeline.timelineInitialColumn
 import com.tendril.app.ui.calendar.DragGhost
 import com.tendril.app.ui.components.dragSource
 import com.tendril.app.ui.nav.LocalDensityProfile
@@ -91,9 +92,9 @@ internal fun TimelineBody(rows: List<TableRow>, view: PageDatabaseView?, viewMod
     val lanePx = with(density) { LANE_HEIGHT.toPx() }
     val headerPx = with(density) { HEADER_HEIGHT.toPx() }
     val hScroll = rememberScrollState()
-    // Open on today, a day of margin to the left, once per range.
+    // L13 — open with today three columns in and never past the first bar, once per range.
     LaunchedEffect(range.start) {
-        hScroll.scrollTo(((ChronoUnit.DAYS.between(range.start, today) - 1).coerceAtLeast(0) * dayPx).roundToInt())
+        hScroll.scrollTo((timelineInitialColumn(range, bars, today) * dayPx).roundToInt())
     }
     val laneOf = bars.withIndex().associate { (i, bar) -> bar.row.page.id to i }
     // 14g·2 — a dependency line is the error family (blocked), not the third hue.

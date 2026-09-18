@@ -1,5 +1,6 @@
 package com.tendril.app.domain.reminders
 
+
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.data.entry.EntryStatus
@@ -110,4 +111,16 @@ private fun nextOccurrenceDate(entry: Entry, exceptions: List<Entry>, now: Insta
     return candidates.firstOrNull { o ->
         LocalDateTime.of(o.startDate, o.startTime ?: LocalTime.MIDNIGHT).atZone(zone).toInstant().isAfter(now)
     }?.startDate ?: candidates.firstOrNull()?.startDate
+}
+
+/**
+ * L14 / F12 (small things III, 2026-09-18 — TickTick's reminder list measured: each row names
+ * the offset *and the moment it fires*, *1 day early (9:00 AM)*): the moment a reminder set
+ * [before] the entry's start would fire — the start's date at its time, else at the all-day
+ * [anchor], else midnight (the arithmetic `entryFirings` uses); null with no date.
+ */
+fun reminderFiresAt(startDate: java.time.LocalDate?, startTime: java.time.LocalTime?, anchor: java.time.LocalTime?, before: java.time.Duration): java.time.LocalDateTime? {
+    val date = startDate ?: return null
+    val base = date.atTime(startTime ?: anchor ?: java.time.LocalTime.MIDNIGHT)
+    return base.minus(before)
 }

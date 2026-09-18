@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.tendril.app.domain.journal.displayTitle
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.nav.PageRoute
@@ -174,7 +175,7 @@ private fun ShelfGraph(core: WorkbenchCore, navState: WorkbenchNavState, shelfSt
     ShellTopBar(
         title = {
             Text(
-                "Around " + (page?.title?.ifBlank { "Untitled" } ?: ""),
+                "Around " + (page?.title?.let { displayTitle(it) }?.ifBlank { "Untitled" } ?: ""),
                 style = MaterialTheme.typography.heading, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         },

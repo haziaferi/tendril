@@ -586,8 +586,9 @@ class PageDetailViewModel(
     fun searchLabelCandidates(query: String) {
         viewModelScope.launch {
             val existingIds = labels.value.map { it.id }.toSet()
-            _labelCandidates.value = if (query.isBlank()) emptyList() else
-                labelDao.search(query).filter { it.id !in existingIds }
+            // F9 (small things III): every label the page does not have yet, filtered as typed —
+            // Notion's and Obsidian's pickers list the existing ones first; a blank query lists all.
+            _labelCandidates.value = labelDao.search(query.trim()).filter { it.id !in existingIds }
         }
     }
 
