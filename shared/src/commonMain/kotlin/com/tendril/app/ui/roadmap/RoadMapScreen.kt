@@ -563,11 +563,16 @@ internal fun RoadMapCanvas(graph: RoadMapGraph, onOpenPage: (Long) -> Unit, node
                 val to = positions[edge.toPageId]
                 if (from != null && to != null) {
                     val touchesSelection = selectedId != null && (edge.fromPageId == selectedId || edge.toPageId == selectedId)
-                    val alpha = if (highlightSet == null || touchesSelection) 0.6f else DIMMED_ALPHA * 0.6f
-                    val lineColor = (if (edge.source == EdgeSource.MENTION) mentionInk else relatedInk).copy(alpha = alpha)
-                    drawLine(color = lineColor, start = from, end = to, strokeWidth = 2f)
+                    // The design layer (2026-09-18, `desktop-design-layer.md` #5): an edge is drawn at its
+                    // token's full alpha — the old 0.6 undid the solve (a mention edge measured 2.35–2.80:1,
+                    // a related one 1.86) — and the de-emphasis alpha was doing is a thinner stroke instead.
+                    // A dimmed edge under a focus keeps DIMMED_ALPHA: de-emphasis, not a required graphic.
+                    val dimmedEdge = highlightSet != null && !touchesSelection
+                    val ink = if (edge.source == EdgeSource.MENTION) mentionInk else relatedInk
+                    val lineColor = if (dimmedEdge) ink.copy(alpha = DIMMED_ALPHA) else ink
+                    drawLine(color = lineColor, start = from, end = to, strokeWidth = 1.dp.toPx())
                     if (edge.source == EdgeSource.MENTION) {
-                        drawArrowhead(from, to, nodeWidthPx / 2f, lineColor.copy(alpha = alpha * 1.6f))
+                        drawArrowhead(from, to, nodeWidthPx / 2f, lineColor)
                     }
                 }
             }

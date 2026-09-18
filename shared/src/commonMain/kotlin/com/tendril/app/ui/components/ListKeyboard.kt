@@ -23,6 +23,8 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import kotlinx.coroutines.delay
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.text.AnnotatedString
@@ -153,3 +155,24 @@ fun keyedTitle(title: String, typed: String, focused: Boolean): AnnotatedString 
 @Composable
 fun Modifier.keyboardCursorRing(shown: Boolean, radius: Int = 6): Modifier =
     if (shown) border(2.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(radius.dp)) else this
+
+/**
+ * The design layer (2026-09-18, `desktop-design-layer.md` #8): a control that draws no ripple
+ * (`indication = null` — the rail pill, a register swatch, the tree row, the task and habit
+ * rows) still takes keyboard focus on Tab, and drew nothing when it did. This ring shows only
+ * while the control is focused *and* the input mode is the keyboard's — a click focuses without
+ * a ring, as Android draws none for touch. Place it before the `clickable` it watches.
+ * A *list's* row does not take this: Tab into a row moves the list's cursor there instead
+ * ([cursorOnFocus]), so the cursor ring is the one ring — the walk found Tab drawing a second
+ * ring beside the cursor's on the tree.
+ */
+@Composable
+fun Modifier.keyboardFocusRing(radius: Int = 6, colour: Color = MaterialTheme.colorScheme.outlineVariant): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    val shown = focused && keyboardCursorShown()
+    return onFocusChanged { focused = it.isFocused }
+        .then(if (shown) Modifier.border(2.dp, colour, RoundedCornerShape(radius.dp)) else Modifier)
+}
+
+/** A list row that gains focus (Tab) becomes the list's cursor; the cursor ring draws it. Place before the `clickable`. */
+fun Modifier.cursorOnFocus(onFocus: () -> Unit): Modifier = onFocusChanged { if (it.isFocused) onFocus() }

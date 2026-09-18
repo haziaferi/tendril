@@ -12,7 +12,7 @@ data class TendrilPalette(
     /** The resolved mode — a stored hue (a label, a callout) is lightened on a dark ground, darkened on a light one. */
     val dark: Boolean,
     val bg: Color,
-    /** The lifted ground — hover, the selected row, a sheet: text mixed 4 % (light) / 6 % (dark). */
+    /** The lifted ground — hover, the selected row, a sheet: text mixed 6 % into the ground in both modes (ΔE ≥ 2, tested). */
     val surface2: Color,
     /** Solved into the 9.5–13:1 band (B§13.7.3 rule 2), never the ground's raw near-black/white. */
     val text: Color,
@@ -22,7 +22,6 @@ data class TendrilPalette(
     val textFaint: Color,
     /** The hue, solved to ≥ 8.0:1 light / 7.6:1 dark on the ground by lightness alone. */
     val accent: Color,
-    val accentStrong: Color,
     /** ≥ 4.6:1 on [accent]: white on a light ground, the ground itself on a dark one. */
     val onAccent: Color,
     /** The selection tint — [accent] at 12 % / 22 % over the ground. */
@@ -31,13 +30,11 @@ data class TendrilPalette(
     val accentSoftText: Color,
     /** Chrome hairlines: text at 11 % / 14 % — Notion's weight, ~1.3:1, meaningless by design. */
     val border: Color,
-    /** The fan's third hue as a *mark* (≥ 3.0:1): the register's second channel where it has one,
+    /** The fan's third hue, solved to ≥ 4.6:1: the register's second channel where it has one,
      *  else the accent fanned 180°. Block-reference bars, related edges, canvas outlines, the
-     *  current find match (14g·2). */
+     *  current find match, a database's date (14g·2; one token since the design layer). */
     val third: Color,
-    /** [third] solved to ≥ 4.6:1 — the third hue where it is read or carries text. */
-    val thirdStrong: Color,
-    /** ≥ 4.6:1 on [thirdStrong]. */
+    /** ≥ 4.6:1 on [third]. */
     val onThird: Color,
     /** [third] at 14 % / 24 % into the ground — a database's fill until it has its own hue. */
     val thirdSoft: Color,

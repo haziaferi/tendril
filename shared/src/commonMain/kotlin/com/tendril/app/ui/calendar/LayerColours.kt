@@ -36,7 +36,7 @@ fun dotColour(kind: DotKind): Color {
         DotKind.TASK -> p.textDim
         DotKind.EVENT -> p.event
         DotKind.HABIT -> p.habit
-        DotKind.DATABASE -> p.thirdStrong
+        DotKind.DATABASE -> p.third
     }
 }
 

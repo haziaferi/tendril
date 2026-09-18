@@ -949,7 +949,7 @@ private fun WeekStripView(
                             // database date the third; the accent is reserved for today and selection.
                             val palette = LocalTendrilPalette.current
                             dayExtras.take(3).forEach {
-                                Text("◦ ${it.title}", style = MaterialTheme.typography.caption, color = if (it is CalendarExtra.HabitAt) palette.habit else palette.thirdStrong)
+                                Text("◦ ${it.title}", style = MaterialTheme.typography.caption, color = if (it is CalendarExtra.HabitAt) palette.habit else palette.third)
                             }
                             if (dayExtras.size > 3) Text("+${dayExtras.size - 3} more", style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

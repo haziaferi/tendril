@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.components.keyboardFocusRing
 import com.tendril.app.ui.theme.caption
 import com.tendril.app.ui.theme.pageTitle
 
@@ -73,7 +74,7 @@ fun ShellRail(navState: WorkbenchNavState, foot: @Composable () -> Unit) {
                 val placement = rememberTitleBarPlacement()
                 Box(modifier = Modifier.width(RAIL_WIDTH).height(TOP_BAR_HEIGHT).titleBarPlacement(placement), contentAlignment = Alignment.Center) {
                     TitleBarGround(placement)
-                    Box(modifier = Modifier.size(18.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)))
+                    Box(modifier = Modifier.size(18.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)))
                 }
             }
             WorkbenchDestination.entries.forEach { destination ->
@@ -140,6 +141,7 @@ private fun ShellItem(
     Column(
         modifier = modifier
             // No ripple: the pill is the whole of the affordance, as in the mock.
+            .keyboardFocusRing(8, MaterialTheme.colorScheme.primary)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),

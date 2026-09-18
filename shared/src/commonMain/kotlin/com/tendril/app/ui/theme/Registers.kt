@@ -101,9 +101,11 @@ fun paletteFor(register: Register, dark: Boolean, oled: Boolean = false): Tendri
     val second = register.second?.let { if (dark) it.second else it.first }
 
     val text = solveText(seed, bg)
-    val surface2 = mix(text, bg, if (dark) 0.06 else 0.04)
+    // The design layer (2026-09-18, `desktop-design-layer.md` #4): one share, 6 %, in both modes —
+    // at 4 % the light hover measured 1.07:1 and CIEDE2000 1.6 against the ground, under the 2.0
+    // just-noticeable difference, so a hovered tree row read as nothing. Tested at ΔE ≥ 2.
+    val surface2 = mix(text, bg, 0.06)
     val accent = solveHue(hue, bg, if (dark) Floors.ACCENT_DARK else Floors.ACCENT_LIGHT, lighten = dark)
-    val strong = mix(accent, text, 0.80)
     val onAccent = listOf(if (dark) bg else Srgb.WHITE, if (dark) Srgb.WHITE else bg, text)
         .firstOrNull { contrast(it, accent) >= Floors.ON_ACCENT } ?: text
     val soft = mix(accent, bg, if (dark) 0.22 else 0.12)
@@ -121,9 +123,11 @@ fun paletteFor(register: Register, dark: Boolean, oled: Boolean = false): Tendri
     val tintShare = if (dark) 0.24 else 0.14
     val event = fanHue(accent, -120.0, bg, Floors.DATA, lighten = dark)
     val habit = fanHue(accent, 60.0, bg, Floors.DATA, lighten = dark)
-    val third = second?.let { solveHue(it, bg, Floors.MARK, lighten = dark) } ?: fanHue(accent, 180.0, bg, Floors.MARK, lighten = dark)
-    val thirdStrong = solveHue(third, bg, Floors.DATA, lighten = dark)
-    val onThird = onColour(thirdStrong, bg, text, dark)
+    // One third token (the design layer, #6): solved to DATA (4.6), not MARK — the fan cleared 4.6
+    // in 28 of 30 palettes anyway, so `third` and the old `thirdStrong` were the same colour, and
+    // `onThird` was solved against the one nothing drew. A bar or a find mark reads at 4.6 too.
+    val third = second?.let { solveHue(it, bg, Floors.DATA, lighten = dark) } ?: fanHue(accent, 180.0, bg, Floors.DATA, lighten = dark)
+    val onThird = onColour(third, bg, text, dark)
     val findSoft = tintFor(third, bg, text, if (dark) 0.36 else 0.30, Floors.DATA)
     // The error family: a red at 5° solved against the ground *and* its own soft (#2 of the critique).
     val error = solveHue(hslToSrgb(5.0, 0.55, if (dark) 0.62 else 0.45), bg, Floors.DATA, lighten = dark, tintShare = tintShare)
@@ -132,9 +136,9 @@ fun paletteFor(register: Register, dark: Boolean, oled: Boolean = false): Tendri
     return TendrilPalette(
         dark = dark, bg = bg.toColor(), surface2 = surface2.toColor(), text = text.toColor(),
         textDim = dim.toColor(), textFaint = faint.toColor(),
-        accent = accent.toColor(), accentStrong = strong.toColor(), onAccent = onAccent.toColor(),
+        accent = accent.toColor(), onAccent = onAccent.toColor(),
         accentSoft = soft.toColor(), accentSoftText = softText.toColor(), border = border.toColor(),
-        third = third.toColor(), thirdStrong = thirdStrong.toColor(), onThird = onThird.toColor(),
+        third = third.toColor(), onThird = onThird.toColor(),
         thirdSoft = mix(third, bg, tintShare).toColor(), findSoft = findSoft.toColor(),
         event = event.toColor(), eventSoft = mix(event, bg, tintShare).toColor(),
         habit = habit.toColor(), habitSoft = mix(habit, bg, tintShare).toColor(),

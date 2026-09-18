@@ -2,13 +2,16 @@ package com.tendril.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.unit.dp
 
 /** Exposes the raw palette to composables that need tokens Material3's ColorScheme has no slot for
  *  (accentSoftText, textFaint, border, the calendar's layers, the find mark) — the mapped ColorScheme
@@ -20,7 +23,7 @@ private fun ColorScheme.applyPalette(p: TendrilPalette): ColorScheme = copy(
     onPrimary = p.onAccent,
     primaryContainer = p.accentSoft,
     onPrimaryContainer = p.accentSoftText,
-    secondary = p.accentStrong,
+    secondary = p.accent,
     onSecondary = p.onAccent,
     // 14g·2 — the calendar reads its layers from the palette, so Material's secondary container
     // is only ever a lifted ground here; the third hue and the error family are solved tokens.
@@ -78,10 +81,23 @@ fun TendrilTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typographyFor(typeface),
+            shapes = TendrilShapes,
             content = content,
         )
     }
 }
+
+/** The radius family — 4 · 6 · 8 · 10 · 12 (the design layer, 2026-09-18): Material's own
+ *  28 dp `extraLarge` had leaked through every `AlertDialog`, the date picker and the bottom
+ *  sheet. 6 is the workhorse (rows, fields, chips), 8 cards, 10 the switcher and the hover card,
+ *  12 sheets and dialogs; audit rule 17 refuses any other literal radius in `ui/`. */
+val TendrilShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(6.dp),
+    medium = RoundedCornerShape(10.dp),
+    large = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(12.dp),
+)
 
 /** SYSTEM follows the OS — Android's night mode, Windows' app theme through Compose Desktop. */
 @Composable

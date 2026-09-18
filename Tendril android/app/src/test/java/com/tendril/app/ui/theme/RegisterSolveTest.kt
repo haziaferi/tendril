@@ -36,6 +36,17 @@ class RegisterSolveTest {
         }
     }
 
+    // The design layer (2026-09-18, `desktop-design-layer.md` #4): the lifted ground must be told
+    // apart from the ground — at 4 % the light hover measured CIEDE2000 1.6, under the 2.0 JND.
+    @Test
+    fun `surface2 is a noticeable step from the ground in every palette`() {
+        cases.forEach { c ->
+            val p = paletteFor(c.register, c.dark, c.oled)
+            val de = deltaE(p.surface2.toSrgb(), p.bg.toSrgb())
+            assertTrue("${c.name}: surface2 ΔE ${"%.2f".format(de)}", de >= 2.0)
+        }
+    }
+
     @Test
     fun `dim and faint clear their floors on the ground, on surface2 and on the selection's tint`() {
         cases.forEach { c ->
@@ -55,19 +66,20 @@ class RegisterSolveTest {
             assertTrue("${c.name}: accent ${"%.2f".format(ratio(p.accent, p.bg))}", ratio(p.accent, p.bg) >= floor - 0.01)
             assertTrue("${c.name}: on-accent", ratio(p.onAccent, p.accent) >= Floors.ON_ACCENT)
             assertTrue("${c.name}: soft text on soft", ratio(p.accentSoftText, p.accentSoft) >= Floors.SOFT_TEXT)
-            assertTrue("${c.name}: strong", ratio(p.accentStrong, p.bg) >= Floors.DIM)
         }
     }
 
     @Test
-    fun `a second channel is a mark at three to one, and the third hue always is`() {
+    fun `a second channel and the third hue read as data at four point six`() {
+        // One token since the design layer (#6): `third` is solved to DATA, where the old
+        // `thirdStrong` was — the fan cleared 4.6 in 28 of 30 palettes anyway.
         cases.forEach { c ->
             val p = paletteFor(c.register, c.dark, c.oled)
-            assertTrue("${c.name}: third ${"%.2f".format(ratio(p.third, p.bg))}", ratio(p.third, p.bg) >= Floors.MARK)
+            assertTrue("${c.name}: third ${"%.2f".format(ratio(p.third, p.bg))}", ratio(p.third, p.bg) >= Floors.DATA)
         }
-        // Swiss light's signal yellow measured 2.6:1 on the mock (registers-mock.md #3); solved, it is a mark.
+        // Swiss light's signal yellow measured 2.6:1 on the mock (registers-mock.md #3); solved, it reads.
         val swiss = paletteFor(Register.SWISS, dark = false)
-        assertTrue(ratio(swiss.third, swiss.bg) >= Floors.MARK)
+        assertTrue(ratio(swiss.third, swiss.bg) >= Floors.DATA)
     }
 
     private fun hueDistance(a: androidx.compose.ui.graphics.Color, b: androidx.compose.ui.graphics.Color): Double {
@@ -101,8 +113,7 @@ class RegisterSolveTest {
             val p = paletteFor(c.register, c.dark, c.oled)
             assertTrue("${c.name}: event", ratio(p.event, p.bg) >= Floors.DATA)
             assertTrue("${c.name}: habit", ratio(p.habit, p.bg) >= Floors.DATA)
-            assertTrue("${c.name}: third strong", ratio(p.thirdStrong, p.bg) >= Floors.DATA)
-            assertTrue("${c.name}: on third", ratio(p.onThird, p.thirdStrong) >= Floors.ON_ACCENT)
+            assertTrue("${c.name}: on third", ratio(p.onThird, p.third) >= Floors.ON_ACCENT)
             assertTrue("${c.name}: error on bg", ratio(p.error, p.bg) >= Floors.DATA)
             assertTrue("${c.name}: error on its soft", ratio(p.error, p.errorSoft) >= Floors.DATA)
             assertTrue("${c.name}: on error", ratio(p.onError, p.error) >= Floors.ON_ACCENT)
