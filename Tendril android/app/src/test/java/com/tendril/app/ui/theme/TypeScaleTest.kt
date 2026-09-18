@@ -6,6 +6,8 @@ import org.junit.Test
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.LineHeightStyle
 
 /** 14h·2 — sizes a step apart; the type PR: 11 · 12.5 · 14 · 16 · 18 for the chrome, 20 and 24 for the editor's H2 and H1. */
 class TypeScaleTest {
@@ -43,6 +45,18 @@ class TypeScaleTest {
         listOf(t.titleLarge, t.titleMedium, t.bodyMedium, t.bodySmall, t.labelLarge, t.labelMedium).forEach {
             assertTrue("${it.fontSize} on the scale", it.fontSize.value in TypeScale.SIZES)
             assertTrue("line height above the size", it.lineHeight.value > it.fontSize.value)
+        }
+    }
+
+    @Test
+    fun `a chrome style's line height holds on a single line`() {
+        // T·P3 — without a LineHeightStyle the first and last lines are trimmed to the font's own
+        // height, so one style measured 22 in a sheet and 25 in the bar.
+        val untrimmed = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
+        TypeScale.SIZES.forEach { size ->
+            val style = chromeStyle(FontFamily.Default, size)
+            assertEquals(untrimmed, style.lineHeightStyle)
+            assertEquals(TypeScale.lineHeightFor(size), style.lineHeight.value)
         }
     }
 }

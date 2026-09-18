@@ -59,6 +59,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
+import com.tendril.app.domain.plan.weekdayInitial
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -640,7 +641,7 @@ private fun DayView(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             IconButton(onClick = onPrev) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous day") }
-            Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")), style = MaterialTheme.typography.heading)
+            Text(rangeTitle(CalendarView.DAY, date), style = MaterialTheme.typography.heading) // P10 — one title for the day, in the locale's order
             IconButton(onClick = onNext) { Icon(Icons.Filled.ChevronRight, contentDescription = "Next day") }
         }
         // §0.6.5 — compare: two numbers side by side, no score and no colour (§0.5.2). Absent
@@ -690,7 +691,7 @@ private fun DayView(
                 parsed = parsed,
                 onFlipKind = { kindOverride = if (parsed.kind == EntryKind.TASK) EntryKind.EVENT else EntryKind.TASK },
                 onDrop = { ignored = ignored + it },
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp), // P8 — inset with the field
             )
         }
         HorizontalDivider()
@@ -965,8 +966,8 @@ private fun MonthGridView(
         val cells = remember(month) { monthGridDays(month) }
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
             (0..6).forEach { i ->
-                Text(
-                    DayOfWeek.MONDAY.plus(i.toLong()).getDisplayName(TextStyle.NARROW, Locale.getDefault()).uppercase(Locale.getDefault()),
+                Text( // type: EYEBROW — the weekday header's upper-cased initials, the Month grid's row on the phone
+                    weekdayInitial(DayOfWeek.MONDAY.plus(i.toLong())),
                     style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f),
                 )

@@ -2,6 +2,7 @@ package com.tendril.app.ui.calendar
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
@@ -33,7 +34,8 @@ fun CalendarOpensOnSection(store: KeyValueStore, modifier: Modifier = Modifier) 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // P7 (item 23's Lows) — four chips do not fit a 288 dp sheet in one row; a `FlowRow` wraps a chip whole.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             CalendarViewKey.entries.forEach { key ->
                 FilterChip(
                     selected = key == current,

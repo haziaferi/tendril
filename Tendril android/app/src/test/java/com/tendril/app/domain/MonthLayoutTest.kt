@@ -7,6 +7,7 @@ import com.tendril.app.domain.plan.monthDots
 import com.tendril.app.domain.plan.monthGridDays
 import com.tendril.app.domain.plan.monthRange
 import com.tendril.app.domain.plan.visibleInCell
+import com.tendril.app.domain.plan.weekdayInitial
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.DayOfWeek
@@ -66,5 +67,12 @@ class MonthLayoutTest {
         assertEquals(listOf(DotKind.TASK, DotKind.EVENT, DotKind.HABIT), monthDots(listOf(DotKind.DATABASE, DotKind.HABIT, DotKind.EVENT, DotKind.TASK, DotKind.TASK)))
         assertEquals(listOf(DotKind.EVENT, DotKind.DATABASE), monthDots(listOf(DotKind.DATABASE, DotKind.EVENT)))
         assertEquals(emptyList<DotKind>(), monthDots(emptyList()))
+    }
+
+    @Test
+    fun `a weekday's initial is the locale's, not the enum's`() {
+        val week = DayOfWeek.entries
+        assertEquals("L M M G V S D", week.joinToString(" ") { weekdayInitial(it, Locale.ITALIAN) })
+        assertEquals("M T W T F S S", week.joinToString(" ") { weekdayInitial(it, Locale.ENGLISH) })
     }
 }

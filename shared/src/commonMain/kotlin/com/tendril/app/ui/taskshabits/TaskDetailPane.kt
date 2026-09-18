@@ -36,6 +36,7 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.domain.TaskWithSubtasks
+import com.tendril.app.domain.dayLabel
 import com.tendril.app.domain.plan.loggedSegment
 import com.tendril.app.domain.track.TrackTarget
 import com.tendril.app.domain.urgency.Urgency
@@ -82,8 +83,10 @@ internal fun TaskDetailPane(
             Text(entry.title, style = MaterialTheme.typography.pageTitle, modifier = Modifier.weight(1f).padding(start = 4.dp))
         }
         Spacer(Modifier.height(10.dp))
-        DetailRow("When", listOfNotNull(entry.startDate?.toString(), entry.startTime?.toString()).joinToString(" · ").ifEmpty { null })
-        DetailRow("Deadline", entry.dueDate?.toString())
+        // F·P4's desktop half (item 23's Lows, 2026-09-18): the pane's dates as the rows' — *ven 25*, not ISO.
+        val today = LocalDate.now()
+        DetailRow("When", listOfNotNull(entry.startDate?.let { dayLabel(it, today) }, entry.startTime?.toString()).joinToString(" · ").ifEmpty { null })
+        DetailRow("Deadline", entry.dueDate?.let { dayLabel(it, today) })
         DetailRow("Repeat", (entry.recurrenceRule as? RecurrenceRule.Elastic)?.period?.let(::periodWords))
         if (actions.showUrgency) {
             // 14g·3 — the level shown is the greater of the set level and the deadline's pressure;

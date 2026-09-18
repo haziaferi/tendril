@@ -41,6 +41,7 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
         core = container.workbenchCore,
         // B§13.5 #4 — a finger does not get a density setting: the phone is Touch, always.
         fixedDensityProfile = DensityProfile.TOUCH,
+        platformScaled = true, // `MainActivity.attachBaseContext` scaled the activity's density, windows included
         navState = navState,
         onCheckboxOnlyWindowFlags = { active ->
             activity?.setShowWhenLocked(active)

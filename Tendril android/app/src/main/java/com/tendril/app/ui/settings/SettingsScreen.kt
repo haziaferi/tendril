@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -532,7 +533,8 @@ private fun PortableBackupSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // P7 (item 23's Lows) — three buttons wrap whole on a 360 dp phone instead of breaking *Restore backup*.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Button(onClick = { exportLauncher.launch("tendril-export.tendril") }) { Text("Export") }
             Button(enabled = !viewOnly, onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import") }
             Button(enabled = !viewOnly, onClick = { restoreLauncher.launch(arrayOf("*/*")) }) { Text("Restore backup") }
