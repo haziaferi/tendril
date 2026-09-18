@@ -146,6 +146,7 @@ import com.tendril.app.domain.ParsedEntry
 import com.tendril.app.domain.QuickAddParser
 import com.tendril.app.domain.TokenKind
 import com.tendril.app.ui.entries.QuickAddPreview
+import com.tendril.app.ui.entries.quickAddTokensTransformation
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -701,9 +702,12 @@ private fun DayView(
         val parsed = remember(quickAddText, ignored, kindOverride) {
             QuickAddParser.parse(quickAddText, LocalDate.now(), EntryKind.EVENT, ignored, kindOverride)
         }
+        val tokenTint = LocalTendrilPalette.current.findSoft
         if (showQuickAdd) TendrilField(
             value = quickAddText,
             onValueChange = { quickAddText = it; ignored = emptySet(); kindOverride = null },
+            // L7b — the recognised runs tinted in the line (the strip's and the popup's rule).
+            visualTransformation = remember(parsed.spans, tokenTint) { quickAddTokensTransformation(parsed.spans, tokenTint) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             placeholder = stringResource(Res.string.calendar_quick_add_hint),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

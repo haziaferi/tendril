@@ -206,6 +206,10 @@ object QuickAddParser {
         }
         val estimate = if (kind == EntryKind.TASK) duration else null
         if (kind == EntryKind.TASK) endTime = null
+        // A deadline is a task's (§0.6.4): an event's `by friday` was read, dropped, and its words
+        // vanished from the title with no chip to say so — L7b's inline tint made that visible
+        // (2026-09-18). The words go back to the title, untinted, unchipped.
+        if (kind == EntryKind.EVENT) spans.removeAll { it.kind == TokenKind.DEADLINE }
 
         val title = line.removeSpans(spans).replace(Regex("\\s{2,}"), " ").trim(' ', ':', ',', '-')
 

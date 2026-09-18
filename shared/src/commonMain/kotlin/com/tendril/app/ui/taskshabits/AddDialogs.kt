@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import org.jetbrains.compose.resources.stringResource
 import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.components.TendrilSheet
@@ -48,6 +49,8 @@ import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.domain.QuickAddParser
 import com.tendril.app.domain.TokenKind
 import com.tendril.app.ui.entries.QuickAddPreview
+import com.tendril.app.ui.entries.quickAddTokensTransformation
+import com.tendril.app.ui.theme.LocalTendrilPalette
 import java.time.LocalDate
 import java.time.LocalTime
 import com.tendril.app.ui.theme.body
@@ -84,7 +87,16 @@ fun AddTaskDialog(
     // edit sheet's frame, the 36 dp field and the sheet's title style.
     TendrilSheet(onDismiss = onDismiss, title = stringResource(Res.string.taskshabits_add_task)) {
         Column {
-            TendrilField(value = title, onValueChange = { title = it; ignored = emptySet() }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
+            // L7b — the recognised runs tinted in the line, the chips under it unchanged; the field
+            // takes focus when the sheet opens (the walk's Ctrl+Shift+N typed into nothing).
+            val tint = LocalTendrilPalette.current.findSoft
+            val titleFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { runCatching { titleFocus.requestFocus() } }
+            TendrilField(
+                value = title, onValueChange = { title = it; ignored = emptySet() }, placeholder = "Title", modifier = Modifier.fillMaxWidth(),
+                visualTransformation = remember(parsed.spans, tint) { quickAddTokensTransformation(parsed.spans, tint) },
+                focusRequester = titleFocus,
+            )
             if (parsed.spans.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 QuickAddPreview(parsed = parsed, onFlipKind = {}, onDrop = { ignored = ignored + it })
