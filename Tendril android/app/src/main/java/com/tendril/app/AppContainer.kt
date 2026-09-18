@@ -92,7 +92,7 @@ class AppContainer(context: Context) {
     /** §7 in reverse — every live page as Markdown in a zip. Takes daos and a stream rather
      * than a `Context`, so unlike [portableArchive] it is shared code and desktop can use it as
      * it stands. */
-    val markdownExporter = MarkdownExporter(database.pageDao(), database.blockDao(), localImages)
+    val markdownExporter = MarkdownExporter(database.pageDao(), database.blockDao(), localImages, database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao())
     /** §3.1.2's View-Only toggle. Declared ahead of [portableArchive] because the archive now
      * takes it: the lock is absolute and it covers Settings, so import and restore refuse at
      * the class rather than only at the two Settings buttons. */

@@ -19,6 +19,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
+import javax.swing.JFileChooser
+import java.io.FileOutputStream
+import java.io.File
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import com.tendril.app.ui.components.BarPillButton
+import com.tendril.app.domain.plural
+import com.tendril.app.markdown.MarkdownExporter
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.WorkbenchCore
@@ -66,6 +79,11 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             // B§13.6 #7 — the × rule and the global quick-add chord; the section is shared code the phone never draws.
             NotificationAreaSection(core.keyValueStore, hotkeyError)
             HorizontalDivider()
+            // §0.10 item 6 (2026-09-19) — the Markdown export on the desktop too: the exporter is
+            // `jvmCommon`, only the file dialog is this platform's. The zip is an Obsidian vault
+            // whose canvases are `.canvas` files.
+            MarkdownExportSection(core)
+            HorizontalDivider()
             Text(
                 "Backups are Android-only for now.",
                 style = MaterialTheme.typography.description,
@@ -101,5 +119,41 @@ private fun DensitySection(store: KeyValueStore) {
                 )
             }
         }
+    }
+}
+
+/** §0.10 item 6 — *Export as Markdown* for the desktop: one zip through a save dialog. */
+@Composable
+private fun MarkdownExportSection(core: WorkbenchCore) {
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
+    val exporter = remember(core) {
+        MarkdownExporter(core.database.pageDao(), core.database.blockDao(), core.localImages, core.database.pageCanvasDao(), core.database.canvasNodeDao(), core.database.canvasEdgeDao())
+    }
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text("Export as Markdown", style = MaterialTheme.typography.heading)
+        Text(
+            "A zip of .md files any editor can open — an Obsidian vault, with every canvas as a .canvas file. Databases export their pages, not their layout.",
+            style = MaterialTheme.typography.description,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+        )
+        BarPillButton(label = "Export Markdown", onClick = {
+            scope.launch {
+                status = runCatching {
+                    val file = withContext(Dispatchers.IO) {
+                        val chooser = JFileChooser().apply {
+                            fileSelectionMode = JFileChooser.FILES_ONLY
+                            dialogTitle = "Export as Markdown"
+                            selectedFile = File("tendril-markdown.zip")
+                        }
+                        if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
+                    } ?: return@launch
+                    val result = withContext(Dispatchers.IO) { FileOutputStream(file).use { exporter.export(it) } }
+                    "Exported ${plural(result.pages, "page")}, ${plural(result.canvases, "canvas", "canvases")} and ${plural(result.images, "picture")} to ${file.name}"
+                }.getOrElse { it.message ?: "Export failed." }
+            }
+        })
+        status?.let { Text(it, style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) }
     }
 }

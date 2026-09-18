@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.tendril.app.R
 import com.tendril.app.domain.DatabaseSyncManager
 import androidx.compose.ui.platform.LocalContext
+import com.tendril.app.domain.plural
 import com.tendril.app.markdown.MarkdownExporter
 import com.tendril.app.domain.ics.IcsImporter
 import com.tendril.app.domain.ics.IcsWriter
@@ -443,7 +444,7 @@ private fun PortableBackupSection(
                         ?: error("Couldn't open the chosen file for writing — nothing was exported.")
                     stream.use { markdownExporter.export(it) }
                 }.fold(
-                    { "Exported ${it.pages} page(s) and ${it.images} picture(s) as Markdown" },
+                    { "Exported ${plural(it.pages, "page")}, ${plural(it.canvases, "canvas", "canvases")} and ${plural(it.images, "picture")}" },
                     { it.message ?: "Markdown export failed." },
                 )
             }
@@ -542,8 +543,8 @@ private fun PortableBackupSection(
         Spacer(Modifier.height(12.dp))
         Text("Export as Markdown", style = MaterialTheme.typography.body)
         Text(
-            "A zip of .md files any editor can open — for keeping your notes readable without " +
-                "this app. Databases and canvases export their pages, not their layout.",
+            "A zip of .md files any editor can open — an Obsidian vault, with every canvas as a .canvas file. " +
+                "Databases export their pages, not their layout.",
             style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
