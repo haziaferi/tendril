@@ -6,7 +6,15 @@ import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.SpanStyle
+import com.tendril.app.data.canvas.CanvasArrowDirection
+import com.tendril.app.data.canvas.CanvasEdge
+import com.tendril.app.data.canvas.CanvasNode
+import com.tendril.app.data.canvas.CanvasNodeType
+import com.tendril.app.data.canvas.PageCanvas
 import com.tendril.app.sync.FakeBlockDao
+import com.tendril.app.sync.FakeCanvasEdgeDao
+import com.tendril.app.sync.FakeCanvasNodeDao
+import com.tendril.app.sync.FakePageCanvasDao
 import com.tendril.app.sync.FakePageDao
 import com.tendril.app.sync.FakePageStore
 import com.tendril.app.sync.InMemoryLocalImageStore
@@ -33,7 +41,10 @@ class MarkdownExporterTest {
     private val pageDao = FakePageDao(store)
     private val blockDao = FakeBlockDao(store)
     private val localImages = InMemoryLocalImageStore()
-    private val exporter = MarkdownExporter(pageDao, blockDao, localImages)
+    private val canvasDao = FakePageCanvasDao(store)
+    private val nodeDao = FakeCanvasNodeDao(store)
+    private val edgeDao = FakeCanvasEdgeDao(store)
+    private val exporter = MarkdownExporter(pageDao, blockDao, localImages, canvasDao, nodeDao, edgeDao)
 
     private fun at(m: Long) = Instant.ofEpochMilli(m)
 
@@ -43,12 +54,13 @@ class MarkdownExporterTest {
         deleted: Boolean = false,
         isTemplate: Boolean = false,
         icon: String? = null,
+        kind: PageKind = PageKind.PAGE,
     ): Long = store.seedPage(
         Page(
             uid = "uid-${title.lowercase().replace(' ', '-')}-${store.pages.size}",
             title = title,
             icon = icon,
-            kind = PageKind.PAGE,
+            kind = kind,
             parentId = parentId,
             isTemplate = isTemplate,
             deletedAt = if (deleted) at(9) else null,
@@ -225,5 +237,45 @@ class MarkdownExporterTest {
         assertEquals(2, result.pages)
         assertEquals(1, result.images)
         assertTrue(entriesOf(out.toByteArray()).containsKey("assets/${block.uid}.png"))
+    }
+
+    // ----------------------------------------------------------- §0.10 item 6 — JSON Canvas
+
+    @Test
+    fun `a canvas page is a canvas file in the zip, not an md, and a mention links it`() = runBlocking {
+        val board = page("Garden plan", kind = PageKind.CANVAS)
+        val target = page("Compost bins")
+        val canvasId = canvasDao.insert(PageCanvas(pageId = board, createdAt = at(1), updatedAt = at(1)))
+        val text = nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = 10.4f, y = 20.6f, text = "Beds by the wall", createdAt = at(1), updatedAt = at(1)))
+        val embed = nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.PAGE_EMBED, x = 300f, y = 20f, embeddedPageId = target, createdAt = at(1), updatedAt = at(1)))
+        nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.FRAME, x = 0f, y = 0f, width = 400f, height = 300f, text = "Beds", createdAt = at(1), updatedAt = at(1)))
+        edgeDao.insert(CanvasEdge(canvasId = canvasId, fromNodeId = text, toNodeId = embed, direction = CanvasArrowDirection.TWO_WAY, label = "then"))
+        val note = page("Notes")
+        addBlock(note, BlockType.PAGE_MENTION, content = "Garden plan", mentionedPageId = board)
+
+        val entries = exported()
+
+        assertTrue("the canvas is a .canvas file", entries.containsKey("Garden plan.canvas"))
+        assertTrue("no .md twin", !entries.containsKey("Garden plan.md"))
+        val doc = text(entries, "Garden plan.canvas")
+        assertTrue(doc.contains("\"type\": \"text\"") && doc.contains("\"text\": \"Beds by the wall\""))
+        assertTrue("integers, rounded", doc.contains("\"x\": 10,") && doc.contains("\"y\": 21,"))
+        assertTrue("a page card is a file node at the page's path", doc.contains("\"type\": \"file\"") && doc.contains("\"file\": \"Compost bins.md\""))
+        assertTrue("a frame is a group with its label", doc.contains("\"type\": \"group\"") && doc.contains("\"label\": \"Beds\"") && doc.contains("\"width\": 400"))
+        assertTrue("a two-way arrow", doc.contains("\"fromEnd\": \"arrow\"") && doc.contains("\"label\": \"then\""))
+        assertTrue("the mention links the canvas file", text(entries, "Notes.md").contains("(Garden%20plan.canvas)"))
+    }
+
+    @Test
+    fun `a page card whose page the export does not carry becomes a text node with its title`() = runBlocking {
+        val board = page("Board", kind = PageKind.CANVAS)
+        val gone = page("Old idea", deleted = true)
+        val canvasId = canvasDao.insert(PageCanvas(pageId = board, createdAt = at(1), updatedAt = at(1)))
+        nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.PAGE_EMBED, x = 0f, y = 0f, embeddedPageId = gone, createdAt = at(1), updatedAt = at(1)))
+
+        val doc = text(exported(), "Board.canvas")
+
+        assertTrue(doc.contains("\"type\": \"text\"") && doc.contains("\"text\": \"Old idea\""))
+        assertTrue(!doc.contains("\"file\""))
     }
 }

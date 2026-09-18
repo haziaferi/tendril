@@ -1,6 +1,11 @@
 package com.tendril.app.markdown
 
+import com.tendril.app.data.canvas.CanvasEdgeDao
+import com.tendril.app.data.canvas.CanvasNodeDao
+import com.tendril.app.data.canvas.PageCanvasDao
 import com.tendril.app.data.page.BlockDao
+import com.tendril.app.data.page.PageKind
+import com.tendril.app.domain.canvas.JsonCanvas
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.sync.LocalImageStore
@@ -11,7 +16,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /** What an export actually wrote, for the sentence the person is shown afterwards. */
-data class MarkdownExportResult(val pages: Int, val images: Int)
+data class MarkdownExportResult(val pages: Int, val images: Int, val canvases: Int = 0)
 
 /**
  * §7 in reverse, the I/O half — every live page as a `.md` file in a zip, with its pictures.
@@ -33,15 +38,23 @@ data class MarkdownExportResult(val pages: Int, val images: Int)
  * writes outside the app, and a lock that stopped someone taking a copy of their own notes would
  * be the toggle working against the data it exists to protect.
  *
- * **Known limitation, stated rather than discovered:** a Database's table and a Canvas's nodes are
- * not represented. Their rows are ordinary pages and do get exported, but the structure around
- * them is tabular and belongs in CSV — which is exactly the split §7 already makes coming the
- * other way, where Notion hands this app Markdown *and* CSV as two different things.
+ * **A Canvas page is a `.canvas` file** (§0.10 item 6, 2026-09-18): JSON Canvas, the format
+ * Obsidian reads, at the page's place in the tree — so the zip is a vault whose canvases open, and
+ * a note's mention of a canvas links `Garden plan.canvas`. A canvas has no blocks and gets no
+ * `.md` twin. Page cards point at the pages' own files in the zip (`domain/canvas/JsonCanvas`).
+ *
+ * **Known limitation, stated rather than discovered:** a Database's table is not represented.
+ * Its rows are ordinary pages and do get exported, but the structure around them is tabular and
+ * belongs in CSV — which is exactly the split §7 already makes coming the other way, where Notion
+ * hands this app Markdown *and* CSV as two different things.
  */
 class MarkdownExporter(
     private val pageDao: PageDao,
     private val blockDao: BlockDao,
     private val localImages: LocalImageStore,
+    private val pageCanvasDao: PageCanvasDao,
+    private val canvasNodeDao: CanvasNodeDao,
+    private val canvasEdgeDao: CanvasEdgeDao,
 ) {
 
     suspend fun export(destination: OutputStream): MarkdownExportResult = withContext(Dispatchers.IO) {
@@ -51,10 +64,24 @@ class MarkdownExporter(
         val paths = filePathsFor(pages)
         val writtenAssets = mutableSetOf<String>()
         var images = 0
+        var canvases = 0
+        val titles = pageDao.getAll().associate { it.id to it.title }
 
         ZipOutputStream(destination).use { zip ->
             for (page in pages) {
                 val here = paths.getValue(page.id)
+                if (page.kind == PageKind.CANVAS) {
+                    val canvas = pageCanvasDao.getByPageId(page.id)
+                    val document = JsonCanvas.document(
+                        nodes = canvas?.let { canvasNodeDao.getForCanvas(it.id) } ?: emptyList(),
+                        edges = canvas?.let { canvasEdgeDao.getForCanvas(it.id) } ?: emptyList(),
+                        filePathFor = { id -> paths[id] },
+                        titleFor = { id -> titles[id] },
+                    )
+                    zip.writeEntry(here, JsonCanvas.write(document))
+                    canvases++
+                    continue
+                }
                 val blocks = blockDao.getForPage(page.id)
 
                 // Every picture is read *before* rendering, because `assetPathFor` is an ordinary
@@ -89,7 +116,7 @@ class MarkdownExporter(
                 }
             }
         }
-        MarkdownExportResult(pages = pages.size, images = images)
+        MarkdownExportResult(pages = pages.size - canvases, images = images, canvases = canvases)
     }
 
     /**
@@ -122,7 +149,7 @@ class MarkdownExporter(
                 candidate = "$base ($suffix)"
                 suffix++
             }
-            paths[page.id] = (if (directory.isEmpty()) "" else "$directory/") + candidate + ".md"
+            paths[page.id] = (if (directory.isEmpty()) "" else "$directory/") + candidate + (if (page.kind == PageKind.CANVAS) ".canvas" else ".md")
         }
         return paths
     }
