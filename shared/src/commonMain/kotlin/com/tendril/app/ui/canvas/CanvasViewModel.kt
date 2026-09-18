@@ -26,6 +26,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.tendril.app.domain.TemplateManager
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_W
+import com.tendril.app.domain.canvas.clampFrameSize
+import com.tendril.app.domain.canvas.nodesInside
 import java.time.Instant
 
 /**
@@ -42,6 +48,8 @@ class CanvasViewModel(
     private val canvasEdgeDao: CanvasEdgeDao,
     private val viewLockState: ViewLockState,
     private val pageContentRepository: PageContentRepository,
+    /** §0.10 item 15 — *Save as template* on a canvas; the manager clones the board. */
+    private val templateManager: TemplateManager,
 ) : ViewModel() {
     /** §3.1.2 — the same single enforcement point every other editing ViewModel keeps (see
      * [com.tendril.app.ui.pages.PageDetailViewModel.viewOnlyLocked] and
@@ -180,6 +188,42 @@ class CanvasViewModel(
 
     fun moveNode(node: CanvasNode, x: Float, y: Float) {
         launchAndTouch { canvasNodeDao.update(node.copy(x = x, y = y, updatedAt = Instant.now())) }
+    }
+
+    // §0.10 item 15 — frames (`domain/canvas/Frames.kt`).
+
+    fun addFrame(x: Float, y: Float, onInserted: (Long) -> Unit = {}) {
+        val canvasId = canvas.value?.id ?: return
+        launchAndTouch {
+            val now = Instant.now()
+            val id = canvasNodeDao.insert(
+                CanvasNode(canvasId = canvasId, type = CanvasNodeType.FRAME, x = x, y = y, width = FRAME_DEFAULT_W, height = FRAME_DEFAULT_H, text = FRAME_DEFAULT_LABEL, createdAt = now, updatedAt = now)
+            )
+            onInserted(id)
+        }
+    }
+
+    /** The frame and every node wholly inside it move together — geometry, no parent (Obsidian's, measured). */
+    fun moveFrame(frame: CanvasNode, x: Float, y: Float) {
+        val dx = x - frame.x; val dy = y - frame.y
+        val carried = nodesInside(frame, nodes.value)
+        launchAndTouch {
+            val now = Instant.now()
+            canvasNodeDao.update(frame.copy(x = x, y = y, updatedAt = now))
+            carried.forEach { canvasNodeDao.update(it.copy(x = it.x + dx, y = it.y + dy, updatedAt = now)) }
+        }
+    }
+
+    fun resizeFrame(frame: CanvasNode, width: Float, height: Float) {
+        val (w, h) = clampFrameSize(width, height)
+        launchAndTouch { canvasNodeDao.update(frame.copy(width = w, height = h, updatedAt = Instant.now())) }
+    }
+
+    /** §3.1.3's verb on a canvas: a new template page carrying the board (the page's `···` has it). */
+    fun saveAsTemplate(onSaved: (Long) -> Unit = {}) {
+        val current = page.value ?: return
+        if (locked()) return
+        viewModelScope.launch { onSaved(templateManager.saveAsTemplate(current)) }
     }
 
     fun setNodeText(node: CanvasNode, text: String) {

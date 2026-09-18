@@ -4,6 +4,20 @@ package com.tendril.app.ui.canvas
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.domain.canvas.nodeBox
+import com.tendril.app.domain.canvas.fitToBoxes
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_W
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
+import com.tendril.app.domain.canvas.CANVAS_NODE_W
+import com.tendril.app.domain.canvas.CANVAS_NODE_H
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -12,7 +26,6 @@ import com.tendril.app.ui.nav.ShellLayout
 import com.tendril.app.ui.nav.LocalShellLayout
 import com.tendril.app.ui.nav.LocalDensityProfile
 import com.tendril.app.ui.components.openVerb
-import com.tendril.app.domain.canvas.fitToCards
 import com.tendril.app.domain.canvas.contentAtPaneCentre
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
@@ -26,6 +39,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -110,8 +124,8 @@ import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
 
-internal const val NODE_W = 180f
-internal const val NODE_H = 90f
+internal const val NODE_W = CANVAS_NODE_W
+internal const val NODE_H = CANVAS_NODE_H
 private const val MIN_SCALE = 0.3f
 private const val MAX_SCALE = 2.5f
 
@@ -136,7 +150,7 @@ fun CanvasScreen(
         key = "canvas_$pageId",
         factory = viewModelFactory {
             initializer {
-                CanvasViewModel(pageId, core.database.pageDao(), core.database.pageCanvasDao(), core.database.canvasNodeDao(), core.database.canvasEdgeDao(), core.viewLockState, core.pageContentRepository)
+                CanvasViewModel(pageId, core.database.pageDao(), core.database.pageCanvasDao(), core.database.canvasNodeDao(), core.database.canvasEdgeDao(), core.viewLockState, core.pageContentRepository, core.templateManager)
             }
         }
     )
@@ -178,7 +192,7 @@ fun CanvasScreen(
     }
     fun newCardOrigin(): Pair<Float, Float> = contentAtPaneCentre(paneSize.width.toFloat(), paneSize.height.toFloat(), scale, pan.x, pan.y, density, NODE_W, NODE_H)
     fun fit() {
-        val f = fitToCards(nodes.map { it.x to it.y }, NODE_W, NODE_H, paneSize.width.toFloat(), paneSize.height.toFloat(), density)
+        val f = fitToBoxes(nodes.map { nodeBox(it) }, paneSize.width.toFloat(), paneSize.height.toFloat(), density)
         scale = f.scale.coerceIn(MIN_SCALE, MAX_SCALE); pan = Offset(f.panX, f.panY)
     }
     val addMenu: @Composable () -> Unit = {
@@ -189,6 +203,13 @@ fun CanvasScreen(
                 viewModel.addTextNode(x, y)
             })
             TendrilMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
+            HorizontalDivider()
+            // §0.10 item 15 — a frame at the visible centre, its label editor open at once (Obsidian's *Crea gruppo*).
+            TendrilMenuItem(text = { Text("Frame") }, onClick = {
+                showAddMenu = false
+                val c = contentAtPaneCentre(paneSize.width.toFloat(), paneSize.height.toFloat(), scale, pan.x, pan.y, density, FRAME_DEFAULT_W, FRAME_DEFAULT_H)
+                viewModel.addFrame(c.first, c.second) { pendingNewNodeId = it }
+            })
         }
     }
 
@@ -229,6 +250,7 @@ fun CanvasScreen(
                         IconButton(onClick = { showOwnMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                         TendrilMenu(expanded = showOwnMenu, onDismissRequest = { showOwnMenu = false }) {
                             if (onShowOnRoadMap != null) TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showOwnMenu = false; onShowOnRoadMap(pageId) })
+                            if (!viewOnly) TendrilMenuItem(text = { Text("Save as template") }, onClick = { showOwnMenu = false; viewModel.saveAsTemplate() })
                             if (!viewOnly) TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { showOwnMenu = false; showTrashCanvas = true })
                         }
                     }
@@ -237,7 +259,11 @@ fun CanvasScreen(
                         paneChrome.actions(this)
                         Box {
                             IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
-                            TendrilMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) { paneChrome.menuItems(this) { showPaneMenu = false } }
+                            TendrilMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) {
+                                // §0.10 item 15 — the canvas's own verb before the workspace's (the page's `···` has the same).
+                                if (!viewOnly) { TendrilMenuItem(text = { Text("Save as template") }, onClick = { showPaneMenu = false; viewModel.saveAsTemplate() }); HorizontalDivider() }
+                                paneChrome.menuItems(this) { showPaneMenu = false }
+                            }
                         }
                     }
                 },
@@ -283,11 +309,12 @@ fun CanvasScreen(
                 pan = pan,
                 onScaleChange = { scale = it },
                 onPanChange = { pan = it },
-                onMoveNode = { node, x, y -> viewModel.moveNode(node, x, y) },
+                onMoveNode = { node, x, y -> if (node.type == CanvasNodeType.FRAME) viewModel.moveFrame(node, x, y) else viewModel.moveNode(node, x, y) },
+                onResizeFrame = { frame, w, h -> viewModel.resizeFrame(frame, w, h) },
                 onTapNode = { node ->
                     // Under a pointer a first click selects, a second opens (Obsidian's); the phone opens at once.
                     if (pointer && selectedNodeId != node.id) selectedNodeId = node.id
-                    else if (node.type == CanvasNodeType.TEXT) editingNode = node
+                    else if (node.type == CanvasNodeType.TEXT || node.type == CanvasNodeType.FRAME) editingNode = node
                     else node.embeddedPageId?.let(onOpenPage)
                 },
                 onDeleteNode = { viewModel.deleteNode(it); if (selectedNodeId == it.id) selectedNodeId = null },
@@ -368,6 +395,8 @@ private fun CanvasBoard(
     onScaleChange: (Float) -> Unit,
     onPanChange: (Offset) -> Unit,
     onMoveNode: (CanvasNode, Float, Float) -> Unit,
+    /** §0.10 item 15 — a frame's corner handle. */
+    onResizeFrame: (CanvasNode, Float, Float) -> Unit,
     onTapNode: (CanvasNode) -> Unit,
     onDeleteNode: (CanvasNode) -> Unit,
     onConnect: (CanvasNode, CanvasNode) -> Unit,
@@ -383,6 +412,8 @@ private fun CanvasBoard(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
+    val currentPan by rememberUpdatedState(pan)
+    val currentScale by rememberUpdatedState(scale)
     var linkDrag by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
     var nodeMenuFor by remember { mutableStateOf<CanvasNode?>(null) }
     // L10 — the board takes focus when a card is selected, so Delete / Backspace reach it and
@@ -404,9 +435,13 @@ private fun CanvasBoard(
                 } else false
             }
             .pointerInput(Unit) {
+                // Item 15's walk: `pan` and `scale` read through `rememberUpdatedState` — the lambda
+                // of a `pointerInput(Unit)` never restarts, so it had kept the pan captured at first
+                // composition and every move set the board to that pan plus one delta: a 400 px
+                // drag moved the board 26 px, on both platforms, since the board was built.
                 detectTransformGestures { _, panDelta, zoom, _ ->
-                    onScaleChange((scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE))
-                    onPanChange(pan + panDelta)
+                    onScaleChange((currentScale * zoom).coerceIn(MIN_SCALE, MAX_SCALE))
+                    onPanChange(currentPan + panDelta)
                 }
             }
             // A second detector on the ground for taps only: a tap clears the selection, a double
@@ -426,6 +461,7 @@ private fun CanvasBoard(
                 selectedNodeId = selectedNodeId,
                 linkDrag = linkDrag,
                 onMoveNode = onMoveNode,
+                onResizeFrame = onResizeFrame,
                 onTapNode = onTapNode,
                 onDeleteRequest = { nodeMenuFor = it },
                 onTapEdge = onTapEdge,
@@ -449,10 +485,12 @@ private fun CanvasBoard(
     // open, and a confirm tap after that would be exactly the destructive write the lock exists
     // to stop.
     nodeMenuFor?.takeIf { !viewOnly }?.let { node ->
+        val frame = node.type == CanvasNodeType.FRAME
         AlertDialog(
             onDismissRequest = { nodeMenuFor = null },
-            title = { Text("Delete this card?") },
-            text = { Text("Any arrows connected to it go too.") },
+            title = { Text(if (frame) "Delete this frame?" else "Delete this card?") },
+            // Item 15 — a frame goes alone; its cards stay where they are (Obsidian's, on both platforms).
+            text = { Text(if (frame) "Its cards stay." else "Any arrows connected to it go too.") },
             confirmButton = { TextButton(onClick = { onDeleteNode(node); nodeMenuFor = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { nodeMenuFor = null }) { Text("Cancel") } },
         )
@@ -465,6 +503,7 @@ internal class CanvasInteraction(
     val selectedNodeId: Long?,
     val linkDrag: Pair<CanvasNode, Offset>?,
     val onMoveNode: (CanvasNode, Float, Float) -> Unit,
+    val onResizeFrame: (CanvasNode, Float, Float) -> Unit,
     val onTapNode: (CanvasNode) -> Unit,
     val onDeleteRequest: (CanvasNode) -> Unit,
     val onTapEdge: (CanvasEdge) -> Unit,
@@ -500,12 +539,16 @@ internal fun CanvasLayer(
     ) {
         Canvas(modifier = Modifier.size(4000.dp).then(
             if (interactive == null) Modifier else Modifier.pointerInput(edges, nodes, scale) {
-                detectDragGestures { change, _ ->
-                    // A tap-to-select-edge, expressed as a drag detector so it composes with
-                    // the pinch/pan detector above rather than adding a third competing
-                    // gesture stream on the same layer.
-                    val hit = nearestEdge(change.position, nodes, edges, density.density)
-                    if (hit != null) interactive.onTapEdge(hit)
+                // A tap on an arrow opens its editor. Item 15's walk found the previous form — a
+                // `detectDragGestures` "so it composes with the pan" — consumed every drag past
+                // touch slop and so cancelled the board's pan on both platforms (a 380 px swipe
+                // moved the board 40). This waits for the up without consuming the down or the
+                // moves; the pan consuming them cancels the wait, so a drag pans and a tap picks.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                    val hit = nearestEdge(up.position, nodes, edges, density.density)
+                    if (hit != null) { up.consume(); interactive.onTapEdge(hit) }
                 }
             },
         )) {
@@ -520,7 +563,12 @@ internal fun CanvasLayer(
             }
         }
 
-        nodes.forEach { node ->
+        // Item 15 — frames first, so every card sits over its region.
+        val frames = nodes.filter { it.type == CanvasNodeType.FRAME }
+        frames.forEach { node ->
+            key(node.id) { CanvasFrameBox(node = node, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
+        }
+        nodes.filter { it.type != CanvasNodeType.FRAME }.forEach { node ->
             key(node.id) {
                 CanvasNodeCard(
                     node = node,
@@ -530,6 +578,146 @@ internal fun CanvasLayer(
                     showContent = showContent,
                 )
             }
+        }
+        // The labels over the cards: a card that overlaps a frame's top edge must not hide its handle.
+        frames.forEach { node ->
+            key("label", node.id) { CanvasFrameBox(node = node, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.LABEL) }
+        }
+    }
+}
+
+/**
+ * §0.10 item 15 (2026-09-18) — the phone's canvas gesture, decided on Obsidian mobile measured:
+ * **a long press lifts a card or a frame; a swipe pans.** The tray's chips follow the same rule
+ * under Touch (B§13.6 #5). A tap still opens (a card) or edits (a frame's label). The detectors
+ * consume nothing before the long press, so a swipe that starts on a card reaches the board's
+ * pan. The desktop keeps its press-and-move (a pointer never pans by dragging a card).
+ */
+private fun Modifier.touchNodeGestures(density: Float, viewOnly: Boolean, node: () -> CanvasNode, interactive: CanvasInteraction): Modifier = this
+    .pointerInput(density, viewOnly) {
+        detectDragGesturesAfterLongPress(onDrag = { change, delta ->
+            change.consume()
+            if (!viewOnly) { val n = node(); interactive.onMoveNode(n, n.x + delta.x / density, n.y + delta.y / density) }
+        })
+    }
+    .pointerInput(Unit) {
+        // Not `detectTapGestures`: it consumes the down, and a consumed down cancels the board's
+        // pan — a swipe that began on a card moved the board 40 px of 380 on the walk. This waits
+        // for the up without touching the down; the pan consuming the moves cancels the wait.
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            val up = waitForUpOrCancellation()
+            if (up != null) { up.consume(); interactive.onTapNode(node()) }
+        }
+    }
+
+/**
+ * §0.10 item 15 — a frame: its region under the cards (a 3 % tint of the text, a hairline on
+ * `faint` — Obsidian's group border measures 4.6 : 1, the critique's #1), its **label the handle**
+ * in a pill above the top-left corner (drag moves the frame and what lies wholly inside it; a
+ * click selects under a pointer, a tap edits on the phone), its corner handle the resize. The
+ * body reads no pointer, so a press on it pans the board and a double-click makes a card there.
+ * The delete disc lives on the label (a frame's verbs are its label's); the ring on selection.
+ */
+private enum class FramePart { BODY, LABEL }
+
+@Composable
+private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: CanvasInteraction?, showContent: Boolean, part: FramePart) {
+    val current by rememberUpdatedState(node)
+    val palette = LocalTendrilPalette.current
+    val pointer = LocalDensityProfile.current.pointer
+    val viewOnly = interactive?.viewOnly ?: true
+    val selected = interactive?.selectedNodeId == node.id
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val live = interactive != null && (!pointer || hovered || selected)
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = Modifier
+            .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
+            .size(node.width.dp, node.height.dp),
+    ) {
+        if (part == FramePart.BODY) Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(palette.text.copy(alpha = 0.03f), shape)
+                .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else palette.textFaint, shape),
+        )
+        if (showContent && part == FramePart.LABEL) {
+            val pillHeight = if (pointer) 22.dp else 26.dp
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .offset(y = -(pillHeight + 4.dp))
+                    .height(pillHeight)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                    .then(if (live) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp)) else Modifier)
+                    .then(
+                        when {
+                            interactive == null -> Modifier
+                            !pointer -> Modifier.touchNodeGestures(density, viewOnly, { current }, interactive)
+                            else -> Modifier.hoverable(interaction).pointerInput(node.id, density, viewOnly) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(); down.consume()
+                                    var totalDrag = Offset.Zero
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (change.pressed) {
+                                            val delta = change.position - change.previousPosition
+                                            if (delta != Offset.Zero) {
+                                                totalDrag += delta
+                                                if (!viewOnly) interactive.onMoveNode(current, current.x + delta.x / density, current.y + delta.y / density)
+                                            }
+                                            change.consume()
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                    if (totalDrag.getDistance() < 12f) interactive.onTapNode(current)
+                                }
+                            }
+                        },
+                    )
+                    .padding(horizontal = 8.dp),
+            ) {
+                Text( // type: SLOT_CHIP — a frame's label pill, the FocusBar's chip style
+                    node.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL },
+                    style = MaterialTheme.typography.label,
+                    color = if (live) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (interactive != null && !viewOnly && live) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(if (pointer) 16.dp else 20.dp)
+                            .background(MaterialTheme.colorScheme.errorContainer, CircleShape)
+                            .clickable { interactive.onDeleteRequest(current) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = "Delete frame", tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(3.dp))
+                    }
+                }
+            }
+        }
+        // The resize handle at the corner: on the selected frame under a pointer, always on the phone.
+        if (part == FramePart.BODY && interactive != null && !viewOnly && (selected || !pointer)) {
+            val handle = if (pointer) 14.dp else 20.dp
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = handle / 2, y = handle / 2)
+                    .size(handle)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
+                    .pointerInput(node.id, density) {
+                        detectDragGestures(onDrag = { change, delta ->
+                            change.consume()
+                            val n = current
+                            interactive.onResizeFrame(n, n.width + delta.x / density, n.height + delta.y / density)
+                        })
+                    },
+            )
         }
     }
 }
@@ -608,6 +796,8 @@ private fun CanvasNodeCard(
 ) {
     val viewOnly = interactive?.viewOnly ?: true
     val selected = interactive?.selectedNodeId == node.id
+    // The gesture reads the card as it is now, not as it was when the detector started.
+    val current by rememberUpdatedState(node)
     // L10 — under a pointer the badges show on hover or on the selected card (14d's rule for row
     // controls); their row stays laid out so the text never moves. The phone shows them always.
     val interaction = remember { MutableInteractionSource() }
@@ -621,7 +811,7 @@ private fun CanvasNodeCard(
         modifier = Modifier
             .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
             .size((NODE_W).dp, (NODE_H).dp)
-            .then(if (interactive == null) Modifier else Modifier.hoverable(interaction)
+            .then(if (interactive == null) Modifier else if (!pointer) Modifier.touchNodeGestures(density, viewOnly, { current }, interactive) else Modifier.hoverable(interaction)
             // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
             // same lambda until a key changes, so a board already on screen when the eye toggle
             // is flipped would otherwise go on dragging against the value captured at first
@@ -648,12 +838,12 @@ private fun CanvasNodeCard(
                                 // stays honest: a smeared finger that would have been a drag must
                                 // not fall through and open the card's editor instead.
                                 totalDrag += delta
-                                if (!viewOnly) interactive.onMoveNode(node, node.x + delta.x / density, node.y + delta.y / density)
+                                if (!viewOnly) interactive.onMoveNode(current, current.x + delta.x / density, current.y + delta.y / density)
                             }
                             change.consume()
                         }
                     } while (event.changes.any { it.pressed })
-                    if (totalDrag.getDistance() < 12f) interactive.onTapNode(node)
+                    if (totalDrag.getDistance() < 12f) interactive.onTapNode(current)
                 }
             }),
     ) {
@@ -718,6 +908,7 @@ private fun CanvasNodeCard(
                         maxLines = 3,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
+                    CanvasNodeType.FRAME -> Unit // drawn by CanvasFrameBox, never as a card
                     CanvasNodeType.PAGE_EMBED -> Column {
                         Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                         Spacer(Modifier.height(4.dp))
@@ -746,8 +937,12 @@ private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () ->
             // §3.1.2 — a reader, not an editor, while the lock is on: the field goes read-only
             // (so the full text of a card the board truncates at three lines is still legible)
             // and Save goes away, leaving one button that closes the sheet.
-            Text(if (viewOnly) "Card" else "Edit card", style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp))
-            TendrilField(value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), focusRequester = focus, minLines = 3)
+            val frame = node.type == CanvasNodeType.FRAME
+            Text( // type: SHEET_HEADER — the editor sheet's own title, as it was before the frame's branch
+                if (viewOnly) (if (frame) "Frame" else "Card") else (if (frame) "Edit frame" else "Edit card"),
+                style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp),
+            )
+            TendrilField(value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), focusRequester = focus, minLines = if (frame) 1 else 3)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss) { Text(if (viewOnly) "Done" else "Cancel") }

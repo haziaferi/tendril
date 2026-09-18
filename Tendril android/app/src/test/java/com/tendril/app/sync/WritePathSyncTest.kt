@@ -122,7 +122,7 @@ class WritePathSyncTest {
 
         val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
         val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
-        val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao)
+        val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
         val databaseSyncManager =
             DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase)
         val viewLockState = ViewLockState()
@@ -161,7 +161,7 @@ class WritePathSyncTest {
             databaseSyncManager, resolveEntryUseCase, coordinator, templateManager, purgeRegistry, viewLockState, labelDao, labelMembership, contentRepository,
         )
 
-        fun canvas(pageId: Long) = CanvasViewModel(pageId, pageDao, canvasDao, nodeDao, edgeDao, viewLockState, contentRepository)
+        fun canvas(pageId: Long) = CanvasViewModel(pageId, pageDao, canvasDao, nodeDao, edgeDao, viewLockState, contentRepository, templateManager)
 
         /**
          * The Pages list itself (§3.1) — the only surface that *creates* pages, canvases and

@@ -26,11 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
-import com.tendril.app.ui.canvas.NODE_W
-import com.tendril.app.ui.canvas.NODE_H
+import com.tendril.app.domain.canvas.nodeBox
 import com.tendril.app.ui.canvas.CanvasLayer
-import com.tendril.app.domain.canvas.fitToCards
-import com.tendril.app.domain.canvas.canvasEmbedHeightDp
+import com.tendril.app.domain.canvas.fitToBoxes
+import com.tendril.app.domain.canvas.embedHeightForBoxes
 import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalDensity
@@ -81,9 +80,9 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
     // §0.10 item 7 — the card is as tall as the board's shape asks at this column's width (Obsidian's embed, measured), clamped.
     var box by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
-    val cards = remember(nodes) { nodes.map { it.x to it.y } }
+    val boxes = remember(nodes) { nodes.map { nodeBox(it) } }   // item 15 — a frame's box is its own
     val columnDp = with(density) { box.width.toDp().value }
-    val heightDp = canvasEmbedHeightDp(cards, NODE_W, NODE_H, columnDp)
+    val heightDp = embedHeightForBoxes(boxes, columnDp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -111,7 +110,7 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
         } else if (box != IntSize.Zero) {
             // The board's own layer at the fit — one canvas at two sizes (§3.7); inert, so the
             // list scrolls over it. Text shows where the fit keeps it readable.
-            val fit = fitToCards(cards, NODE_W, NODE_H, box.width.toFloat(), box.height.toFloat(), density.density, marginDp = 16f)
+            val fit = fitToBoxes(boxes, box.width.toFloat(), box.height.toFloat(), density.density, marginDp = 16f)
             val embedded by produceState(emptyMap<Long, Page>(), nodes) {
                 val ids = nodes.mapNotNull { it.embeddedPageId }.distinct()
                 value = ids.mapNotNull { id -> core.database.pageDao().getById(id)?.let { id to it } }.toMap()
