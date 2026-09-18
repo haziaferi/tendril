@@ -70,7 +70,6 @@ import java.awt.Dimension
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tendril.app.ui.nav.PopOutRegistry
 import com.tendril.app.ui.nav.WorkbenchNavState
-import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.ui.switcher.SwitcherState
@@ -159,7 +158,6 @@ fun main() {
         DesktopLocalImageStore(File(dbFile.parentFile, "images")),
     )
     val folderManager = DesktopSyncFolderManager()
-    val escapeBack = EscapeBackInput()
     val switcher = SwitcherState()
     // B§13.6 #6 — the main window's nav state is built here so a pop-out window can hand a page
     // to it; the pop-outs themselves and their remembered pages (`popout_pages`).
@@ -212,13 +210,13 @@ fun main() {
             state = windowState,
             title = "Tendril",
             icon = painterResource("tendril_icon.png"),
-            // Preview, not consume: a text field that wants Escape for itself still gets it, and
-            // an Escape nobody handles falls through to nothing, as before. On the *release*,
-            // because that is the half of an Escape press this callback sees: the window swallows
-            // the press before preview (observed 2026-09-12 with a log on every event; `A` arrived
-            // as down and up, Esc as up alone). A release also cannot auto-repeat.
+            // Escape is the runtime's: Compose Multiplatform dispatches the Escape press to the
+            // enabled `BackHandler`s itself (the scaffold's page, a sheet's, a card's) — that is
+            // why the press never reached this preview and only its release did (observed
+            // 2026-09-12). The release was dispatched here as a second back until 2026-09-17,
+            // when L10's walk caught it: every Escape went back twice (a sheet's close *and* the
+            // page's pop when a frame fell between the two). One dispatch now, the platform's.
             onPreviewKeyEvent = { event ->
-                if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) escapeBack.back()
                 // 14e — every other chord is one table (`Shortcuts.kt`): Ctrl+K (§3.1.7, step 8a) and
                 // Ctrl+\ (14c) moved into it; the overlay is generated from the same table.
                 if (event.type == KeyEventType.KeyDown) {
@@ -245,7 +243,7 @@ fun main() {
             val titleBarInstaller = remember(window) { DesktopTitleBarInstaller(window) }
             CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
-                App(core, orchestrator, folderManager, escapeBack, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
+                App(core, orchestrator, folderManager, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
             }
             }
         }
@@ -293,7 +291,7 @@ private fun logCrash(file: File, thread: Thread, e: Throwable) {
 }
 
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, escapeBack: EscapeBackInput, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions, hotkey: GlobalHotkey) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions, hotkey: GlobalHotkey) {
     // B§13.6 #6 — the pop-outs draw at this window's scale: its shorter side, in the platform's dp.
     val mainDensity = androidx.compose.ui.platform.LocalDensity.current
     val mainSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
@@ -301,11 +299,6 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
     // The dispatcher is a composition local of the window's content, so the key input can only be
     // attached from inside it; the key event itself arrives at the window, outside. Hence the
     // input is built in `main` and joined here.
-    val backOwner = LocalNavigationEventDispatcherOwner.current
-    DisposableEffect(backOwner) {
-        backOwner?.navigationEventDispatcher?.addInput(escapeBack)
-        onDispose { backOwner?.navigationEventDispatcher?.removeInput(escapeBack) }
-    }
     // Compose Multiplatform doesn't supply a default ViewModelStoreOwner outside NavHost (which
     // this app's hand-rolled nav doesn't use — see WorkbenchNavState's doc comment) — one
     // application-lifetime owner, provided once here, is what the ported screens' viewModel()
