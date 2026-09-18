@@ -5,7 +5,7 @@ shared Kotlin Multiplatform core they both build on.
 
 Sideloaded and personal — not distributed through any store.
 
-Start with `Tendril android/tendril-spec.md` **§0 Objectives** — what the app is for, what it must
+Start with `tendril-spec.md` (the repository root) **§0 Objectives** — what the app is for, what it must
 never do, what it is measured against, and the order of work. Everything else follows from it.
 
 | folder | what it is | builds |
@@ -131,7 +131,7 @@ The list and the reasoning behind each check live in the script's own module doc
 
 | document | what it is for |
 |---|---|
-| `Tendril android/tendril-spec.md` | the design record — decisions, reasoning, open questions, and a Revision Log. Start here for *why*. |
+| `tendril-spec.md` (root) | the design record — decisions, reasoning, open questions, and a Revision Log. Start here for *why*. |
 | `Tendril windows/tendril-windows-spec.md` | the same, for the desktop companion |
 | `docs/audit-2026-09-04.md` | findings from the 2026-09-04 code audit that were *not* fixed — open bugs, sync gaps, security residue, and where Tendril sits against Notion and its open-source peers |
 | this README | how to get it building. Nothing else. |

@@ -42,8 +42,8 @@ class DesktopAppContainer(database: TendrilDatabase, scheduler: EntryScheduleCoo
             DesktopLocalImageStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/images")),
             // §0.10 item 12 — one flat file beside the database.
             PropertiesKeyValueStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/prefs.properties")),
-            // §0.6.15 — the key in a file of its own, never the .properties beside it.
-            FileAiKeyStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/anthropic.key")),
+            // §0.6.15 — the key in a file of its own, never the .properties beside it; §0.10 item 20 — DPAPI-wrapped on Windows.
+            FileAiKeyStore(java.io.File(System.getProperty("user.home"), ".tendril-desktop-dev/anthropic.key"), DpapiWrap.forThisPlatform()),
         )
     }
 }
