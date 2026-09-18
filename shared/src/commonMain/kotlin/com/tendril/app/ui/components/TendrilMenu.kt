@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -98,16 +97,15 @@ fun TendrilMenuItem(
     enabled: Boolean = true,
 ) {
     val profile = LocalDensityProfile.current
-    if (!profile.pointer) {
-        DropdownMenuItem(text = text, onClick = onClick, modifier = modifier, leadingIcon = leadingIcon, trailingIcon = trailingIcon, enabled = enabled)
-        return
-    }
+    // T·P2 (the phone's second fix PR, 2026-09-18): the app's row under Touch too — Material's item
+    // drew 15 / 17 dp text bands beside the app's 14 / 16 / 18 on one screen; the height stays the
+    // 48 dp target (Notion's phone menu rows measured 45), the text `body` at the Touch scale.
     val colour = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = modifier
             .fillMaxWidth()
             .widthIn(min = 112.dp, max = 280.dp)
-            .heightIn(min = profile.rowHeightDp.dp)
+            .heightIn(min = if (profile.pointer) profile.rowHeightDp.dp else 48.dp)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(PaddingValues(horizontal = 12.dp)),
         verticalAlignment = Alignment.CenterVertically,

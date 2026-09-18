@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.nav.LocalDensityProfile
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -83,7 +86,7 @@ internal fun HistorySheet(viewModel: PageDetailViewModel, contentLocked: Boolean
                 } else {
                     LazyColumn {
                         items(revisions, key = { it.id }) { revision ->
-                            Column(modifier = Modifier.fillMaxWidth().clickable { open = revision }.padding(vertical = 10.dp)) {
+                            Column(modifier = Modifier.fillMaxWidth().clickable { open = revision }.heightIn(min = LocalDensityProfile.current.rowHeightDp.dp).padding(vertical = 4.dp), verticalArrangement = Arrangement.Center) {
                                 Text(describe(revision), style = MaterialTheme.typography.body)
                                 Text(
                                     revision.title.ifBlank { "Untitled" } + " · " + plural(revision.blockCount, "block"),

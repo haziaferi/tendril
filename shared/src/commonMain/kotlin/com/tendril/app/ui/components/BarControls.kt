@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.nav.LocalDensityProfile
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,13 +27,15 @@ import com.tendril.app.ui.theme.label
  * menu button (`Week ▾`, `Layers ▾`, `Today ▾`, `Filter ▾`) and a pill (`Today`), both 28 dp at
  * `label`, the radius-6 family of the bar's icon buttons. The menu itself is `TendrilMenu`,
  * anchored by the caller's `Box`; a check-menu's items keep it open, so several layers or kinds
- * toggle in one visit (Fantastical's calendar-set menu).
+ * toggle in one visit (Fantastical's calendar-set menu). Under Touch (the phone's second fix PR,
+ * L·P2 / L·P3, 2026-09-18) the same controls stand 40 dp tall — the bar and the Tasks' pane header
+ * carry them on the phone now, and a 28 dp pill is a finger's miss.
  */
 @Composable
 fun BarMenuButton(label: String, open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .height(28.dp)
+            .height(barControlHeight())
             .background(if (open) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
             .padding(start = 10.dp, end = 4.dp),
@@ -47,7 +50,7 @@ fun BarMenuButton(label: String, open: Boolean, onClick: () -> Unit, modifier: M
 fun BarPillButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .height(28.dp)
+            .height(barControlHeight())
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp),
@@ -56,6 +59,10 @@ fun BarPillButton(label: String, onClick: () -> Unit, modifier: Modifier = Modif
         Text(label, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+/** 28 dp under a pointer, 40 under Touch — the bar's pills, menu buttons and pane tabs. */
+@Composable
+fun barControlHeight(): androidx.compose.ui.unit.Dp = if (LocalDensityProfile.current.pointer) 28.dp else 40.dp
 
 /** A check-menu item's trailing mark: present when on, an empty 16 dp box when off, so the labels align. */
 @Composable

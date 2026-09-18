@@ -1442,7 +1442,8 @@ private fun RowPropertyEditor(
 ) {
     val locked = LocalContentLocked.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        // L·P3 (the phone's second fix PR): under Touch the row is a 48 dp target and its value's tap covers it.
+        modifier = Modifier.fillMaxWidth().heightIn(min = if (LocalDensityProfile.current.pointer) 0.dp else 48.dp).padding(horizontal = 16.dp, vertical = if (LocalDensityProfile.current.pointer) 6.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(property.name, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
@@ -1525,6 +1526,10 @@ private fun RowRecurrenceEditor(entry: Entry?, viewModel: PageDetailViewModel) {
     }
 }
 
+/** The vertical padding that makes a strip value a 48 dp target under Touch (the text is 24 dp there). */
+@Composable
+private fun stripValuePad(): androidx.compose.ui.unit.Dp = if (LocalDensityProfile.current.pointer) 0.dp else 12.dp
+
 @Composable
 private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel: PageDetailViewModel) {
     val locked = LocalContentLocked.current
@@ -1532,7 +1537,7 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
         PropertyType.CHECKBOX -> Checkbox(checked = storedValue == "true", onCheckedChange = { viewModel.setRowPropertyValue(property, it.toString()) }, enabled = !locked)
         PropertyType.DATE -> {
             var showPicker by remember { mutableStateOf(false) }
-            Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showPicker = true }))
+            Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showPicker = true }).padding(vertical = stripValuePad()))
             if (showPicker) {
                 val initial = storedValue?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
                 val state = rememberDatePickerState(initialSelectedDateMillis = initial.toDatePickerMillis())
@@ -1552,7 +1557,7 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
             var showMenu by remember { mutableStateOf(false) }
             val options = property.config?.split(",")?.filter { it.isNotBlank() }.orEmpty()
             Box {
-                Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showMenu = true }))
+                Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showMenu = true }).padding(vertical = stripValuePad()))
                 TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     options.forEach { option ->
                         TendrilMenuItem(text = { Text(option) }, onClick = { viewModel.setRowPropertyValue(property, option); showMenu = false })
