@@ -45,3 +45,28 @@ fun contentAtPaneCentre(
     val cy = ((paneHeightPx / 2f - panY) / scale) / density
     return (cx - nodeW / 2f) to (cy - nodeH / 2f)
 }
+
+/**
+ * §0.10 item 7 (2026-09-18) — the inert canvas card in a page draws the same layer the board
+ * draws, at [fitToCards]'s scale. Its height follows the board's shape at the column's width
+ * (Obsidian's canvas embed, measured: a 250 × 60 card's embed stood 164 px in an 828 px column),
+ * clamped so a tall board cannot take the page and a flat one cannot vanish. Content in dp.
+ */
+fun canvasEmbedHeightDp(
+    cards: List<Pair<Float, Float>>,
+    nodeW: Float,
+    nodeH: Float,
+    columnWidthDp: Float,
+    marginDp: Float = 24f,
+    minDp: Float = 160f,
+    maxDp: Float = 320f,
+): Float {
+    if (cards.isEmpty() || columnWidthDp <= 0f) return minDp
+    val boxW = cards.maxOf { it.first } + nodeW - cards.minOf { it.first }
+    val boxH = cards.maxOf { it.second } + nodeH - cards.minOf { it.second }
+    val inner = (columnWidthDp - 2 * marginDp).coerceAtLeast(1f)
+    return (inner * boxH / boxW + 2 * marginDp).coerceIn(minDp, maxDp)
+}
+
+/** Below this fit a card's text would be unreadable; the layer draws the boxes alone (Obsidian's zoom threshold). */
+const val CANVAS_CONTENT_MIN_SCALE = 0.5f

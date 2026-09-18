@@ -2,12 +2,10 @@
 
 package com.tendril.app.ui.pages
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,9 +25,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.tendril.app.ui.canvas.NODE_W
+import com.tendril.app.ui.canvas.NODE_H
+import com.tendril.app.ui.canvas.CanvasLayer
+import com.tendril.app.domain.canvas.fitToCards
+import com.tendril.app.domain.canvas.canvasEmbedHeightDp
+import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clip
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
@@ -50,7 +56,6 @@ import com.tendril.app.ui.theme.label
  * mention uses — and there is no second canvas model. Nothing here scrolls, zooms or drags, which
  * is what lets the block list scroll over it.
  */
-private const val CARD_HEIGHT_DP = 200
 
 @Composable
 internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackTitle: String, onArm: () -> Unit) {
@@ -73,12 +78,20 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
 
     val title = page?.title?.ifBlank { null } ?: fallbackTitle.ifBlank { "Canvas" }
     val missing = canvasPageId != null && page == null
+    // §0.10 item 7 — the card is as tall as the board's shape asks at this column's width (Obsidian's embed, measured), clamped.
+    var box by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    val cards = remember(nodes) { nodes.map { it.x to it.y } }
+    val columnDp = with(density) { box.width.toDp().value }
+    val heightDp = canvasEmbedHeightDp(cards, NODE_W, NODE_H, columnDp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .height(CARD_HEIGHT_DP.dp)
+            .onSizeChanged { box = it }
+            .height(heightDp.dp)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = !missing, onClick = onArm),
     ) {
         if (missing) {
@@ -95,8 +108,15 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.Center),
             )
-        } else {
-            CanvasThumbnail(nodes, edges)
+        } else if (box != IntSize.Zero) {
+            // The board's own layer at the fit — one canvas at two sizes (§3.7); inert, so the
+            // list scrolls over it. Text shows where the fit keeps it readable.
+            val fit = fitToCards(cards, NODE_W, NODE_H, box.width.toFloat(), box.height.toFloat(), density.density, marginDp = 16f)
+            val embedded by produceState(emptyMap<Long, Page>(), nodes) {
+                val ids = nodes.mapNotNull { it.embeddedPageId }.distinct()
+                value = ids.mapNotNull { id -> core.database.pageDao().getById(id)?.let { id to it } }.toMap()
+            }
+            CanvasLayer(nodes, edges, embedded, scale = fit.scale, pan = Offset(fit.panX, fit.panY), interactive = null, showContent = fit.scale >= CANVAS_CONTENT_MIN_SCALE)
         }
         Text(
             title + " · " + openVerb(),
@@ -104,34 +124,6 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
         )
-    }
-}
-
-/** The board scaled to fit: node boxes and straight edges, nothing else. A thumbnail is for
- * recognising a board, not reading it. */
-@Composable
-private fun CanvasThumbnail(nodes: List<CanvasNode>, edges: List<CanvasEdge>) {
-    val nodeFill = MaterialTheme.colorScheme.surfaceVariant
-    val nodeStroke = MaterialTheme.colorScheme.outline
-    val edgeColor = MaterialTheme.colorScheme.outline
-    Canvas(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        val minX = nodes.minOf { it.x }; val minY = nodes.minOf { it.y }
-        val maxX = nodes.maxOf { it.x + it.width }; val maxY = nodes.maxOf { it.y + it.height }
-        val contentW = (maxX - minX).coerceAtLeast(1f); val contentH = (maxY - minY).coerceAtLeast(1f)
-        val fit = minOf(size.width / contentW, size.height / contentH).coerceAtMost(1f)
-        val offset = Offset((size.width - contentW * fit) / 2f, (size.height - contentH * fit) / 2f)
-        fun at(x: Float, y: Float) = Offset(offset.x + (x - minX) * fit, offset.y + (y - minY) * fit)
-        for (edge in edges) {
-            val from = nodes.firstOrNull { it.id == edge.fromNodeId } ?: continue
-            val to = nodes.firstOrNull { it.id == edge.toNodeId } ?: continue
-            drawLine(edgeColor, at(from.x + from.width / 2, from.y + from.height / 2), at(to.x + to.width / 2, to.y + to.height / 2), strokeWidth = 2f)
-        }
-        for (node in nodes) {
-            val topLeft = at(node.x, node.y)
-            val s = Size(node.width * fit, node.height * fit)
-            drawRoundRect(nodeFill, topLeft, s, androidx.compose.ui.geometry.CornerRadius(6f * fit.coerceAtLeast(0.3f)))
-            drawRoundRect(nodeStroke, topLeft, s, androidx.compose.ui.geometry.CornerRadius(6f * fit.coerceAtLeast(0.3f)), style = Stroke(width = 1.5f))
-        }
     }
 }
 

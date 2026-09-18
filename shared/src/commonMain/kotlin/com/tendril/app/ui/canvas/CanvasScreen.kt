@@ -110,8 +110,8 @@ import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
 
-private const val NODE_W = 180f
-private const val NODE_H = 90f
+internal const val NODE_W = 180f
+internal const val NODE_H = 90f
 private const val MIN_SCALE = 0.3f
 private const val MAX_SCALE = 2.5f
 
@@ -383,8 +383,6 @@ private fun CanvasBoard(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val edgeInk = MaterialTheme.colorScheme.onSurfaceVariant
-    val draftInk = MaterialTheme.colorScheme.primary
     var linkDrag by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
     var nodeMenuFor by remember { mutableStateOf<CanvasNode?>(null) }
     // L10 — the board takes focus when a card is selected, so Delete / Backspace reach it and
@@ -417,56 +415,33 @@ private fun CanvasBoard(
                 detectTapGestures(onTap = { onGroundTap() }, onDoubleTap = onGroundDoubleTap)
             },
     ) {
-        Box(
-            modifier = Modifier
-                .graphicsLayer(scaleX = scale, scaleY = scale, translationX = pan.x, translationY = pan.y, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)),
-        ) {
-            Canvas(modifier = Modifier.size(4000.dp).pointerInput(edges, nodes, scale) {
-                detectDragGestures { change, _ ->
-                    // A tap-to-select-edge, expressed as a drag detector so it composes with
-                    // the pinch/pan detector above rather than adding a third competing
-                    // gesture stream on the same layer.
-                    val hit = nearestEdge(change.position, nodes, edges, density.density)
-                    if (hit != null) onTapEdge(hit)
-                }
-            }) {
-                edges.forEach { edge ->
-                    val from = nodes.find { it.id == edge.fromNodeId } ?: return@forEach
-                    val to = nodes.find { it.id == edge.toNodeId } ?: return@forEach
-                    drawCanvasEdge(from, to, edge, density.density, edgeInk)
-                }
-                linkDrag?.let { (fromNode, pointer) ->
-                    val start = with(density) { Offset((fromNode.x + NODE_W / 2) * density.density, (fromNode.y + NODE_H / 2) * density.density) }
-                    drawLine(color = draftInk, start = start, end = pointer, strokeWidth = 3f)
-                }
-            }
-
-            nodes.forEach { node ->
-                key(node.id) {
-                    CanvasNodeCard(
-                        node = node,
-                        embeddedPage = node.embeddedPageId?.let { embeddedPages[it] },
-                        density = density.density,
-                        onMove = { x, y -> onMoveNode(node, x, y) },
-                        onTap = { onTapNode(node) },
-                        onDeleteRequest = { nodeMenuFor = node },
-                        viewOnly = viewOnly,
-                        selected = node.id == selectedNodeId,
-                        onLinkDragStart = { linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + NODE_H / 2) * density.density) },
-                        onLinkDrag = { pointerInParent -> linkDrag = linkDrag?.let { (n, _) -> n to pointerInParent } },
-                        onLinkDragEnd = { pointerInParent ->
-                            val target = nodes.firstOrNull { candidate ->
-                                candidate.id != node.id &&
-                                    pointerInParent.x / density.density >= candidate.x && pointerInParent.x / density.density <= candidate.x + NODE_W &&
-                                    pointerInParent.y / density.density >= candidate.y && pointerInParent.y / density.density <= candidate.y + NODE_H
-                            }
-                            if (target != null) onConnect(node, target)
-                            linkDrag = null
-                        },
-                    )
-                }
-            }
-        }
+        CanvasLayer(
+            nodes = nodes,
+            edges = edges,
+            embeddedPages = embeddedPages,
+            scale = scale,
+            pan = pan,
+            interactive = CanvasInteraction(
+                viewOnly = viewOnly,
+                selectedNodeId = selectedNodeId,
+                linkDrag = linkDrag,
+                onMoveNode = onMoveNode,
+                onTapNode = onTapNode,
+                onDeleteRequest = { nodeMenuFor = it },
+                onTapEdge = onTapEdge,
+                onLinkDragStart = { node -> linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + NODE_H / 2) * density.density) },
+                onLinkDrag = { pointerInParent -> linkDrag = linkDrag?.let { (n, _) -> n to pointerInParent } },
+                onLinkDragEnd = { node, pointerInParent ->
+                    val target = nodes.firstOrNull { candidate ->
+                        candidate.id != node.id &&
+                            pointerInParent.x / density.density >= candidate.x && pointerInParent.x / density.density <= candidate.x + NODE_W &&
+                            pointerInParent.y / density.density >= candidate.y && pointerInParent.y / density.density <= candidate.y + NODE_H
+                    }
+                    if (target != null) onConnect(node, target)
+                    linkDrag = null
+                },
+            ),
+        )
     }
 
     // The `takeIf` is not redundant with the hidden badge: the badge is the only way to *open*
@@ -481,6 +456,81 @@ private fun CanvasBoard(
             confirmButton = { TextButton(onClick = { onDeleteNode(node); nodeMenuFor = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { nodeMenuFor = null }) { Text("Cancel") } },
         )
+    }
+}
+
+/** The board's live half: what a card and an edge can do, given only where the layer is interactive. */
+internal class CanvasInteraction(
+    val viewOnly: Boolean,
+    val selectedNodeId: Long?,
+    val linkDrag: Pair<CanvasNode, Offset>?,
+    val onMoveNode: (CanvasNode, Float, Float) -> Unit,
+    val onTapNode: (CanvasNode) -> Unit,
+    val onDeleteRequest: (CanvasNode) -> Unit,
+    val onTapEdge: (CanvasEdge) -> Unit,
+    val onLinkDragStart: (CanvasNode) -> Unit,
+    val onLinkDrag: (Offset) -> Unit,
+    val onLinkDragEnd: (CanvasNode, Offset) -> Unit,
+)
+
+/**
+ * §0.10 item 7 (2026-09-18) — **one canvas at two sizes**, the mind map's rule (§0.6.2): the
+ * edges and the cards on one `graphicsLayer`, drawn by the board (interactive, filling the
+ * viewport) and by the inert card in a page (`CanvasBlockCard`, at `fitToCards`'s scale, no
+ * gesture on it — the block list scrolls over it). With [interactive] null nothing here reads a
+ * pointer; with [showContent] false the cards are their boxes alone (a fit under
+ * `CANVAS_CONTENT_MIN_SCALE`, where text would be unreadable — Obsidian hides it the same way).
+ */
+@Composable
+internal fun CanvasLayer(
+    nodes: List<CanvasNode>,
+    edges: List<CanvasEdge>,
+    embeddedPages: Map<Long, Page>,
+    scale: Float,
+    pan: Offset,
+    interactive: CanvasInteraction?,
+    showContent: Boolean = true,
+) {
+    val density = LocalDensity.current
+    val edgeInk = MaterialTheme.colorScheme.onSurfaceVariant
+    val draftInk = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .graphicsLayer(scaleX = scale, scaleY = scale, translationX = pan.x, translationY = pan.y, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)),
+    ) {
+        Canvas(modifier = Modifier.size(4000.dp).then(
+            if (interactive == null) Modifier else Modifier.pointerInput(edges, nodes, scale) {
+                detectDragGestures { change, _ ->
+                    // A tap-to-select-edge, expressed as a drag detector so it composes with
+                    // the pinch/pan detector above rather than adding a third competing
+                    // gesture stream on the same layer.
+                    val hit = nearestEdge(change.position, nodes, edges, density.density)
+                    if (hit != null) interactive.onTapEdge(hit)
+                }
+            },
+        )) {
+            edges.forEach { edge ->
+                val from = nodes.find { it.id == edge.fromNodeId } ?: return@forEach
+                val to = nodes.find { it.id == edge.toNodeId } ?: return@forEach
+                drawCanvasEdge(from, to, edge, density.density, edgeInk)
+            }
+            interactive?.linkDrag?.let { (fromNode, pointer) ->
+                val start = Offset((fromNode.x + NODE_W / 2) * density.density, (fromNode.y + NODE_H / 2) * density.density)
+                drawLine(color = draftInk, start = start, end = pointer, strokeWidth = 3f)
+            }
+        }
+
+        nodes.forEach { node ->
+            key(node.id) {
+                CanvasNodeCard(
+                    node = node,
+                    embeddedPage = node.embeddedPageId?.let { embeddedPages[it] },
+                    density = density.density,
+                    interactive = interactive,
+                    showContent = showContent,
+                )
+            }
+        }
     }
 }
 
@@ -552,15 +602,12 @@ private fun CanvasNodeCard(
     node: CanvasNode,
     embeddedPage: Page?,
     density: Float,
-    onMove: (Float, Float) -> Unit,
-    onTap: () -> Unit,
-    onDeleteRequest: () -> Unit,
-    onLinkDragStart: () -> Unit,
-    onLinkDrag: (Offset) -> Unit,
-    onLinkDragEnd: (Offset) -> Unit,
-    viewOnly: Boolean,
-    selected: Boolean = false,
+    /** Null on the inert card in a page (item 7): no gesture, no badge, no hover. */
+    interactive: CanvasInteraction?,
+    showContent: Boolean = true,
 ) {
+    val viewOnly = interactive?.viewOnly ?: true
+    val selected = interactive?.selectedNodeId == node.id
     // L10 — under a pointer the badges show on hover or on the selected card (14d's rule for row
     // controls); their row stays laid out so the text never moves. The phone shows them always.
     val interaction = remember { MutableInteractionSource() }
@@ -574,7 +621,7 @@ private fun CanvasNodeCard(
         modifier = Modifier
             .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
             .size((NODE_W).dp, (NODE_H).dp)
-            .hoverable(interaction)
+            .then(if (interactive == null) Modifier else Modifier.hoverable(interaction)
             // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
             // same lambda until a key changes, so a board already on screen when the eye toggle
             // is flipped would otherwise go on dragging against the value captured at first
@@ -601,15 +648,16 @@ private fun CanvasNodeCard(
                                 // stays honest: a smeared finger that would have been a drag must
                                 // not fall through and open the card's editor instead.
                                 totalDrag += delta
-                                if (!viewOnly) onMove(node.x + delta.x / density, node.y + delta.y / density)
+                                if (!viewOnly) interactive.onMoveNode(node, node.x + delta.x / density, node.y + delta.y / density)
                             }
                             change.consume()
                         }
                     } while (event.changes.any { it.pressed })
-                    if (totalDrag.getDistance() < 12f) onTap()
+                    if (totalDrag.getDistance() < 12f) interactive.onTapNode(node)
                 }
-            },
+            }),
     ) {
+        if (!showContent) return@Surface
         Column(modifier = Modifier.fillMaxSize().padding(4.dp)) {
             // Badges live in their own dedicated row above the content, not overlaid on top
             // of it — an absolutely-positioned corner badge overlapped whatever text happened
@@ -620,12 +668,12 @@ private fun CanvasNodeCard(
             // so both come off the card entirely while View-Only is on rather than sitting there
             // greyed out. The row itself goes with them: with nothing left to reserve space for,
             // an empty strip would only push the card's own text down for no reason.
-            if (!viewOnly) Row(modifier = Modifier.fillMaxWidth().alpha(badgesAlpha), horizontalArrangement = Arrangement.SpaceBetween) {
+            if (interactive != null && !viewOnly) Row(modifier = Modifier.fillMaxWidth().alpha(badgesAlpha), horizontalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
                         .background(MaterialTheme.colorScheme.errorContainer, CircleShape)
-                        .clickable(enabled = badgesAlpha > 0f, onClick = onDeleteRequest),
+                        .clickable(enabled = badgesAlpha > 0f, onClick = { interactive.onDeleteRequest(node) }),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Delete card", tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(3.dp))
@@ -643,15 +691,15 @@ private fun CanvasNodeCard(
                             detectDragGestures(
                                 onDragStart = {
                                     parentPointer = Offset((node.x + NODE_W) * density, node.y * density)
-                                    onLinkDragStart()
+                                    interactive.onLinkDragStart(node)
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     parentPointer += dragAmount
-                                    onLinkDrag(parentPointer)
+                                    interactive.onLinkDrag(parentPointer)
                                 },
-                                onDragEnd = { onLinkDragEnd(parentPointer) },
-                                onDragCancel = { onLinkDragEnd(parentPointer) },
+                                onDragEnd = { interactive.onLinkDragEnd(node, parentPointer) },
+                                onDragCancel = { interactive.onLinkDragEnd(node, parentPointer) },
                             )
                         },
                     contentAlignment = Alignment.Center,
