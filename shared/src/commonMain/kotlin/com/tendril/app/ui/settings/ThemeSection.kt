@@ -28,6 +28,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -152,7 +153,7 @@ private fun RegisterSwatch(register: Register, dark: Boolean, selected: Boolean,
             register.label,
             style = MaterialTheme.typography.caption,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
             softWrap = false,
             modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp),
         )

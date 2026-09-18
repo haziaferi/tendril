@@ -22,7 +22,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -33,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.jetbrains.compose.resources.stringResource
@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.TendrilSheet
 import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.reminders_add
@@ -147,25 +148,23 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
                     FilterChip(
                         selected = !useCustomOffset && preset == option,
                         onClick = { useCustomOffset = false; preset = option },
-                        label = { Text(option.label(), maxLines = 1) },
+                        label = { Text(option.label(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     )
                 }
                 FilterChip(
                     selected = useCustomOffset,
                     onClick = { useCustomOffset = true },
-                    label = { Text("Custom", maxLines = 1) },
+                    label = { Text("Custom", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 )
             }
 
             if (useCustomOffset) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        textStyle = MaterialTheme.typography.body,
+                    TendrilField(
                         value = customCount,
                         onValueChange = { if (it.all(Char::isDigit)) customCount = it },
                         modifier = Modifier.width(96.dp),
-                        singleLine = true,
                     )
                     Spacer(Modifier.width(8.dp))
                     Row(
@@ -176,7 +175,7 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
                             FilterChip(
                                 selected = customUnit == u,
                                 onClick = { customUnit = u },
-                                label = { Text(u.name.lowercase(), maxLines = 1) },
+                                label = { Text(u.name.lowercase(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             )
                         }
                     }
@@ -201,7 +200,7 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
                         FilterChip(
                             selected = anchor == time,
                             onClick = { anchor = time },
-                            label = { Text(time.format(TIME_FORMAT), maxLines = 1) },
+                            label = { Text(time.format(TIME_FORMAT), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         )
                     }
                     FilterChip(
@@ -209,7 +208,7 @@ fun ReminderSheet(core: WorkbenchCore, entry: Entry, onDismiss: () -> Unit) {
                             LocalTime.of(it.hour, it.minute) == anchor
                         },
                         onClick = { showAnchorPicker = true },
-                        label = { Text("Custom", maxLines = 1) },
+                        label = { Text("Custom", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     )
                 }
                 if (anchor == null) {

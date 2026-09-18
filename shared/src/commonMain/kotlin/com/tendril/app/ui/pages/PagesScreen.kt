@@ -8,6 +8,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.ui.components.TendrilDatePicker
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.theme.labelColours
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
@@ -55,7 +58,6 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -63,7 +65,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -114,6 +115,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.label
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
@@ -293,7 +295,7 @@ internal fun PagesHost(
                 }) { Text("Open") }
             },
             dismissButton = { TextButton(onClick = { showJournalDatePicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = state) }
+        ) { TendrilDatePicker(state = state) }
     }
 
     if (showNewSheet) {
@@ -375,7 +377,7 @@ internal fun LabelFilterRow(
                 FilterChip(
                     selected = selected,
                     onClick = { viewModel.toggleLabelFilter(label.id) },
-                    label = { Text(label.name, maxLines = 1) },
+                    label = { Text(label.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     colors = FilterChipDefaults.filterChipColors(
                         containerColor = colours.tint, labelColor = colours.hue, iconColor = colours.hue,
                         selectedContainerColor = colours.hue, selectedLabelColor = colours.onHue, selectedLeadingIconColor = colours.onHue,
@@ -474,12 +476,10 @@ private fun NewPageSheet(
     var title by remember { mutableStateOf("") }
     TendrilSheet(title = "New", onDismiss = onDismiss) {
         Column {
-            OutlinedTextField(
-                textStyle = MaterialTheme.typography.body,
+            TendrilField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Title") },
-                singleLine = true,
+                placeholder = "Title",
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             )
@@ -492,7 +492,7 @@ private fun NewPageSheet(
             NewOptionRow(Icons.Filled.Dashboard, "Canvas") { onCanvas(title) }
             if (templates.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Text("From template", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("From template", style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 templates.forEach { template ->
                     val icon = if (template.kind == PageKind.DATABASE) Icons.Filled.TableChart else Icons.Outlined.Description
                     NewOptionRow(icon, template.title) { onFromTemplate(template, title) }

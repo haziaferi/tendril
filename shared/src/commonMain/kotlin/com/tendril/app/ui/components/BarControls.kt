@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -37,7 +38,7 @@ fun BarMenuButton(label: String, open: Boolean, onClick: () -> Unit, modifier: M
             .padding(start = 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
     }
 }
@@ -52,7 +53,7 @@ fun BarPillButton(label: String, onClick: () -> Unit, modifier: Modifier = Modif
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.label, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

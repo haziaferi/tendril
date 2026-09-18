@@ -25,9 +25,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
 import com.tendril.app.ui.components.openVerb
@@ -250,7 +250,7 @@ private fun NodeTextDialog(title: String, initial: String, onDismiss: () -> Unit
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { OutlinedTextField(textStyle = MaterialTheme.typography.body, value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
+        text = { TendrilField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth()) },
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("OK") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

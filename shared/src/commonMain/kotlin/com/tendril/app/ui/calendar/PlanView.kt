@@ -115,7 +115,7 @@ internal fun PlanView(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    allDay.forEach { o -> AssistChip(onClick = { onEdit(o.entry) }, label = { Text(o.entry.title, maxLines = 1) }) }
+                    allDay.forEach { o -> AssistChip(onClick = { onEdit(o.entry) }, label = { Text(o.entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }) }
                 }
             }
             BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { gridBounds = it.boundsInRoot() }.verticalScroll(scroll)) {
@@ -239,7 +239,7 @@ internal fun PlanView(
                                     },
                             ) {
                                 Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(task.title, style = MaterialTheme.typography.label, maxLines = 1)
+                                    Text(task.title, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     task.estimate?.let { Text("  ${it.toMinutes()}m", style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                                 }
                             }

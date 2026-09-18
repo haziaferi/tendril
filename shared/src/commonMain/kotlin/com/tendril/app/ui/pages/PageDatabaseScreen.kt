@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -42,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.heightIn
+import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.nav.LocalDensityProfile
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.calendar.OccurrenceChip
@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -399,7 +400,7 @@ private fun TableBody(
             ) {
                 Box(modifier = Modifier.width(CELL_WIDTH).padding(horizontal = 12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickableRow { onOpenPage(tableRow.page.id) }) {
-                        Text(tableRow.page.title, style = MaterialTheme.typography.body, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        Text(tableRow.page.title, style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         BlockedChip(tableRow, viewModel)
                     }
                 }
@@ -559,13 +560,13 @@ private fun GalleryBody(rows: List<TableRow>, properties: List<Property>, covers
                     }
                     Column(modifier = Modifier.padding(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(row.page.title, style = MaterialTheme.typography.body, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                            Text(row.page.title, style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                             BlockedChip(row, viewModel)
                         }
                         properties.take(3).forEach { property ->
                             val value = viewModel.valueForCell(row, property.id)
                             if (!value.isNullOrBlank()) {
-                                Text("${property.name}: $value", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                Text("${property.name}: $value", style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -842,7 +843,7 @@ private fun PropertyHeaderCell(
             property.name,
             style = MaterialTheme.typography.label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.clickableRow { if (!viewOnly) showMenu = true },
         )
         TendrilMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -1166,7 +1167,7 @@ private fun BoundDateCell(entry: Entry?, viewModel: PageDatabaseViewModel, role:
                 }) { Text("OK") }
             },
             dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = state) }
+        ) { TendrilDatePicker(state = state) }
     }
 }
 
@@ -1219,7 +1220,7 @@ private fun UnboundCell(property: Property, row: TableRow, viewModel: PageDataba
                         }) { Text("OK") }
                     },
                     dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
-                ) { DatePicker(state = state) }
+                ) { TendrilDatePicker(state = state) }
             }
         }
         PropertyType.SELECT -> {

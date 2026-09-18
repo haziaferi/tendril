@@ -8,10 +8,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.components.LabelDot
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.theme.labelColours
@@ -44,7 +46,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -247,7 +248,7 @@ fun RoadMapScreen(
                     "→ mention   — related",
                     style = MaterialTheme.typography.label,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 8.dp),
                 )
             }
@@ -331,7 +332,7 @@ private fun FilterRow(
             "→ mention   — related",
             style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -387,7 +388,7 @@ private fun FocusBar(page: Page, depth: Int, onDepthChange: (Int) -> Unit, onCle
         Text(
             "Focused on \"${page.title}\"",
             style = MaterialTheme.typography.label,
-            maxLines = 1,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         (1..3).forEach { d ->
@@ -722,7 +723,7 @@ internal fun RoadMapNode(
             .semantics { contentDescription = if (onDoubleTap == null) "${page.title} — tap to focus, tap again to open" else "${page.title} — click to focus, click again to open here, double-click to open in the main pane" },
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
-            Text(page.title, style = MaterialTheme.typography.label, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(page.title, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -739,13 +740,11 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
 
     TendrilSheet(title = "All Pages", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
         Column {
-            OutlinedTextField(
-                textStyle = MaterialTheme.typography.body,
+            TendrilField(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                singleLine = true,
-                placeholder = { Text("Filter…") },
+                placeholder = "Filter…",
             )
             if (filtered.isEmpty()) {
                 EmptyState(icon = Icons.Outlined.Description, message = stringResource(Res.string.empty_pages_message), modifier = Modifier.fillMaxSize())
@@ -762,7 +761,7 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(page.title, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f), maxLines = 1)
+                            Text(page.title, style = MaterialTheme.typography.body, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             AssistChip(
                                 onClick = { onFocus(page.id) },
                                 label = { Text("Focus") },
@@ -814,13 +813,11 @@ private fun PagePickerSheet(title: String, viewModel: RoadMapViewModel, excludeP
                 Text(title, style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.clearPageSearch(); onDismiss() }) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
-            OutlinedTextField(
-                textStyle = MaterialTheme.typography.body,
+            TendrilField(
                 value = query,
                 onValueChange = { query = it; viewModel.searchPages(it, excludePageId) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                singleLine = true,
-                placeholder = { Text("Search pages…") },
+                placeholder = "Search pages…",
                 keyboardActions = KeyboardActions(onSearch = { viewModel.searchPages(query, excludePageId) }),
             )
             LazyColumn {

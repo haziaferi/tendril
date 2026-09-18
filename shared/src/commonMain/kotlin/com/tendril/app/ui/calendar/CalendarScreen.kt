@@ -5,6 +5,7 @@ package com.tendril.app.ui.calendar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,7 +54,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -701,13 +701,11 @@ private fun DayView(
         val parsed = remember(quickAddText, ignored, kindOverride) {
             QuickAddParser.parse(quickAddText, LocalDate.now(), EntryKind.EVENT, ignored, kindOverride)
         }
-        if (showQuickAdd) OutlinedTextField(
-            textStyle = MaterialTheme.typography.body,
+        if (showQuickAdd) TendrilField(
             value = quickAddText,
             onValueChange = { quickAddText = it; ignored = emptySet(); kindOverride = null },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            placeholder = { Text(stringResource(Res.string.calendar_quick_add_hint)) },
-            singleLine = true,
+            placeholder = stringResource(Res.string.calendar_quick_add_hint),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
                 onQuickAdd(parsed)

@@ -232,7 +232,7 @@ fun HoverPreviewCard(
                     Text(p.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.heading, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     // hover-preview-mock.md #1: text, so `onSurfaceVariant` (4.6+), never the faint token (2.8:1 on the mock).
-                    Text("edited " + relativeTime(p.editedAt), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    Text("edited " + relativeTime(p.editedAt), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (p.lines.isNotEmpty()) Spacer(Modifier.height(6.dp))
                 p.lines.forEach { line ->

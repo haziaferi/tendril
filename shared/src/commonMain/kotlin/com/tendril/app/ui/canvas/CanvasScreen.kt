@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.nav.ShellLayout
 import com.tendril.app.ui.nav.LocalShellLayout
 import com.tendril.app.ui.nav.LocalDensityProfile
@@ -57,7 +58,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -670,7 +670,7 @@ private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () ->
             // (so the full text of a card the board truncates at three lines is still legible)
             // and Save goes away, leaving one button that closes the sheet.
             Text(if (viewOnly) "Card" else "Edit card", style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp))
-            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth().focusRequester(focus), minLines = 3)
+            TendrilField(value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), focusRequester = focus, minLines = 3)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss) { Text(if (viewOnly) "Done" else "Cancel") }
@@ -691,13 +691,11 @@ private fun EdgeEditor(edge: CanvasEdge, viewOnly: Boolean, onDismiss: () -> Uni
             // §3.1.2 — the sheet is how an arrow's label is read at all (the board draws the
             // line, never the text), so the field stays and turns read-only. "Change" and
             // "Delete arrow" both write, so both go.
-            OutlinedTextField(
-                textStyle = MaterialTheme.typography.body,
+            TendrilField(
                 value = label,
                 onValueChange = { label = it; onSetLabel(it) },
                 readOnly = viewOnly,
-                label = { Text("Label (optional)") },
-                singleLine = true,
+                placeholder = "Label (optional)",
                 modifier = Modifier.fillMaxWidth(),
                 keyboardActions = KeyboardActions(onDone = { onDismiss() }),
             )
@@ -733,13 +731,11 @@ private fun CanvasPagePickerSheet(viewModel: CanvasViewModel, onDismiss: () -> U
                 Text("Add a page card", style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.clearPageSearch(); onDismiss() }) { Icon(Icons.Filled.Close, contentDescription = "Close") }
             }
-            OutlinedTextField(
-                textStyle = MaterialTheme.typography.body,
+            TendrilField(
                 value = query,
                 onValueChange = { query = it; viewModel.searchPages(it) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                singleLine = true,
-                placeholder = { Text("Search pages…") },
+                placeholder = "Search pages…",
             )
             LazyColumn {
                 items(results, key = { it.id }) { candidate ->

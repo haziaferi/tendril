@@ -36,7 +36,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.nav.TOP_BAR_HEIGHT
+import com.tendril.app.ui.nav.LocalTitleBar
+import com.tendril.app.ui.theme.pageTitle
 
 /**
  * B§13.4 14b — a sheet's frame on a wide window, as `docs/mockups/desktop-shell.html` draws it
@@ -81,16 +83,23 @@ internal fun SlideOver(
                         // The panel takes its own clicks, so none fall through to the scrim.
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {}),
                 ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    // PR B's walk (2026-09-18): since L5 the window's caption buttons are painted over the
+                    // top-right corner of *everything*, and a full-height panel at the right edge put its
+                    // own x (or a titleless sheet's first row) exactly under Windows' x. The panel keeps
+                    // its height; its content starts under the title bar's row where a handle exists.
+                    val underCaption = if (LocalTitleBar.current != null) TOP_BAR_HEIGHT else 0.dp
+                    Column(modifier = Modifier.fillMaxSize().padding(top = underCaption)) {
                         // A sheet that passes no title draws its own first row, close control
                         // included (History, the Trash sheets, Reminders) — no second header over it.
                         if (title != null) Row(
                             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
+                            Text( // type: BAR_TITLE — a slide-over's header is the panel's title bar
                                 title,
-                                style = MaterialTheme.typography.heading,
+                                // T5 (PR B, 2026-09-18 — `desktop-type-full.md` #5): a slide-over is a page-sized
+                                // surface, so its header is the page title's size; a card keeps `heading`.
+                                style = MaterialTheme.typography.pageTitle,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f).padding(vertical = 8.dp),
                             )

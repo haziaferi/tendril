@@ -41,6 +41,10 @@ Checks
                                (`MonthGrid`; the phone's dot grid beside it) with two homes, never a third
  17. radius family            `RoundedCornerShape(N.dp)` outside `ui/theme/` with N not in 2 · 4 · 6 · 8 ·
                                10 · 12 — the family Material's shapes carry too (`TendrilShapes`)
+ 18. material field           `OutlinedTextField(` / `TextField(` outside `ui/components/` — every text
+                               field is a `TendrilField` (36 dp under a pointer, 48 under Touch)
+ 19. clip                     a `maxLines = 1` whose call has no `overflow` — a one-line title clips
+                               without an ellipsis (`desktop-type-full.md` #4)
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -63,6 +67,27 @@ MONTH_GRID = re.compile(r"\bGridCells\.Fixed\(\s*7\s*\)")
 # The design layer (2026-09-18) — 4 · 6 · 8 · 10 · 12, plus 2 for a 4 dp stripe's ends; kept in step with `TendrilShapes` by hand.
 RADIUS = re.compile(r"\bRoundedCornerShape\(\s*(\d+(?:\.\d+)?)\.dp\s*\)")
 RADIUS_FAMILY = {"2", "4", "6", "8", "10", "12"}
+MATERIAL_FIELD = re.compile(r"\b(?:Outlined)?TextField\s*\(")
+MAX_LINES_ONE = re.compile(r"\bmaxLines = 1\b")
+
+
+def call_span(src: str, pos: int) -> tuple[int, int]:
+    """The innermost `(...)` around pos — the call a `maxLines = 1` argument belongs to."""
+    depth = 0; i = pos
+    while i >= 0:
+        if src[i] == ")": depth += 1
+        elif src[i] == "(":
+            if depth == 0: break
+            depth -= 1
+        i -= 1
+    depth = 0; j = pos
+    while j < len(src):
+        if src[j] == "(": depth += 1
+        elif src[j] == ")":
+            if depth == 0: break
+            depth -= 1
+        j += 1
+    return max(i, 0), j
 
 
 def rel(p: str) -> str:
@@ -433,10 +458,23 @@ def main() -> int:
             # L4 — one Month grid: a seven-column grid outside `ui/calendar/` is a second one.
             if MONTH_GRID.search(line) and "/ui/calendar/" not in r and not line.lstrip().startswith(("//", "*", "/*")):
                 rep.add("second month grid", f"{r}:{i}  {line.strip()[:90]}")
+            # PR B (L6b) — one text field; Material's 56 dp `OutlinedTextField` is a size louder than every row.
+            if MATERIAL_FIELD.search(line) and "/ui/components/" not in r and not line.lstrip().startswith(("//", "*", "/*", "import")):
+                rep.add("material field", f"{r}:{i}  {line.strip()[:90]}")
             # D7 — one radius family; Material's 28 dp came through every dialog until the shapes were set.
             for m in RADIUS.finditer(line):
                 if m.group(1) not in RADIUS_FAMILY and not line.lstrip().startswith(("//", "*", "/*")):
                     rep.add("radius family", f"{r}:{i}  {line.strip()[:90]}")
+
+    # PR B (T4) — a one-line text without an ellipsis clips: the call around each `maxLines = 1` must name `overflow`.
+    for f, src in srcs.items():
+        r = rel(f)
+        if "/ui/" not in r or TEST_PATH.search("/" + r):
+            continue
+        for m in MAX_LINES_ONE.finditer(src):
+            a, b = call_span(src, m.start())
+            if "overflow" not in src[a:b]:
+                rep.add("clip", f"{r}:{src.count(chr(10), 0, m.start()) + 1}  {src[m.start():m.start() + 60].splitlines()[0]}")
 
     # The audit's fixes — a text's class decides its style (`tools/type_sites.py`, `tools/type_table/table.json`).
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

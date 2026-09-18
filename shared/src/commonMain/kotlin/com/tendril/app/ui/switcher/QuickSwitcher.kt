@@ -32,7 +32,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -308,7 +307,7 @@ private fun CardRow(item: SwitcherItem, selected: Boolean, query: String, rowHei
                     }
                 }
                 if (item.meta != null) Text( // type: META — the page's age at the row's right
-                    item.meta, style = MaterialTheme.typography.description, color = meta, maxLines = 1)
+                    item.meta, style = MaterialTheme.typography.description, color = meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             is SwitcherItem.Cmd -> {
                 Icon(Icons.Outlined.KeyboardCommandKey, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
@@ -350,13 +349,13 @@ private fun SwitcherOverlay(
         Column(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
-                OutlinedTextField(
-                    textStyle = MaterialTheme.typography.body,
+                TendrilField(
                     value = text,
                     onValueChange = onText,
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus).onPreviewKeyEvent(keys),
-                    singleLine = true,
-                    placeholder = { Text("Search pages, or > for a command") },
+                    modifier = Modifier.fillMaxWidth(),
+                    focusRequester = focus,
+                    onPreviewKeyEvent = keys,
+                    placeholder = "Search pages, or > for a command",
                 )
             }
             if (items.isEmpty() && query.isNotBlank()) {

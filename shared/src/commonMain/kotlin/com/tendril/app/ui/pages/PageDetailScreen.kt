@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
+import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.theme.CALLOUT_COLORS
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.theme.calloutColours
@@ -73,7 +74,6 @@ import com.tendril.app.data.pagedatabase.parseRelationValue
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -1486,7 +1486,7 @@ private fun RowBoundDateEditor(entry: Entry?, viewModel: PageDetailViewModel, ro
                 }) { Text("OK") }
             },
             dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = state) }
+        ) { TendrilDatePicker(state = state) }
     }
 }
 
@@ -1552,7 +1552,7 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
                         }) { Text("OK") }
                     },
                     dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
-                ) { DatePicker(state = state) }
+                ) { TendrilDatePicker(state = state) }
             }
         }
         PropertyType.SELECT -> {
