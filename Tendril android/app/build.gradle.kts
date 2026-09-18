@@ -51,6 +51,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
+    // P11 (2026-09-18): Robolectric reads the merged manifest (the debug one declares the activity
+    // `createComposeRule()` launches) and the resources a composed screen needs.
+    testOptions { unitTests.isIncludeAndroidResources = true }
     buildFeatures {
         compose = true
     }
@@ -97,6 +100,13 @@ dependencies {
     // the framework's own SQLiteDatabase underneath — the one place a JVM fake cannot stand in,
     // because the failure it guards against lives inside android.database.sqlite itself.
     testImplementation("org.robolectric:robolectric:4.16.1")
+    // The phone's fix PR (P11, 2026-09-18): a Compose layout test under Robolectric — the one check
+    // that would have caught a Touch-only negative padding (`docs/critiques/phone-catch-up.md`).
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    // ui-test-junit4 asks for androidx.test 1.5.0, which is not in the offline cache; the 1.7.0 the
+    // on-device tests already use is, and Gradle takes the higher.
+    testImplementation("androidx.test:core:1.7.0")
+    testImplementation("androidx.test:runner:1.7.0")
     // On-device tests for the SAF write path — the one thing JVM unit tests can't reach,
     // since DocumentFile's behaviour is what SYNC-02 turns on.
     androidTestImplementation("androidx.test:runner:1.7.0")

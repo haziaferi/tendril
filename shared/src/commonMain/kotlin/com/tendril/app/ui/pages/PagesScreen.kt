@@ -349,9 +349,9 @@ internal fun ViewOnlyButton(actions: PagesActions, modifier: Modifier = Modifier
     }
 }
 
-/** The label filter chips, when there are labels; a horizontal row on the phone and in the tree alike. */
+/** The label filter chips, when there are labels; a horizontal row on the phone and in the tree alike. Public for the app's `PhoneLayoutTest` (P11). */
 @Composable
-internal fun LabelFilterRow(
+fun LabelFilterRow(
     viewModel: PagesViewModel,
     horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp,
     /** What the list below already pads at its top, so the visible gap under the chips is 12 dp too. */
@@ -535,7 +535,7 @@ private fun TrashSheet(core: WorkbenchCore, viewModel: PagesViewModel, onDismiss
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteForever by remember { mutableStateOf<List<Long>?>(null) }
 
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
         // A fraction of the current screen's height, not a flat dp figure — stays
         // proportionate from small phones to tablets rather than over/under-filling.
         Column {

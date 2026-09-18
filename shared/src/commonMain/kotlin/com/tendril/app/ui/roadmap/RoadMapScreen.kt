@@ -763,7 +763,7 @@ private fun AllPagesSheet(pages: List<Page>, onDismiss: () -> Unit, onOpenPage: 
         if (query.isBlank()) pages else pages.filter { it.title.contains(query, ignoreCase = true) }
     }
 
-    TendrilSheet(title = "All Pages", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
+    TendrilSheet(scrolls = false, title = "All Pages", onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.7f)) {
         Column {
             TendrilField(
                 value = query,
@@ -832,7 +832,7 @@ private fun PagePickerSheet(title: String, viewModel: RoadMapViewModel, excludeP
     var query by remember { mutableStateOf("") }
     val results by viewModel.pageSearchResults.collectAsState()
 
-    TendrilSheet(onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
+    TendrilSheet(scrolls = false, onDismiss = { viewModel.clearPageSearch(); onDismiss() }, modifier = Modifier.fillMaxHeight(0.6f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.heading, modifier = Modifier.weight(1f))

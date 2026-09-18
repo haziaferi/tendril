@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -43,16 +45,25 @@ import com.tendril.app.ui.theme.pageTitle
  * The 33 sites that open a sheet see one signature and never choose.
  *
  * `ModalBottomSheet` and [SlideOver] are deliberately called nowhere else — `grep` is the check.
+ *
+ * **The phone's fix PR (P2, 2026-09-18):** the frame **scrolls** — with the keyboard up a phone's
+ * sheet is squeezed and a plain column squashed its rows (the Add task sheet's chips measured
+ * 20 px under the *Has deadline* switch, `phone-catch-up.md`). A sheet whose content is itself a
+ * lazy list (History, the Trash sheets, the label sheet) passes [scrolls] `= false` and keeps the
+ * bounded height a `LazyColumn` needs; `tools/audit.py` rule 20 pairs the two — a `LazyColumn`
+ * inside a scrolling frame is a crash, a plain column inside a bounded one is the squash.
  */
 @Composable
 fun TendrilSheet(
     onDismiss: () -> Unit,
     title: String? = null,
     modifier: Modifier = Modifier,
+    /** False only when the content is a lazy list that owns its scroll (rule 20). */
+    scrolls: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (sheetFormFor(windowWidthDp().value) == SheetForm.SLIDE_OVER) {
-        SlideOver(onDismiss = onDismiss, title = title, content = content)
+        SlideOver(onDismiss = onDismiss, title = title, scrolls = scrolls, content = content)
         return
     }
     ModalBottomSheet(
@@ -62,6 +73,7 @@ fun TendrilSheet(
         Column(
             modifier = modifier
                 .fillMaxWidth()
+                .then(if (scrolls) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(horizontal = 20.dp)
                 .padding(bottom = sheetBottomRoom()),
         ) {

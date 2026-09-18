@@ -58,7 +58,7 @@ internal fun BindLabelSheet(
     var candidates by remember { mutableStateOf<List<Label>>(emptyList()) }
     LaunchedEffect(query) { candidates = search(query).filter { it.id != current?.id } }
 
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

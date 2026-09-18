@@ -19,6 +19,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntSize
+import com.tendril.app.ui.nav.DensityProfile
+import com.tendril.app.ui.nav.LocalDensityProfile
 
 /**
  * 14h·2 — a menu item that opens a second menu **beside** it: the item's own width to the right
@@ -27,6 +29,11 @@ import androidx.compose.ui.unit.IntSize
  * under the parent's rows instead (`urgency-ladder-function.md` #3, `shelf-function.md` #3).
  * Compose still flips it inside the window when the right edge is near. [content] gets `close`,
  * which shuts the submenu only — the caller shuts the parent, as it would for any item.
+ *
+ * **Under Touch (the phone's fix PR, P3, 2026-09-18)** the second menu opens **under its item**, not
+ * beside it: on a 360 dp window a 220 dp submenu has no side to go to and L11's flip put it over
+ * the parent's rows (`phone-catch-up.md` #3). Notion's phone sheet pushes a level for *Duplica ›*; so
+ * does this — [TendrilMenu] shows a back row and the levels in place of the parent's rows.
  */
 @Composable
 fun SubmenuItem(
@@ -43,12 +50,14 @@ fun SubmenuItem(
     // at the right — at the user's window *Show beside ▸* had opened on top of its own parent.
     val submenuWidthPx = with(density) { SUBMENU_WIDTH.toPx() }
     val flip = submenuSide(rightInWindow, submenuWidthPx, windowWidth.toFloat())
+    val level = LocalMenuLevel.current
+    val beside = LocalDensityProfile.current != DensityProfile.TOUCH || level == null
     Box {
         TendrilMenuItem(
             text = text,
             leadingIcon = leadingIcon,
             trailingIcon = { Icon(Icons.Filled.ArrowRight, contentDescription = null) },
-            onClick = { open = true },
+            onClick = { if (beside) open = true else { level!!.title = text; level.pushed = content } },
             modifier = Modifier.onSizeChanged { size = it }.onGloballyPositioned { rightInWindow = it.positionInWindow().x + it.size.width },
         )
         TendrilMenu(

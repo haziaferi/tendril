@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The phone's fix PR (P11, 2026-09-18): the activity `createComposeRule()` launches under
+     Robolectric (what `ui-test-manifest` declares — that artifact's 1.12.0 is not in the offline
+     cache). Debug only; nothing in the app starts it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    </application>
+</manifest>

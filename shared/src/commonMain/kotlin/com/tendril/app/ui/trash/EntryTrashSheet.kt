@@ -65,7 +65,7 @@ fun EntryTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
         scope.launch { ids.forEach { core.resolveEntryUseCase.restore(it) } }
     }
 
-    TendrilSheet(onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
+    TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {
         // Same proportional height as the Page/Row Trash rather than a flat dp figure.
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
