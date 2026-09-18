@@ -5,7 +5,23 @@ package com.tendril.app.ui.canvas
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import com.tendril.app.ui.nav.ShellLayout
+import com.tendril.app.ui.nav.LocalShellLayout
+import com.tendril.app.ui.nav.LocalDensityProfile
+import com.tendril.app.ui.components.openVerb
+import com.tendril.app.domain.canvas.fitToCards
+import com.tendril.app.domain.canvas.contentAtPaneCentre
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.outlined.FitScreen
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -49,6 +65,7 @@ import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.PaneChrome
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -58,10 +75,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -127,11 +151,45 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
     var scale by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     val density = LocalDensity.current.density
+    // L9 + L10 (2026-09-17) — under a pointer on a wide window the verbs live in the bar (*Fit*, *+*),
+    // a double-click on the ground makes a text card where it landed, a click selects a card (its
+    // badges then stay; the ring), a new card from the menu lands at the visible centre. The phone
+    // keeps its FAB, its always-on badges and its tap-to-open.
+    val wide = LocalShellLayout.current == ShellLayout.RAIL
+    val pointer = LocalDensityProfile.current.pointer
+    var paneSize by remember { mutableStateOf(IntSize.Zero) }
+    var selectedNodeId by remember { mutableStateOf<Long?>(null) }
+    // A card made by a double-click: its editor opens as soon as it exists, and it is discarded if
+    // that editor closes with nothing typed (a stray double-click leaves no card — the scoring's rule).
+    var pendingNewNodeId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(nodes, pendingNewNodeId) {
+        val id = pendingNewNodeId ?: return@LaunchedEffect
+        nodes.firstOrNull { it.id == id }?.let { if (editingNode?.id != id) editingNode = it }
+    }
+    fun newCardOrigin(): Pair<Float, Float> = contentAtPaneCentre(paneSize.width.toFloat(), paneSize.height.toFloat(), scale, pan.x, pan.y, density, NODE_W, NODE_H)
+    fun fit() {
+        val f = fitToCards(nodes.map { it.x to it.y }, NODE_W, NODE_H, paneSize.width.toFloat(), paneSize.height.toFloat(), density)
+        scale = f.scale.coerceIn(MIN_SCALE, MAX_SCALE); pan = Offset(f.panX, f.panY)
+    }
+    val addMenu: @Composable () -> Unit = {
+        TendrilMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
+            TendrilMenuItem(text = { Text("Text card") }, onClick = {
+                showAddMenu = false
+                val (x, y) = newCardOrigin()
+                viewModel.addTextNode(x, y)
+            })
+            TendrilMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
+        }
+    }
 
     // screen_px = (content_dp * density) * scale + pan, so a screen point inverts back to
     // content-dp via ((screen_px - pan) / scale) / density — used to drop a new card near
     // wherever the view currently looks centered, regardless of current pan/zoom.
     fun screenToContent(screen: Offset): Offset = ((screen - pan) / scale) / density
+    fun addAtDoubleTap(tap: Offset) {
+        val c = screenToContent(tap)
+        viewModel.addTextNode(c.x - NODE_W / 2f, c.y - NODE_H / 2f) { pendingNewNodeId = it }
+    }
 
     Scaffold(
         topBar = {
@@ -148,6 +206,13 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                 },
                 navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } else paneChrome?.leading?.invoke() },
                 actions = {
+                    if (wide) {
+                        IconButton(onClick = { fit() }, enabled = nodes.isNotEmpty()) { Icon(Icons.Outlined.FitScreen, contentDescription = "Fit every card") }
+                        if (!viewOnly) Box {
+                            IconButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "New card") }
+                            addMenu()
+                        }
+                    }
                     // The canvas has no menu of its own; as a pane it gains the workspace's (View-Only, Trash…).
                     if (paneChrome != null) {
                         var showPaneMenu by remember { mutableStateOf(false) }
@@ -163,31 +228,34 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
         floatingActionButton = {
             // Hidden rather than disabled while View-Only is on, matching the Pages hub's own
             // create FAB (§3.1.2) — there is nothing else on this control, so a greyed-out one
-            // would only advertise an action the lock has already refused.
-            if (!viewOnly) {
+            // would only advertise an action the lock has already refused. The phone's: on a
+            // wide window the verb is the bar's + (L9).
+            if (!viewOnly && !wide) {
                 Box {
                     FloatingActionButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "Add card") }
-                    TendrilMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                        TendrilMenuItem(text = { Text("Text card") }, onClick = {
-                            showAddMenu = false
-                            val center = screenToContent(Offset(200f, 200f))
-                            viewModel.addTextNode(center.x, center.y)
-                        })
-                        TendrilMenuItem(text = { Text("Page card") }, onClick = { showAddMenu = false; showPagePicker = true })
-                    }
+                    addMenu()
                 }
             }
         },
     ) { innerPadding ->
         if (nodes.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).onSizeChanged { paneSize = it }
+                    .pointerInput(wide, viewOnly) { if (wide && !viewOnly) detectTapGestures(onDoubleTap = { addAtDoubleTap(it) }) },
+            ) {
             EmptyState(
                 icon = Icons.Outlined.Description,
                 // The prompt half drops under View-Only, the same way the Pages hub drops its
                 // empty-state CTA: the add control is gone, so inviting the tap would be an
                 // instruction to use something that is no longer there.
-                message = if (viewOnly) "Nothing on this canvas yet" else "Nothing on this canvas yet — add a text or page card",
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                message = when {
+                    viewOnly -> "Nothing on this canvas yet"
+                    wide && pointer -> "Nothing on this canvas yet — double-click the ground for a text card, or + for a page card"
+                    else -> "Nothing on this canvas yet — add a text or page card"
+                },
+                modifier = Modifier.fillMaxSize(),
             )
+            }
         } else {
             CanvasBoard(
                 nodes = nodes,
@@ -199,13 +267,19 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
                 onPanChange = { pan = it },
                 onMoveNode = { node, x, y -> viewModel.moveNode(node, x, y) },
                 onTapNode = { node ->
-                    if (node.type == CanvasNodeType.TEXT) editingNode = node
+                    // Under a pointer a first click selects, a second opens (Obsidian's); the phone opens at once.
+                    if (pointer && selectedNodeId != node.id) selectedNodeId = node.id
+                    else if (node.type == CanvasNodeType.TEXT) editingNode = node
                     else node.embeddedPageId?.let(onOpenPage)
                 },
-                onDeleteNode = { viewModel.deleteNode(it) },
+                onDeleteNode = { viewModel.deleteNode(it); if (selectedNodeId == it.id) selectedNodeId = null },
                 onConnect = { from, to -> viewModel.addEdge(from.id, to.id) },
                 onTapEdge = { editingEdge = it },
                 viewOnly = viewOnly,
+                selectedNodeId = selectedNodeId,
+                onGroundTap = { selectedNodeId = null },
+                onGroundDoubleTap = if (wide && !viewOnly) ::addAtDoubleTap else null,
+                onPaneSize = { paneSize = it },
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
             )
         }
@@ -216,7 +290,16 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
     // so refusing to open them would hide content rather than protect it. What they lose is
     // every control that writes — see each one's own note.
     editingNode?.let { node ->
-        TextNodeEditor(node = node, viewOnly = viewOnly, onDismiss = { editingNode = null }, onSave = { text -> viewModel.setNodeText(node, text); editingNode = null })
+        // The discard rule: a double-click's card whose editor closes with nothing typed is deleted.
+        fun closeEditor(text: String?) {
+            if (node.id == pendingNewNodeId) {
+                pendingNewNodeId = null
+                if (text.isNullOrBlank() && node.text.isNullOrBlank()) { viewModel.deleteNode(node); editingNode = null; return }
+            }
+            if (text != null) viewModel.setNodeText(node, text)
+            editingNode = null
+        }
+        TextNodeEditor(node = node, viewOnly = viewOnly, onDismiss = { closeEditor(null) }, onSave = { closeEditor(it) })
     }
 
     editingEdge?.let { edge ->
@@ -238,8 +321,8 @@ fun CanvasScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?, onOpe
             viewModel = viewModel,
             onDismiss = { showPagePicker = false },
             onPick = { target ->
-                val center = screenToContent(Offset(200f, 200f))
-                viewModel.addPageEmbedNode(center.x, center.y, target)
+                val (x, y) = newCardOrigin()
+                viewModel.addPageEmbedNode(x, y, target)
                 showPagePicker = false
             },
         )
@@ -263,6 +346,11 @@ private fun CanvasBoard(
     /** §3.1.2 — pan, zoom, tapping a card open and tapping an arrow to read its label all stay
      * live; only the four things that write (move, delete, connect, edit) come off the board. */
     viewOnly: Boolean,
+    selectedNodeId: Long? = null,
+    onGroundTap: () -> Unit = {},
+    /** L10 — a double-click on the ground (screen px in the board) makes a text card there; null on the phone and under the lock. */
+    onGroundDoubleTap: ((Offset) -> Unit)? = null,
+    onPaneSize: (IntSize) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -270,15 +358,34 @@ private fun CanvasBoard(
     val draftInk = MaterialTheme.colorScheme.primary
     var linkDrag by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
     var nodeMenuFor by remember { mutableStateOf<CanvasNode?>(null) }
+    // L10 — the board takes focus when a card is selected, so Delete / Backspace reach it and
+    // open the same dialog the badge opens (the desktop's key for a selection; the lock still
+    // gates the dialog below). A finger never selects, so the phone never focuses the board.
+    val boardFocus = remember { FocusRequester() }
+    LaunchedEffect(selectedNodeId) { if (selectedNodeId != null) boardFocus.requestFocus() }
 
     Box(
         modifier = modifier
             .background(MaterialTheme.colorScheme.background)
+            .onSizeChanged(onPaneSize)
+            .focusRequester(boardFocus)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                val selected = selectedNodeId?.let { id -> nodes.firstOrNull { it.id == id } }
+                if (event.type == KeyEventType.KeyDown && (event.key == Key.Delete || event.key == Key.Backspace) && selected != null && !viewOnly) {
+                    nodeMenuFor = selected; true
+                } else false
+            }
             .pointerInput(Unit) {
                 detectTransformGestures { _, panDelta, zoom, _ ->
                     onScaleChange((scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE))
                     onPanChange(pan + panDelta)
                 }
+            }
+            // A second detector on the ground for taps only: a tap clears the selection, a double
+            // tap makes a card (L10). The cards consume their own downs, so neither reaches them.
+            .pointerInput(onGroundDoubleTap) {
+                detectTapGestures(onTap = { onGroundTap() }, onDoubleTap = onGroundDoubleTap)
             },
     ) {
         Box(
@@ -315,6 +422,7 @@ private fun CanvasBoard(
                         onTap = { onTapNode(node) },
                         onDeleteRequest = { nodeMenuFor = node },
                         viewOnly = viewOnly,
+                        selected = node.id == selectedNodeId,
                         onLinkDragStart = { linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + NODE_H / 2) * density.density) },
                         onLinkDrag = { pointerInParent -> linkDrag = linkDrag?.let { (n, _) -> n to pointerInParent } },
                         onLinkDragEnd = { pointerInParent ->
@@ -422,13 +530,22 @@ private fun CanvasNodeCard(
     onLinkDrag: (Offset) -> Unit,
     onLinkDragEnd: (Offset) -> Unit,
     viewOnly: Boolean,
+    selected: Boolean = false,
 ) {
+    // L10 — under a pointer the badges show on hover or on the selected card (14d's rule for row
+    // controls); their row stays laid out so the text never moves. The phone shows them always.
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val pointer = LocalDensityProfile.current.pointer
+    val badgesAlpha = if (!pointer || hovered || selected) 1f else 0f
     Surface(
         color = if (node.type == CanvasNodeType.PAGE_EMBED) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(8.dp),
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = Modifier
             .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
             .size((NODE_W).dp, (NODE_H).dp)
+            .hoverable(interaction)
             // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
             // same lambda until a key changes, so a board already on screen when the eye toggle
             // is flipped would otherwise go on dragging against the value captured at first
@@ -474,12 +591,12 @@ private fun CanvasNodeCard(
             // so both come off the card entirely while View-Only is on rather than sitting there
             // greyed out. The row itself goes with them: with nothing left to reserve space for,
             // an empty strip would only push the card's own text down for no reason.
-            if (!viewOnly) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            if (!viewOnly) Row(modifier = Modifier.fillMaxWidth().alpha(badgesAlpha), horizontalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
                         .background(MaterialTheme.colorScheme.errorContainer, CircleShape)
-                        .clickable(onClick = onDeleteRequest),
+                        .clickable(enabled = badgesAlpha > 0f, onClick = onDeleteRequest),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Delete card", tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(3.dp))
@@ -516,11 +633,13 @@ private fun CanvasNodeCard(
 
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)) {
                 when (node.type) {
-                    CanvasNodeType.TEXT -> Text(
-                        node.text.orEmpty().ifBlank { "Empty card — tap to edit" },
+                    // The caption's verb by the profile (14h·2's `openVerb`); `onSurface` on the card's tint
+                    // (`onSurfaceVariant` measured 3.45 : 1 there — `canvas-cards-mock.md` #1).
+                    CanvasNodeType.TEXT -> Text( // type: PREVIEW_LINE — a card shows at most three lines of its text; the editor holds the rest
+                        node.text.orEmpty().ifBlank { "Empty card — ${openVerb()}" },
                         style = MaterialTheme.typography.description,
                         maxLines = 3,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     CanvasNodeType.PAGE_EMBED -> Column {
                         Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -541,13 +660,17 @@ private fun CanvasNodeCard(
 @Composable
 private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember(node.id) { mutableStateOf(node.text.orEmpty()) }
+    // L10 — the field takes focus as the editor opens: a double-click's card is typed into at once
+    // (Obsidian's), and a card left blank is discarded by the caller's rule.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(node.id) { runCatching { focus.requestFocus() } }
     TendrilSheet(onDismiss = onDismiss) {
         Column {
             // §3.1.2 — a reader, not an editor, while the lock is on: the field goes read-only
             // (so the full text of a card the board truncates at three lines is still legible)
             // and Save goes away, leaving one button that closes the sheet.
             Text(if (viewOnly) "Card" else "Edit card", style = MaterialTheme.typography.heading, modifier = Modifier.padding(bottom = 12.dp))
-            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            OutlinedTextField(textStyle = MaterialTheme.typography.body, value = text, onValueChange = { text = it }, readOnly = viewOnly, modifier = Modifier.fillMaxWidth().focusRequester(focus), minLines = 3)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss) { Text(if (viewOnly) "Done" else "Cancel") }

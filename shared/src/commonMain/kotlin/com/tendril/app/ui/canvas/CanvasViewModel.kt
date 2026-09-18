@@ -142,13 +142,15 @@ class CanvasViewModel(
         }
     }
 
-    fun addTextNode(x: Float, y: Float) {
+    /** [onInserted] receives the new card's id — L10's double-click opens its editor at once. */
+    fun addTextNode(x: Float, y: Float, onInserted: (Long) -> Unit = {}) {
         val canvasId = canvas.value?.id ?: return
         launchAndTouch {
             val now = Instant.now()
-            canvasNodeDao.insert(
+            val id = canvasNodeDao.insert(
                 CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = x, y = y, text = "", createdAt = now, updatedAt = now)
             )
+            onInserted(id)
         }
     }
 

@@ -42,8 +42,6 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import com.tendril.app.ui.nav.LocalTitleBarInstaller
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import androidx.navigationevent.NavigationEventInput
-import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.nav.PageRoute
@@ -64,29 +62,17 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.runBlocking
 import java.awt.Dimension
 
-/**
- * tendril-spec.md §0.10 item 10 — the desktop half of Back, one per window. Compose
- * Multiplatform's `BackHandler` registers on the `NavigationEventDispatcher` the skiko window
- * provides, but nothing on desktop ever *feeds* that dispatcher: Android has the system gesture,
- * desktop has no equivalent, so an armed map ignored Escape. This is the missing input — one
- * key, one completed back event — and nothing else: the handlers that decide what Back means
- * stay in shared code, where Android's already are.
- */
-internal class EscapeBackInput : NavigationEventInput() {
-    fun back() = dispatchOnBackCompleted()
-}
 
 /**
  * B§13.6 #6 — one page in its own OS window (decided 2026-09-16 on `docs/mockups/pop-out.html`,
  * `docs/critiques/pop-out-mock.md`): the same `PageRoute` as the main pane, its own back stack
- * (a link pushes, Escape pops and **stops at the seed**), its own `EscapeBackInput`, its own
+ * (a link pushes, Escape pops and **stops at the seed**), its own
  * ViewModel store (cleared on close), the theme, and **the main window's scale**. The page stays
  * open in the main window. Keys: Escape · Ctrl+F · Ctrl+W · Alt+← / Alt+→; everything else is
  * the main window's.
  */
 internal class PopOut(val pageId: Long) {
     val nav = WorkbenchNavState().apply { openPage(pageId) }
-    val escapeBack = EscapeBackInput()
     val storeOwner = DesktopViewModelStoreOwner()
     /** Set by the window once it has one, so `open` on an already-open page can front it. */
     var front: () -> Unit = {}
@@ -162,7 +148,7 @@ internal fun PopOutWindows(core: WorkbenchCore, popOuts: PopOuts, registry: PopO
                 title = "$title — Tendril",
                 icon = painterResource("tendril_icon.png"),
                 onPreviewKeyEvent = { event ->
-                    if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) p.escapeBack.back()
+                    // Escape is the runtime's own back dispatch (see Main.kt) — nothing to do here.
                     if (event.type == KeyEventType.KeyDown) {
                         if (event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed && event.key == Key.W) { popOuts.close(p.pageId); return@Window true }
                         when (shortcutFor(event.key, event.isCtrlPressed, event.isShiftPressed, event.isAltPressed)) {
@@ -202,11 +188,6 @@ internal fun PopOutWindows(core: WorkbenchCore, popOuts: PopOuts, registry: PopO
 
 @Composable
 private fun PopOutContent(core: WorkbenchCore, p: PopOut, popOuts: PopOuts, main: MainWindowActions, mainShorterSideDp: Float, kind: PageKind?) {
-    val backOwner = LocalNavigationEventDispatcherOwner.current
-    DisposableEffect(backOwner) {
-        backOwner?.navigationEventDispatcher?.addInput(p.escapeBack)
-        onDispose { backOwner?.navigationEventDispatcher?.removeInput(p.escapeBack) }
-    }
     CompositionLocalProvider(LocalViewModelStoreOwner provides p.storeOwner) {
         WorkbenchEnvironment(core, shorterSideDp = mainShorterSideDp, wide = true) {
             Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {

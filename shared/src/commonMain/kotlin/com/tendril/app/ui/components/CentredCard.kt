@@ -43,7 +43,7 @@ fun CentredCard(
     cardMaxWidth: Dp = 560.dp,
     content: @Composable (windowWidth: Dp) -> Unit,
 ) {
-    Popup(properties = PopupProperties(focusable = true), onDismissRequest = onDismiss) {
+    Popup(properties = PopupProperties(focusable = true, dismissOnBackPress = false), onDismissRequest = onDismiss) {
         BackHandler(enabled = true, onBack = onDismiss)
         BoxWithConstraints(
             modifier = Modifier

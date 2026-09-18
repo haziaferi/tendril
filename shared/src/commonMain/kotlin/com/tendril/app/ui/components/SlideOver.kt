@@ -56,7 +56,7 @@ internal fun SlideOver(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shown = remember { MutableTransitionState(false).apply { targetState = true } }
-    Popup(properties = PopupProperties(focusable = true), onDismissRequest = onDismiss) {
+    Popup(properties = PopupProperties(focusable = true, dismissOnBackPress = false), onDismissRequest = onDismiss) {
         BackHandler(enabled = true, onBack = onDismiss)
         Box(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(visibleState = shown, enter = fadeIn()) {
