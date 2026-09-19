@@ -7,6 +7,8 @@ import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.data.checkin.CheckIn
+import com.tendril.app.data.checkin.CheckInDao
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
@@ -338,4 +340,33 @@ class FakeAiKeyStore(initial: String? = null) : com.tendril.app.data.prefs.AiKey
     private val _key = kotlinx.coroutines.flow.MutableStateFlow(initial)
     override val key: kotlinx.coroutines.flow.StateFlow<String?> = _key
     override fun set(value: String?) { _key.value = value?.trim()?.takeIf { it.isNotEmpty() } }
+}
+
+class FakeCheckInDao(seed: List<CheckIn> = emptyList()) : CheckInDao {
+    private val rows = linkedMapOf<Long, CheckIn>()
+    private var nextId = 1L
+
+    init { seed.forEach { rows[it.id] = it; nextId = maxOf(nextId, it.id + 1) } }
+
+    override suspend fun insert(checkIn: CheckIn): Long {
+        val id = nextId++
+        rows[id] = checkIn.copy(id = id)
+        return id
+    }
+
+    override fun observeForDay(date: LocalDate): Flow<List<CheckIn>> =
+        flowOf(rows.values.filter { it.date == date && it.deletedAt == null }.sortedBy { it.at })
+
+    override fun observeBetween(from: LocalDate, to: LocalDate): Flow<List<CheckIn>> =
+        flowOf(rows.values.filter { !it.date.isBefore(from) && !it.date.isAfter(to) && it.deletedAt == null }.sortedBy { it.at })
+
+    override suspend fun getAll(): List<CheckIn> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): CheckIn? = rows.values.firstOrNull { it.uid == uid }
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt) }
+    }
+
+    override suspend fun deleteAll() { rows.clear() }
 }

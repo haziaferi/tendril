@@ -10,6 +10,7 @@ import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.enumOrNull
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
+import com.tendril.app.data.checkin.CheckIn
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.habit.HabitFrequency
 import com.tendril.app.data.reminder.Reminder
@@ -311,6 +312,25 @@ fun HabitCompletionSnapshotRecord.toEntity(habitId: Long): HabitCompletion = Hab
     date = runCatching { LocalDate.parse(date) }.getOrElse { undecodable("habit completion date", date) },
     checkedAt = Instant.ofEpochMilli(checkedAt),
     value = value,
+    deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+)
+
+fun CheckIn.toSnapshot(): CheckInSnapshotRecord = CheckInSnapshotRecord(
+    uid = uid,
+    date = date.toString(),
+    at = at.toEpochMilli(),
+    mood = mood,
+    energy = energy,
+    deletedAt = deletedAt?.toEpochMilli(),
+)
+
+/** Throws [SnapshotDecodeException] on a date this build cannot parse. */
+fun CheckInSnapshotRecord.toEntity(): CheckIn = CheckIn(
+    uid = uid,
+    date = runCatching { LocalDate.parse(date) }.getOrElse { undecodable("check-in date", date) },
+    at = Instant.ofEpochMilli(at),
+    mood = mood,
+    energy = energy,
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
 )
 

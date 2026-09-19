@@ -43,6 +43,7 @@ class SyncMetaSaltTest {
         reminderDao = mockk(relaxed = true),
         entryCompletionDao = mockk(relaxed = true),
         habitCompletionDao = FakeHabitCompletionDao(),
+        checkInDao = FakeCheckInDao(),
         timeLogDao = FakeTimeLogDao(),
         localImages = InMemoryLocalImageStore(),
     )

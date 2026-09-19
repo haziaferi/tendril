@@ -48,6 +48,10 @@ import com.tendril.app.domain.references.linkMention
 import com.tendril.app.domain.references.unlinkedMentions
 import com.tendril.app.domain.journal.JournalToday
 import com.tendril.app.domain.journal.journalDayOf
+import com.tendril.app.data.checkin.CheckIn
+import com.tendril.app.data.checkin.CheckInDao
+import com.tendril.app.domain.checkin.checkInOffered
+import java.time.YearMonth
 import com.tendril.app.domain.journal.todayHabits
 import com.tendril.app.domain.journal.todayTasks
 import com.tendril.app.domain.track.minuteTicker
@@ -97,6 +101,7 @@ class PageDetailViewModel(
     private val pageHistory: PageHistory,
     private val aiKeyStore: AiKeyStore,
     private val keyValueStore: KeyValueStore,
+    private val checkInDao: CheckInDao,
 ) : ViewModel() {
     /** §3.1.2 — "every page under Pages becomes read-only as a group... no per-page exception."
      * Every mutating function below early-returns through this guard rather than relying on the
@@ -128,6 +133,34 @@ class PageDetailViewModel(
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** §0.10 item 4 — the Journal day this page is, null on every other page; the check-in row's
+     * home (any day that has happened, not only today — the strip's rule is its own). */
+    val journalDay: StateFlow<LocalDate?> =
+        page.filterNotNull().map { journalDayOf(it, pageDao.findRootByTitle("Journal")) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The day's live check-ins, in tap order. Empty on a non-Journal page and on a future day. */
+    val checkIns: StateFlow<List<CheckIn>> =
+        journalDay.flatMapLatest { day ->
+            if (day == null || !checkInOffered(day, LocalDate.now())) flowOf(emptyList()) else checkInDao.observeForDay(day)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The sheet's month — the live rows between its first and last day. */
+    fun checkInsIn(month: YearMonth): Flow<List<CheckIn>> = checkInDao.observeBetween(month.atDay(1), month.atEndOfMonth())
+
+    /** One tap: a row with one scale set, stamped now, dated the page's day. Not behind
+     * [contentLocked] for the strip's reason — a note about the person, not the page's text. */
+    fun checkIn(mood: Int? = null, energy: Int? = null) {
+        val day = journalDay.value ?: return
+        if (!checkInOffered(day, LocalDate.now())) return
+        viewModelScope.launch { checkInDao.insert(CheckIn(date = day, at = Instant.now(), mood = mood, energy = energy)) }
+    }
+
+    /** A tap on the chosen chip again: the row is tombstoned, never edited (see [CheckIn]). */
+    fun undoCheckIn(id: Long) {
+        viewModelScope.launch { checkInDao.softDelete(id, Instant.now()) }
+    }
 
     /** The strip's boxes. Not behind [contentLocked]: these are task and habit writes, which
      * View-Only (§3.1.2, "pages become read-only") never covered — the Tasks tab ticks under

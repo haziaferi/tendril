@@ -146,6 +146,18 @@ data class HabitCompletionSnapshotRecord(
     val deletedAt: Long? = null,
 )
 
+/** §0.10 item 4 / v22 — one check-in, travelling as [com.tendril.app.data.checkin.CheckIn] does
+ * locally: no owner, a tombstone and no `updatedAt` — a row is inserted once and tombstoned once. */
+@Serializable
+data class CheckInSnapshotRecord(
+    val uid: String,
+    val date: String,
+    val at: Long,
+    val mood: Int? = null,
+    val energy: Int? = null,
+    val deletedAt: Long? = null,
+)
+
 /**
  * §0.6.5 / v14 — one stretch of tracked time, travelling as [com.tendril.app.data.track.TimeLog]
  * does locally: the owner by uid (one of the two, never both), a tombstone *and* an `updatedAt`,

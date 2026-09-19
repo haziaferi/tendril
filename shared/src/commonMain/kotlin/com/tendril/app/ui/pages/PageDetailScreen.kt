@@ -166,6 +166,7 @@ import com.tendril.app.ui.components.toDatePickerMillis
 import java.time.LocalDate
 import com.tendril.app.domain.BindingRole
 import com.tendril.app.ui.theme.body
+import com.tendril.app.domain.checkin.checkInOffered
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.label
@@ -216,6 +217,7 @@ fun PageDetailScreen(
                     core.pageHistory,
                     core.aiKeyStore,
                     core.keyValueStore,
+                    core.database.checkInDao(),
                 )
             }
         }
@@ -290,6 +292,9 @@ fun PageDetailScreen(
     val backlinks by viewModel.backlinks.collectAsState()
     val unlinkedMentions by viewModel.unlinkedMentions.collectAsState()
     val journalToday by viewModel.journalToday.collectAsState()
+    val journalDay by viewModel.journalDay.collectAsState()
+    val checkIns by viewModel.checkIns.collectAsState()
+    var checkInSheetOpen by remember { mutableStateOf(false) }
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var blockActionSheetFor by remember { mutableStateOf<Block?>(null) }
     // §0.6.2 / B§9.6 — the armed map: the block whose subtree fills the viewport, or null.
@@ -470,6 +475,10 @@ fun PageDetailScreen(
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().clickable(interactionSource = groundInteraction, indication = null) { focusManager.clearFocus() }) {
                 // §3.1.4 (amended, step 8b) — today's Journal page opens with the day: its tasks
                 // and due habits, checkable, above everything else. Null on every other page.
+                // §0.10 item 4 — the check-in row on any Journal day that has happened, above the strip.
+                journalDay?.takeIf { checkInOffered(it, LocalDate.now()) }?.let { day ->
+                    checkInItems(day, checkIns, viewModel, onOpenSheet = { checkInSheetOpen = true })
+                }
                 journalToday?.let { (date, today) -> journalTodayItems(today, date, viewModel) }
                 // §5.1 Row-as-page — a Database row shows its property values as a compact
                 // strip above the same free-form Block body every other Page has. §0.6.8 — one
@@ -647,6 +656,9 @@ fun PageDetailScreen(
 
     if (showHistory) {
         HistorySheet(viewModel = viewModel, contentLocked = contentLocked, onDismiss = { showHistory = false })
+    }
+    if (checkInSheetOpen) {
+        journalDay?.let { day -> CheckInSheet(viewModel = viewModel, day = day, onDismiss = { checkInSheetOpen = false }) }
     }
 
     blockReferenceAfter?.let { after ->
