@@ -97,7 +97,17 @@ fun shortcutRows(quickAddChordLabel: String = QuickAddChord.DEFAULT.label): List
         ShortcutRow("Jump to a row by its first letters", listOf("type")),
         ShortcutRow("Clear the cursor", listOf("Esc")),
     )
-    return listOf(ShortcutGroup.NAVIGATE to navigate, ShortcutGroup.CREATE to create, ShortcutGroup.FIND to find, ShortcutGroup.LISTS to lists)
+    // §0.10 item 19 — the editor's keys are static rows too: they are the page's, active only
+    // with a field or a block selection, never chords in the table.
+    val editor = listOf(
+        ShortcutRow("Select the block · clear the selection", listOf("Esc")),
+        ShortcutRow("Extend the selection", listOf("Shift+↑", "Shift+↓")),
+        ShortcutRow("Select every block (the first press selects the text)", listOf("Ctrl+A", "Ctrl+A")),
+        ShortcutRow("Delete the selection", listOf("Delete")),
+        ShortcutRow("Copy · cut · paste · duplicate blocks", listOf("Ctrl+C", "Ctrl+X", "Ctrl+V", "Ctrl+D")),
+        ShortcutRow("Undo · redo a block operation", listOf("Ctrl+Z", "Ctrl+Y")),
+    )
+    return listOf(ShortcutGroup.NAVIGATE to navigate, ShortcutGroup.CREATE to create, ShortcutGroup.FIND to find, ShortcutGroup.LISTS to lists, ShortcutGroup.EDITOR to editor)
 }
 
 @Composable

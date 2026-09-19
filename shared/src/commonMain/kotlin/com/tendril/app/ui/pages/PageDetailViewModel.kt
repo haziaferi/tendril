@@ -42,6 +42,12 @@ import com.tendril.app.domain.ai.AiVerb
 import com.tendril.app.domain.ai.ClaudeClient
 import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.indentTargetFor
+import com.tendril.app.domain.outlineOf
+import com.tendril.app.domain.blocks.BlockEdit
+import com.tendril.app.domain.blocks.BlockUndoStack
+import com.tendril.app.domain.blocks.planApply
+import com.tendril.app.domain.blocks.withSubtrees
+import com.tendril.app.markdown.MarkdownWriter
 import com.tendril.app.domain.references.MIN_UNLINKED_TITLE_LENGTH
 import com.tendril.app.domain.references.UnlinkedMention
 import com.tendril.app.domain.references.linkMention
@@ -537,9 +543,7 @@ class PageDetailViewModel(
         blockDao.update(block.copy(toggleExpanded = expanded, updatedAt = Instant.now()))
     }
 
-    fun changeType(block: Block, newType: BlockType) = launchAndReindex {
-        blockDao.update(block.copy(type = newType, updatedAt = Instant.now()))
-    }
+    fun changeType(block: Block, newType: BlockType) = changeTypes(setOf(block.id), newType)
 
     /** CODE only (P1). `null` means "plain text" — the same value the Notion importer
      * stores for a fence with no language tag (`NotionMarkdownParser`'s `.ifBlank { null }`). */
@@ -567,18 +571,16 @@ class PageDetailViewModel(
         blockDao.update(block.copy(calloutColor = color, updatedAt = Instant.now()))
     }
 
-    fun deleteBlock(block: Block) = launchAndReindex {
-        blockDao.delete(block.id)
-    }
+    fun deleteBlock(block: Block) = deleteBlocks(setOf(block.id))
 
     /** Reordering via Move Up/Down rather than a literal drag gesture (§3.1.1 calls for
      * "a drag handle on hover/long-press to reorder") — same end capability, any block can
      * move to any position, with far less gesture-tracking risk on a touch target this small. */
-    fun moveBlock(block: Block, direction: Int) = launchAndReindex {
+    fun moveBlock(block: Block, direction: Int) = launchRecorded("move") {
         val ordered = blockDao.getForPage(pageId).sortedBy { it.order }
         val index = ordered.indexOfFirst { it.id == block.id }
         val targetIndex = index + direction
-        if (index < 0 || targetIndex < 0 || targetIndex >= ordered.size) return@launchAndReindex
+        if (index < 0 || targetIndex < 0 || targetIndex >= ordered.size) return@launchRecorded
         val reordered = ordered.toMutableList().apply { add(targetIndex, removeAt(index)) }
         reordered.forEachIndexed { i, b -> if (b.order != i) blockDao.update(b.copy(order = i)) }
     }
@@ -590,9 +592,8 @@ class PageDetailViewModel(
      * `order` is left alone: [outlineOf] draws a child immediately after its parent whatever
      * its own order says, so re-numbering here would be churn with nothing depending on it.
      */
-    fun indentBlock(block: Block) = launchAndReindex {
-        val blocks = blockDao.getForPage(pageId)
-        val target = indentTargetFor(block, blocks) ?: return@launchAndReindex
+    fun indentBlock(block: Block) = launchRecorded("indent") { blocks ->
+        val target = indentTargetFor(block, blocks) ?: return@launchRecorded
         blockDao.update(block.copy(parentBlockId = target.id, updatedAt = Instant.now()))
     }
 
@@ -600,14 +601,13 @@ class PageDetailViewModel(
      * page keeps its reading order (see [outdentPlanFor]). Still the escape hatch for a child
      * whose parent went away on another device: the outline already draws such a block as a
      * root, and this makes that permanent. */
-    fun outdentBlock(block: Block) = launchAndReindex {
-        val blocks = blockDao.getForPage(pageId)
+    fun outdentBlock(block: Block) = launchRecorded("outdent") { blocks ->
         val plan = outdentPlanFor(block, blocks)
         val now = Instant.now()
         if (plan == null) {
             // Parent missing on this page: flatten, which is what the outline was showing anyway.
             if (block.parentBlockId != null) blockDao.update(block.copy(parentBlockId = null, updatedAt = now))
-            return@launchAndReindex
+            return@launchRecorded
         }
         blockDao.update(block.copy(parentBlockId = plan.newParentId, updatedAt = now))
         for (id in plan.adoptedIds) {
@@ -735,6 +735,175 @@ class PageDetailViewModel(
      * otherwise locked page), and [addLabel], whose bump is conditional.
      */
     private suspend fun touch() = pageDao.touch(pageId, Instant.now())
+
+
+    // ── §0.10 item 19 — a block selection's verbs and the block undo stack ──────────────────
+    // Every verb below runs under [launchRecorded]: the page's blocks are read before and after,
+    // and the rows that differ become one [BlockEdit] on the stack. Typing does not come here —
+    // [updateBlockContent] stays on [launchAndReindex], the field keeps its own undo.
+
+    private val undoStack = BlockUndoStack()
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+    private fun undoChanged() { _canUndo.value = undoStack.canUndo; _canRedo.value = undoStack.canRedo }
+
+    /** The last copied run in reading order — types, spans and nesting kept. The rows are the
+     * source's; a paste mints new ones, so a run can be pasted twice. */
+    private var copied: List<Block> = emptyList()
+    val hasCopiedBlocks: Boolean get() = copied.isNotEmpty()
+
+    /** The run [ids] closed under the outline's subtrees, in reading order. */
+    private fun runOf(blocks: List<Block>, ids: Set<Long>): List<Block> {
+        val outline = outlineOf(blocks, expandAll = true)
+        val closed = withSubtrees(ids, outline)
+        return outline.map { it.block }.filter { it.id in closed }
+    }
+
+    private fun launchRecorded(label: String, onDone: (BlockEdit?) -> Unit = {}, op: suspend (List<Block>) -> Unit) = launchAndReindex {
+        val before = blockDao.getForPage(pageId)
+        op(before)
+        val after = blockDao.getForPage(pageId)
+        val b = before.associateBy { it.id }
+        val a = after.associateBy { it.id }
+        val changed = (b.keys + a.keys).filter { b[it] != a[it] }.toSet()
+        val edit = if (changed.isEmpty()) null else BlockEdit(label, before.filter { it.id in changed }, after.filter { it.id in changed })
+        if (edit != null) { undoStack.push(edit); undoChanged() }
+        onDone(edit)
+    }
+
+    /** Delete a run and its subtrees — one entry. */
+    fun deleteBlocks(ids: Set<Long>, onDone: (Int) -> Unit = {}) = launchRecorded("delete", onDone = { onDone(it?.before?.size ?: 0) }) { blocks ->
+        runOf(blocks, ids).forEach { blockDao.delete(it.id) }
+    }
+
+    /** Move a run one step in the page's flat order (the sheet's Move up / Move down); parents
+     * stay as they are, as [moveBlock] has always left them. */
+    fun moveBlocks(ids: Set<Long>, direction: Int) = launchRecorded("move") { blocks ->
+        val ordered = blocks.sortedBy { it.order }
+        val run = runOf(blocks, ids).map { it.id }.toSet()
+        if (run.isEmpty()) return@launchRecorded
+        val rest = ordered.filter { it.id !in run }.toMutableList()
+        val first = ordered.indexOfFirst { it.id in run }
+        val at = (first + direction).coerceIn(0, rest.size)
+        val moving = ordered.filter { it.id in run }
+        rest.addAll(at, moving)
+        rest.forEachIndexed { i, b -> if (b.order != i) blockDao.update(b.copy(order = i)) }
+    }
+
+    /** Drop a run after [afterId] (null: the top of the page) — the group drag. The run's roots
+     * become siblings of the block they land after; their subtrees follow. */
+    fun moveBlocksAfter(ids: Set<Long>, afterId: Long?) = launchRecorded("move") { blocks ->
+        val run = runOf(blocks, ids)
+        val runIds = run.map { it.id }.toSet()
+        if (run.isEmpty() || afterId in runIds) return@launchRecorded
+        val ordered = outlineOf(blocks, expandAll = true).map { it.block }.filter { it.id !in runIds }.toMutableList()
+        val target = afterId?.let { id -> blocks.firstOrNull { it.id == id } }
+        // After the target's whole subtree, so the run lands beside it, not inside it.
+        val at = if (target == null) 0 else {
+            val outline = outlineOf(blocks.filter { it.id !in runIds }, expandAll = true)
+            val i = outline.indexOfFirst { it.block.id == target.id }
+            var j = i + 1
+            while (j < outline.size && outline[j].depth > outline[i].depth) j++
+            j
+        }
+        val newParent = target?.parentBlockId
+        val now = Instant.now()
+        val moved = run.map { b -> if (b.parentBlockId == null || b.parentBlockId !in runIds) b.copy(parentBlockId = newParent, updatedAt = now) else b }
+        ordered.addAll(at.coerceIn(0, ordered.size), moved)
+        ordered.forEachIndexed { i, b -> val want = b.copy(order = i); if (want != blocks.first { it.id == b.id }) blockDao.update(want) }
+    }
+
+    fun indentBlocks(ids: Set<Long>) = launchRecorded("indent") { blocks ->
+        var current = blocks
+        for (root in runOf(blocks, ids).filter { it.parentBlockId !in ids }) {
+            val target = indentTargetFor(root, current) ?: continue
+            if (target.id in ids) continue
+            val updated = root.copy(parentBlockId = target.id, updatedAt = Instant.now())
+            blockDao.update(updated)
+            current = current.map { if (it.id == updated.id) updated else it }
+        }
+    }
+
+    fun outdentBlocks(ids: Set<Long>) = launchRecorded("outdent") { blocks ->
+        for (root in runOf(blocks, ids).filter { it.parentBlockId !in ids }.asReversed()) {
+            val current = blockDao.getForPage(pageId)
+            val block = current.first { it.id == root.id }
+            val plan = outdentPlanFor(block, current)
+            val now = Instant.now()
+            if (plan == null) {
+                if (block.parentBlockId != null) blockDao.update(block.copy(parentBlockId = null, updatedAt = now))
+                continue
+            }
+            blockDao.update(block.copy(parentBlockId = plan.newParentId, updatedAt = now))
+            for (id in plan.adoptedIds) {
+                val sibling = current.first { it.id == id }
+                blockDao.update(sibling.copy(parentBlockId = block.id, updatedAt = now))
+            }
+        }
+    }
+
+    fun changeTypes(ids: Set<Long>, newType: BlockType) = launchRecorded("turn into") { blocks ->
+        val now = Instant.now()
+        blocks.filter { it.id in ids && it.type != newType }.forEach { b ->
+            blockDao.update(b.copy(type = newType, checked = if (newType == BlockType.TODO) (b.checked ?: false) else null, updatedAt = now))
+        }
+    }
+
+    /** Copy a run; returns its Markdown for the system clipboard (`MarkdownWriter`). */
+    fun copyBlocks(ids: Set<Long>): String {
+        copied = runOf(blocks.value, ids)
+        return MarkdownWriter.render(copied)
+    }
+
+    fun cutBlocks(ids: Set<Long>): String {
+        val text = copyBlocks(ids)
+        deleteBlocks(ids)
+        return text
+    }
+
+    /** Paste the copied run after [afterId] (null: the top) as new rows — fresh ids and uids,
+     * nesting rebuilt relative to the run's own roots, which land beside the block they follow.
+     * [onDone] gets the new rows' ids so the screen can select them. */
+    fun pasteBlocks(afterId: Long?, onDone: (Set<Long>) -> Unit = {}) {
+        val run = copied
+        if (run.isEmpty()) return
+        launchRecorded("paste", onDone = { edit -> onDone(edit?.after?.map { it.id }?.toSet() ?: emptySet()) }) { blocks ->
+            val ordered = blocks.sortedBy { it.order }
+            val target = afterId?.let { id -> blocks.firstOrNull { it.id == id } }
+            val at = if (target == null) 0 else ordered.indexOfFirst { it.id == target.id } + 1
+            ordered.drop(at).forEach { b -> blockDao.update(b.copy(order = b.order + run.size)) }
+            val runIds = run.map { it.id }.toSet()
+            val newIds = mutableMapOf<Long, Long>()
+            val now = Instant.now()
+            run.forEachIndexed { i, b ->
+                val parent = if (b.parentBlockId in runIds) newIds[b.parentBlockId] else target?.parentBlockId
+                val id = blockDao.insert(b.copy(id = 0, uid = java.util.UUID.randomUUID().toString(), pageId = pageId, order = at + i, parentBlockId = parent, imagePath = null, createdAt = now, updatedAt = now))
+                newIds[b.id] = id
+            }
+        }
+    }
+
+    fun duplicateBlocks(ids: Set<Long>, onDone: (Set<Long>) -> Unit = {}) {
+        copyBlocks(ids)
+        pasteBlocks(runOf(blocks.value, ids).lastOrNull()?.id, onDone)
+    }
+
+    fun undo() = applyEdit(undoStack.undo()?.inverse())
+    fun redo() = applyEdit(undoStack.redo())
+
+    /** Write [edit]'s `after` over the page — unrecorded; the stack already moved the entry. */
+    private fun applyEdit(edit: BlockEdit?) {
+        if (edit == null) return
+        undoChanged()
+        launchAndReindex {
+            val plan = planApply(blockDao.getForPage(pageId), edit.after, edit.affectedIds)
+            plan.delete.forEach { blockDao.delete(it) }
+            plan.insert.forEach { blockDao.insert(it) }
+            plan.update.forEach { blockDao.update(it) }
+        }
+    }
 
     private fun launchAndReindex(block: suspend () -> Unit) {
         if (contentLocked()) return
