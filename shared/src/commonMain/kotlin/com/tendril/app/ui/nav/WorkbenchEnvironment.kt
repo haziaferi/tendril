@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Density
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.pages.LocalViewOnly
+import com.tendril.app.ui.theme.pointerTypography
 import com.tendril.app.ui.theme.touchTypography
 
 /**
@@ -65,7 +66,9 @@ fun WorkbenchEnvironment(
     val titleBar = remember(titleBarInstaller, barPx, darkGround) { titleBarInstaller?.install(barPx, darkGround) }
     // T·P1 (the phone's second fix PR): under Touch every chrome role steps one size up the scale —
     // the phone read two to three points under every app beside it (`touchTypography`).
-    val typography = if (profile == DensityProfile.TOUCH) touchTypography(MaterialTheme.typography) else MaterialTheme.typography
+    // The desktop's small styles step up one size too (2026-09-20, measured beside Notion and the
+    // Claude app: chrome text is one size there, hierarchy is weight and colour) — `pointerTypography`.
+    val typography = if (profile == DensityProfile.TOUCH) touchTypography(MaterialTheme.typography) else pointerTypography(MaterialTheme.typography)
     CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile, LocalTitleBar provides titleBar) {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = typography) {
             if (wide == null) content()

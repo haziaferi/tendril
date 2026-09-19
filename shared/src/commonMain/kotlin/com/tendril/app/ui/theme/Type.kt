@@ -163,6 +163,31 @@ fun typographyFor(typeface: TendrilTypeface): Typography {
  * the roles and the type-class audit sees no new site. A remap of the theme's own typography,
  * so the family and weights travel with it.
  */
+/**
+ * The desktop's second type pass (2026-09-20, the user's brief after the rail: "look at the other
+ * text elements and resize accordingly, on real examples"). Measured beside Notion and the Claude
+ * app at 125 % (`docs/critiques/desktop-type-grounds.md`): both set **every piece of chrome text
+ * at one size** — Notion's property labels, values, chips, view tabs, buttons and sidebar items
+ * all 14 px CSS (10 px of cap height), Claude's items, meta lines and body 10–12 — and reserve a
+ * smaller size (12 px, 9 px of cap) for section headers alone; hierarchy is colour and weight,
+ * not size. Tendril's `label`, `description`, `caption` and `eyebrow` stood a step under that
+ * (8 px of cap at Compact). Under a pointer profile the four step **one size up the same scale** —
+ * label and description 14 (Medium and Regular: the weight and the dim colour keep them apart
+ * from `body`, Notion's way), caption and eyebrow 12.5 — and body, heading, pageTitle and the
+ * editor's sizes stay: those already measured at the grounds' heights. The mirror of
+ * [touchTypography], provided by `WorkbenchEnvironment` the same way; the phone is untouched.
+ */
+fun pointerTypography(base: Typography): Typography {
+    fun TextStyle.at(size: Float) = copy(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
+    return base.copy(
+        titleSmall = base.titleSmall.at(TypeScale.BODY),
+        bodySmall = base.bodySmall.at(TypeScale.BODY),
+        labelLarge = base.labelLarge.at(TypeScale.BODY),
+        labelMedium = base.labelMedium.at(TypeScale.LABEL),
+        labelSmall = base.labelSmall.at(TypeScale.LABEL),
+    )
+}
+
 fun touchTypography(base: Typography): Typography {
     fun TextStyle.at(size: Float) = copy(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
     return base.copy(
