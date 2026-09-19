@@ -42,6 +42,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -106,6 +111,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.geometry.CornerRadius
@@ -115,6 +121,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.rememberUpdatedState
@@ -124,6 +132,35 @@ import com.tendril.app.ui.components.HoverPreviewState
 import com.tendril.app.ui.components.PreviewTarget
 import com.tendril.app.ui.components.hoverPreview
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.AnnotatedString
+import com.tendril.app.domain.blocks.marqueeHits
+import com.tendril.app.domain.blocks.runBetween
+import com.tendril.app.domain.blocks.stepSelection
+import com.tendril.app.domain.blocks.withSubtrees
+import com.tendril.app.domain.plural
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -168,6 +205,7 @@ import com.tendril.app.domain.BindingRole
 import com.tendril.app.ui.theme.body
 import com.tendril.app.domain.checkin.checkInOffered
 import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.theme.eyebrow
 import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.label
 import com.tendril.app.ui.theme.pageTitle
@@ -297,6 +335,63 @@ fun PageDetailScreen(
     var checkInSheetOpen by remember { mutableStateOf(false) }
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var blockActionSheetFor by remember { mutableStateOf<Block?>(null) }
+    // §0.10 item 19 — the block selection: ids closed under the outline's subtrees, an anchor for
+    // Shift-runs, a focus for the arrows; the rows' bounds (row, text) in root coordinates for the
+    // marquee and the group drag; the page's own focus so the keys reach it once no field has them.
+    val focusManager = LocalFocusManager.current
+    var selection by remember(pageId) { mutableStateOf<Set<Long>>(emptySet()) }
+    var selectionAnchor by remember(pageId) { mutableStateOf<Long?>(null) }
+    var selectionFocus by remember(pageId) { mutableStateOf<Long?>(null) }
+    val rowBounds = remember(pageId) { mutableStateMapOf<Long, Pair<Rect, Rect>>() }
+    var marquee by remember { mutableStateOf<Rect?>(null) }
+    var groupDrag by remember { mutableStateOf<GroupDrag?>(null) }
+    var focusedFieldId by remember(pageId) { mutableStateOf<Long?>(null) }
+    var fieldFocusRequest by remember { mutableStateOf<Long?>(null) }
+    val pageFocus = remember { FocusRequester() }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    @Suppress("DEPRECATION") val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val pointer = LocalDensityProfile.current.pointer
+    val visibleIds = remember(shownBlocks) { shownBlocks.map { it.id } }
+    fun setSelection(ids: Collection<Long>, anchor: Long?, focus: Long?) {
+        selection = withSubtrees(ids.toSet(), outline)
+        selectionAnchor = anchor
+        selectionFocus = focus
+    }
+    fun clearSelection() { selection = emptySet(); selectionAnchor = null; selectionFocus = null }
+    fun selectBlock(id: Long, extend: Boolean) {
+        val a = selectionAnchor
+        if (extend && a != null) setSelection(runBetween(visibleIds, a, id), a, id) else setSelection(listOf(id), id, id)
+    }
+    fun toggleBlock(id: Long) {
+        if (id in selection) {
+            val rest = selection - withSubtrees(setOf(id), outline)
+            if (rest.isEmpty()) clearSelection() else setSelection(rest, selectionAnchor?.takeIf { it in rest }, id)
+        } else setSelection(selection + id, selectionAnchor ?: id, id)
+    }
+    fun deleteBlocks(ids: Set<Long>) {
+        viewModel.deleteBlocks(ids) { n ->
+            if (n > 0) scope.launch {
+                val result = snackbarHostState.showSnackbar(plural(n, "block") + " deleted", actionLabel = "Undo", duration = SnackbarDuration.Short)
+                if (result == SnackbarResult.ActionPerformed) viewModel.undo()
+            }
+        }
+    }
+    fun copySelection() { clipboardManager.setText(AnnotatedString(viewModel.copyBlocks(selection))) }
+    fun cutSelection() { clipboardManager.setText(AnnotatedString(viewModel.cutBlocks(selection))) }
+    fun pasteAfterSelection() {
+        val after = visibleIds.lastOrNull { it in selection }
+        viewModel.pasteBlocks(after) { ids -> if (ids.isNotEmpty()) setSelection(ids, ids.first(), ids.last()) }
+    }
+    // A deleted or moved-away block leaves the selection; a run that emptied clears it.
+    LaunchedEffect(blocks) {
+        if (selection.isNotEmpty()) {
+            val live = blocks.map { it.id }.toSet()
+            if (!selection.all { it in live }) { val kept = selection.filter { it in live }.toSet(); if (kept.isEmpty()) clearSelection() else selection = kept }
+        }
+    }
+    LaunchedEffect(selection.isNotEmpty()) { if (selection.isNotEmpty()) { focusManager.clearFocus(); pageFocus.requestFocus() } }
+    androidx.compose.ui.backhandler.BackHandler(enabled = selection.isNotEmpty()) { clearSelection() }
     // §0.6.2 / B§9.6 — the armed map: the block whose subtree fills the viewport, or null.
     var armedMapRoot by remember { mutableStateOf<Long?>(null) }
     // §0.6.3 — the armed canvas: the Canvas page filling the viewport, or null.
@@ -330,12 +425,58 @@ fun PageDetailScreen(
         }
     }
 
+    // §0.10 item 19 — the keys a selection takes, and Ctrl+Z / Ctrl+Y with no field focused. An
+    // ancestor's preview runs before the focused field's, so a field's own keys are left alone.
+    fun onPageKey(event: KeyEvent): Boolean {
+        if (event.type != KeyEventType.KeyDown || focusedFieldId != null) return false
+        val ctrl = event.isCtrlPressed || event.isMetaPressed
+        if (ctrl && event.key == Key.Z && !event.isShiftPressed) { viewModel.undo(); return true }
+        if (ctrl && (event.key == Key.Y || (event.key == Key.Z && event.isShiftPressed))) { viewModel.redo(); return true }
+        if (selection.isEmpty()) return false
+        val focus = selectionFocus ?: visibleIds.firstOrNull { it in selection } ?: return false
+        val anchor = selectionAnchor ?: focus
+        when {
+            event.key == Key.Escape -> clearSelection()
+            event.key == Key.DirectionUp || event.key == Key.DirectionDown -> {
+                val (ids, f) = stepSelection(visibleIds, anchor, focus, if (event.key == Key.DirectionUp) -1 else 1, event.isShiftPressed)
+                setSelection(ids, if (event.isShiftPressed) anchor else f, f)
+            }
+            event.key == Key.Delete || event.key == Key.Backspace -> if (!contentLocked) deleteBlocks(selection)
+            ctrl && event.key == Key.A -> setSelection(visibleIds, visibleIds.firstOrNull(), visibleIds.lastOrNull())
+            ctrl && event.key == Key.C -> copySelection()
+            ctrl && event.key == Key.X -> if (!contentLocked) cutSelection()
+            ctrl && event.key == Key.V -> if (!contentLocked && viewModel.hasCopiedBlocks) pasteAfterSelection() else return false
+            ctrl && event.key == Key.D -> if (!contentLocked) viewModel.duplicateBlocks(selection) { ids -> if (ids.isNotEmpty()) setSelection(ids, ids.first(), ids.last()) }
+            event.key == Key.Enter -> { fieldFocusRequest = focus; clearSelection() }
+            else -> return false
+        }
+        return true
+    }
+
     // B§13.6 #3 — one hover-preview state per screen: the mention spans, mention blocks and
     // block references below call `hoverPreview`; the card is drawn once at the screen's root.
     val hoverPreview = remember { HoverPreviewState() }
     CompositionLocalProvider(LocalContentLocked provides contentLocked) {
     Scaffold(
+        // Lifted above the content by zIndex: on the phone a canvas block's layer drew over it.
+        snackbarHost = { SnackbarHost(snackbarHostState, modifier = Modifier.zIndex(1f)) },
         topBar = {
+            // §0.10 item 19 — under Touch the page bar becomes the selection's while blocks are selected
+            // (frame f of the mock): the count, ×, Copy · Cut · Delete · ··· (the sheet over the run).
+            if (selection.isNotEmpty() && !pointer) {
+                ShellTopBar(
+                    // The count is of rows on screen — a folded subtree comes along with its map block
+                    // (it is deleted or moved with it) but is not a row the person can see.
+                    title = { Text(selection.count { it in visibleIds }.toString() + " selected", style = MaterialTheme.typography.heading, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = { IconButton(onClick = { clearSelection() }) { Icon(Icons.Filled.Close, contentDescription = "Clear selection") } },
+                    actions = {
+                        IconButton(onClick = { copySelection() }) { Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy") }
+                        IconButton(onClick = { deleteBlocks(selection) }, enabled = !contentLocked) { Icon(Icons.Outlined.Delete, contentDescription = "Delete") }
+                        IconButton(onClick = { blockActionSheetFor = shownBlocks.firstOrNull { it.id in selection } }, enabled = !contentLocked) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
+                    },
+                )
+                return@Scaffold
+            }
             // The editable title lives in the app bar's own title row rather than a
             // second, separately-padded block below it — one compact header, not two
             // stacked ones (an empty app bar followed by a large title field read as
@@ -389,7 +530,7 @@ fun PageDetailScreen(
             )
         },
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).focusRequester(pageFocus).focusable().onPreviewKeyEvent(::onPageKey)) {
             if (findOpen) {
                 FindBar(
                     query = findQuery,
@@ -470,9 +611,33 @@ fun PageDetailScreen(
             }
             // 14h·2 — a click on the page's ground (beside or below the blocks) ends editing; the
             // blocks' own fields take their clicks first, so only the ground reaches this.
-            val focusManager = LocalFocusManager.current
             val groundInteraction = remember { MutableInteractionSource() }
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().clickable(interactionSource = groundInteraction, indication = null) { focusManager.clearFocus() }) {
+            var groundOrigin by remember { mutableStateOf(Offset.Zero) }
+            val palette = LocalTendrilPalette.current
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .onGloballyPositioned { groundOrigin = it.positionInRoot() }
+                    .then(
+                        if (pointer) Modifier.blockGround(
+                            origin = { groundOrigin }, rows = { rowBounds }, selected = { selection }, canDrag = !contentLocked,
+                            onMarquee = { rect ->
+                                marquee = rect
+                                if (rect != null) {
+                                    val hits = marqueeHits(rowBounds.mapValues { it.value.first.toBox() }, rect.toBox())
+                                    val ordered = visibleIds.filter { it in hits }
+                                    if (ordered.isEmpty()) clearSelection() else setSelection(ordered, ordered.first(), ordered.last())
+                                }
+                            },
+                            onDragChange = { d ->
+                                groupDrag = d
+                                // The press focused a field and that cleared the selection; the drag brings it back.
+                                if (d != null && selection != d.ids) setSelection(d.ids, visibleIds.firstOrNull { it in d.ids }, visibleIds.lastOrNull { it in d.ids })
+                            },
+                            onDrop = { ids, afterId -> viewModel.moveBlocksAfter(ids, afterId) },
+                        ) else Modifier,
+                    ),
+            ) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().clickable(interactionSource = groundInteraction, indication = null) { focusManager.clearFocus(); clearSelection(); pageFocus.requestFocus() }) {
                 // §3.1.4 (amended, step 8b) — today's Journal page opens with the day: its tasks
                 // and due habits, checkable, above everything else. Null on every other page.
                 // §0.10 item 4 — the check-in row on any Journal day that has happened, above the strip.
@@ -534,6 +699,21 @@ fun PageDetailScreen(
                         listPosition = entry.listPosition,
                         viewModel = viewModel,
                         onLongPress = { blockActionSheetFor = entry.block },
+                        selected = entry.block.id in selection,
+                        selectionActive = selection.isNotEmpty(),
+                        onSelect = { extend -> selectBlock(entry.block.id, extend) },
+                        onToggle = { toggleBlock(entry.block.id) },
+                        onSelectAll = { setSelection(visibleIds, visibleIds.firstOrNull(), visibleIds.lastOrNull()) },
+                        onBounds = { row, text -> rowBounds[entry.block.id] = row to text },
+                        onBoundsGone = { rowBounds.remove(entry.block.id) },
+                        focusRequest = fieldFocusRequest == entry.block.id,
+                        onFieldFocus = { focused ->
+                            if (focused) {
+                                focusedFieldId = entry.block.id
+                                if (selection.isNotEmpty()) clearSelection()
+                                if (fieldFocusRequest == entry.block.id) fieldFocusRequest = null
+                            } else if (focusedFieldId == entry.block.id) focusedFieldId = null
+                        },
                         findMarks = findMarks,
                         onSelection = { lastSelection = it },
                         onRequestMention = { baseContent -> mentionTarget = entry.block to baseContent },
@@ -562,28 +742,62 @@ fun PageDetailScreen(
                 }
                 item { BacklinksPanel(backlinks, unlinkedMentions, onOpenPage, onLink = { viewModel.link(it) }) }
             }
+            // The marquee and the drag's insertion line, drawn over the list in its own coordinates.
+            val marqueeRect = marquee
+            val dragLine = groupDrag?.lineY
+            if (marqueeRect != null || dragLine != null) {
+                Box(modifier = Modifier.matchParentSize().drawBehind {
+                    if (marqueeRect != null) {
+                        val r = marqueeRect.translate(-groundOrigin)
+                        drawRect(palette.accentSoft, r.topLeft, r.size)
+                        drawRect(palette.accent, r.topLeft, r.size, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
+                    }
+                    if (dragLine != null) {
+                        val y = dragLine - groundOrigin.y
+                        drawLine(palette.accent, Offset(28.dp.toPx(), y), Offset(size.width - 28.dp.toPx(), y), 2.dp.toPx())
+                    }
+                })
+            }
+            groupDrag?.let { drag ->
+                val first = shownBlocks.firstOrNull { it.id in drag.ids }
+                Popup(popupPositionProvider = remember(drag.pointer) { AtRootOffset(drag.pointer + Offset(16f, 16f)) }) {
+                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+                        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(first?.content?.lineSequence()?.firstOrNull()?.ifBlank { null } ?: "(empty)", style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))
+                            Text(plural(drag.ids.count { it in visibleIds }, "block"), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            }
         }
     }
 
     HoverPreviewCard(core, hoverPreview, onOpenPage, onOpenBeside = paneChrome?.openBeside, onOpenInWindow = paneChrome?.openInWindow)
 
     blockActionSheetFor?.let { block ->
+        // §0.10 item 19 — over the selection when the block is in it, else over the block alone.
+        val targets = if (block.id in selection) selection else setOf(block.id)
         BlockActionSheet(
             block = block,
+            count = targets.count { it in visibleIds }.coerceAtLeast(1),
+            canPaste = !contentLocked && viewModel.hasCopiedBlocks,
+            onCut = { cutSelection(); blockActionSheetFor = null },
+            onPaste = { viewModel.pasteBlocks(visibleIds.lastOrNull { it in targets }) { ids -> if (ids.isNotEmpty()) setSelection(ids, ids.first(), ids.last()) }; blockActionSheetFor = null },
             onDismiss = { blockActionSheetFor = null },
-            onMoveUp = { viewModel.moveBlock(block, -1); blockActionSheetFor = null },
-            onMoveDown = { viewModel.moveBlock(block, 1); blockActionSheetFor = null },
+            onMoveUp = { if (targets.size > 1) viewModel.moveBlocks(targets, -1) else viewModel.moveBlock(block, -1); blockActionSheetFor = null },
+            onMoveDown = { if (targets.size > 1) viewModel.moveBlocks(targets, 1) else viewModel.moveBlock(block, 1); blockActionSheetFor = null },
             canIndent = indentTargetFor(block, blocks) != null,
             canOutdent = block.parentBlockId != null,
-            onIndent = { viewModel.indentBlock(block); blockActionSheetFor = null },
-            onOutdent = { viewModel.outdentBlock(block); blockActionSheetFor = null },
+            onIndent = { viewModel.indentBlocks(targets); blockActionSheetFor = null },
+            onOutdent = { viewModel.outdentBlocks(targets); blockActionSheetFor = null },
             // Dismisses on pick like every other row here — `block` is a snapshot captured
             // when the sheet opened, not a live reference, so leaving the sheet open would
             // show a selection ring that never moves to the newly picked swatch/language.
             onSetLanguage = { language -> viewModel.setCodeLanguage(block, language); blockActionSheetFor = null },
             onSetCalloutColor = { color -> viewModel.setCalloutColor(block, color); blockActionSheetFor = null },
-            onTurnInto = { type -> viewModel.changeType(block, type); blockActionSheetFor = null },
-            onDelete = { viewModel.deleteBlock(block); blockActionSheetFor = null },
+            onTurnInto = { type -> viewModel.changeTypes(targets, type); blockActionSheetFor = null },
+            onDelete = { deleteBlocks(targets); blockActionSheetFor = null },
             mindMap = block.mindMap,
             onToggleMindMap = { viewModel.setMindMap(block, !block.mindMap); blockActionSheetFor = null },
         )
@@ -771,6 +985,16 @@ private fun BlockRow(
     onSelection: (String) -> Unit = {},
     /** B§13.6 #3 — the screen's hover-preview state; null where nothing previews (a picker's preview row). */
     hoverPreview: HoverPreviewState? = null,
+    // §0.10 item 19 — the block selection's share of a row.
+    selected: Boolean = false,
+    selectionActive: Boolean = false,
+    onSelect: (extend: Boolean) -> Unit = {},
+    onToggle: () -> Unit = {},
+    onSelectAll: () -> Unit = {},
+    onBounds: (row: Rect, text: Rect) -> Unit = { _, _ -> },
+    onBoundsGone: () -> Unit = {},
+    focusRequest: Boolean = false,
+    onFieldFocus: (Boolean) -> Unit = {},
 ) {
     // Keyed only on block.id, not block.content: every edit round-trips through Room and
     // re-emits this same block via the Flow, and re-keying on content would reset this
@@ -807,6 +1031,15 @@ private fun BlockRow(
     // over the words around it; the span the card is up for wears a 1.5 dp accent outline.
     var textLayout by remember(block.id) { mutableStateOf<TextLayoutResult?>(null) }
     var hoveredSpan by remember(block.id) { mutableStateOf<FormattingSpan?>(null) }
+    // §0.10 item 19 — the row's and the text's bounds for the ground's gestures; the field's focus.
+    val pointer = LocalDensityProfile.current.pointer
+    val windowInfo = LocalWindowInfo.current
+    var rowRect by remember(block.id) { mutableStateOf<Rect?>(null) }
+    var textRect by remember(block.id) { mutableStateOf<Rect?>(null) }
+    fun reportBounds() { val r = rowRect; val t = textRect; if (r != null) onBounds(r, t ?: r) }
+    DisposableEffect(block.id) { onDispose { onBoundsGone() } }
+    val fieldRequester = remember(block.id) { FocusRequester() }
+    LaunchedEffect(focusRequest) { if (focusRequest) fieldRequester.requestFocus() }
 
     // 14d — inside the text the field's own right-click menu wins (as its long-press wins on
     // the phone); the block's actions ride on it as one appended item. Outside the text —
@@ -816,7 +1049,33 @@ private fun BlockRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp + indent, end = 16.dp, top = 2.dp, bottom = 2.dp)
+                .onGloballyPositioned { rowRect = it.boundsInRoot(); reportBounds() }
+                .padding(horizontal = 8.dp)
+                // §0.10 item 19 — a selected block: the accent's soft under a 2 dp ring (the tint
+                // alone measured 1.55 / 1.21:1 on the two grounds — `block-selection-mock.md` #1).
+                .then(if (selected) Modifier.clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.primaryContainer).border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)) else Modifier)
+                // §0.10 item 19 — the whole row (before its inner padding, so an indented block's margin
+                // counts) is the ground: a click on it beside the text selects under a
+                // pointer (Shift extends, Ctrl toggles); under Touch a tap toggles while a selection is up
+                // and a long press selects — the sheet on a second long press of a selected block.
+                .combinedClickable(
+                    onClick = {
+                        val mods = windowInfo.keyboardModifiers
+                        when {
+                            selectionActive && !pointer -> onToggle()
+                            pointer && mods.isCtrlPressed -> onToggle()
+                            pointer -> onSelect(mods.isShiftPressed)
+                        }
+                    },
+                    onLongClick = when {
+                        locked && pointer -> null
+                        !pointer -> ({ if (selected) { if (!locked) onLongPress() } else onSelect(false) })
+                        else -> onLongPress
+                    },
+                )
+                // B§13.4 14d — right-click is the pointer's long-press: the same block action sheet.
+                .onSecondaryClick { if (!locked) { if (!selected) onSelect(false); onLongPress() } }
+                .padding(start = 8.dp + indent, end = 8.dp, top = 2.dp, bottom = 2.dp)
                 .then(
                     // §P3 — a callout always has a tinted background, even before a swatch is
                     // chosen, matching the "icon + colored background" design §3.1.1 called for.
@@ -833,15 +1092,12 @@ private fun BlockRow(
                     } else {
                         Modifier
                     },
-                )
-                .combinedClickable(onClick = {}, onLongClick = if (locked) null else onLongPress)
-                // B§13.4 14d — right-click is the pointer's long-press: the same block action sheet.
-                .onSecondaryClick { if (!locked) onLongPress() },
+                ),
             verticalAlignment = Alignment.Top,
         ) {
             BlockPrefix(block, listPosition, viewModel)
             Spacer(Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f).onGloballyPositioned { textRect = it.boundsInRoot(); reportBounds() }) {
                 if (block.type == BlockType.DIVIDER) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 } else if (block.type == BlockType.CANVAS) {
@@ -930,7 +1186,17 @@ private fun BlockRow(
                         ),
                         readOnly = locked,
                         onTextLayout = { textLayout = it },
-                        modifier = Modifier.fillMaxWidth().onFocusChanged { fieldFocused = it.isFocused }
+                        modifier = Modifier.fillMaxWidth().focusRequester(fieldRequester).onFocusChanged { fieldFocused = it.isFocused; onFieldFocus(it.isFocused) }
+                            // §0.10 item 19 — Esc leaves the field and selects its block; a second Ctrl+A (the
+                            // first is the platform's, over the text) selects every block.
+                            .onPreviewKeyEvent { e ->
+                                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when {
+                                    e.key == Key.Escape -> { onSelect(false); true }
+                                    (e.isCtrlPressed || e.isMetaPressed) && e.key == Key.A && (fieldValue.text.isEmpty() || (fieldValue.selection.min == 0 && fieldValue.selection.max == fieldValue.text.length)) -> { onSelectAll(); true }
+                                    else -> false
+                                }
+                            }
                             .then(if (hoverPreview != null && LocalDensityProfile.current.pointer) Modifier.mentionSpanHover(hoverPreview, block, { textLayout }, hoveredSpan, { hoveredSpan = it }) else Modifier),
                     )
                 } else {
@@ -1193,6 +1459,12 @@ private fun FormattingToolbar(
  * edges aligned, [gapPx] between; below the anchor when the window has no room above, so a
  * selection on the first line of a page still gets a toolbar rather than a clipped one.
  */
+/** §0.10 item 19 — the drag ghost: a popup at a root offset (the window's, on both platforms). */
+private class AtRootOffset(private val at: Offset) : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset =
+        IntOffset(at.x.toInt().coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width)), at.y.toInt().coerceIn(0, maxOf(0, windowSize.height - popupContentSize.height)))
+}
+
 private class AboveAnchor(private val gapPx: Int) : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         val above = anchorBounds.top - popupContentSize.height - gapPx
@@ -1215,6 +1487,12 @@ private val CODE_LANGUAGES = listOf(
 @Composable
 private fun BlockActionSheet(
     block: Block,
+    /** §0.10 item 19 — how many blocks the verbs act on; the single-block sections (a map, a
+     * language, a colour) are absent for a run, whose title is the count. */
+    count: Int = 1,
+    canPaste: Boolean = false,
+    onPaste: () -> Unit = {},
+    onCut: () -> Unit = {},
     onDismiss: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -1229,19 +1507,22 @@ private fun BlockActionSheet(
     mindMap: Boolean = false,
     onToggleMindMap: () -> Unit = {},
 ) {
-    TendrilSheet(onDismiss = onDismiss) {
+    TendrilSheet(onDismiss = onDismiss, title = if (count > 1) plural(count, "block") else null) {
         Column {
             SheetActionRow(Icons.Filled.ArrowUpward, "Move up", onMoveUp)
             SheetActionRow(Icons.Filled.ArrowDownward, "Move down", onMoveDown)
+            // §0.10 item 19 — the copied run, below this block (the phone's paste; the desktop has Ctrl+V).
+            if (canPaste) SheetActionRow(Icons.Outlined.ContentPaste, "Paste below", onPaste)
+            SheetActionRow(Icons.Outlined.ContentCut, "Cut", onCut)
             // §3.1.1 — one level, so each is offered only where it would actually do something:
             // nothing to tuck under, or already tucked under, and the row is simply absent.
             if (canIndent) SheetActionRow(Icons.Filled.FormatIndentIncrease, "Indent", onIndent)
             if (canOutdent) SheetActionRow(Icons.Filled.FormatIndentDecrease, "Outdent", onOutdent)
             // §0.6.2 — the subtree as a map, or back to rows. Offered on every block: a block
             // with no children yet becomes a one-node map whose first act is "add child".
-            SheetActionRow(Icons.Filled.AccountTree, if (mindMap) "Show as list" else "Show as mind map", onToggleMindMap)
+            if (count == 1) SheetActionRow(Icons.Filled.AccountTree, if (mindMap) "Show as list" else "Show as mind map", onToggleMindMap)
             // §P1 — free-form language, same shape the Notion importer already stores.
-            if (block.type == BlockType.CODE) {
+            if (count == 1 && block.type == BlockType.CODE) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Language", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
                 val currentLanguage = block.codeLanguage?.takeIf { it.isNotBlank() }
@@ -1256,7 +1537,7 @@ private fun BlockActionSheet(
             // §P3 — a fixed swatch row rather than a full color picker; matches Label's own
             // small-fixed-palette choice (`LabelColors`) rather than introducing a second,
             // heavier color-picking pattern for one field.
-            if (block.type == BlockType.CALLOUT) {
+            if (count == 1 && block.type == BlockType.CALLOUT) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Color", style = MaterialTheme.typography.label, modifier = Modifier.padding(bottom = 8.dp))
                 val currentColor = block.calloutColor ?: CALLOUT_COLORS.first()

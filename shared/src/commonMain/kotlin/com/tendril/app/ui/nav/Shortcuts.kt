@@ -34,7 +34,7 @@ enum class ShortcutAction(val group: ShortcutGroup, val label: String) {
     SHORTCUTS(ShortcutGroup.FIND, "This list"),
 }
 
-enum class ShortcutGroup(val label: String) { NAVIGATE("Navigate"), CREATE("Create"), FIND("Find"), LISTS("Lists") }
+enum class ShortcutGroup(val label: String) { NAVIGATE("Navigate"), CREATE("Create"), FIND("Find"), LISTS("Lists"), EDITOR("Editor") }
 
 /**
  * A chord. Every key here is one a person can press **on any layout without AltGr or Shift**:
