@@ -44,6 +44,7 @@ class TimeLogSyncTest {
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
             habitCompletionDao = FakeHabitCompletionDao(),
+            checkInDao = FakeCheckInDao(),
             timeLogDao = timeLogDao,
             localImages = InMemoryLocalImageStore(),
         )

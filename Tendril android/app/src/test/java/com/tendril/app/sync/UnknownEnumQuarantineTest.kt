@@ -155,6 +155,7 @@ class UnknownEnumQuarantineTest {
             reminderDao = mockk(relaxed = true),
             entryCompletionDao = mockk(relaxed = true),
             habitCompletionDao = FakeHabitCompletionDao(),
+            checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
             localImages = InMemoryLocalImageStore(),
         )
@@ -1672,6 +1673,7 @@ class UnknownEnumQuarantineTest {
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
             habitCompletionDao = FakeHabitCompletionDao(),
+            checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
             purgeRegistry = mockk(relaxed = true),
             pagesSyncEngine = mockk(relaxed = true),

@@ -267,3 +267,16 @@ val MIGRATION_20_21 = object : Migration(20, 21) {
         connection.execSQL("ALTER TABLE `habit_completions` ADD COLUMN `value` REAL")
     }
 }
+
+/** v21 → v22 — §0.10 item 4: the `check_ins` table (a mood or energy check-in on a Journal day),
+ * the SQL as Room exports it in `22.json`. */
+val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `check_ins` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uid` TEXT NOT NULL, " +
+                "`date` INTEGER NOT NULL, `at` INTEGER NOT NULL, `mood` INTEGER, `energy` INTEGER, `deletedAt` INTEGER)"
+        )
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_check_ins_uid` ON `check_ins` (`uid`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_check_ins_date` ON `check_ins` (`date`)")
+    }
+}

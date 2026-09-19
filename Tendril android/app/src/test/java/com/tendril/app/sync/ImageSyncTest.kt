@@ -76,6 +76,7 @@ class ImageSyncTest {
             reminderDao = FakeReminderDao(),
             entryCompletionDao = FakeEntryCompletionDao(),
             habitCompletionDao = FakeHabitCompletionDao(),
+            checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
             localImages = localImages,
         )

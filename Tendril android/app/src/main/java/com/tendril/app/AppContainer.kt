@@ -86,7 +86,7 @@ class AppContainer(context: Context) {
     val localImages = AndroidLocalImageStore(context)
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.timeLogDao(), pagesSyncEngine, purgeRegistry,
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(), pagesSyncEngine, purgeRegistry,
         localImages,
     )
     /** §7 in reverse — every live page as Markdown in a zip. Takes daos and a stream rather
@@ -99,7 +99,7 @@ class AppContainer(context: Context) {
     val viewLockState = ViewLockState()
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.timeLogDao(),
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4 / S4 — the same store the sync folder's fetch writes into, so a picture that
         // arrived in a `.tendril` package and one that arrived from a peer are indistinguishable

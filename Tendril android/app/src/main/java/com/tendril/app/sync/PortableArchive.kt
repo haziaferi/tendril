@@ -5,6 +5,7 @@ import android.net.Uri
 import com.tendril.app.data.completion.EntryCompletionDao
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.data.checkin.CheckInDao
 import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.data.page.PageDao
@@ -31,6 +32,7 @@ private const val FILE_HABITS = "habits.json"
 private const val FILE_REMINDERS = "reminders.json"
 private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_HABIT_COMPLETIONS = "habit_completions.json"
+private const val FILE_CHECK_INS = "check_ins.json"
 private const val FILE_TIME_LOGS = "time_logs.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
@@ -78,6 +80,7 @@ class PortableArchive(
     private val reminderDao: ReminderDao,
     private val entryCompletionDao: EntryCompletionDao,
     private val habitCompletionDao: HabitCompletionDao,
+    private val checkInDao: CheckInDao,
     private val timeLogDao: TimeLogDao,
     private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
@@ -136,6 +139,7 @@ class PortableArchive(
         val allReminders = reminderDao.getAll()
         val allCompletions = entryCompletionDao.getAll()
         val allHabitCompletions = habitCompletionDao.getAll()
+        val allCheckIns = checkInDao.getAll()
         val allTimeLogs = timeLogDao.getAll()
         val habitIdToUid = allHabits.associate { it.id to it.uid }
         val (active, archived) = allEntries.partition { it.isActive() }
@@ -162,7 +166,7 @@ class PortableArchive(
             kind = "full",
             includedFiles = listOf(
                 FILE_ENTRIES_ACTIVE, FILE_ENTRIES_ARCHIVED, FILE_HABITS,
-                FILE_REMINDERS, FILE_ENTRY_COMPLETIONS, FILE_HABIT_COMPLETIONS, FILE_TIME_LOGS, FILE_RELATIONS, FILE_PURGED,
+                FILE_REMINDERS, FILE_ENTRY_COMPLETIONS, FILE_HABIT_COMPLETIONS, FILE_CHECK_INS, FILE_TIME_LOGS, FILE_RELATIONS, FILE_PURGED,
             ) +
                 pageRecords.map { "$PAGES_DIR_PREFIX${it.uid}.json" } +
                 imagesToPublish.map { (name, _) -> "$IMAGES_DIR_PREFIX$name" },
@@ -200,6 +204,7 @@ class PortableArchive(
                     json.encodeToString(allHabitCompletions.mapNotNull { c -> habitIdToUid[c.habitId]?.let { c.toSnapshot(it) } }),
                     key,
                 )
+                zip.writeEntry(FILE_CHECK_INS, json.encodeToString(allCheckIns.map { it.toSnapshot() }), key)
                 // §0.6.5 — every log, closed or deleted or not, on the sync folder's terms.
                 zip.writeEntry(
                     FILE_TIME_LOGS,
@@ -280,6 +285,7 @@ class PortableArchive(
         quarantined += applyReminders(decodeReminders(contents[FILE_REMINDERS]))
         quarantined += applyCompletions(decodeCompletions(contents[FILE_ENTRY_COMPLETIONS]))
         quarantined += applyHabitCompletions(decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS]))
+        quarantined += applyCheckIns(decodeCheckIns(contents[FILE_CHECK_INS]))
         quarantined += applyTimeLogs(decodeTimeLogs(contents[FILE_TIME_LOGS]))
         ImportResult(
             hadManifest = contents.containsKey(MANIFEST_NAME),
@@ -328,6 +334,7 @@ class PortableArchive(
         val reminders = decodeReminders(contents[FILE_REMINDERS])
         val completions = decodeCompletions(contents[FILE_ENTRY_COMPLETIONS])
         val habitCompletions = decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS])
+        val checkIns = decodeCheckIns(contents[FILE_CHECK_INS])
         val timeLogs = decodeTimeLogs(contents[FILE_TIME_LOGS])
         val purged = decodePurged(contents)
 
@@ -353,6 +360,7 @@ class PortableArchive(
         reminderDao.deleteAll()
         entryCompletionDao.deleteAll()
         habitCompletionDao.deleteAll()
+        checkInDao.deleteAll()
         timeLogDao.deleteAll()
         // §5.5.1.1 — Restore is "become exactly what this archive says", so this device's own
         // purge history is discarded and the archive's adopted in its place. Keeping the local
@@ -373,6 +381,7 @@ class PortableArchive(
         applyReminders(reminders)
         applyCompletions(completions)
         applyHabitCompletions(habitCompletions)
+        applyCheckIns(checkIns)
         applyTimeLogs(timeLogs)
     }
 
@@ -418,6 +427,11 @@ class PortableArchive(
     private fun decodeTimeLogs(content: String?): List<TimeLogSnapshotRecord> {
         if (content.isNullOrBlank()) return emptyList()
         return runCatching { json.decodeFromString<List<TimeLogSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
+    }
+
+    private fun decodeCheckIns(content: String?): List<CheckInSnapshotRecord> {
+        if (content.isNullOrBlank()) return emptyList()
+        return runCatching { json.decodeFromString<List<CheckInSnapshotRecord>>(content) }.getOrNull() ?: emptyList()
     }
 
     private fun decodeHabitCompletions(content: String?): List<HabitCompletionSnapshotRecord> {
@@ -623,6 +637,23 @@ class PortableArchive(
                 continue
             }
             entryCompletionDao.insert(decoded)
+        }
+        return quarantined
+    }
+
+    /** §0.10 item 4 — [applyHabitCompletions]' rule with no owner to resolve. */
+    private suspend fun applyCheckIns(records: List<CheckInSnapshotRecord>): Int {
+        var quarantined = 0
+        for (record in records) {
+            val decoded = runCatching { record.toEntity() }.getOrNull()
+            if (decoded == null) { quarantined++; continue }
+            val local = checkInDao.getByUid(record.uid)
+            val remoteDeletedAt = decoded.deletedAt
+            when {
+                local == null -> checkInDao.insert(decoded)
+                local.deletedAt == null && remoteDeletedAt != null -> checkInDao.softDelete(local.id, remoteDeletedAt)
+                else -> Unit
+            }
         }
         return quarantined
     }

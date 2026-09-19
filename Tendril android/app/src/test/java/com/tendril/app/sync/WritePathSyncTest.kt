@@ -153,7 +153,7 @@ class WritePathSyncTest {
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
             resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership,
             habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao), PageHistory(pageDao, blockDao, FakePageRevisionDao()),
-            FakeAiKeyStore(), MapKeyValueStore(),
+            FakeAiKeyStore(), MapKeyValueStore(), FakeCheckInDao(),
         )
 
         fun database(pageId: Long) = PageDatabaseViewModel(

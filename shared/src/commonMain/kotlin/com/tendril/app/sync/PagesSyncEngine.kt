@@ -64,6 +64,7 @@ data class QuarantinedRecord(val kind: String, val uid: String, val detail: Stri
         const val REMINDER = "reminder"
         const val COMPLETION = "completion"
         const val HABIT_COMPLETION = "habit completion"
+        const val CHECK_IN = "check-in"
         const val TIME_LOG = "time log"
 
         /**

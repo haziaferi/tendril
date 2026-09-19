@@ -44,6 +44,7 @@ class PortableArchiveTest {
         reminderDao: FakeReminderDao = FakeReminderDao(),
         entryCompletionDao: FakeEntryCompletionDao = FakeEntryCompletionDao(),
         habitCompletionDao: FakeHabitCompletionDao = FakeHabitCompletionDao(),
+        checkInDao: FakeCheckInDao = FakeCheckInDao(),
         timeLogDao: FakeTimeLogDao = FakeTimeLogDao(),
     ) = PortableArchive(
         context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
@@ -53,6 +54,7 @@ class PortableArchiveTest {
         reminderDao = reminderDao,
         entryCompletionDao = entryCompletionDao,
         habitCompletionDao = habitCompletionDao,
+        checkInDao = checkInDao,
         timeLogDao = timeLogDao,
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
@@ -300,6 +302,7 @@ class PortableArchiveTest {
             FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
             entryCompletionDao = FakeEntryCompletionDao(listOf(archivedCompletion(1, "c1", entry.id))),
             habitCompletionDao = FakeHabitCompletionDao(),
+            checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
         ).export(destination)
 
@@ -310,6 +313,7 @@ class PortableArchiveTest {
                 FakeEntryDao(listOf(entry)), FakeHabitDao(), backing,
                 entryCompletionDao = restoredCompletions,
                 habitCompletionDao = FakeHabitCompletionDao(),
+                checkInDao = FakeCheckInDao(),
                 timeLogDao = FakeTimeLogDao(),
             ).importAdditive(backing.givenFile(exported))
         }

@@ -8,6 +8,8 @@ import com.tendril.app.data.enumOrNull
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.habit.HabitCompletionDao
+import com.tendril.app.data.checkin.CheckIn
+import com.tendril.app.data.checkin.CheckInDao
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
@@ -45,6 +47,7 @@ private const val FILE_HABITS = "habits.json"
 private const val FILE_REMINDERS = "reminders.json"
 private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_HABIT_COMPLETIONS = "habit_completions.json"
+private const val FILE_CHECK_INS = "check_ins.json"
 private const val FILE_TIME_LOGS = "time_logs.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
@@ -63,7 +66,7 @@ private const val FILE_META = "sync_meta.json"
  * both would put one uid in two files at once. Pooling by family says that once, instead of
  * leaving each future file to remember it.
  */
-private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION, HABIT_COMPLETION, TIME_LOG }
+private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION, HABIT_COMPLETION, CHECK_IN, TIME_LOG }
 
 /**
  * **Every folder-wide array file the write pass publishes — the list a new one must join.**
@@ -109,6 +112,7 @@ private enum class FolderArrayFile(
         RecordFamily.HABIT_COMPLETION,
         HabitCompletionSnapshotRecord.serializer().descriptor,
     ),
+    CHECK_INS(FILE_CHECK_INS, RecordFamily.CHECK_IN, CheckInSnapshotRecord.serializer().descriptor),
     TIME_LOGS(FILE_TIME_LOGS, RecordFamily.TIME_LOG, TimeLogSnapshotRecord.serializer().descriptor),
     RELATIONS(FILE_RELATIONS, RecordFamily.RELATION, PageRelationSnapshotRecord.serializer().descriptor),
     PURGED(FILE_PURGED, RecordFamily.PURGE, PurgedRecordSnapshot.serializer().descriptor),
@@ -336,6 +340,7 @@ private class ReadTally {
     val reminders = HeldBuilder(FolderArrayFile.REMINDERS, quarantined)
     val completions = HeldBuilder(FolderArrayFile.ENTRY_COMPLETIONS, quarantined)
     val habitCompletions = HeldBuilder(FolderArrayFile.HABIT_COMPLETIONS, quarantined)
+    val checkIns = HeldBuilder(FolderArrayFile.CHECK_INS, quarantined)
     val timeLogs = HeldBuilder(FolderArrayFile.TIME_LOGS, quarantined)
     val relations = HeldBuilder(FolderArrayFile.RELATIONS, quarantined)
     val purged = HeldBuilder(FolderArrayFile.PURGED, quarantined)
@@ -444,6 +449,7 @@ class SnapshotSyncOrchestrator(
     private val reminderDao: ReminderDao,
     private val entryCompletionDao: EntryCompletionDao,
     private val habitCompletionDao: HabitCompletionDao,
+    private val checkInDao: CheckInDao,
     private val timeLogDao: TimeLogDao,
     private val pagesSyncEngine: PagesSyncEngine,
     private val purgeRegistry: PurgeRegistry,
@@ -638,6 +644,7 @@ class SnapshotSyncOrchestrator(
         val allReminders = reminderDao.getAll()
         val allCompletions = entryCompletionDao.getAll()
         val allHabitCompletions = habitCompletionDao.getAll()
+        val allCheckIns = checkInDao.getAll()
         val allTimeLogs = timeLogDao.getAll()
         val habitIdToUid = allHabits.associate { it.id to it.uid }
         val (active, archived) = allEntries.partition { it.isActive() }
@@ -692,6 +699,9 @@ class SnapshotSyncOrchestrator(
                         allHabitCompletions.filterNot { it.uid in suppressed }
                             .mapNotNull { c -> habitIdToUid[c.habitId]?.let { c.toSnapshot(it) } }
                     )
+                // §0.10 item 4 — the completions' rule, with no owner to resolve.
+                FolderArrayFile.CHECK_INS ->
+                    elementsOf(allCheckIns.filterNot { it.uid in suppressed }.map { it.toSnapshot() })
                 // §0.6.5 — both edited and tombstoned, so every row travels, closed or deleted or
                 // not. The owner is whichever of the two the log has; a log with neither, or with
                 // an owner Room no longer holds, is a state the cascades do not permit — dropped
@@ -1039,6 +1049,7 @@ class SnapshotSyncOrchestrator(
         mergeHabitFile(store, read)
         // After the Habits, for the same reason the two below follow the Entries.
         mergeHabitCompletionFile(store, read)
+        mergeCheckInFile(store, read)
         // After the Entries, necessarily: both resolve `entryUid` to a local Entry id, and a
         // record whose owner has not merged here yet is held rather than dropped — see
         // [mergeReminderContent].
@@ -1067,6 +1078,7 @@ class SnapshotSyncOrchestrator(
                     mergeCompletionContent(readRootText(store, name, read), read.tally)
                 name.startsWith("habit_completions") ->
                     mergeHabitCompletionContent(readRootText(store, name, read), read.tally)
+                name.startsWith("check_ins") -> mergeCheckInContent(readRootText(store, name, read), read.tally)
                 name.startsWith("time_logs") -> mergeTimeLogContent(readRootText(store, name, read), read.tally)
                 name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, read))
                 name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, read))
@@ -1098,6 +1110,7 @@ class SnapshotSyncOrchestrator(
                     FolderArrayFile.REMINDERS -> read.tally.reminders
                     FolderArrayFile.ENTRY_COMPLETIONS -> read.tally.completions
                     FolderArrayFile.HABIT_COMPLETIONS -> read.tally.habitCompletions
+                    FolderArrayFile.CHECK_INS -> read.tally.checkIns
                     FolderArrayFile.TIME_LOGS -> read.tally.timeLogs
                     FolderArrayFile.RELATIONS -> read.tally.relations
                     FolderArrayFile.PURGED -> read.tally.purged
@@ -1791,6 +1804,45 @@ class SnapshotSyncOrchestrator(
                 local == null -> habitCompletionDao.insert(entity)
                 local.deletedAt == null && remoteDeletedAt != null ->
                     habitCompletionDao.softDelete(local.id, remoteDeletedAt)
+                else -> Unit
+            }
+        }
+        return allRead
+    }
+
+    private suspend fun mergeCheckInFile(store: SyncFileStore, read: ReadKey) {
+        mergeCheckInContent(readRootText(store, FolderArrayFile.CHECK_INS.fileName, read), read.tally, held = read.tally.checkIns)
+    }
+
+    /** §0.10 item 4 — [mergeHabitCompletionContent]'s rule with nothing to resolve: a check-in has
+     * no owner, so a record is either inserted, tombstoned, or already known. */
+    private suspend fun mergeCheckInContent(content: String, tally: ReadTally, held: HeldBuilder? = null): Boolean {
+        val elements = decodeArray(content, held) ?: return false
+        var allRead = true
+        for (element in elements) {
+            val record = decodeRecord<CheckInSnapshotRecord>(element)
+            if (record == null) {
+                allRead = false
+                tally.quarantineElement(QuarantinedRecord.CHECK_IN, element)
+                held?.hold(element, element.uidOrNull())
+                continue
+            }
+            val entity: CheckIn? = try {
+                record.toEntity()
+            } catch (e: SnapshotDecodeException) {
+                tally.quarantine(QuarantinedRecord.CHECK_IN, record.uid, e)
+                null
+            }
+            if (entity == null) {
+                allRead = false
+                held?.hold(element, record.uid)
+                continue
+            }
+            val local = checkInDao.getByUid(record.uid)
+            val remoteDeletedAt = entity.deletedAt
+            when {
+                local == null -> checkInDao.insert(entity)
+                local.deletedAt == null && remoteDeletedAt != null -> checkInDao.softDelete(local.id, remoteDeletedAt)
                 else -> Unit
             }
         }
