@@ -37,6 +37,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.tendril.app.ui.nav.LocalSystemTextScale
 import com.tendril.app.ui.nav.LocalTitleBarInstaller
 import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
 import androidx.compose.ui.window.Notification
@@ -225,6 +226,15 @@ fun main() {
                 false
             },
         ) {
+            // The system's text size, re-read when the window comes back from Settings.
+            androidx.compose.runtime.DisposableEffect(window) {
+                val listener = object : java.awt.event.WindowFocusListener {
+                    override fun windowGainedFocus(e: java.awt.event.WindowEvent?) { mainWindow.systemTextScale = WindowsTextScale.read() }
+                    override fun windowLostFocus(e: java.awt.event.WindowEvent?) {}
+                }
+                window.addWindowFocusListener(listener)
+                onDispose { window.removeWindowFocusListener(listener) }
+            }
             LaunchedEffect(Unit) {
                 window.minimumSize = Dimension(MIN_WINDOW.w, MIN_WINDOW.h)
                 mainWindow.front = { window.toFront(); window.requestFocus() }
@@ -243,7 +253,9 @@ fun main() {
             val titleBarInstaller = remember(window) { DesktopTitleBarInstaller(window) }
             CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
-                App(core, orchestrator, folderManager, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
+                CompositionLocalProvider(LocalSystemTextScale provides mainWindow.systemTextScale) {
+                    App(core, orchestrator, folderManager, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
+                }
             }
             }
         }

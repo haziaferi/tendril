@@ -46,7 +46,14 @@ fun WorkbenchEnvironment(
     val storedProfile by core.keyValueStore.observe(DENSITY_PROFILE_KEY).collectAsState(initial = core.keyValueStore.get(DENSITY_PROFILE_KEY))
     val profile = fixedDensityProfile ?: DensityProfile.fromKey(storedProfile)
     val side = shorterSideDp ?: (minOf(containerSize.width, containerSize.height) / baseDensity.density)
-    val scale = if (platformScaled) 1f else shellScaleFor(side, profile)
+    // The desktop's reference is the system's text size (`LocalSystemTextScale`, 2026-09-19); the
+    // window's side is the phone's rule and the fallback where no platform provides the local.
+    val systemTextScale = LocalSystemTextScale.current
+    val scale = when {
+        platformScaled -> 1f
+        systemTextScale != null -> systemTextScale * profile.factor
+        else -> shellScaleFor(side, profile)
+    }
     val scaledDensity = remember(baseDensity, scale) { Density(baseDensity.density * scale, baseDensity.fontScale) }
     // L5 — the window's title bar is the bar (`TitleBar.kt`): installed here, where every window's
     // content passes (the main scaffold and each pop-out), once the scaled density is known — the

@@ -9,7 +9,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * calendar's `DAY_WIDTH`, a slide-over's 440 — converts to pixels through the same factor. No
  * site is edited; none can forget.
  *
- * The factor is the window's shorter side over 800 dp, clamped to 0.85…1.25, times a profile:
+ * **On the desktop (decided 2026-09-19, the user's brief: no other app resizes its type with its
+ * window) the reference is Windows' own text size** — Settings › Accessibility › Text size,
+ * 100…225 % — times the profile ([systemTextScale]); the window's size plays no part, and display
+ * scaling is already in the runtime's density. The rule below stays the phone's, whose screen
+ * is fixed. On the phone the factor is the screen's shorter side over 800 dp, clamped to 0.85…1.25, times a profile:
  * *Compact* 0.85 (the desktop's default, chosen in its Settings), *Comfortable* 0.95, *Touch*
  * 1.23 (the phone, fixed — a finger does not get a setting). The three were 0.9 / 1.0 / 1.3 until
  * 2026-09-16: beside Notion at the same window Compact read "a bit large" (the user, mid-walk of
@@ -54,6 +58,18 @@ val LocalDensityProfile = staticCompositionLocalOf { DensityProfile.TOUCH }
 const val SCALE_REFERENCE_DP = 800f
 const val SCALE_MIN = 0.85f
 const val SCALE_MAX = 1.25f
+
+/** The desktop's factor: the system's text size (100…225, the registry's percent; anything
+ * else reads as 100) times the profile. Pure, so the rule is testable without a registry. */
+fun systemTextScale(percent: Int): Float = if (percent in 100..225) percent / 100f else 1f
+
+fun desktopShellScale(textScalePercent: Int, profile: DensityProfile): Float = systemTextScale(textScalePercent) * profile.factor
+
+/**
+ * The desktop's text-size factor for the composition below it, or null where the platform has
+ * none (the phone reads its screen). Provided per window on the desktop, re-read on focus.
+ */
+val LocalSystemTextScale = staticCompositionLocalOf<Float?> { null }
 
 fun shellScaleFor(shorterSideDp: Float, profile: DensityProfile): Float {
     val screen = if (shorterSideDp.isFinite() && shorterSideDp > 0f) (shorterSideDp / SCALE_REFERENCE_DP).coerceIn(SCALE_MIN, SCALE_MAX) else 1f

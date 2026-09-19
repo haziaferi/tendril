@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,6 +42,7 @@ import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.domain.quickAddEntry
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.entries.QuickAddField
+import com.tendril.app.ui.nav.LocalSystemTextScale
 import com.tendril.app.ui.nav.WorkbenchEnvironment
 import com.tendril.app.ui.theme.TendrilTheme
 import com.tendril.app.ui.theme.caption
@@ -106,6 +108,7 @@ internal fun QuickAddWindow(core: WorkbenchCore, state: QuickAddState, main: Mai
         val theme = core.themeSettings.observe()
         val scope = rememberCoroutineScope()
         TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
+            CompositionLocalProvider(LocalSystemTextScale provides main.systemTextScale) {
             WorkbenchEnvironment(core, shorterSideDp = main.shorterSideDp, wide = true) {
                 Box(modifier = Modifier.padding(SHADOW.dp)) {
                     Surface(
@@ -146,6 +149,7 @@ internal fun QuickAddWindow(core: WorkbenchCore, state: QuickAddState, main: Mai
                         }
                     }
                 }
+            }
             }
         }
     }

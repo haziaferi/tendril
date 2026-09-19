@@ -26,6 +26,17 @@ class ShellScaleTest {
         assertEquals(1.25f * 0.85f, shellScaleFor(4000f, DensityProfile.COMPACT), eps)
     }
 
+    /** The desktop (2026-09-19): Windows' text size times the profile; the window plays no part. */
+    @Test
+    fun `the desktop scales by the system text size, and reads anything odd as 100 percent`() {
+        assertEquals(0.85f, desktopShellScale(100, DensityProfile.COMPACT), eps)
+        assertEquals(1.25f * 0.85f, desktopShellScale(125, DensityProfile.COMPACT), eps)
+        assertEquals(2.25f * 0.95f, desktopShellScale(225, DensityProfile.COMFORTABLE), eps)
+        assertEquals(0.85f, desktopShellScale(0, DensityProfile.COMPACT), eps)
+        assertEquals(0.85f, desktopShellScale(300, DensityProfile.COMPACT), eps)
+        assertEquals(1f, systemTextScale(-5), eps)
+    }
+
     @Test
     fun `a side that is not a size is neutral, never a crash`() {
         assertEquals(0.85f, shellScaleFor(Float.NaN, DensityProfile.COMPACT), eps)
