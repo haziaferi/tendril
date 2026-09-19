@@ -239,6 +239,9 @@ class FakeHabitCompletionDao(seed: List<HabitCompletion> = emptyList()) : HabitC
     override fun observeForHabit(habitId: Long): Flow<List<HabitCompletion>> =
         flowOf(rows.values.filter { it.habitId == habitId && it.deletedAt == null }.sortedByDescending { it.date })
 
+    override fun observeLiveForDay(date: LocalDate): Flow<List<HabitCompletion>> =
+        flowOf(rows.values.filter { it.date == date && it.deletedAt == null })
+
     override suspend fun getLiveForDay(habitId: Long, date: LocalDate): List<HabitCompletion> =
         rows.values.filter { it.habitId == habitId && it.date == date && it.deletedAt == null }
 

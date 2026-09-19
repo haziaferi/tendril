@@ -84,4 +84,38 @@ class CheckInHabitLogTest {
         useCase.undoCheckIn(id, today)
         assertTrue(logDao.getAll().isEmpty())
     }
+
+    // ------------------------------------------------------------- §0.10 item 3 — a counting habit
+
+    private fun seedCounting(): Long = runBlocking {
+        habitDao.insert(
+            Habit(title = "Water", frequency = HabitFrequency(1, IntervalUnit.DAY), unit = "cups", amountPerCheckIn = 1.0, dailyAmount = 3.0, createdAt = Instant.EPOCH, updatedAt = Instant.EPOCH),
+        )
+    }
+
+    @Test
+    fun `a counting habit logs every tap with its amount and the day counts once`() = runBlocking {
+        val id = seedCounting()
+        useCase.checkIn(id, today)
+        useCase.checkIn(id, today)
+        useCase.checkIn(id, today, value = 2.5)
+        val live = logDao.getLiveForDay(id, today)
+        assertEquals(listOf(1.0, 1.0, 2.5), live.map { it.value })
+        val habit = habitDao.getById(id)!!
+        assertEquals(today, habit.lastCompletedDate)
+        assertEquals("the day counts once, however many cups", 1, habit.streak)
+    }
+
+    @Test
+    fun `undo on a counting habit removes the last cup and keeps the day until the last goes`() = runBlocking {
+        val id = seedCounting()
+        useCase.checkIn(id, today)
+        useCase.checkIn(id, today)
+        useCase.undoCheckIn(id, today)
+        assertEquals(1, logDao.getLiveForDay(id, today).size)
+        assertEquals("the day still stands on the first cup", today, habitDao.getById(id)!!.lastCompletedDate)
+        useCase.undoCheckIn(id, today)
+        assertEquals(0, logDao.getLiveForDay(id, today).size)
+        assertNull("the last cup undone takes the day with it", habitDao.getById(id)!!.lastCompletedDate)
+    }
 }

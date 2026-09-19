@@ -22,6 +22,10 @@ data class HabitPresence(
      * leave it *empty*, never mark it missed. */
     val daysThisMonth: Set<LocalDate>,
     val month: YearMonth,
+    /** §0.10 item 3 — a counting habit's amounts: today's and the month's sums of what was logged;
+     * null when nothing was (a plain habit, or nothing yet). Presence still: a sum of things done. */
+    val amountToday: Double? = null,
+    val amountThisMonth: Double? = null,
 )
 
 enum class TimeOfDay { MORNING, AFTERNOON, EVENING, NIGHT }
@@ -52,11 +56,20 @@ fun habitPresenceOf(
     val usual = buckets.maxByOrNull { it.value }
         ?.takeIf { live.size >= 3 && it.value * 2 > live.size }
         ?.key
+    val valued = live.filter { it.value != null }
     return HabitPresence(
         timesThisMonth = daysThisMonth.size,
         lastDate = live.maxOfOrNull { it.date },
         usualTime = usual,
         daysThisMonth = daysThisMonth,
         month = month,
+        amountToday = valued.filter { it.date == today }.sumOf { it.value!! }.takeIf { valued.any { c -> c.date == today } },
+        amountThisMonth = valued.filter { YearMonth.from(it.date) == month }.sumOf { it.value!! }.takeIf { valued.any { c -> YearMonth.from(c.date) == month } },
     )
+}
+
+/** *2 cups* — the amount without a trailing `.0`, the unit as typed (never pluralised by the app). */
+fun amountLabel(amount: Double, unit: String?): String {
+    val n = if (amount == amount.toLong().toDouble()) amount.toLong().toString() else amount.toString()
+    return if (unit.isNullOrBlank()) n else "$n $unit"
 }

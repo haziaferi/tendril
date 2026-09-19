@@ -256,3 +256,14 @@ val MIGRATION_19_20 = object : Migration(19, 20) {
         connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_entries_uid` ON `entries` (`uid`)")
     }
 }
+
+/** §0.10 item 3 (2026-09-19) — measurable habits: three nullable columns on `habits`, one on
+ * `habit_completions`. A plain habit's rows carry null and read as before. */
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `unit` TEXT")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `amountPerCheckIn` REAL")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `dailyAmount` REAL")
+        connection.execSQL("ALTER TABLE `habit_completions` ADD COLUMN `value` REAL")
+    }
+}

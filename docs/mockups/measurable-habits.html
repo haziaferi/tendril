@@ -1,0 +1,107 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Measurable Habits</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+*{box-sizing:border-box}body{margin:0;background:#EEF0F3;color:#1B1B18;font:13.5px/1.45 Inter,system-ui,sans-serif;padding:24px}
+h1{font:600 22px/1.2 Inter,sans-serif;margin:0 0 4px}h2{font:600 15px/1.2 Inter,sans-serif;margin:26px 0 2px}.lead{color:#5B5B58;max-width:100ch;margin:0 0 14px}.note{color:#5B5B58;max-width:100ch;margin:-4px 0 8px;font-size:12.5px}
+.frame{margin:10px 0 0}.compare{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}.badge{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#5B5B58;margin:0 0 6px}
+.shell{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.18);position:relative;display:flex;flex-direction:column;width:900px;height:430px}
+.bar{height:52px;display:flex;align-items:center;border-bottom:1px solid var(--border);flex:none}
+.railtop{width:84px;height:100%;display:flex;align-items:center;justify-content:center;flex:none}.mark{width:18px;height:18px;border-radius:5px;background:var(--accent)}
+.title{display:flex;align-items:center;gap:8px;padding:0 8px 0 16px;flex:1;min-width:0;font-size:18px;font-weight:600}
+.actions{display:flex;align-items:center;gap:4px;padding-right:8px}.ib{width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--text);font-size:14px}
+.caption{display:flex;height:100%;flex:none}.caption span{width:46px;height:100%;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text)}
+.body{display:flex;flex:1;min-height:0}
+.rail{width:84px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:6px}.ri{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--dim);width:64px;padding:6px 0;border-radius:6px}.ri.on{background:var(--soft);color:var(--text)}.ri i{width:18px;height:18px;border-radius:4px;border:1.5px solid currentColor;display:block}
+.list{width:420px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column}
+.ph{height:52px;display:flex;align-items:center;padding:0 8px 0 10px;border-bottom:1px solid var(--border);gap:4px}.tab{height:28px;padding:0 10px;border-radius:6px;display:inline-flex;align-items:center;font-size:14px;font-weight:600;color:var(--dim)}.tab.on{background:var(--soft);color:var(--text)}
+.row{height:29px;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;font-size:14px}.row.sel{background:var(--soft)}
+.cb{width:16px;height:16px;border:1.5px solid var(--dim);border-radius:3px;flex:none}.cb.on{background:var(--accent);border-color:var(--accent)}.cb.plusdisc{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text);border-color:var(--text)}.prow .cb.plusdisc{font-size:16px}
+.meta{color:var(--dim);font-size:12.5px;white-space:nowrap}.grow{flex:1;min-width:0}
+.plus{height:22px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.pane{flex:1;padding:20px 20px;min-width:0}.pane h3{font:600 18px/1.3 Inter,sans-serif;margin:0 0 10px}
+.dr{display:flex;gap:16px;height:29px;align-items:center;font-size:14px}.dr .k{width:120px;color:var(--dim);flex:none}.dr .v{color:var(--text)}.dr .v.none{color:var(--dim);font-style:italic}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}.chip{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.eyebrow{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:16px 0 6px}
+.dots{display:grid;grid-template-columns:repeat(7,22px);gap:4px}.dots span{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--dim)}.dots span.on{background:var(--habitSoft);color:var(--text);font-weight:500}.dots span.big{background:var(--habit);color:var(--on)}
+/* the phone */
+.phone{width:360px;height:640px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.pbar{height:52px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:1px solid var(--border);font-size:20px;font-weight:600;flex:none}
+.phead{height:52px;display:flex;align-items:center;padding:0 8px;gap:4px;border-bottom:1px solid var(--border)}.phead .tab{height:40px;font-size:16px}
+.prow{height:56px;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:16px}.prow .cb{width:20px;height:20px}.prow .meta{font-size:14px}.prow .plus{height:36px;font-size:14px;padding:0 12px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:12px 20px 20px}.sheet .handle{width:32px;height:4px;border-radius:2px;background:var(--faint);margin:0 auto 10px}.sheet h4{font:600 20px/1.3 Inter,sans-serif;margin:0 0 8px}.sheet p{margin:0 0 4px;font-size:16px;line-height:24px}.sheet .chips .chip{height:48px;font-size:14px;padding:0 14px}
+/* the add sheet (slide-over) */
+.so{width:440px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.3);padding:0 20px 20px}
+.so .h{height:52px;display:flex;align-items:center;justify-content:space-between;font-size:18px;font-weight:600}
+.f36{height:36px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;padding:0 12px;font-size:14px;margin:6px 0 10px}.f36 .lab{width:110px;color:var(--dim);font-size:12.5px;font-weight:500}.f36 .ph{color:var(--dim)}
+.sw{display:flex;align-items:center;justify-content:space-between;height:36px;font-size:14px}.tog{width:36px;height:20px;border-radius:10px;background:var(--soft);position:relative}.tog.on{background:var(--accent)}.tog i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--bg)}.tog.on i{left:18px}
+.so .desc{color:var(--dim);font-size:12.5px;margin:2px 0 8px}
+.foot{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.btn{height:28px;padding:0 10px;border-radius:6px;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center}.btn.p{background:var(--accent);color:var(--on)}
+</style></head><body>
+<h1>Measurable Habits</h1><p class="lead">§0.10 item 3 — a value on the habit's log entry. Ground measured on the phone (TickTick 7, Italian): a habit's goal is <i>Realizza tutto</i> (a check) or <i>Raggiungere una certa quantità</i> — a daily amount (3), a unit (<i>Tazza</i>), an amount recorded per check-in (1) and whether the check-in records it automatically; the row then reads <b>'0 / 3 Tazza'</b> and each tap on its icon adds one (<b>'1 / 3 Tazza'</b>); the detail carries a progress bar under the same fraction, and its statistics list <i>Completamento mensile 1 Tazza</i> and <i>Totale completamento</i> beside a monthly rate in % and a streak. B§10.3's rule (§0.6.6): presence, never absence — no fraction, no bar, no percentage, no chain by default. What is taken from TickTick: the unit, the amount per check-in, a repeatable check-in, the monthly and total amounts. What is not: the fraction on the row, the bar, the rate. The number the person sets, if any, is shown once and as a sentence. 1 px = 1 dp.</p>
+
+<h2>Today — a habit is a check, once a day</h2>
+<section class="frame" style="--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#909194;--faint:#727376;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--habit:#C9A0B6;--habitSoft:#3E3238"><div class="shell">
+<div class="bar"><div class="railtop"><div class="mark"></div></div><div class="title">Tasks</div><div class="actions"><span class="ib">☑</span><span class="ib">🗑</span><span class="ib">+</span></div><div class="caption"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="body"><div class="rail"><div class="ri"><i></i>Pages</div><div class="ri"><i></i>Calendar</div><div class="ri on"><i></i>Tasks</div><div class="ri"><i></i>Road Map</div><div class="ri"><i></i>Settings</div></div>
+<div class="list"><div class="ph"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div><div class="row"><span class="cb"></span><span class="grow">Stretch</span><span class="meta">Every day</span></div>
+<div class="row sel"><span class="cb on"></span><span class="grow">Water</span><span class="meta">Every day</span></div>
+<div class="row"><span class="cb"></span><span class="grow">Read</span><span class="meta">Every 3 days</span></div></div>
+<div class="pane"><h3>Water</h3>
+<div class="dr"><span class="k">Repeats</span><span class="v">Every day</span></div>
+<div class="dr"><span class="k">At</span><span class="v none">any time</span></div>
+<div class="dr"><span class="k">For</span><span class="v none">no length</span></div>
+<div class="eyebrow">Presence</div>
+<div style="font-size:14px;line-height:22px">Four times this month<br>Usually mornings<br>Last: Thursday, 18 Sep</div>
+<div class="chips"><span class="chip">Undo today's check-in</span><span class="chip">▶ Start timer</span><span class="chip">Move to Trash</span></div></div></div></div></section>
+<h2>Proposed — a habit that counts: the row's check becomes <i>+ 1 cup</i>, repeatable; the meta says what was done today</h2>
+<p class="note">The row: a <code>+</code> disc in the checkbox's own slot (the critique's #1 — 28 dp under a pointer, 40 in a 48 dp target on the phone, so titles stay aligned), the day's total as the meta (<i>2 cups today</i>) where a plain habit shows its cadence. The pane: <i>Counts</i> (the unit and the amount a check-in adds) and <i>You set</i> (the optional number, a sentence — never <i>2 / 3</i>); the presence gains the amounts — <i>2 cups today</i>, <i>41 cups this month, on 12 days</i>; the month of dots unchanged (a day with a check-in has a dot; the amount is not drawn as a size). <i>Undo the last cup</i> tombstones the last check-in, as undo does today.</p>
+<section class="frame" style="--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#909194;--faint:#727376;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--habit:#C9A0B6;--habitSoft:#3E3238"><div class="shell">
+<div class="bar"><div class="railtop"><div class="mark"></div></div><div class="title">Tasks</div><div class="actions"><span class="ib">☑</span><span class="ib">🗑</span><span class="ib">+</span></div><div class="caption"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="body"><div class="rail"><div class="ri"><i></i>Pages</div><div class="ri"><i></i>Calendar</div><div class="ri on"><i></i>Tasks</div><div class="ri"><i></i>Road Map</div><div class="ri"><i></i>Settings</div></div>
+<div class="list"><div class="ph"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div><div class="row"><span class="cb"></span><span class="grow">Stretch</span><span class="meta">Every day</span></div>
+<div class="row sel"><span class="cb plusdisc">+</span><span class="grow">Water</span><span class="meta">2 cups today</span></div>
+<div class="row"><span class="cb"></span><span class="grow">Read</span><span class="meta">Every 3 days</span></div></div>
+<div class="pane"><h3>Water</h3>
+<div class="dr"><span class="k">Repeats</span><span class="v">Every day</span></div>
+<div class="dr"><span class="k">At</span><span class="v none">any time</span></div>
+<div class="dr"><span class="k">Counts</span><span class="v">cups, 1 a check-in</span></div>
+<div class="dr"><span class="k">You set</span><span class="v">3 cups a day</span></div>
+<div class="eyebrow">Presence</div>
+<div style="font-size:14px;line-height:22px">2 cups today<br>41 cups this month, on 12 days<br>Usually mornings<br>Last: today</div>
+<div class="chips"><span class="chip">+ 1 cup</span><span class="chip">Undo the last cup</span><span class="chip">▶ Start timer</span><span class="chip">Move to Trash</span></div>
+<div class="eyebrow">September</div>
+<div class="dots"><span>1</span><span class="on">2</span><span>3</span><span class="on">4</span><span class="on">5</span><span>6</span><span>7</span><span class="on">8</span><span>9</span><span class="on">10</span><span class="on">11</span><span>12</span><span>13</span><span class="on">14</span><span class="on">15</span><span>16</span><span class="on">17</span><span class="on">18</span><span class="big">19</span></div></div></div></div></section>
+<h2>The phone — the same row at 56 dp, the same sheet</h2>
+<div class="compare"><section class="frame" style="--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#909194;--faint:#727376;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--habit:#C9A0B6;--habitSoft:#3E3238"><div class="phone"><div class="pbar">Tasks</div><div class="phead"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div>
+<div class="prow"><span class="cb"></span><span class="grow">Stretch</span><span class="meta">Every day</span></div>
+<div class="prow"><span class="cb plusdisc">+</span><span class="grow">Water</span><span class="meta">2 cups today</span></div>
+<div class="prow"><span class="cb"></span><span class="grow">Read</span><span class="meta">Every 3 days</span></div>
+<div class="sheet"><div class="handle"></div><h4>Water</h4><p>2 cups today</p><p>41 cups this month, on 12 days</p><p>Usually mornings</p><p>Last: today</p><p style="color:var(--dim);font-size:14px;line-height:20px;margin-top:6px">3 cups a day is what you set</p>
+<div class="chips"><span class="chip">+ 1 cup</span><span class="chip">Undo the last cup</span></div></div></div></section><div><div class="badge">New habit — three fields when the switch is on</div><section class="frame" style="--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#909194;--faint:#727376;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--habit:#C9A0B6;--habitSoft:#3E3238"><div class="so"><div class="h">New habit <span style="font-weight:400;color:var(--dim)">✕</span></div>
+<div class="f36"><span class="lab">Title</span>Water</div>
+<div class="sw">Every <span class="chip" style="height:28px">1 day ▾</span></div>
+<div class="sw">Has time<span class="tog"><i></i></span></div>
+<div class="sw">Has a length<span class="tog"><i></i></span></div>
+<div class="sw">Counts something<span class="tog on"><i></i></span></div>
+<div class="f36"><span class="lab">Unit</span>cups</div>
+<div class="f36"><span class="lab">Each check-in</span>1</div>
+<div class="f36"><span class="lab">A day, if you like</span><span class="ph">3</span></div>
+<div class="desc">A number you set for yourself. The row and the sheet count what you did; the number is shown once, in the sheet, and never as a fraction, a bar or a percentage.</div>
+<div class="foot"><span class="btn">Cancel</span><span class="btn p">Add</span></div></div></section></div></div>
+<h2>Chalk light</h2>
+<section class="frame" style="--bg:#FBFBFA;--s2:#F3F3F2;--text:#343638;--dim:#6C6D6E;--faint:#8A8B8B;--accent:#574C38;--on:#FFFFFF;--soft:#E7E6E3;--border:#E5E5E5;--habit:#7A3F5F;--habitSoft:#EFE0E8"><div class="shell">
+<div class="bar"><div class="railtop"><div class="mark"></div></div><div class="title">Tasks</div><div class="actions"><span class="ib">☑</span><span class="ib">🗑</span><span class="ib">+</span></div><div class="caption"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="body"><div class="rail"><div class="ri"><i></i>Pages</div><div class="ri"><i></i>Calendar</div><div class="ri on"><i></i>Tasks</div><div class="ri"><i></i>Road Map</div><div class="ri"><i></i>Settings</div></div>
+<div class="list"><div class="ph"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div><div class="row"><span class="cb"></span><span class="grow">Stretch</span><span class="meta">Every day</span></div>
+<div class="row sel"><span class="cb plusdisc">+</span><span class="grow">Water</span><span class="meta">2 cups today</span></div>
+<div class="row"><span class="cb"></span><span class="grow">Read</span><span class="meta">Every 3 days</span></div></div>
+<div class="pane"><h3>Water</h3>
+<div class="dr"><span class="k">Repeats</span><span class="v">Every day</span></div>
+<div class="dr"><span class="k">At</span><span class="v none">any time</span></div>
+<div class="dr"><span class="k">Counts</span><span class="v">cups, 1 a check-in</span></div>
+<div class="dr"><span class="k">You set</span><span class="v">3 cups a day</span></div>
+<div class="eyebrow">Presence</div>
+<div style="font-size:14px;line-height:22px">2 cups today<br>41 cups this month, on 12 days<br>Usually mornings<br>Last: today</div>
+<div class="chips"><span class="chip">+ 1 cup</span><span class="chip">Undo the last cup</span><span class="chip">▶ Start timer</span><span class="chip">Move to Trash</span></div>
+<div class="eyebrow">September</div>
+<div class="dots"><span>1</span><span class="on">2</span><span>3</span><span class="on">4</span><span class="on">5</span><span>6</span><span>7</span><span class="on">8</span><span>9</span><span class="on">10</span><span class="on">11</span><span>12</span><span>13</span><span class="on">14</span><span class="on">15</span><span>16</span><span class="on">17</span><span class="on">18</span><span class="big">19</span></div></div></div></div></section>
+</body></html>

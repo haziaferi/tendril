@@ -90,7 +90,7 @@ import kotlinx.coroutines.Dispatchers
     //
     // v9 adds `uid` to `reminders` and `entry_completions` (S2). Unlike every bump
     // before it, it is migrated rather than destructive — see [MIGRATION_8_9].
-    version = 20, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log; v11 §0.8 step 2b dueDate binding; v12 §0.6.2 Block.mindMap; v13 §0.6.8 schema on a label; v14 §0.6.5 time_logs; v15 §0.6.11 lastReviewedAt; v16 §3.1.1 page_fts emptied so titles get indexed; v17 §0.6.12 blocks.referencedBlockUid; v18 §0.6.13 page_revisions; v19 §0.6.14 timeline end date + blockedBy; v20 B§13.8.1 entries.important → importance
+    version = 21, // §3.2/§9.9/§5.5.1.1/§9.4 — v5 providerEventId; Canvas tables; purge tombstones; v9 reminder+completion uid; v10 §0.6.4 Entry fields + §0.6.6 habit log; v11 §0.8 step 2b dueDate binding; v12 §0.6.2 Block.mindMap; v13 §0.6.8 schema on a label; v14 §0.6.5 time_logs; v15 §0.6.11 lastReviewedAt; v16 §3.1.1 page_fts emptied so titles get indexed; v17 §0.6.12 blocks.referencedBlockUid; v18 §0.6.13 page_revisions; v19 §0.6.14 timeline end date + blockedBy; v20 B§13.8.1 entries.important → importance; v21 §0.10 item 3 measurable habits
     exportSchema = true, // §9.10 — see `shared/schemas/`; a version with no JSON cannot be migrated from
 )
 @TypeConverters(Converters::class)
@@ -170,7 +170,7 @@ internal fun finishBuilding(
     builder
         .setDriver(driver)
         .setQueryCoroutineContext(Dispatchers.IO)
-        .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20) // §9.10 — the declared paths, tried before any fallback
+        .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21) // §9.10 — the declared paths, tried before any fallback
         // §9.10 / S1b — destructive **only** from a pre-v9 schema. See [PRE_RELEASE_VERSIONS].
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, *PRE_RELEASE_VERSIONS)
         .build()

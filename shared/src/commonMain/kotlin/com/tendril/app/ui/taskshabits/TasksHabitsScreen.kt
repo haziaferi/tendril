@@ -84,6 +84,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
+import com.tendril.app.domain.amountLabel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -697,6 +698,7 @@ private fun HabitsList(
     val keyState = remember { ListKeyState() }
     TypeAheadReset(keyState)
     BackHandler(enabled = keyState.hasSomethingToClear) { keyState.clear() }
+    val amountsToday by viewModel.amountsToday.collectAsState()   // §0.10 item 3 — the counting rows' meta
     LazyColumn(
         modifier = Modifier.fillMaxSize().listKeyboard(
             state = keyState,
@@ -714,6 +716,7 @@ private fun HabitsList(
                 keyFocused = keyState.focused == index && keyboardCursorShown(),
                 typed = keyState.typed,
                 selected = selectedId == habit.id,
+                amountsToday = amountsToday,
             )
         }
     }
@@ -739,6 +742,7 @@ private fun HabitRow(
     onKeyboardFocus: () -> Unit = {},
     typed: String = "",
     selected: Boolean = false,
+    amountsToday: Map<Long, Double> = emptyMap(),
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var menuAt by remember { mutableStateOf<Offset?>(null) }
@@ -760,18 +764,16 @@ private fun HabitRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val checkedToday = habit.lastCompletedDate == LocalDate.now()
-        Checkbox(
-            checked = checkedToday,
-            onCheckedChange = { checked ->
-                if (checked) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id)
-            },
-        )
+        // §0.10 item 3 — a counting habit's `+` disc in the checkbox's slot; every tap adds one amount.
+        HabitCheck(habit, doneToday = checkedToday, onCheckIn = { viewModel.checkInHabit(habit.id) }, onUndo = { viewModel.undoCheckInHabit(habit.id) })
+        val amountToday = amountsToday[habit.id]
         // §3.3 — time and duration are what distinguish a habit that sits at an hour from one
         // that just needs doing sometime today, so both show when set and neither takes room
         // when not. Under a pointer the line sits at the title's right (one row, the tray PR);
         // under Touch it is the second line.
         val meta = listOfNotNull(
-            habit.frequency.label(),
+            // A counting habit's row says what was done today where a plain one says its cadence.
+            if (habit.counts) amountToday?.let { amountLabel(it, habit.unit) + " today" } ?: habit.frequency.label() else habit.frequency.label(),
             habit.time?.toString(),
             habit.duration?.let(::formatHabitDuration),
             // §0.6.6 — retired from the row by default; a plain number when asked for.
