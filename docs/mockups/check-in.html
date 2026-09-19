@@ -1,0 +1,109 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Check-in Mock</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+*{box-sizing:border-box}body{margin:0;background:#EEF0F3;color:#1B1B18;font:13.5px/1.45 Inter,system-ui,sans-serif;padding:24px}
+h1{font:600 22px/1.2 Inter,sans-serif;margin:0 0 4px}h2{font:600 15px/1.2 Inter,sans-serif;margin:26px 0 2px}.lead{color:#5B5B58;max-width:100ch;margin:0 0 14px}.note{color:#5B5B58;max-width:100ch;margin:-4px 0 8px;font-size:12.5px}
+.frame{margin:10px 0 0}.compare{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}.badge{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#5B5B58;margin:0 0 6px}
+/* the phone */
+.phone{width:360px;height:640px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.pbar{height:52px;display:flex;align-items:center;padding:0 8px 0 16px;gap:8px;border-bottom:1px solid var(--border);font-size:20px;font-weight:600;flex:none}.pbar .grow{flex:1}.ib{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;color:var(--text);font-size:16px}
+.lab{font-size:12.5px;font-weight:500;color:var(--dim);padding:4px 16px}.lab.link{color:var(--text)}
+.faces{display:flex;padding:0 8px;height:48px;align-items:center}.faces span{width:48px;height:48px;display:inline-flex;align-items:center;justify-content:center;color:var(--dim);font-size:22px}
+.faces span.on{color:var(--on);background:var(--mood);border-radius:50%;width:32px;height:32px;margin:0 8px}
+.faces span i{display:inline-block;width:20px;height:20px;border:1.5px solid currentColor;border-radius:50%}
+.bars{display:flex;padding:0 8px;height:48px;align-items:center}.bars span{width:48px;height:48px;display:inline-flex;align-items:flex-end;justify-content:center;gap:2px;padding-bottom:14px}.bars b{width:3px;background:var(--faint);border-radius:1px;display:block}.bars span.on b{background:var(--accent)}
+.logged{padding:0 16px 6px;font-size:14px;color:var(--dim)}.logged em{font-style:normal;color:var(--text)}
+.strip{display:flex;align-items:center;height:56px;padding:0 16px 0 4px;gap:12px;font-size:16px}.cb{width:20px;height:20px;border:1.5px solid var(--dim);border-radius:3px;margin:0 14px;flex:none}.cb.on{background:var(--accent);border-color:var(--accent)}.strip .meta{font-size:14px;color:var(--dim)}
+.hr{height:1px;background:var(--border);margin:8px 0}
+.blk{padding:6px 16px;font-size:16px;line-height:24px}.blk.dim{color:var(--dim)}
+/* the desktop pane */
+.shell{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.18);position:relative;display:flex;flex-direction:column;width:900px;height:400px}
+.bar{height:52px;display:flex;align-items:center;border-bottom:1px solid var(--border);flex:none}.railtop{width:84px;height:100%;display:flex;align-items:center;justify-content:center;flex:none}.mark{width:18px;height:18px;border-radius:5px;background:var(--accent)}
+.title{display:flex;align-items:center;gap:8px;padding:0 8px 0 16px;flex:1;min-width:0;font-size:18px;font-weight:600}.actions{display:flex;gap:4px;padding-right:8px}.actions span{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}.caption{display:flex;height:100%}.caption span{width:46px;display:flex;align-items:center;justify-content:center;font-size:12px}
+.body{display:flex;flex:1;min-height:0}.rail{width:84px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:6px}.ri{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--dim);width:64px;padding:6px 0;border-radius:6px}.ri.on{background:var(--soft);color:var(--text)}.ri i{width:18px;height:18px;border-radius:4px;border:1.5px solid currentColor;display:block}
+.tree{width:280px;flex:none;border-right:1px solid var(--border)}.th{height:52px;display:flex;align-items:center;padding:0 10px;border-bottom:1px solid var(--border);font-size:14px;font-weight:600}.tr{height:29px;display:flex;align-items:center;padding:0 12px;font-size:14px;gap:8px}.tr.on{background:var(--soft)}.tr.k{padding-left:30px}
+.pane{flex:1;min-width:0;display:flex;flex-direction:column}.pbar2{height:52px;display:flex;align-items:center;padding:0 8px 0 20px;border-bottom:1px solid var(--border);font-size:18px;font-weight:600}
+.dlab{font-size:12.5px;font-weight:500;color:var(--dim);padding:6px 20px 0}.dlab.link{color:var(--text)}
+.drow{display:flex;align-items:center;height:36px;padding:0 12px;gap:0}.drow .faces,.drow .bars{padding:0;height:36px}.drow .faces span,.drow .bars span{width:40px;height:36px;font-size:18px}.drow .faces span.on{width:26px;height:26px;margin:0 7px}.drow .bars span{padding-bottom:9px}.drow .sep{width:1px;height:20px;background:var(--border);margin:0 8px}
+.dlogged{padding:0 20px 4px;font-size:12.5px;color:var(--dim)}.dlogged em{font-style:normal;color:var(--text)}
+.dstrip{display:flex;align-items:center;height:29px;padding:0 20px 0 12px;gap:8px;font-size:14px}.dstrip .cb{width:16px;height:16px;margin:0 4px}.dstrip .meta{font-size:12.5px;color:var(--dim)}
+.dblk{padding:4px 20px;font-size:16px;line-height:24px}
+/* the sheet */
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:12px 20px 20px}.sheet .handle{width:32px;height:4px;border-radius:2px;background:var(--faint);margin:0 auto 10px}.sheet h4{font:600 20px/1.3 Inter,sans-serif;margin:0 0 6px}
+.eyebrow{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:12px 0 6px}
+.dots{display:grid;grid-template-columns:repeat(7,32px);gap:6px}.dots span{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12.5px;color:var(--dim)}.dots span.m{color:var(--on);font-weight:500}.dots span.e{border:1.5px solid var(--faint);color:var(--text)}
+.dlist p{margin:0;font-size:16px;line-height:24px}.dlist p .t{color:var(--dim);font-size:14px;margin-left:8px}.dlist .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
+</style></head><body>
+<h1>§0.10 item 4 — a one-tap check-in, on the day</h1>
+<p class="lead">A note about the person, not a habit (B§10.3). It lives on the Journal's day page above the Today strip: five faces for mood, five bars for energy, either alone. A tap logs one check-in with its time; a tap on the filled one undoes it. The words are the page below. No score, no average, no chart — the month is colours where something was logged and nothing where not (Daylio's rule). Ground: Daylio [Assumed — not installed; its “How are you?” is five coloured faces in a row, entries carry a time, the calendar colours a day]; Finch [Assumed — energy as a second one-tap scale]; Notion’s journal templates keep a Mood select on a database row — a setup, not a tap.</p>
+
+<h2>A — the phone, before and after a tap</h2>
+<p class="note">Ink dark, nothing logged; Chalk light, <em>Good</em> and <em>energy high</em> logged. The 48 dp targets, the faces at 22 sp, the bars as five rising strokes. The chosen face fills with its mood’s hue; the chosen bars take the accent. The line under says what and when.</p>
+<div class="compare"><section class="frame" style="--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#909194;--faint:#727376;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--m1:#8DA0C6;--m2:#7FB2D6;--m3:#B3A6CF;--m4:#7EC4B4;--m5:#B0CF7A"><div class="phone">
+<div class="pbar"><span class="ib">‹</span><span class="grow">19 Sep 2026</span><span class="ib">📅</span><span class="ib">⋯</span></div>
+<div class="lab link">How are you? ›</div>
+<div class="faces"><span>☹</span><span>🙁</span><span>😐</span><span>🙂</span><span>😊</span></div>
+<div class="bars"><span class=""><b style="height:4px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b><b style="height:16px"></b></span></div>
+
+<div class="lab">Today</div>
+<div class="strip"><span class="cb"></span><span style="flex:1">Call the library</span><span class="meta">10:00</span></div>
+<div class="strip"><span class="cb on"></span><span style="flex:1">Stretch</span><span class="meta">Every day</span></div>
+<div class="hr"></div>
+<div class="blk">Slept badly, but the walk helped.</div>
+<div class="blk dim">Type ‘/’ for a block…</div>
+
+</div></section><section class="frame" style="--bg:#FBFBFA;--s2:#F3F3F2;--text:#343638;--dim:#6C6D6E;--faint:#8A8B8B;--accent:#574C38;--on:#FFFFFF;--soft:#E7E6E3;--border:#E5E5E5;--m1:#5A6E96;--m2:#3F7EA6;--m3:#7C6BA3;--m4:#2E8A76;--m5:#6E8A2C"><div class="phone">
+<div class="pbar"><span class="ib">‹</span><span class="grow">19 Sep 2026</span><span class="ib">📅</span><span class="ib">⋯</span></div>
+<div class="lab link">How are you? ›</div>
+<div class="faces"><span>☹</span><span>🙁</span><span>😐</span><span class="on" style="--mood:var(--m4)">🙂</span><span>😊</span></div>
+<div class="bars"><span class=""><b style="height:4px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b></span><span class="on"><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b><b style="height:16px"></b></span></div>
+<div class="logged"><em>Good</em> at 14:32 · energy <em>high</em> at 14:35</div>
+<div class="lab">Today</div>
+<div class="strip"><span class="cb"></span><span style="flex:1">Call the library</span><span class="meta">10:00</span></div>
+<div class="strip"><span class="cb on"></span><span style="flex:1">Stretch</span><span class="meta">Every day</span></div>
+<div class="hr"></div>
+<div class="blk">Slept badly, but the walk helped.</div>
+<div class="blk dim">Type ‘/’ for a block…</div>
+
+</div></section></div>
+
+<h2>B — the desktop pane</h2>
+<p class="note">The Journal’s day in the Pages workspace: one 36 dp row holds both scales (40 dp targets under a pointer), the logged line at <code>description</code>, the Today strip under.</p>
+<section class="frame" style="--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#909194;--faint:#727376;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--m1:#8DA0C6;--m2:#7FB2D6;--m3:#B3A6CF;--m4:#7EC4B4;--m5:#B0CF7A"><div class="shell">
+<div class="bar"><div class="railtop"><div class="mark"></div></div><div class="title">Pages</div><div class="actions"><span>⌕</span><span>📓</span><span>👁</span><span>⋯</span></div><div class="caption"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="body"><div class="rail"><div class="ri on"><i></i>Pages</div><div class="ri"><i></i>Calendar</div><div class="ri"><i></i>Tasks</div><div class="ri"><i></i>Road Map</div><div class="ri"><i></i>Settings</div></div>
+<div class="tree"><div class="th">PAGES</div><div class="tr">Escape test</div><div class="tr">Books v12</div><div class="tr">Journal ▾</div><div class="tr k on">19 Sep 2026</div><div class="tr k">18 Sep 2026</div><div class="tr">Garden plan</div></div>
+<div class="pane"><div class="pbar2">19 Sep 2026</div>
+<div class="dlab link">How are you? ›</div>
+<div class="drow"><div class="faces"><span>☹</span><span>🙁</span><span>😐</span><span class="on" style="--mood:var(--m4)">🙂</span><span>😊</span></div><span class="sep"></span><div class="bars"><span class=""><b style="height:4px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b></span><span class="on"><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b><b style="height:16px"></b></span></div></div>
+<div class="dlogged"><em>Good</em> at 14:32 · energy <em>high</em> at 14:35</div>
+<div class="dlab">Today</div>
+<div class="dstrip"><span class="cb"></span><span style="flex:1">Call the library</span><span class="meta">10:00</span></div>
+<div class="dstrip"><span class="cb on"></span><span style="flex:1">Stretch</span><span class="meta">Every day</span></div>
+<div class="hr" style="margin:8px 20px"></div>
+<div class="dblk">Slept badly, but the walk helped.</div>
+</div></div></div></section>
+
+<h2>C — the sheet: how you’ve been</h2>
+<p class="note">From the row’s title. The month as coloured discs — the day’s <em>latest</em> mood, a ring where only energy was logged, nothing where nothing was — then the month’s check-ins newest first. No count, no average, no line chart.</p>
+<div class="compare"><section class="frame" style="--bg:#FBFBFA;--s2:#F3F3F2;--text:#343638;--dim:#6C6D6E;--faint:#8A8B8B;--accent:#574C38;--on:#FFFFFF;--soft:#E7E6E3;--border:#E5E5E5;--m1:#5A6E96;--m2:#3F7EA6;--m3:#7C6BA3;--m4:#2E8A76;--m5:#6E8A2C"><div class="phone">
+<div class="pbar"><span class="ib">‹</span><span class="grow">19 Sep 2026</span><span class="ib">📅</span><span class="ib">⋯</span></div>
+<div class="lab link">How are you? ›</div>
+<div class="faces"><span>☹</span><span>🙁</span><span>😐</span><span class="on" style="--mood:var(--m4)">🙂</span><span>😊</span></div>
+<div class="bars"><span class=""><b style="height:4px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b></span><span class="on"><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b></span><span class=""><b style="height:4px"></b><b style="height:7px"></b><b style="height:10px"></b><b style="height:13px"></b><b style="height:16px"></b></span></div>
+<div class="logged"><em>Good</em> at 14:32 · energy <em>high</em> at 14:35</div>
+<div class="lab">Today</div>
+<div class="strip"><span class="cb"></span><span style="flex:1">Call the library</span><span class="meta">10:00</span></div>
+<div class="strip"><span class="cb on"></span><span style="flex:1">Stretch</span><span class="meta">Every day</span></div>
+<div class="hr"></div>
+<div class="blk">Slept badly, but the walk helped.</div>
+<div class="blk dim">Type ‘/’ for a block…</div>
+<div class="sheet"><div class="handle"></div><h4>How you’ve been</h4>
+<div class="eyebrow">September</div>
+<div class="dots"><span></span><span class="m" style="background:var(--m4)">1</span><span class="m" style="background:var(--m3)">2</span><span>3</span><span class="m" style="background:var(--m4)">4</span><span class="m" style="background:var(--m5)">5</span><span>6</span>
+<span class="m" style="background:var(--m2)">7</span><span class="m" style="background:var(--m3)">8</span><span>9</span><span class="e">10</span><span class="m" style="background:var(--m4)">11</span><span>12</span><span class="m" style="background:var(--m5)">13</span>
+<span>14</span><span class="m" style="background:var(--m3)">15</span><span class="m" style="background:var(--m4)">16</span><span class="m" style="background:var(--m4)">17</span><span class="m" style="background:var(--m1)">18</span><span class="m" style="background:var(--m4)">19</span><span></span></div>
+<div class="eyebrow">This month</div>
+<div class="dlist"><p><span class="sw" style="background:var(--m4)"></span>Good, energy high<span class="t">Fri 19 · 14:32</span></p><p><span class="sw" style="background:var(--m1)"></span>Awful<span class="t">Thu 18 · 22:10</span></p><p><span class="sw" style="background:var(--m4)"></span>Good<span class="t">Wed 17 · 09:05</span></p><p><span class="sw" style="background:var(--m4)"></span>Good, energy steady<span class="t">Tue 16 · 08:40</span></p></div>
+</div>
+</div></section></div>
+</body></html>
