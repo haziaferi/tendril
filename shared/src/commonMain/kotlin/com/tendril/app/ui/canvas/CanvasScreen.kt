@@ -265,10 +265,11 @@ fun CanvasScreen(
         val kids = tree.children(node.id)
         val frame = node.type == CanvasNodeType.FRAME
         if (!frame) {
-            TendrilMenuItem(text = { Text(if (node.type == CanvasNodeType.PAGE_EMBED) "Open page" else "Edit") }, onClick = { close(); if (node.type == CanvasNodeType.TEXT) editingNode = node else node.embeddedPageId?.let(onOpenPage) })
+            // Under a pointer the menu is the way in, so it offers the editor; the phone's sheet *is* the editor.
+            if (pointer || node.type == CanvasNodeType.PAGE_EMBED) TendrilMenuItem(text = { Text(if (node.type == CanvasNodeType.PAGE_EMBED) "Open page" else "Edit") }, onClick = { close(); if (node.type == CanvasNodeType.TEXT) editingNode = node else node.embeddedPageId?.let(onOpenPage) })
             if (!viewOnly) {
-                TendrilMenuItem(text = { Text("Add child") }, trailingIcon = { KeyChip("Tab") }, onClick = { close(); viewModel.addChild(node) { pendingNewNodeId = it } })
-                TendrilMenuItem(text = { Text("Add sibling") }, trailingIcon = { KeyChip("Enter") }, onClick = { close(); viewModel.addSibling(node) { pendingNewNodeId = it } })
+                TendrilMenuItem(text = { Text("Add child") }, trailingIcon = if (pointer) ({ KeyChip("Insert") }) else null, onClick = { close(); viewModel.addChild(node) { pendingNewNodeId = it } })
+                TendrilMenuItem(text = { Text("Add sibling") }, trailingIcon = if (pointer) ({ KeyChip("Enter") }) else null, onClick = { close(); viewModel.addSibling(node) { pendingNewNodeId = it } })
                 if (kids.isNotEmpty() || node.folded) {
                     val hidden = tree.hiddenCount(node.id)
                     TendrilMenuItem(text = { Text(if (node.folded) "Unfold ($hidden hidden)" else "Fold") }, onClick = { close(); viewModel.toggleFold(node) })
@@ -552,8 +553,9 @@ private fun CanvasBoard(
                 if (event.type != KeyEventType.KeyDown || selected == null || viewOnly) return@onPreviewKeyEvent false
                 when (event.key) {
                     Key.Delete, Key.Backspace -> { nodeMenuFor = selected; true }
-                    // The mind-map pass — Xmind's, Mindomo's, Freeplane's keys.
-                    Key.Tab -> { if (selected.type != CanvasNodeType.FRAME) onAddChild(selected); true }
+                    // The mind-map pass — Xmind's Tab and Freeplane's Insert for a child (AWT keeps Tab for focus
+                    // traversal on the desktop, so Insert is the key that always arrives), Enter for a sibling.
+                    Key.Tab, Key.Insert -> { if (selected.type != CanvasNodeType.FRAME) onAddChild(selected); true }
                     Key.Enter -> { if (selected.type != CanvasNodeType.FRAME) onAddSibling(selected); true }
                     else -> false
                 }

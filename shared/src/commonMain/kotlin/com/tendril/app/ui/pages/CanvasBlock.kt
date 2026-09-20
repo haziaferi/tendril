@@ -32,6 +32,7 @@ import com.tendril.app.domain.canvas.fitToBoxes
 import com.tendril.app.domain.canvas.embedHeightForBoxes
 import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
+import com.tendril.app.domain.canvas.NodeBox
 import com.tendril.app.domain.canvas.TreeLevel
 import com.tendril.app.domain.canvas.CanvasTree
 import com.tendril.app.domain.canvas.CanvasStructure
@@ -89,7 +90,8 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
     val structure = CanvasStructure.fromKey(canvas?.structure)
     val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
     val shown = remember(tree) { nodes.filter { tree.isVisible(it) } }
-    val boxes = remember(tree) { shown.map { tree.box(it) } }
+    // A frame's label pill sits 28 dp above its box (`CanvasFrameBox`), so the fit counts that air in — the walk's first grab clipped *Beds*.
+    val boxes = remember(tree) { shown.map { n -> tree.box(n).let { b -> if (n.type == CanvasNodeType.FRAME) NodeBox(b.x, b.y - 28f, b.w, b.h + 28f) else b } } }
     val columnDp = with(density) { box.width.toDp().value }
     val heightDp = embedHeightForBoxes(boxes, columnDp)
     Box(
@@ -135,7 +137,7 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
                         CanvasNodeType.FRAME -> n.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL }
                     }
                     when {
-                        n.type == CanvasNodeType.FRAME -> ScaledLabel(b.x, b.y, b.w, 0f, text, pill = true)
+                        n.type == CanvasNodeType.FRAME -> tree.box(n).let { fb -> ScaledLabel(fb.x, fb.y, fb.w, 0f, text, pill = true) }
                         tree.levelOf(n) == TreeLevel.ROOT -> ScaledLabel(b.x, b.y, b.w, b.h, text, emphasis = true)
                         tree.levelOf(n) == TreeLevel.LEAF -> ScaledLabel(b.x, b.y, b.w, b.h, text, underline = true)
                         else -> ScaledLabel(b.x, b.y, b.w, b.h, text)
