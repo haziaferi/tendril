@@ -2,6 +2,9 @@
 
 package com.tendril.app.ui.nav
 
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -206,7 +209,11 @@ fun WorkbenchScaffold(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             when (shellLayoutFor(maxWidth.value)) {
                 ShellLayout.BAR -> Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) { content(false) }
+                    // S4 (small things IV) — the bottom bar takes the navigation bar's inset for everything
+                    // above it, so a screen's `Scaffold` (which pads for `contentWindowInsets` by default)
+                    // no longer leaves a dead band above the bar; while the keyguard is bypassed there is no
+                    // bar and the inset is left for the screen.
+                    Box(modifier = Modifier.weight(1f).then(if (bypassingKeyguard) Modifier else Modifier.consumeWindowInsets(WindowInsets.navigationBars))) { content(false) }
                     // §3.1.2 / audit 4.3 — no bottom bar while the keyguard is being bypassed. It used
                     // to render regardless, so a tap on Settings navigated there *over the lock screen*;
                     // the LaunchedEffect above deactivates on a page change, but it runs after that frame

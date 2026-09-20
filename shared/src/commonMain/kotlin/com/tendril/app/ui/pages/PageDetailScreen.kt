@@ -2,6 +2,8 @@
 
 package com.tendril.app.ui.pages
 
+import com.tendril.app.domain.journal.displayTitle
+import com.tendril.app.domain.dayLabel
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -483,7 +485,15 @@ fun PageDetailScreen(
             // "doubled" height for no visual payoff).
             ShellTopBar(
                 title = {
-                    BasicTextField(
+                    // S5 (small things IV) — a Journal day's bar reads its date, as the tree, the shelf and the
+                    // switcher do (L12); the stored `journal/…` name is the day's link and is not edited here.
+                    if (displayTitle(titleField) != titleField) Text(
+                        displayTitle(titleField),
+                        style = if (paneChrome?.compact == true) MaterialTheme.typography.heading else MaterialTheme.typography.pageTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    ) else BasicTextField(
                         value = titleField,
                         onValueChange = {
                             titleField = it
@@ -1315,7 +1325,8 @@ private fun SlashCommandSheet(onDismiss: () -> Unit, onPick: (BlockType) -> Unit
                 BlockType.CODE to "Code", BlockType.TOGGLE to "Toggle", BlockType.CALLOUT to "Callout", BlockType.DIVIDER to "Divider",
                 BlockType.IMAGE to "Image", BlockType.CANVAS to "Canvas", BlockType.BLOCK_REFERENCE to "Block reference",
             ).forEach { (type, label) ->
-                TextButton(onClick = { onPick(type) }) { Text(label) }
+                // S2 (small things IV) — the app's menu row (the profile's height), not a 47 px `TextButton`.
+                TendrilMenuItem(text = { Text(label) }, onClick = { onPick(type) })
             }
         }
     }
@@ -1579,16 +1590,13 @@ private fun BlockActionSheet(
 
 @Composable
 private fun SheetActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = onClick) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(label)
-        }
-    }
+    // S2 (small things IV) — one row of the app's menu (the profile's height under a pointer, 48 dp under
+    // Touch), where a `TextButton` inside 10 dp of padding had made ≈ 60 dp rows on the desktop.
+    TendrilMenuItem(
+        text = { Text(label) },
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -1833,7 +1841,9 @@ private fun RowUnboundEditor(property: Property, storedValue: String?, viewModel
         PropertyType.CHECKBOX -> Checkbox(checked = storedValue == "true", onCheckedChange = { viewModel.setRowPropertyValue(property, it.toString()) }, enabled = !locked)
         PropertyType.DATE -> {
             var showPicker by remember { mutableStateOf(false) }
-            Text(storedValue ?: "—", style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showPicker = true }).padding(vertical = stripValuePad()))
+            // S1 (small things IV) — the stored ISO date shown by F·P4's rule (*Fri 25*), as the edit sheets show theirs.
+            val shown = storedValue?.let { v -> runCatching { LocalDate.parse(v) }.getOrNull()?.let { dayLabel(it, LocalDate.now()) } ?: v } ?: "—"
+            Text(shown, style = MaterialTheme.typography.body, modifier = Modifier.combinedClickable(onClick = { if (!locked) showPicker = true }).padding(vertical = stripValuePad()))
             if (showPicker) {
                 val initial = storedValue?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
                 val state = rememberDatePickerState(initialSelectedDateMillis = initial.toDatePickerMillis())

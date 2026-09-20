@@ -2,6 +2,7 @@
 
 package com.tendril.app.ui.pages
 
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -458,7 +459,8 @@ private fun TreeRow(
         }
         IconButton(
             onClick = { menuAt = null; menuOpen = true },
-            modifier = Modifier.size(TREE_MORE_TARGET).alpha(if (hovered || menuOpen) 1f else 0f),
+            // D9 (small things IV) — invisible, it is not a Tab stop either: the ring would have landed on nothing.
+            modifier = Modifier.size(TREE_MORE_TARGET).alpha(if (hovered || menuOpen) 1f else 0f).focusProperties { canFocus = hovered || menuOpen },
         ) {
             Icon(Icons.Outlined.MoreHoriz, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         }
