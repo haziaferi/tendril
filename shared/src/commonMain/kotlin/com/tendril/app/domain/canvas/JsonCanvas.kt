@@ -24,7 +24,7 @@ import kotlin.math.roundToInt
  * | a frame following a subtree | a `group` node at the box the subtree gives it (`nodeBox` with the tree) |
  *
  * Coordinates are the board's dp rounded to the integers the spec asks for; a card takes the
- * [CANVAS_NODE_W] wide and as tall as its lines ask (`cardHeight`), a frame its own box. Ids are the rows' uids, so a
+ * as wide as its text asks (`cardWidth`) and as tall as its lines (`cardHeight`), a frame its own box. Ids are the rows' uids, so a
  * re-export of the same board writes the same ids. No colours: Tendril's cards have none.
  * Import is not here — the item asked where the files go.
  */
@@ -67,7 +67,7 @@ object JsonCanvas {
         structure: CanvasStructure = CanvasStructure.FREE,
     ): JsonCanvasDocument {
         val ids = nodes.associate { it.id to it.uid }
-        val tree = CanvasTree(nodes, structure)
+        val tree = CanvasTree(nodes, structure, titleFor)
         val outNodes = nodes.map { node ->
             val box = tree.box(node)
             val base = JsonCanvasNode(id = node.uid, type = "text", x = box.x.roundToInt(), y = box.y.roundToInt(), width = box.w.roundToInt(), height = box.h.roundToInt())

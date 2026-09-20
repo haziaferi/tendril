@@ -273,8 +273,8 @@ class ViewOnlySurfacesGuardTest {
         // by the frame's delta, the card straddling the edge and the card outside stay.
         val seeded = seedCanvas()
         val frame = seedFrame(seeded.canvasId, x = 0f, y = 0f)              // 388 × 212
-        val inside = seedNode(seeded.canvasId, "in", x = 20f, y = 20f)       // 20…200 × 20…110
-        val straddling = seedNode(seeded.canvasId, "edge", x = 300f, y = 20f) // 300…480: past the frame's 388
+        val inside = seedNode(seeded.canvasId, "in", x = 20f, y = 20f)       // 20…80 × 20…68
+        val straddling = seedNode(seeded.canvasId, "edge", x = 350f, y = 20f) // "edge" is 60 wide: 350…410, past the frame's 388
         val outside = seedNode(seeded.canvasId, "out", x = 600f, y = 600f)
         val viewModel = canvasViewModel(seeded.page.id)
         testScheduler.advanceUntilIdle()
@@ -285,7 +285,7 @@ class ViewOnlySurfacesGuardTest {
         val after = nodeDao.getForCanvas(seeded.canvasId).associateBy { it.id }
         assertEquals(100f to 50f, after.getValue(frame.id).let { it.x to it.y })
         assertEquals(120f to 70f, after.getValue(inside.id).let { it.x to it.y })
-        assertEquals(300f to 20f, after.getValue(straddling.id).let { it.x to it.y })
+        assertEquals(350f to 20f, after.getValue(straddling.id).let { it.x to it.y })
         assertEquals(600f to 600f, after.getValue(outside.id).let { it.x to it.y })
     }
 
