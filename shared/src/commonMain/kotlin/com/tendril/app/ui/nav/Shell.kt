@@ -38,7 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.tendril.app.ui.components.keyboardFocusRing
+import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.pageTitle
 
 /**
@@ -85,6 +87,7 @@ fun ShellRail(navState: WorkbenchNavState, foot: @Composable () -> Unit) {
                     selected = currentTab == destination,
                     onClick = { navState.switchTab(destination) },
                     pillWidth = 52.dp, pillHeight = 30.dp, iconSize = 22.dp,
+                    labelStyle = MaterialTheme.typography.body,
                     modifier = Modifier.width(RAIL_WIDTH).padding(vertical = 10.dp),
                 )
             }
@@ -134,6 +137,10 @@ private fun ShellItem(
     pillWidth: androidx.compose.ui.unit.Dp,
     pillHeight: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
+    /** The rail's labels are `body`, the row's own size (decided 2026-09-20: Notion's and the
+     * Claude app's navigation items measured 10 px of cap height beside the rail's 7 at `caption`);
+     * the phone's bar keeps `caption`, Material's bar label size under Touch's step. */
+    labelStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.caption,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -158,7 +165,9 @@ private fun ShellItem(
         ) {
             Icon(icon, contentDescription = null, tint = colour, modifier = Modifier.size(iconSize))
         }
-        Text(label, style = MaterialTheme.typography.caption, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // type: ICON_LABEL — the style is the caller's (`caption` on the bar, `body` on the rail), Medium when current.
+        val textStyle = if (selected) labelStyle.copy(fontWeight = MaterialTheme.typography.heading.fontWeight) else labelStyle
+        Text(label, style = textStyle, color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

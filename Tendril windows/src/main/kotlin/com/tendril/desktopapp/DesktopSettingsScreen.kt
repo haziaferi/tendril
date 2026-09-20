@@ -105,7 +105,7 @@ private fun DensitySection(store: KeyValueStore) {
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Density", style = MaterialTheme.typography.heading)
         Text(
-            "Every measurement scales with the window's shorter side; this sets how much room a row gets on top of that.",
+            "Every measurement follows Windows' text size (Settings › Accessibility › Text size); this sets how much room a row gets on top of that.",
             style = MaterialTheme.typography.description,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),

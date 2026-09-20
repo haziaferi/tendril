@@ -31,6 +31,8 @@ import com.tendril.app.ui.canvas.CanvasLayer
 import com.tendril.app.domain.canvas.fitToBoxes
 import com.tendril.app.domain.canvas.embedHeightForBoxes
 import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
+import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
+import com.tendril.app.data.canvas.CanvasNodeType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
@@ -115,7 +117,20 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
                 val ids = nodes.mapNotNull { it.embeddedPageId }.distinct()
                 value = ids.mapNotNull { id -> core.database.pageDao().getById(id)?.let { id to it } }.toMap()
             }
-            CanvasLayer(nodes, edges, embedded, scale = fit.scale, pan = Offset(fit.panX, fit.panY), interactive = null, showContent = fit.scale >= CANVAS_CONTENT_MIN_SCALE)
+            val readable = fit.scale >= CANVAS_CONTENT_MIN_SCALE
+            CanvasLayer(nodes, edges, embedded, scale = fit.scale, pan = Offset(fit.panX, fit.panY), interactive = null, showContent = readable)
+            // The size count: the cards' words at `caption` over the bare boxes where the fit is small.
+            if (!readable) ReadableLabels(
+                labels = nodes.zip(boxes).map { (n, b) ->
+                    val text = when (n.type) {
+                        CanvasNodeType.TEXT -> n.text.orEmpty().ifBlank { "Empty card" }
+                        CanvasNodeType.PAGE_EMBED -> embedded[n.embeddedPageId]?.title?.ifBlank { "Untitled" } ?: "…"
+                        CanvasNodeType.FRAME -> n.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL }
+                    }
+                    if (n.type == CanvasNodeType.FRAME) ScaledLabel(b.x, b.y, b.w, 0f, text, pill = true) else ScaledLabel(b.x, b.y, b.w, b.h, text)
+                },
+                scale = fit.scale, pan = Offset(fit.panX, fit.panY), density = density.density, color = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Text(
             title + " · " + openVerb(),

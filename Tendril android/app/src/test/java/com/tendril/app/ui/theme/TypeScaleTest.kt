@@ -48,6 +48,27 @@ class TypeScaleTest {
         }
     }
 
+    /** The desktop (2026-09-20): the four small styles one size up, everything else as it was. */
+    @Test
+    fun `under a pointer the small styles step up one size and the rest hold`() {
+        fun at(size: Float) = TextStyle(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
+        val base = Typography(
+            titleLarge = at(18f), titleMedium = at(14f), titleSmall = at(12.5f), bodyLarge = at(16f), bodyMedium = at(14f), bodySmall = at(12.5f),
+            labelLarge = at(12.5f), labelMedium = at(11f), labelSmall = at(11f), headlineMedium = at(20f), headlineSmall = at(24f),
+        )
+        val t = pointerTypography(base)
+        assertEquals(16f, t.titleLarge.fontSize.value)      // pageTitle at the editor's size
+        assertEquals(14f, t.titleMedium.fontSize.value)     // heading holds
+        assertEquals(14f, t.bodyMedium.fontSize.value)      // body holds
+        assertEquals(14f, t.bodySmall.fontSize.value)       // description
+        assertEquals(14f, t.labelLarge.fontSize.value)      // label
+        assertEquals(14f, t.titleSmall.fontSize.value)      // label's twin role
+        assertEquals(12.5f, t.labelMedium.fontSize.value)   // caption
+        assertEquals(12.5f, t.labelSmall.fontSize.value)    // eyebrow
+        assertEquals(16f, t.bodyLarge.fontSize.value)       // the editor's body
+        assertEquals(20f, t.bodySmall.lineHeight.value)
+    }
+
     @Test
     fun `a chrome style's line height holds on a single line`() {
         // T·P3 — without a LineHeightStyle the first and last lines are trimmed to the font's own

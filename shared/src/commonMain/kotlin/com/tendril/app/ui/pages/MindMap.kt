@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,7 +97,14 @@ internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
             val density = androidx.compose.ui.platform.LocalDensity.current.density
             val pad = 12 * density
             val fit = minOf((box.width - 2 * pad) / (layout.width * density), (box.height - 2 * pad) / (layout.height * density)).coerceAtMost(1f)
-            MapLayer(layout, scale = fit, pan = Offset(pad, pad), selectedId = null, onTapNode = null, interactive = false)
+            // The size count: where the fit would shrink the words under the smallest chrome size, the
+            // layer draws the boxes alone and `ReadableLabels` writes the words over them at `caption`.
+            val readable = fit >= CANVAS_CONTENT_MIN_SCALE
+            MapLayer(layout, scale = fit, pan = Offset(pad, pad), selectedId = null, onTapNode = null, interactive = false, showContent = readable)
+            if (!readable) ReadableLabels(
+                labels = layout.nodes.map { n -> ScaledLabel(n.x, n.y, n.width, n.height, n.block.content.ifBlank { "…" }, emphasis = n.parentId == null) },
+                scale = fit, pan = Offset(pad, pad), density = density, color = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Text(
             "Mind map · " + openVerb(),
@@ -193,7 +201,7 @@ private fun hitTest(layout: MindMapLayout, tap: Offset, scale: Float, pan: Offse
  * apart at any zoom.
  */
 @Composable
-private fun MapLayer(layout: MindMapLayout, scale: Float, pan: Offset, selectedId: Long?, onTapNode: ((Long) -> Unit)?, interactive: Boolean) {
+private fun MapLayer(layout: MindMapLayout, scale: Float, pan: Offset, selectedId: Long?, onTapNode: ((Long) -> Unit)?, interactive: Boolean, showContent: Boolean = true) {
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     val edgeColor = MaterialTheme.colorScheme.outline
     val nodeFill = MaterialTheme.colorScheme.surfaceVariant
@@ -231,7 +239,7 @@ private fun MapLayer(layout: MindMapLayout, scale: Float, pan: Offset, selectedI
                     .then(if (interactive && onTapNode != null) Modifier.clickable { onTapNode(node.block.id) } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(  // type: TITLE — a node shows its block's text
+                if (showContent) Text(  // type: TITLE — a node shows its block's text
                     node.block.content.ifBlank { "…" },
                     style = if (isRoot) MaterialTheme.typography.body else MaterialTheme.typography.description,
                     color = textColor,

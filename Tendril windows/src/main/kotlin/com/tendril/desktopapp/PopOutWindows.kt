@@ -40,6 +40,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
+import com.tendril.app.ui.nav.LocalSystemTextScale
 import com.tendril.app.ui.nav.LocalTitleBarInstaller
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tendril.app.data.page.PageKind
@@ -113,6 +114,9 @@ internal class PopOuts(
 internal class MainWindowActions(val nav: WorkbenchNavState) {
     var front: () -> Unit = {}
     var shorterSideDp: Float = 0f
+    /** Windows' text size as a factor (`WindowsTextScale`), read at launch and again whenever the
+     * main window regains focus; every window's `WorkbenchEnvironment` scales by it. */
+    var systemTextScale: Float by androidx.compose.runtime.mutableStateOf(WindowsTextScale.read())
 }
 
 /**
@@ -178,7 +182,9 @@ internal fun PopOutWindows(core: WorkbenchCore, popOuts: PopOuts, registry: PopO
                 val titleBarInstaller = remember(window) { DesktopTitleBarInstaller(window) }
                 CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
                 TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
-                    PopOutContent(core, p, popOuts, main, main.shorterSideDp, kind = page?.kind)
+                    CompositionLocalProvider(LocalSystemTextScale provides main.systemTextScale) {
+                        PopOutContent(core, p, popOuts, main, main.shorterSideDp, kind = page?.kind)
+                    }
                 }
                 }
             }
