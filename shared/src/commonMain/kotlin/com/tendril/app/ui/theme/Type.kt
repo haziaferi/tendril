@@ -173,13 +173,17 @@ fun typographyFor(typeface: TendrilTypeface): Typography {
  * not size. Tendril's `label`, `description`, `caption` and `eyebrow` stood a step under that
  * (8 px of cap at Compact). Under a pointer profile the four step **one size up the same scale** —
  * label and description 14 (Medium and Regular: the weight and the dim colour keep them apart
- * from `body`, Notion's way), caption and eyebrow 12.5 — and body, heading, pageTitle and the
- * editor's sizes stay: those already measured at the grounds' heights. The mirror of
+ * from `body`, Notion's way), caption and eyebrow 12.5 — pageTitle comes down to 16 (the editor's
+ * size, SemiBold; the desktop's chrome is then 12.5 · 14 · 16 with 20 · 24 for H2 / H1 alone) — and
+ * body, heading and the editor's sizes stay: those already measured at the grounds' heights. The mirror of
  * [touchTypography], provided by `WorkbenchEnvironment` the same way; the phone is untouched.
  */
 fun pointerTypography(base: Typography): Typography {
     fun TextStyle.at(size: Float) = copy(fontSize = size.sp, lineHeight = TypeScale.lineHeightFor(size).sp)
     return base.copy(
+        // The bar's title at the editor's size (decided 2026-09-20 with the size count: 18 was the one
+        // chrome size off the scale; the Claude app's title bar measured 11 px of cap, 16 / 600's).
+        titleLarge = base.titleLarge.at(TypeScale.EDITOR_BODY),
         titleSmall = base.titleSmall.at(TypeScale.BODY),
         bodySmall = base.bodySmall.at(TypeScale.BODY),
         labelLarge = base.labelLarge.at(TypeScale.BODY),

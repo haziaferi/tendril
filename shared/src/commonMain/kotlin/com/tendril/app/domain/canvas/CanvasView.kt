@@ -85,5 +85,7 @@ fun embedHeightForBoxes(boxes: List<NodeBox>, columnWidthDp: Float, marginDp: Fl
     return (inner * boxH / boxW + 2 * marginDp).coerceIn(minDp, maxDp)
 }
 
-/** Below this fit a card's text would be unreadable; the layer draws the boxes alone (Obsidian's zoom threshold). */
-const val CANVAS_CONTENT_MIN_SCALE = 0.5f
+/** Below this fit a card's text would fall under the smallest chrome size (12.5 sp of a 14 sp
+ * `body`), so the layer draws the boxes alone — Obsidian's zoom threshold, and the type pass's
+ * rule (2026-09-20): text is readable or absent, never shrunk. The mind-map card reads it too. */
+const val CANVAS_CONTENT_MIN_SCALE = 12.5f / 14f

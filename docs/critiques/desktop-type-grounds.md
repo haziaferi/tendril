@@ -62,3 +62,24 @@ Regular *Herbert* at the same 14 sp measures 10.
   at `caption`, now 12.5 under a pointer through the same step).
 - Notion's in-page title is a 40 px display line the page bar does not have; a display title
   inside the page is a later question, not a size.
+
+## The size count (the same day, `/typography-spacing-core`)
+
+`dk scale` (base 14, ratio 1.125 — a Major Second) holds every size in use: 11 · 12.5 · 14 · 16 ·
+17.5 · 20 · 22.5 · 25; the bar's 18 was the one chrome size off it. Decided in one batch: **two
+chrome sizes** on the desktop — 14 for everything, 12.5 for captions and eyebrows (Notion's and
+the Claude app's shape); **the bar's title at 16 / 600**, the editor's size (the Claude app's title
+bar measured 11 px of cap — 16 / 600's); **text inside scaled drawings is readable or absent** —
+the canvas embed's and the mind-map card's threshold moves from a 0.5 fit to 12.5 ÷ 14 ≈ 0.89, the
+fit under which a 14 sp label would fall below the smallest chrome size (Obsidian's rule, measured
+on item 7); desktop only. The desktop's page now carries **12.5 · 14 · 16**, with 20 · 24 for H2 /
+H1 alone; the embed in the walk's page draws its boxes bare (its fit is 0.5), the mind-map card
+keeps its two lines at 14 (its fit is 1).
+
+| after the count | cap px |
+|---|---|
+| the bar's title (16 / 600) | 10–11 (was 13) |
+| chrome — rows, labels, values, chips, headings | 9–10 |
+| captions, eyebrows | 9 |
+| a block's text | 12 |
+| a canvas embed's card text at a 0.5 fit | absent (was ≈ 7) |

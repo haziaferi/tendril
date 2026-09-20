@@ -57,7 +57,7 @@ class TypeScaleTest {
             labelLarge = at(12.5f), labelMedium = at(11f), labelSmall = at(11f), headlineMedium = at(20f), headlineSmall = at(24f),
         )
         val t = pointerTypography(base)
-        assertEquals(18f, t.titleLarge.fontSize.value)      // pageTitle holds
+        assertEquals(16f, t.titleLarge.fontSize.value)      // pageTitle at the editor's size
         assertEquals(14f, t.titleMedium.fontSize.value)     // heading holds
         assertEquals(14f, t.bodyMedium.fontSize.value)      // body holds
         assertEquals(14f, t.bodySmall.fontSize.value)       // description
