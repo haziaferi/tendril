@@ -3,7 +3,12 @@ package com.tendril.app.domain
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.domain.canvas.CANVAS_NODE_H
-import com.tendril.app.domain.canvas.CANVAS_NODE_W
+import com.tendril.app.domain.canvas.CANVAS_CARD_MIN_W
+import com.tendril.app.domain.canvas.CANVAS_CARD_WRAP_W
+import com.tendril.app.domain.canvas.CANVAS_LEGACY_CARD_W
+import com.tendril.app.domain.canvas.cardWidth
+import com.tendril.app.domain.canvas.cardChars
+import com.tendril.app.domain.canvas.handWidth
 import com.tendril.app.domain.canvas.FRAME_MIN_H
 import com.tendril.app.domain.canvas.FRAME_MIN_W
 import com.tendril.app.domain.canvas.NodeBox
@@ -28,9 +33,9 @@ class FramesTest {
     @Test
     fun `a node is inside a frame only when its whole box is`() {
         val f = frame(0f, 0f, 400f, 300f)
-        val inside = card(10f, 10f)                       // 10…210 × 10…58
-        val onTheEdge = card(200f, 252f)                  // right 400, bottom 300 — touching counts as inside
-        val straddling = card(300f, 10f)                  // right 500 > 400
+        val inside = card(10f, 10f)                       // an empty card is 101 wide (its caption): 10…111 × 10…58
+        val onTheEdge = card(299f, 252f)                  // right 400, bottom 300 — touching counts as inside
+        val straddling = card(370f, 10f)                  // right 430 > 400
         val outside = card(500f, 500f)
         val innerFrame = frame(20f, 120f, 300f, 150f)     // wholly inside: carried too
         val result = nodesInside(f, listOf(f, inside, onTheEdge, straddling, outside, innerFrame))
@@ -45,7 +50,7 @@ class FramesTest {
 
     @Test
     fun `a card's box is the strip its text asks for, a frame's its own`() {
-        assertEquals(NodeBox(5f, 6f, CANVAS_NODE_W, CANVAS_NODE_H), nodeBox(card(5f, 6f)))
+        assertEquals(NodeBox(5f, 6f, cardWidth(null), CANVAS_NODE_H), nodeBox(card(5f, 6f)))   // an empty card is its caption's width
         assertEquals(NodeBox(5f, 6f, 400f, 300f), nodeBox(frame(5f, 6f, 400f, 300f)))
     }
 
@@ -53,11 +58,28 @@ class FramesTest {
     @Test
     fun `a card grows a line at a time with its text and stops at three`() {
         assertEquals(1, cardLines(null)); assertEquals(1, cardLines("Compost bins"))
-        assertEquals(2, cardLines("a".repeat(25)))
+        assertEquals(1, cardLines("a".repeat(24))); assertEquals(2, cardLines("a".repeat(25)))   // the wrap width holds 24
         assertEquals(2, cardLines("one\ntwo")); assertEquals(3, cardLines("one\ntwo\nthree\nfour"))
         assertEquals(3, cardLines("x".repeat(500)))
         assertEquals(48f, cardHeight("Compost bins")); assertEquals(68f, cardHeight("one\ntwo")); assertEquals(88f, cardHeight("x".repeat(500)))
         assertEquals(68f, nodeBox(card(0f, 0f).copy(text = "one\ntwo")).h)
+    }
+
+    /** The card's width (2026-09-20, `meta-optimizer` over the user's texts): fit to the text between 60 and 220, 8 dp a side; a hand's width wins. */
+    @Test
+    fun `a card is as wide as its text between the minimum and the wrap width, a hand's width wins`() {
+        assertEquals(101f, cardWidth(null)); assertEquals(CANVAS_CARD_MIN_W, cardWidth("Water"))                      // the caption's 10 × 8.5 + 16; 5 × 8.5 + 16 = 58.5 → 60
+        assertEquals(135f, cardWidth("Kitchen scraps"))                                                              // 14 × 8.5 + 16
+        assertEquals(CANVAS_CARD_WRAP_W, cardWidth("Turn the compost every second week in spring"))                  // capped, then wrapped
+        assertEquals(135f, cardWidth("Kitchen scraps\nok"))                                                          // the longest line decides
+        assertEquals(24, cardChars(CANVAS_CARD_WRAP_W)); assertEquals(5, cardChars(CANVAS_CARD_MIN_W))
+        assertEquals(2, cardLines("Turn the compost every second week in spring"))                                   // 44 chars over 24
+        assertEquals(3, cardLines("Turn the compost every second week in spring", width = 100f))                     // a narrower hand width wraps more
+        assertEquals(100f, cardWidth("Kitchen scraps", handWidth = 100f)); assertEquals(CANVAS_CARD_MIN_W, cardWidth("x", handWidth = 10f))
+        // The stored `width`: the entity's default and zero read as derived, anything else as a hand's.
+        assertEquals(null, card(0f, 0f).handWidth()); assertEquals(null, card(0f, 0f).copy(width = CANVAS_LEGACY_CARD_W).handWidth())
+        assertEquals(150f, card(0f, 0f).copy(width = 150f).handWidth()); assertEquals(null, frame(0f, 0f, 400f, 300f).handWidth())
+        assertEquals(150f, nodeBox(card(0f, 0f).copy(text = "Kitchen scraps", width = 150f)).w)
     }
 
     @Test

@@ -2,6 +2,7 @@
 
 package com.tendril.app.ui.pages
 
+import com.tendril.app.domain.canvas.CANVAS_EMPTY_CARD_TEXT
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -88,7 +89,11 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
     val density = LocalDensity.current
     // The mind-map pass — the same tree the board draws; a following frame's box is its subtree's.
     val structure = CanvasStructure.fromKey(canvas?.structure)
-    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    val embeddedTitles by produceState(emptyMap<Long, String>(), nodes) {
+        val ids = nodes.mapNotNull { it.embeddedPageId }.distinct()
+        value = ids.mapNotNull { id -> core.database.pageDao().getById(id)?.let { id to it.title } }.toMap()
+    }
+    val tree = remember(nodes, structure, embeddedTitles) { CanvasTree(nodes, structure) { embeddedTitles[it] } }
     val shown = remember(tree) { nodes.filter { tree.isVisible(it) } }
     // A frame's label pill sits 28 dp above its box (`CanvasFrameBox`), so the fit counts that air in — the walk's first grab clipped *Beds*.
     val boxes = remember(tree) { shown.map { n -> tree.box(n).let { b -> if (n.type == CanvasNodeType.FRAME) NodeBox(b.x, b.y - 28f, b.w, b.h + 28f) else b } } }
@@ -132,7 +137,7 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
             if (!readable) ReadableLabels(
                 labels = shown.zip(boxes).map { (n, b) ->
                     val text = when (n.type) {
-                        CanvasNodeType.TEXT -> n.text.orEmpty().ifBlank { "Empty card" }
+                        CanvasNodeType.TEXT -> n.text.orEmpty().ifBlank { CANVAS_EMPTY_CARD_TEXT }
                         CanvasNodeType.PAGE_EMBED -> embedded[n.embeddedPageId]?.title?.ifBlank { "Untitled" } ?: "…"
                         CanvasNodeType.FRAME -> n.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL }
                     }
