@@ -216,6 +216,11 @@ class CanvasViewModel(
     }
 
     /** Tidy: the layout's positions for one subtree, or for every tree on the board (`rootId` null). The roots stay. */
+    /** S8 — the tree a node belongs to, tidied from its root (a band that grew moves its neighbours, so the whole tree, not the parent's subtree alone). */
+    fun tidyTreeOf(node: CanvasNode) {
+        tree().rootOf(node.id)?.let { tidy(it.id) }
+    }
+
     fun tidy(rootId: Long? = null) {
         val tree = tree()
         val roots = if (rootId != null) listOfNotNull(tree.byId[rootId]) else nodes.value.filter { it.parentId == null && it.type != CanvasNodeType.FRAME && tree.children(it.id).isNotEmpty() }
