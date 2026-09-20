@@ -100,3 +100,17 @@ reserved row above the text to a reserved column at the strip's right edge (× o
 handle; the text keeps a 28 dp end margin) — the width the strip has to spare, never its height;
 the text still never moves. Measured on the board: the card 191 × 46 px at the board's 0.96 fit,
 the text centred.
+
+**On the user's look (the same day, three zooms of Garden plan):** two defects of the parts above.
+The readable overlay wrote a frame's label *inside* the frame's top band, centred — where the board
+draws it as a pill *above* the frame's top-left edge — so at the embed's fit *Beds* landed on a
+card's words; `ScaledLabel(pill = true)` now places it as the board does. And the arrowhead's tip
+was pulled back from the target's centre by half its *height*: a 200 × 48 strip is met from the
+side far more often than from above, and the tip sat under the card; `boxEdgeDistance` (pure,
+tested) puts it on the target's edge from whichever side the line arrives — the frame's box too.
+Both seen on the build at the embed's fit and on the board.
+
+The user's next brief, on the same grabs: consider the structure of mind-mapping apps for this
+part — decided as its own PR after the merge (both the visual grammar and a structured mode; one
+grammar for the Canvas page and the outline's mind-map block; grounds Xmind, Freeplane, Miro or
+Whimsical, Obsidian, and the open-source projects the user listed).

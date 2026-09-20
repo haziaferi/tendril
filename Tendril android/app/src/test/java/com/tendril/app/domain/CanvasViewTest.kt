@@ -1,5 +1,6 @@
 package com.tendril.app.domain
 
+import com.tendril.app.domain.canvas.boxEdgeDistance
 import com.tendril.app.domain.canvas.canvasEmbedHeightDp
 import com.tendril.app.domain.canvas.contentAtPaneCentre
 import com.tendril.app.domain.canvas.fitToCards
@@ -57,5 +58,14 @@ class CanvasViewTest {
         // No cards, or no width yet: the floor.
         assertEquals(160f, canvasEmbedHeightDp(emptyList(), 180f, 90f, 328f), 0.01f)
         assertEquals(160f, canvasEmbedHeightDp(listOf(0f to 0f), 180f, 90f, 0f), 0.01f)
+    }
+
+    /** The arrowhead's tip on the target's edge: half the width from the side, half the height from above, the corner on the diagonal. */
+    @Test
+    fun `a line through a box leaves it at the edge it meets`() {
+        assertEquals(100f, boxEdgeDistance(1f, 0f, 100f, 24f), 0.01f)
+        assertEquals(24f, boxEdgeDistance(0f, -5f, 100f, 24f), 0.01f)
+        assertEquals(24f / (24f / kotlin.math.sqrt(100f * 100f + 24f * 24f)), boxEdgeDistance(100f, 24f, 100f, 24f), 0.01f)
+        assertEquals(0f, boxEdgeDistance(0f, 0f, 100f, 24f), 0f)
     }
 }

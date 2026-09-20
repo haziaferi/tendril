@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import com.tendril.app.ui.theme.label
 import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.domain.canvas.boxEdgeDistance
 import com.tendril.app.domain.canvas.nodeBox
 import com.tendril.app.domain.canvas.fitToBoxes
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_W
@@ -727,14 +728,18 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
 
 /** 14g·2 — a canvas edge is drawn in the register's dim (B§13.8.3), as the Road Map's mention edges are. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasEdge(from: CanvasNode, to: CanvasNode, edge: CanvasEdge, density: Float, ink: Color) {
-    val start = Offset((from.x + NODE_W / 2) * density, (from.y + from.boxH() / 2) * density)
-    val end = Offset((to.x + NODE_W / 2) * density, (to.y + to.boxH() / 2) * density)
+    val fb = nodeBox(from)
+    val tb = nodeBox(to)
+    val start = Offset((fb.x + fb.w / 2) * density, (fb.y + fb.h / 2) * density)
+    val end = Offset((tb.x + tb.w / 2) * density, (tb.y + tb.h / 2) * density)
     drawLine(color = ink, start = start, end = end, strokeWidth = 3f)
+    val d = end - start
+    // The tip on the target's edge, from whichever side the line arrives (`boxEdgeDistance`).
     if (edge.direction == CanvasArrowDirection.ONE_WAY || edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(start, end, to.boxH() * density / 2f, ink)
+        drawCanvasArrowhead(start, end, boxEdgeDistance(d.x, d.y, tb.w * density / 2f, tb.h * density / 2f), ink)
     }
     if (edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(end, start, from.boxH() * density / 2f, ink)
+        drawCanvasArrowhead(end, start, boxEdgeDistance(d.x, d.y, fb.w * density / 2f, fb.h * density / 2f), ink)
     }
 }
 

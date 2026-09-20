@@ -127,7 +127,7 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
                         CanvasNodeType.PAGE_EMBED -> embedded[n.embeddedPageId]?.title?.ifBlank { "Untitled" } ?: "…"
                         CanvasNodeType.FRAME -> n.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL }
                     }
-                    if (n.type == CanvasNodeType.FRAME) ScaledLabel(b.x, b.y, b.w, minOf(b.h, 28f / fit.scale), text) else ScaledLabel(b.x, b.y, b.w, b.h, text)
+                    if (n.type == CanvasNodeType.FRAME) ScaledLabel(b.x, b.y, b.w, 0f, text, pill = true) else ScaledLabel(b.x, b.y, b.w, b.h, text)
                 },
                 scale = fit.scale, pan = Offset(fit.panX, fit.panY), density = density.density, color = MaterialTheme.colorScheme.onSurface,
             )

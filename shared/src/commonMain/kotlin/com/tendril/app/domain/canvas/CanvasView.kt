@@ -89,3 +89,20 @@ fun embedHeightForBoxes(boxes: List<NodeBox>, columnWidthDp: Float, marginDp: Fl
  * `body`), so the layer draws the boxes alone — Obsidian's zoom threshold, and the type pass's
  * rule (2026-09-20): text is readable or absent, never shrunk. The mind-map card reads it too. */
 const val CANVAS_CONTENT_MIN_SCALE = 12.5f / 14f
+
+/**
+ * How far a line through a box's centre travels before it leaves the box: the arrowhead's tip
+ * sits there, on the target's edge, whichever side the line arrives from. The canvas card
+ * (2026-09-20) made this matter: a 200 x 48 strip is met from the side far more often than
+ * from above, and a pull-back of half its *height* left the tip under the card.
+ * `dx`/`dy` is the line's direction (any length); `halfW`/`halfH` the box's half-extents.
+ */
+fun boxEdgeDistance(dx: Float, dy: Float, halfW: Float, halfH: Float): Float {
+    val len = kotlin.math.sqrt(dx * dx + dy * dy)
+    if (len < 1e-6f) return 0f
+    val ux = kotlin.math.abs(dx / len)
+    val uy = kotlin.math.abs(dy / len)
+    val tx = if (ux < 1e-6f) Float.POSITIVE_INFINITY else halfW / ux
+    val ty = if (uy < 1e-6f) Float.POSITIVE_INFINITY else halfH / uy
+    return minOf(tx, ty)
+}
