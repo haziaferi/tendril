@@ -10,6 +10,8 @@ import com.tendril.app.domain.canvas.NodeBox
 import com.tendril.app.domain.canvas.clampFrameSize
 import com.tendril.app.domain.canvas.embedHeightForBoxes
 import com.tendril.app.domain.canvas.fitToBoxes
+import com.tendril.app.domain.canvas.cardHeight
+import com.tendril.app.domain.canvas.cardLines
 import com.tendril.app.domain.canvas.nodeBox
 import com.tendril.app.domain.canvas.nodesInside
 import org.junit.Assert.assertEquals
@@ -26,9 +28,9 @@ class FramesTest {
     @Test
     fun `a node is inside a frame only when its whole box is`() {
         val f = frame(0f, 0f, 400f, 300f)
-        val inside = card(10f, 10f)                       // 10…190 × 10…100
-        val onTheEdge = card(220f, 210f)                  // right 400, bottom 300 — touching counts as inside
-        val straddling = card(300f, 10f)                  // right 480 > 400
+        val inside = card(10f, 10f)                       // 10…210 × 10…58
+        val onTheEdge = card(200f, 252f)                  // right 400, bottom 300 — touching counts as inside
+        val straddling = card(300f, 10f)                  // right 500 > 400
         val outside = card(500f, 500f)
         val innerFrame = frame(20f, 120f, 300f, 150f)     // wholly inside: carried too
         val result = nodesInside(f, listOf(f, inside, onTheEdge, straddling, outside, innerFrame))
@@ -42,9 +44,20 @@ class FramesTest {
     }
 
     @Test
-    fun `a card's box is the fixed size and a frame's its own`() {
+    fun `a card's box is the strip its text asks for, a frame's its own`() {
         assertEquals(NodeBox(5f, 6f, CANVAS_NODE_W, CANVAS_NODE_H), nodeBox(card(5f, 6f)))
         assertEquals(NodeBox(5f, 6f, 400f, 300f), nodeBox(frame(5f, 6f, 400f, 300f)))
+    }
+
+    /** The size count (2026-09-20): one line in 48, two in 68, three in 88 — never more; hard breaks count. */
+    @Test
+    fun `a card grows a line at a time with its text and stops at three`() {
+        assertEquals(1, cardLines(null)); assertEquals(1, cardLines("Compost bins"))
+        assertEquals(2, cardLines("a".repeat(25)))
+        assertEquals(2, cardLines("one\ntwo")); assertEquals(3, cardLines("one\ntwo\nthree\nfour"))
+        assertEquals(3, cardLines("x".repeat(500)))
+        assertEquals(48f, cardHeight("Compost bins")); assertEquals(68f, cardHeight("one\ntwo")); assertEquals(88f, cardHeight("x".repeat(500)))
+        assertEquals(68f, nodeBox(card(0f, 0f).copy(text = "one\ntwo")).h)
     }
 
     @Test

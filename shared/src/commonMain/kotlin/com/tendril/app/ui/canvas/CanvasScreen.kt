@@ -13,6 +13,7 @@ import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
 import com.tendril.app.domain.canvas.CANVAS_NODE_W
 import com.tendril.app.domain.canvas.CANVAS_NODE_H
+import com.tendril.app.domain.canvas.CANVAS_CARD_MAX_LINES
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.material3.HorizontalDivider
@@ -126,6 +127,8 @@ import com.tendril.app.ui.components.TendrilMenuItem
 
 internal const val NODE_W = CANVAS_NODE_W
 internal const val NODE_H = CANVAS_NODE_H
+/** A card's own height — the strip its text asks for (`nodeBox`); `NODE_H` is the one-line minimum. */
+internal fun CanvasNode.boxH(): Float = nodeBox(this).h
 private const val MIN_SCALE = 0.3f
 private const val MAX_SCALE = 2.5f
 
@@ -465,13 +468,13 @@ private fun CanvasBoard(
                 onTapNode = onTapNode,
                 onDeleteRequest = { nodeMenuFor = it },
                 onTapEdge = onTapEdge,
-                onLinkDragStart = { node -> linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + NODE_H / 2) * density.density) },
+                onLinkDragStart = { node -> linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + node.boxH() / 2) * density.density) },
                 onLinkDrag = { pointerInParent -> linkDrag = linkDrag?.let { (n, _) -> n to pointerInParent } },
                 onLinkDragEnd = { node, pointerInParent ->
                     val target = nodes.firstOrNull { candidate ->
                         candidate.id != node.id &&
                             pointerInParent.x / density.density >= candidate.x && pointerInParent.x / density.density <= candidate.x + NODE_W &&
-                            pointerInParent.y / density.density >= candidate.y && pointerInParent.y / density.density <= candidate.y + NODE_H
+                            pointerInParent.y / density.density >= candidate.y && pointerInParent.y / density.density <= candidate.y + candidate.boxH()
                     }
                     if (target != null) onConnect(node, target)
                     linkDrag = null
@@ -558,7 +561,7 @@ internal fun CanvasLayer(
                 drawCanvasEdge(from, to, edge, density.density, edgeInk)
             }
             interactive?.linkDrag?.let { (fromNode, pointer) ->
-                val start = Offset((fromNode.x + NODE_W / 2) * density.density, (fromNode.y + NODE_H / 2) * density.density)
+                val start = Offset((fromNode.x + NODE_W / 2) * density.density, (fromNode.y + fromNode.boxH() / 2) * density.density)
                 drawLine(color = draftInk, start = start, end = pointer, strokeWidth = 3f)
             }
         }
@@ -724,14 +727,14 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
 
 /** 14g·2 — a canvas edge is drawn in the register's dim (B§13.8.3), as the Road Map's mention edges are. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasEdge(from: CanvasNode, to: CanvasNode, edge: CanvasEdge, density: Float, ink: Color) {
-    val start = Offset((from.x + NODE_W / 2) * density, (from.y + NODE_H / 2) * density)
-    val end = Offset((to.x + NODE_W / 2) * density, (to.y + NODE_H / 2) * density)
+    val start = Offset((from.x + NODE_W / 2) * density, (from.y + from.boxH() / 2) * density)
+    val end = Offset((to.x + NODE_W / 2) * density, (to.y + to.boxH() / 2) * density)
     drawLine(color = ink, start = start, end = end, strokeWidth = 3f)
     if (edge.direction == CanvasArrowDirection.ONE_WAY || edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(start, end, NODE_H * density / 2f, ink)
+        drawCanvasArrowhead(start, end, to.boxH() * density / 2f, ink)
     }
     if (edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(end, start, NODE_H * density / 2f, ink)
+        drawCanvasArrowhead(end, start, from.boxH() * density / 2f, ink)
     }
 }
 
@@ -763,8 +766,8 @@ private fun nearestEdge(tap: Offset, nodes: List<CanvasNode>, edges: List<Canvas
     edges.forEach { edge ->
         val from = nodes.find { it.id == edge.fromNodeId } ?: return@forEach
         val to = nodes.find { it.id == edge.toNodeId } ?: return@forEach
-        val a = Offset((from.x + NODE_W / 2) * density, (from.y + NODE_H / 2) * density)
-        val b = Offset((to.x + NODE_W / 2) * density, (to.y + NODE_H / 2) * density)
+        val a = Offset((from.x + NODE_W / 2) * density, (from.y + from.boxH() / 2) * density)
+        val b = Offset((to.x + NODE_W / 2) * density, (to.y + to.boxH() / 2) * density)
         val dist = distanceToSegment(tap, a, b)
         if (dist < bestDist) { bestDist = dist; best = edge }
     }
@@ -810,7 +813,7 @@ private fun CanvasNodeCard(
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = Modifier
             .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
-            .size((NODE_W).dp, (NODE_H).dp)
+            .size((NODE_W).dp, node.boxH().dp)
             .then(if (interactive == null) Modifier else if (!pointer) Modifier.touchNodeGestures(density, viewOnly, { current }, interactive) else Modifier.hoverable(interaction)
             // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
             // same lambda until a key changes, so a board already on screen when the eye toggle
@@ -848,8 +851,11 @@ private fun CanvasNodeCard(
             }),
     ) {
         if (!showContent) return@Surface
-        Column(modifier = Modifier.fillMaxSize().padding(4.dp)) {
-            // Badges live in their own dedicated row above the content, not overlaid on top
+        // The size count (2026-09-20): a card is a 48 dp strip, so the badges' reserved space is a
+        // column at the right edge (× above the link handle), and the text keeps a 28 dp end margin —
+        // the width the strip has to spare, never its height. The rule stands: the text never moves.
+        Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+            // Badges live in their own dedicated column beside the content, not overlaid on top
             // of it — an absolutely-positioned corner badge overlapped whatever text happened
             // to be underneath it (confirmed live: the delete badge covered the first letters
             // of "Empty card," the link handle sat mid-word before "edit"). A reserved row
@@ -858,7 +864,7 @@ private fun CanvasNodeCard(
             // so both come off the card entirely while View-Only is on rather than sitting there
             // greyed out. The row itself goes with them: with nothing left to reserve space for,
             // an empty strip would only push the card's own text down for no reason.
-            if (interactive != null && !viewOnly) Row(modifier = Modifier.fillMaxWidth().alpha(badgesAlpha), horizontalArrangement = Arrangement.SpaceBetween) {
+            if (interactive != null && !viewOnly) Column(modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).alpha(badgesAlpha), verticalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
@@ -898,24 +904,27 @@ private fun CanvasNodeCard(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)) {
+            Box(modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 28.dp, top = 2.dp, bottom = 2.dp), contentAlignment = Alignment.CenterStart) {
                 when (node.type) {
                     // The caption's verb by the profile (14h·2's `openVerb`); `onSurface` on the card's tint
                     // (`onSurfaceVariant` measured 3.45 : 1 there — `canvas-cards-mock.md` #1).
                     CanvasNodeType.TEXT -> Text( // type: PREVIEW_LINE — a card shows at most three lines of its text; the editor holds the rest
                         node.text.orEmpty().ifBlank { "Empty card — ${openVerb()}" },
                         style = MaterialTheme.typography.description,
-                        maxLines = 3,
+                        maxLines = CANVAS_CARD_MAX_LINES,
+                        overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     CanvasNodeType.FRAME -> Unit // drawn by CanvasFrameBox, never as a card
-                    CanvasNodeType.PAGE_EMBED -> Column {
-                        Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Spacer(Modifier.height(4.dp))
+                    // A page card is one line: the glyph beside the title, on the strip.
+                    CanvasNodeType.PAGE_EMBED -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             embeddedPage?.title ?: "…",
                             style = MaterialTheme.typography.body,
-                            maxLines = 2,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }

@@ -22,7 +22,7 @@ import kotlin.math.roundToInt
  * | an arrow | an edge; `ONE_WAY` is the spec's default (`toEnd: arrow`), `TWO_WAY` adds `fromEnd: arrow`, `NONE` sets `toEnd: none` |
  *
  * Coordinates are the board's dp rounded to the integers the spec asks for; a card takes the
- * fixed [CANVAS_NODE_W] × [CANVAS_NODE_H], a frame its own box. Ids are the rows' uids, so a
+ * [CANVAS_NODE_W] wide and as tall as its lines ask (`cardHeight`), a frame its own box. Ids are the rows' uids, so a
  * re-export of the same board writes the same ids. No colours: Tendril's cards have none.
  * Import is not here — the item asked where the files go.
  */

@@ -85,3 +85,18 @@ keeps its two lines at 14 (its fit is 1).
 | a canvas embed's card text at a 0.5 fit | 9 — `caption` over the bare box (was ≈ 7; hidden for one build) |
 
 **Amended the same day** — the user, on the build: "the text in the mind map disappears completely", and *Look at Garden plan* (the embed's boxes bare). Hiding was Obsidian's rule for a board, and wrong for a card whose boxes mean nothing without their words. Below the threshold the layer still draws the boxes alone, and `ReadableLabels` (`ui/pages/ReadableLabels.kt`) writes each box's words over it at `caption` — one to three lines by the box's scaled height, an ellipsis past that — for the canvas embed (a card's text, a page card's title, a frame's label) and the mind-map card (the root at Medium). The words never shrink and never vanish; the class `SCALED_LABEL` → `caption` in the type table.
+
+## The cards (the same day)
+
+The user, on Garden plan: the cards are "disproportionately big" — 180 × 90 dp around one line of
+14 sp, six and a half times its text; Obsidian's card at rest measured 252 × 63 px on L9 (250 × 60
+CSS), a strip about four times its text that grows when typed into. Decided: **a strip that grows
+with its text — 200 × 48 dp, one line; 68 two; 88 three** (`cardLines` / `cardHeight` in
+`domain/canvas/Frames.kt`, the mind map's estimate — characters per line, hard breaks counted —
+so the board's hit-tests, the arrows' anchors and heads, the embed's fit and the JSON Canvas
+export read one `nodeBox`); a page card is one line, its glyph beside its title; frames keep
+their stored sizes (the handle resizes them — Beds stays as drawn). The badges moved from a
+reserved row above the text to a reserved column at the strip's right edge (× over the link
+handle; the text keeps a 28 dp end margin) — the width the strip has to spare, never its height;
+the text still never moves. Measured on the board: the card 191 × 46 px at the board's 0.96 fit,
+the text centred.
