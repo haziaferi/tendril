@@ -75,3 +75,29 @@ data class Habit(
     val createdAt: Instant,
     val updatedAt: Instant,
 )
+
+/**
+ * S10 (2026-09-20) — a habit edited after creation: the fields the Add sheet asked for, the rest
+ * kept — id, uid, the streak and its dates, the completions' record. A blank unit is none; a
+ * habit that stops counting drops its amounts; a time removed takes the duration with it (a
+ * length with no start has nowhere to be drawn, the Add sheet's rule).
+ */
+fun Habit.edited(
+    title: String,
+    frequency: HabitFrequency,
+    time: LocalTime?,
+    duration: java.time.Duration?,
+    unit: String?,
+    amountPerCheckIn: Double?,
+    dailyAmount: Double?,
+    now: Instant,
+): Habit = copy(
+    title = title.trim().ifBlank { this.title },
+    frequency = frequency,
+    time = time,
+    duration = duration?.takeIf { time != null && !it.isZero && !it.isNegative },
+    unit = unit?.trim()?.takeIf { it.isNotEmpty() && amountPerCheckIn != null },
+    amountPerCheckIn = amountPerCheckIn?.takeIf { it > 0 },
+    dailyAmount = dailyAmount?.takeIf { amountPerCheckIn != null && amountPerCheckIn > 0 && it > 0 },
+    updatedAt = now,
+)
