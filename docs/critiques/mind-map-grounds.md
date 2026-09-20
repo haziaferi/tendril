@@ -88,3 +88,7 @@ makes the structure a property of a *topic*, switchable any time. So:
 
 The mock: `docs/mockups/mind-map.html`; its critique: `mind-map-mock.md` (two binding fixes: a
 relationship's outer-side route, the following frame's stroke at `dim`).
+
+**Built (PR #122):** the first four structures — *Free · Map · Right · Down*; Timeline and
+Fishbone next. A child's key is Insert on the desktop (Tab never arrives — AWT's focus
+traversal); the walk: `mind-map-function.md`.
