@@ -32,6 +32,9 @@ import com.tendril.app.domain.canvas.fitToBoxes
 import com.tendril.app.domain.canvas.embedHeightForBoxes
 import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
+import com.tendril.app.domain.canvas.TreeLevel
+import com.tendril.app.domain.canvas.CanvasTree
+import com.tendril.app.domain.canvas.CanvasStructure
 import com.tendril.app.data.canvas.CanvasNodeType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalDensity
@@ -82,7 +85,11 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
     // §0.10 item 7 — the card is as tall as the board's shape asks at this column's width (Obsidian's embed, measured), clamped.
     var box by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
-    val boxes = remember(nodes) { nodes.map { nodeBox(it) } }   // item 15 — a frame's box is its own
+    // The mind-map pass — the same tree the board draws; a following frame's box is its subtree's.
+    val structure = CanvasStructure.fromKey(canvas?.structure)
+    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    val shown = remember(tree) { nodes.filter { tree.isVisible(it) } }
+    val boxes = remember(tree) { shown.map { tree.box(it) } }
     val columnDp = with(density) { box.width.toDp().value }
     val heightDp = embedHeightForBoxes(boxes, columnDp)
     Box(
@@ -118,16 +125,21 @@ internal fun CanvasBlockCard(core: WorkbenchCore, canvasPageId: Long?, fallbackT
                 value = ids.mapNotNull { id -> core.database.pageDao().getById(id)?.let { id to it } }.toMap()
             }
             val readable = fit.scale >= CANVAS_CONTENT_MIN_SCALE
-            CanvasLayer(nodes, edges, embedded, scale = fit.scale, pan = Offset(fit.panX, fit.panY), interactive = null, showContent = readable)
+            CanvasLayer(nodes, edges, embedded, scale = fit.scale, pan = Offset(fit.panX, fit.panY), interactive = null, showContent = readable, structure = structure)
             // The size count: the cards' words at `caption` over the bare boxes where the fit is small.
             if (!readable) ReadableLabels(
-                labels = nodes.zip(boxes).map { (n, b) ->
+                labels = shown.zip(boxes).map { (n, b) ->
                     val text = when (n.type) {
                         CanvasNodeType.TEXT -> n.text.orEmpty().ifBlank { "Empty card" }
                         CanvasNodeType.PAGE_EMBED -> embedded[n.embeddedPageId]?.title?.ifBlank { "Untitled" } ?: "…"
                         CanvasNodeType.FRAME -> n.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL }
                     }
-                    if (n.type == CanvasNodeType.FRAME) ScaledLabel(b.x, b.y, b.w, 0f, text, pill = true) else ScaledLabel(b.x, b.y, b.w, b.h, text)
+                    when {
+                        n.type == CanvasNodeType.FRAME -> ScaledLabel(b.x, b.y, b.w, 0f, text, pill = true)
+                        tree.levelOf(n) == TreeLevel.ROOT -> ScaledLabel(b.x, b.y, b.w, b.h, text, emphasis = true)
+                        tree.levelOf(n) == TreeLevel.LEAF -> ScaledLabel(b.x, b.y, b.w, b.h, text, underline = true)
+                        else -> ScaledLabel(b.x, b.y, b.w, b.h, text)
+                    }
                 },
                 scale = fit.scale, pan = Offset(fit.panX, fit.panY), density = density.density, color = MaterialTheme.colorScheme.onSurface,
             )

@@ -280,3 +280,13 @@ val MIGRATION_21_22 = object : Migration(21, 22) {
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_check_ins_date` ON `check_ins` (`date`)")
     }
 }
+
+/** The mind-map pass (2026-09-20) — the tree on the canvas: a parent link, the fold, a structure per node and per board. */
+val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `canvas_nodes` ADD COLUMN `parentId` INTEGER")
+        connection.execSQL("ALTER TABLE `canvas_nodes` ADD COLUMN `folded` INTEGER NOT NULL DEFAULT 0")
+        connection.execSQL("ALTER TABLE `canvas_nodes` ADD COLUMN `structure` TEXT")
+        connection.execSQL("ALTER TABLE `page_canvases` ADD COLUMN `structure` TEXT NOT NULL DEFAULT 'free'")
+    }
+}

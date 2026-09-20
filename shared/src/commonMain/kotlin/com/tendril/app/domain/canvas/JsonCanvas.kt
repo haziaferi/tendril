@@ -20,6 +20,8 @@ import kotlin.math.roundToInt
  * | a page card | a `file` node whose `file` is the page's path in the zip (vault-relative, the spec's rule); a page the export does not carry (trashed) becomes a `text` node with its title |
  * | a frame (item 15) | a `group` node with its `label` — the same node Obsidian's group is |
  * | an arrow | an edge; `ONE_WAY` is the spec's default (`toEnd: arrow`), `TWO_WAY` adds `fromEnd: arrow`, `NONE` sets `toEnd: none` |
+ * | a parent link (v23, the mind-map pass) | an edge from the parent to the child with `toEnd: none`, its id the child's uid + `-tree` — the spec has no hierarchy, and a headless edge is what Obsidian draws for a branch |
+ * | a frame following a subtree | a `group` node at the box the subtree gives it (`nodeBox` with the tree) |
  *
  * Coordinates are the board's dp rounded to the integers the spec asks for; a card takes the
  * [CANVAS_NODE_W] wide and as tall as its lines ask (`cardHeight`), a frame its own box. Ids are the rows' uids, so a
@@ -62,10 +64,12 @@ object JsonCanvas {
         filePathFor: (Long) -> String?,
         /** The title to fall back on for a page card whose page is not in the export. */
         titleFor: (Long) -> String?,
+        structure: CanvasStructure = CanvasStructure.FREE,
     ): JsonCanvasDocument {
         val ids = nodes.associate { it.id to it.uid }
+        val tree = CanvasTree(nodes, structure)
         val outNodes = nodes.map { node ->
-            val box = nodeBox(node)
+            val box = tree.box(node)
             val base = JsonCanvasNode(id = node.uid, type = "text", x = box.x.roundToInt(), y = box.y.roundToInt(), width = box.w.roundToInt(), height = box.h.roundToInt())
             when (node.type) {
                 CanvasNodeType.TEXT -> base.copy(text = node.text.orEmpty())
@@ -78,7 +82,11 @@ object JsonCanvas {
                 }
             }
         }
-        val outEdges = edges.mapNotNull { edge ->
+        val treeEdges = nodes.mapNotNull { node ->
+            val parent = node.parentId?.let { ids[it] } ?: return@mapNotNull null
+            JsonCanvasEdge(id = node.uid + "-tree", fromNode = parent, toNode = node.uid, toEnd = "none")
+        }
+        val outEdges = treeEdges + edges.mapNotNull { edge ->
             val from = ids[edge.fromNodeId] ?: return@mapNotNull null
             val to = ids[edge.toNodeId] ?: return@mapNotNull null
             JsonCanvasEdge(

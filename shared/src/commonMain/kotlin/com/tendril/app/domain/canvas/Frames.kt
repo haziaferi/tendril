@@ -43,7 +43,8 @@ const val FRAME_MIN_W = 212f
 const val FRAME_MIN_H = 122f
 const val FRAME_DEFAULT_LABEL = "Frame"
 
-/** The box a node occupies on the board — a text card the strip its lines ask for, a page card one line, a frame its own. */
+/** The box a node occupies on the board — a text card the strip its lines ask for, a page card one line, a frame its own.
+ * **A free node's box**: with a parent, the level's grammar decides (`CanvasTree.box`, the mind-map pass). */
 data class NodeBox(val x: Float, val y: Float, val w: Float, val h: Float) {
     val right: Float get() = x + w
     val bottom: Float get() = y + h

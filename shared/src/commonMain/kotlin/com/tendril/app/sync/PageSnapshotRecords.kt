@@ -165,6 +165,8 @@ data class ViewFilterSnapshot(val propertyUid: String, val comparator: String, v
 data class CanvasSnapshotRecord(
     val nodes: List<CanvasNodeSnapshotRecord> = emptyList(),
     val edges: List<CanvasEdgeSnapshotRecord> = emptyList(),
+    /** v23 — the board's structure key; absent from a peer before the mind-map pass → `free`. */
+    val structure: String? = null,
 )
 
 @Serializable
@@ -180,6 +182,11 @@ data class CanvasNodeSnapshotRecord(
     val embeddedPageUid: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
+    /** v23 — the tree: the parent's uid (resolved within the same record; an unknown uid → a free
+     * node, never a quarantine), the fold and the node's own structure key. */
+    val parentUid: String? = null,
+    val folded: Boolean = false,
+    val structure: String? = null,
 )
 
 /** No `uid` of its own — an edge is never referenced from anywhere else, so its identity only

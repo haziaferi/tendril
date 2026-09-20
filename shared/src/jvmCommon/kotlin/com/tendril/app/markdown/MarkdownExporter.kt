@@ -5,6 +5,7 @@ import com.tendril.app.data.canvas.CanvasNodeDao
 import com.tendril.app.data.canvas.PageCanvasDao
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.domain.canvas.CanvasStructure
 import com.tendril.app.domain.canvas.JsonCanvas
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageDao
@@ -77,6 +78,7 @@ class MarkdownExporter(
                         edges = canvas?.let { canvasEdgeDao.getForCanvas(it.id) } ?: emptyList(),
                         filePathFor = { id -> paths[id] },
                         titleFor = { id -> titles[id] },
+                        structure = CanvasStructure.fromKey(canvas?.structure),
                     )
                     zip.writeEntry(here, JsonCanvas.write(document))
                     canvases++

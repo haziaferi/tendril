@@ -33,6 +33,9 @@ data class PageCanvas(
     val pageId: Long,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** The mind-map pass (v23, 2026-09-20) — the board's structure, a [com.tendril.app.domain.canvas.CanvasStructure] key
+     * (`free` · `map` · `right` · `down`); a node's own `structure` overrides it for its subtree (Xmind's per-topic structure). */
+    val structure: String = "free",
 )
 
 /** §0.10 item 15 (2026-09-18) — [FRAME]: a labelled region under the cards, its `width` / `height`
@@ -65,6 +68,16 @@ data class CanvasNode(
     val embeddedPageId: Long? = null,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** The mind-map pass (v23, 2026-09-20) — **the tree**: a node with a parent is a branch of it; one
+     * parent by construction (inoichi's, Ideascape's), so a hierarchy edge is drawn from this link and
+     * never stored as an arrow — `canvas_edges` are *relationships*. A FRAME with a parent follows that
+     * node's subtree (Xmind's boundary) and ignores its own `width` / `height`. No foreign key: deleting a
+     * node lifts its children to its parent (`CanvasViewModel.deleteNode`), never cascades. */
+    val parentId: Long? = null,
+    /** The subtree under this node is hidden; the count shows at the branch's end. */
+    val folded: Boolean = false,
+    /** A [com.tendril.app.domain.canvas.CanvasStructure] key for this node's subtree, null to inherit. */
+    val structure: String? = null,
 )
 
 /** NONE renders a plain line — used for the rare case someone wants to connect two cards
@@ -125,6 +138,10 @@ interface CanvasNodeDao {
 
     @Query("SELECT * FROM canvas_nodes WHERE canvasId = :canvasId")
     suspend fun getForCanvas(canvasId: Long): List<CanvasNode>
+
+    /** v23 — the merge sets the links after every node of the record has an id. */
+    @Query("UPDATE canvas_nodes SET parentId = :parentId WHERE id = :id")
+    suspend fun setParent(id: Long, parentId: Long?)
 }
 
 @Dao

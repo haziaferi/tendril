@@ -31,6 +31,11 @@ import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_W
 import com.tendril.app.domain.canvas.clampFrameSize
+import com.tendril.app.domain.canvas.tidy
+import com.tendril.app.domain.canvas.newChildPosition
+import com.tendril.app.domain.canvas.TREE_SIBLING_GAP
+import com.tendril.app.domain.canvas.CanvasTree
+import com.tendril.app.domain.canvas.CanvasStructure
 import com.tendril.app.domain.canvas.nodesInside
 import java.time.Instant
 
@@ -186,8 +191,119 @@ class CanvasViewModel(
         }
     }
 
+    // The mind-map pass (2026-09-20, `domain/canvas/Tree.kt`) — the tree's verbs. Every one funnels
+    // through `launchAndTouch`, so the lock and the sync bump hold for them as for every other write.
+
+    /** The board's structure, from its row; `free` until set. */
+    val structure: StateFlow<CanvasStructure> = canvas.map { CanvasStructure.fromKey(it?.structure) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CanvasStructure.FREE)
+
+    private fun tree(): CanvasTree = CanvasTree(nodes.value, structure.value)
+
+    /** A node moves with its subtree (Xmind's, Freeplane's); a following frame moves the node it follows. */
     fun moveNode(node: CanvasNode, x: Float, y: Float) {
-        launchAndTouch { canvasNodeDao.update(node.copy(x = x, y = y, updatedAt = Instant.now())) }
+        val tree = tree()
+        if (node.type == CanvasNodeType.FRAME) { tree.followedBy(node)?.let { anchor -> moveNode(anchor, anchor.x + (x - node.x), anchor.y + (y - node.y)); return } }
+        val dx = x - node.x; val dy = y - node.y
+        val carried = tree.descendants(node.id).filter { it.type != CanvasNodeType.FRAME }
+        launchAndTouch {
+            val now = Instant.now()
+            canvasNodeDao.update(node.copy(x = x, y = y, updatedAt = now))
+            carried.forEach { canvasNodeDao.update(it.copy(x = it.x + dx, y = it.y + dy, updatedAt = now)) }
+        }
+    }
+
+    /** Tidy: the layout's positions for one subtree, or for every tree on the board (`rootId` null). The roots stay. */
+    fun tidy(rootId: Long? = null) {
+        val tree = tree()
+        val roots = if (rootId != null) listOfNotNull(tree.byId[rootId]) else nodes.value.filter { it.parentId == null && it.type != CanvasNodeType.FRAME && tree.children(it.id).isNotEmpty() }
+        val moves = roots.flatMap { r -> tidy(tree, r.id).entries }
+        if (moves.isEmpty()) return
+        launchAndTouch {
+            val now = Instant.now()
+            for ((id, at) in moves) {
+                val n = tree.byId[id] ?: continue
+                if (n.x != at.first || n.y != at.second) canvasNodeDao.update(n.copy(x = at.first, y = at.second, updatedAt = now))
+            }
+        }
+    }
+
+    /** The board's structure; the trees are tidied to it at once (Xmind re-lays on a structure change). */
+    fun setBoardStructure(structure: CanvasStructure) {
+        val current = canvas.value ?: return
+        launchAndTouch {
+            pageCanvasDao.update(current.copy(structure = structure.key, updatedAt = Instant.now()))
+            val tree = CanvasTree(nodes.value, structure)
+            val now = Instant.now()
+            for (r in nodes.value.filter { it.parentId == null && it.type != CanvasNodeType.FRAME && tree.children(it.id).isNotEmpty() }) {
+                for ((id, at) in tidy(tree, r.id)) tree.byId[id]?.let { n -> canvasNodeDao.update(n.copy(x = at.first, y = at.second, updatedAt = now)) }
+            }
+        }
+    }
+
+    /** A node's own structure for its subtree (null inherits), then that subtree tidied. */
+    fun setNodeStructure(node: CanvasNode, structure: CanvasStructure?) {
+        launchAndTouch {
+            canvasNodeDao.update(node.copy(structure = structure?.key, updatedAt = Instant.now()))
+            val updated = nodes.value.map { if (it.id == node.id) it.copy(structure = structure?.key) else it }
+            val tree = CanvasTree(updated, this.structure.value)
+            val now = Instant.now()
+            for ((id, at) in tidy(tree, node.id)) tree.byId[id]?.let { n -> canvasNodeDao.update(n.copy(x = at.first, y = at.second, updatedAt = now)) }
+        }
+    }
+
+    /** A child after the last sibling, beside or under its parent (`newChildPosition`); its editor opens through [onInserted]. */
+    fun addChild(parent: CanvasNode, onInserted: (Long) -> Unit = {}) {
+        val canvasId = canvas.value?.id ?: return
+        val (x, y) = newChildPosition(tree(), parent)
+        launchAndTouch {
+            val now = Instant.now()
+            val id = canvasNodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = x, y = y, text = "", parentId = parent.id, createdAt = now, updatedAt = now))
+            if (parent.folded) canvasNodeDao.update(parent.copy(folded = false, updatedAt = now))
+            onInserted(id)
+        }
+    }
+
+    /** A sibling: the parent's next child; for a free card, a card under it. */
+    fun addSibling(node: CanvasNode, onInserted: (Long) -> Unit = {}) {
+        val parent = node.parentId?.let { id -> nodes.value.firstOrNull { it.id == id } }
+        if (parent != null) addChild(parent, onInserted)
+        else addTextNode(node.x, node.y + tree().box(node).h + TREE_SIBLING_GAP, onInserted)
+    }
+
+    /** The parent link: null detaches (the node keeps its place — a free node); a new parent places
+     * the node after that parent's last child. A node can never be its own ancestor. */
+    fun setParent(node: CanvasNode, parent: CanvasNode?) {
+        if (parent != null) {
+            if (parent.id == node.id || parent.type == CanvasNodeType.FRAME) return
+            val tree = tree()
+            if (tree.descendants(node.id).any { it.id == parent.id }) return
+            val (x, y) = newChildPosition(tree, parent)
+            val dx = x - node.x; val dy = y - node.y
+            val carried = tree.descendants(node.id).filter { it.type != CanvasNodeType.FRAME }
+            launchAndTouch {
+                val now = Instant.now()
+                canvasNodeDao.update(node.copy(parentId = parent.id, x = x, y = y, updatedAt = now))
+                carried.forEach { canvasNodeDao.update(it.copy(x = it.x + dx, y = it.y + dy, updatedAt = now)) }
+                if (parent.folded) canvasNodeDao.update(parent.copy(folded = false, updatedAt = now))
+            }
+        } else {
+            launchAndTouch { canvasNodeDao.update(node.copy(parentId = null, updatedAt = Instant.now())) }
+        }
+    }
+
+    fun toggleFold(node: CanvasNode) {
+        launchAndTouch { canvasNodeDao.update(node.copy(folded = !node.folded, updatedAt = Instant.now())) }
+    }
+
+    /** A frame that follows this node's subtree (Xmind's boundary); it has no box of its own. */
+    fun frameSubtree(node: CanvasNode, onInserted: (Long) -> Unit = {}) {
+        val canvasId = canvas.value?.id ?: return
+        launchAndTouch {
+            val now = Instant.now()
+            val id = canvasNodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.FRAME, x = node.x, y = node.y, width = FRAME_DEFAULT_W, height = FRAME_DEFAULT_H, text = FRAME_DEFAULT_LABEL, parentId = node.id, createdAt = now, updatedAt = now))
+            onInserted(id)
+        }
     }
 
     // §0.10 item 15 — frames (`domain/canvas/Frames.kt`).
@@ -203,8 +319,10 @@ class CanvasViewModel(
         }
     }
 
-    /** The frame and every node wholly inside it move together — geometry, no parent (Obsidian's, measured). */
+    /** The frame and every node wholly inside it move together — geometry, no parent (Obsidian's, measured);
+     * a following frame moves the subtree it follows instead. */
     fun moveFrame(frame: CanvasNode, x: Float, y: Float) {
+        if (frame.parentId != null) { moveNode(frame, x, y); return }
         val dx = x - frame.x; val dy = y - frame.y
         val carried = nodesInside(frame, nodes.value)
         launchAndTouch {
@@ -230,8 +348,17 @@ class CanvasViewModel(
         launchAndTouch { canvasNodeDao.update(node.copy(text = text, updatedAt = Instant.now())) }
     }
 
+    /** A deleted node lifts its children to its own parent (never a cascade); a frame following it goes with it. */
     fun deleteNode(node: CanvasNode) {
-        launchAndTouch { canvasNodeDao.delete(node.id) }
+        val tree = tree()
+        val lifted = tree.children(node.id)
+        val followers = nodes.value.filter { it.type == CanvasNodeType.FRAME && it.parentId == node.id }
+        launchAndTouch {
+            val now = Instant.now()
+            lifted.forEach { canvasNodeDao.update(it.copy(parentId = node.parentId, updatedAt = now)) }
+            followers.forEach { canvasNodeDao.delete(it.id) }
+            canvasNodeDao.delete(node.id)
+        }
     }
 
     fun addEdge(fromNodeId: Long, toNodeId: Long) {
