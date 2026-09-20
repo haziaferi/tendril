@@ -122,8 +122,8 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         else parentOf(node)?.let { structureOf(it) } ?: boardStructure
     }
 
-    /** The side a node's subtree grows on: DOWN under a DOWN structure; under MAP a root's first
-     * half of children (in creation order) go right and the rest left, and every deeper node keeps
+    /** The side a node's subtree grows on: DOWN under a DOWN structure; under MAP a root's child is on the
+     * side its own centre lies on (S8, 2026-09-20 — a drag across the root moves it over; Xmind's), and every deeper node keeps
      * its branch's side; RIGHT and FREE grow right. A node with its own structure starts afresh. */
     fun sideOf(node: CanvasNode): TreeSide = sideMemo.getOrPut(node.id) { computeSide(node) }
 
@@ -134,9 +134,9 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         val parentStructure = structureOf(parent)
         if (node.structure != null && structure != parentStructure) return TreeSide.RIGHT
         if (parentStructure == CanvasStructure.MAP && parent.parentId == null) {
-            val order = creationOrder(parent.id)
-            val half = (order.size + 1) / 2
-            return if (order.indexOfFirst { it.id == node.id } >= half) TreeSide.LEFT else TreeSide.RIGHT
+            // The side is the node's own: its centre against the root's (the boxes' widths differ, so centres, not edges).
+            val pb = box(parent)
+            return if (node.x + box(node).w / 2f < pb.x + pb.w / 2f) TreeSide.LEFT else TreeSide.RIGHT
         }
         val parentSide = sideOf(parent)
         return if (parentSide == TreeSide.DOWN) TreeSide.RIGHT else parentSide
@@ -327,9 +327,11 @@ fun newChildPosition(tree: CanvasTree, parent: CanvasNode, childW: Float = cardW
         return if (last == null) (pb.x + pb.w / 2f - childW / 2f) to (pb.bottom + DOWN_LEVEL_GAP)
         else (last.right + DOWN_SIBLING_GAP) to last.y
     }
-    // A MAP root's new child takes the side the split will give it once it exists (index n of n + 1).
-    val side = if (structure == CanvasStructure.MAP && parent.parentId == null) { if (kids.size >= (kids.size + 2) / 2) TreeSide.LEFT else TreeSide.RIGHT }
-    else if (tree.sideOf(parent) == TreeSide.LEFT) TreeSide.LEFT else TreeSide.RIGHT
+    // A MAP root's new child goes to the side with fewer children, the right on a tie (the map stays balanced as it grows).
+    val side = if (structure == CanvasStructure.MAP && parent.parentId == null) {
+        val right = kids.count { tree.sideOf(it) == TreeSide.RIGHT }
+        if (kids.size - right < right) TreeSide.LEFT else TreeSide.RIGHT
+    } else if (tree.sideOf(parent) == TreeSide.LEFT) TreeSide.LEFT else TreeSide.RIGHT
     val x = if (side == TreeSide.RIGHT) pb.right + TREE_LEVEL_GAP else pb.x - TREE_LEVEL_GAP - childW
     val sameSide = kids.filter { tree.sideOf(it) == side }
     val last = sameSide.lastOrNull()?.let { tree.box(it) }

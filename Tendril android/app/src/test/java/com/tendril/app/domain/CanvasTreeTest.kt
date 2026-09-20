@@ -41,7 +41,7 @@ class CanvasTreeTest {
         val root = node(400f, 200f, text = "Garden plan")
         val a = node(700f, 60f, parent = root.id, text = "Beds")
         val b = node(700f, 200f, parent = root.id, text = "Compost bins")
-        val c = node(700f, 340f, parent = root.id, text = "Water")
+        val c = node(100f, 340f, parent = root.id, text = "Water")   // left of the root: under MAP the side is the node's own (S8)
         val a1 = node(950f, 40f, parent = a.id, text = "Tomatoes")
         val a2 = node(950f, 90f, parent = a.id, text = "Beans")
         val frame = node(0f, 0f, parent = a.id, type = CanvasNodeType.FRAME, text = "This season", w = 388f, h = 212f)
@@ -140,11 +140,15 @@ class CanvasTreeTest {
         val rb = tree.box(root)
         val kids = listOf(n[1], n[2], n[3]).map { pos.getValue(it.id) }
         assertTrue(kids.all { it.second == rb.bottom + DOWN_LEVEL_GAP })
-        // The bands are centred under the root: Beds' band is its two strips (each its text's width, 24 between), the others their own.
+        // The row of bands is centred under the root (the order is the children's x: Water first, then Beds, Compost bins);
+        // Beds' band is its two strips (each its text's width, 24 between), the others their own.
+        val ordered = tree.children(root.id)
+        assertEquals(listOf(n[3].id, n[1].id, n[2].id), ordered.map { it.id })
         val bedsBand = tree.box(n[4]).w + 24f + tree.box(n[5]).w
-        val bandLeft = kids[0].first - (bedsBand - tree.box(n[1]).w) / 2f
-        val bandRight = kids[2].first + tree.box(n[3]).w
-        assertEquals(rb.x + rb.w / 2f, (bandLeft + bandRight) / 2f, 0.01f)
+        val bandLeft = pos.getValue(ordered.first().id).first
+        val bandRight = pos.getValue(n[1].id).first + tree.box(n[1]).w / 2f + bedsBand / 2f
+        val lastRight = pos.getValue(ordered.last().id).first + tree.box(ordered.last()).w
+        assertEquals(rb.x + rb.w / 2f, (bandLeft + maxOf(bandRight, lastRight)) / 2f, 0.01f)
         val a = pos.getValue(n[1].id); val a1 = pos.getValue(n[4].id); val a2 = pos.getValue(n[5].id)
         assertEquals(a.first + tree.box(n[1]).w / 2f, (a1.first + a2.first + tree.box(n[5]).w) / 2f, 0.01f)
         assertTrue(a2.first >= a1.first + tree.box(n[4]).w)
@@ -181,5 +185,21 @@ class CanvasTreeTest {
         // Free nodes: the side facing each other.
         val l = NodeBox(0f, 0f, 200f, 48f); val rr = NodeBox(400f, 0f, 200f, 48f)
         assertEquals(TreeSide.RIGHT, outerSide(l, null, rr)); assertEquals(TreeSide.LEFT, outerSide(rr, null, l))
+    }
+
+    /** S8 (2026-09-20): under MAP a root's child is on the side its own centre lies on — a drag across the root
+     * moves it over — and a new child goes to the emptier side, the right on a tie. */
+    @Test
+    fun `under MAP the side is the node's own and a new child balances the map`() {
+        val (tree, n) = sample(CanvasStructure.MAP)
+        assertEquals(TreeSide.RIGHT, tree.sideOf(n[1])); assertEquals(TreeSide.RIGHT, tree.sideOf(n[2])); assertEquals(TreeSide.LEFT, tree.sideOf(n[3]))
+        assertEquals(TreeSide.RIGHT, tree.sideOf(n[4]))   // a deeper node keeps its branch's side
+        val moved = CanvasTree(n.map { if (it.id == n[3].id) it.copy(x = 800f) else it }, CanvasStructure.MAP)
+        assertEquals(TreeSide.RIGHT, moved.sideOf(moved.byId.getValue(n[3].id)))
+        // Two right, one left → the new child goes left; three right, none left → left; a root alone → right.
+        assertTrue(newChildPosition(tree, n[0]).first < tree.box(n[0]).x)
+        assertTrue(newChildPosition(moved, n[0]).first < moved.box(n[0]).x)
+        val alone = CanvasTree(listOf(n[0]), CanvasStructure.MAP)
+        assertTrue(newChildPosition(alone, n[0]).first > alone.box(n[0]).right)
     }
 }

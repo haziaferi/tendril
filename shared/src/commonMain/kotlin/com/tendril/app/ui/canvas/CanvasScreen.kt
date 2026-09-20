@@ -406,6 +406,7 @@ fun CanvasScreen(
                 onMoveNode = { node, x, y -> if (node.type == CanvasNodeType.FRAME) viewModel.moveFrame(node, x, y) else viewModel.moveNode(node, x, y) },
                 onResizeFrame = { frame, w, h -> viewModel.resizeFrame(frame, w, h) },
                 onResizeCard = { card, dx -> viewModel.resizeCard(card, dx) },
+                onDroppedInTree = { node -> viewModel.tidyTreeOf(node) },
                 onTapNode = { node ->
                     // Under a pointer a first click selects, a second opens (Obsidian's); the phone opens at once.
                     if (pointer && selectedNodeId != node.id) selectedNodeId = node.id
@@ -511,6 +512,8 @@ private fun CanvasBoard(
     /** §0.10 item 15 — a frame's corner handle. */
     onResizeFrame: (CanvasNode, Float, Float) -> Unit,
     onResizeCard: (CanvasNode, Float) -> Unit,
+    /** A tree node dropped among its siblings (S8): the tree tidies from its root. */
+    onDroppedInTree: (CanvasNode) -> Unit,
     onTapNode: (CanvasNode) -> Unit,
     onDeleteNode: (CanvasNode) -> Unit,
     onConnect: (CanvasNode, CanvasNode) -> Unit,
@@ -599,7 +602,16 @@ private fun CanvasBoard(
                 linkDrag = linkDrag,
                 dropTargetId = dropTargetId,
                 onDragOver = { node, p -> dropTargetId = dropCandidate(node, p)?.id },
-                onDropAt = { node, p -> dropCandidate(node, p)?.let { onSetParent(node, it) }; dropTargetId = null },
+                // S8 (2026-09-20) — a tree node dropped among its siblings (not onto a card) takes its new slot at once:
+                // the order is the position's (y on a side, x under Down; under Map the side is the node's own), and the
+                // tree tidies from its root so the slot is drawn — Xmind's and Mindomo's drop. A board on *Free* keeps
+                // the node where it was dropped, and a dragged node on any board is where its hand left it only until then.
+                onDropAt = { node, p ->
+                    val target = dropCandidate(node, p)
+                    if (target != null) onSetParent(node, target)
+                    else if (node.parentId != null && tree.structureOf(node) != CanvasStructure.FREE) onDroppedInTree(node)
+                    dropTargetId = null
+                },
                 onFoldToggle = onFoldToggle,
                 onContextMenu = { node, p -> contextMenu = node to (p * scale + pan) },
                 onMoveNode = onMoveNode,
