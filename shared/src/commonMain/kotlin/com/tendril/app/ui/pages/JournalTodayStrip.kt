@@ -1,5 +1,7 @@
 package com.tendril.app.ui.pages
 
+import com.tendril.app.ui.taskshabits.HabitCheck
+import com.tendril.app.data.habit.Habit
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,16 +58,15 @@ fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewMo
     items(today.tasks, key = { "journal_task_" + it.entry.id + "_" + it.date }) { occurrence ->
         val entry = occurrence.entry
         StripRow(
-            checked = entry.status == EntryStatus.DONE,
-            onCheckedChange = { viewModel.setTaskDone(entry.id, it) },
+            check = { Checkbox(checked = entry.status == EntryStatus.DONE, onCheckedChange = { viewModel.setTaskDone(entry.id, it) }) },
             title = entry.title,
             detail = occurrence.startTime?.format(hourMinute),
         )
     }
     items(today.habits, key = { "journal_habit_" + it.id }) { habit ->
+        // S6 (small things IV) — the same check as the Habits and Merged rows: a counting habit's `+` disc.
         StripRow(
-            checked = habit.lastCompletedDate == date,
-            onCheckedChange = { if (it) viewModel.checkInHabit(habit.id) else viewModel.undoCheckInHabit(habit.id) },
+            check = { HabitCheck(habit, doneToday = habit.lastCompletedDate == date, onCheckIn = { viewModel.checkInHabit(habit.id) }, onUndo = { viewModel.undoCheckInHabit(habit.id) }) },
             title = habit.title,
             detail = listOfNotNull(
                 habit.time?.format(hourMinute),
@@ -77,12 +78,12 @@ fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewMo
 }
 
 @Composable
-private fun StripRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, title: String, detail: String?) {
+private fun StripRow(check: @Composable () -> Unit, title: String, detail: String?) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        check()
         Column {
             Text(title, style = MaterialTheme.typography.body)
             if (!detail.isNullOrBlank()) {

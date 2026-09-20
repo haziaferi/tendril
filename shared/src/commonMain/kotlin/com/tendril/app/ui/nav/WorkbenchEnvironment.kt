@@ -1,5 +1,6 @@
 package com.tendril.app.ui.nav
 
+import com.tendril.app.ui.components.PlatformTextMenus
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.Composable
@@ -71,8 +72,12 @@ fun WorkbenchEnvironment(
     val typography = if (profile == DensityProfile.TOUCH) touchTypography(MaterialTheme.typography) else pointerTypography(MaterialTheme.typography)
     CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile, LocalTitleBar provides titleBar) {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = typography) {
-            if (wide == null) content()
-            else CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR, content = content)
+            // S3 (small things IV) — the platform's text context menu (cut · copy · paste) drawn in the
+            // register's colours with the app's words; nothing on Android.
+            PlatformTextMenus {
+                if (wide == null) content()
+                else CompositionLocalProvider(LocalShellLayout provides if (wide) ShellLayout.RAIL else ShellLayout.BAR, content = content)
+            }
         }
     }
 }
