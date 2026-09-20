@@ -97,8 +97,14 @@ internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
             val density = androidx.compose.ui.platform.LocalDensity.current.density
             val pad = 12 * density
             val fit = minOf((box.width - 2 * pad) / (layout.width * density), (box.height - 2 * pad) / (layout.height * density)).coerceAtMost(1f)
-            // The card's text only where the fit keeps it at the smallest chrome size; the boxes always (`CANVAS_CONTENT_MIN_SCALE`).
-            MapLayer(layout, scale = fit, pan = Offset(pad, pad), selectedId = null, onTapNode = null, interactive = false, showContent = fit >= CANVAS_CONTENT_MIN_SCALE)
+            // The size count: where the fit would shrink the words under the smallest chrome size, the
+            // layer draws the boxes alone and `ReadableLabels` writes the words over them at `caption`.
+            val readable = fit >= CANVAS_CONTENT_MIN_SCALE
+            MapLayer(layout, scale = fit, pan = Offset(pad, pad), selectedId = null, onTapNode = null, interactive = false, showContent = readable)
+            if (!readable) ReadableLabels(
+                labels = layout.nodes.map { n -> ScaledLabel(n.x, n.y, n.width, n.height, n.block.content.ifBlank { "…" }, emphasis = n.parentId == null) },
+                scale = fit, pan = Offset(pad, pad), density = density, color = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Text(
             "Mind map · " + openVerb(),

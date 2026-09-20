@@ -60,6 +60,8 @@ SMALL_STYLES = {"labelSmall", "labelMedium", "caption", "eyebrow"}
 # The hover card's lines and the rail's labels: chrome with its own register, one class each.
 PREVIEW_COMPOSABLES = {"HoverPreviewCard"}
 ICON_LABEL_COMPOSABLES = {"ShellRail", "ShellItem", "ShellBottomBar"}
+# The size count (2026-09-20): a scaled drawing's words written over its bare boxes at the smallest chrome size.
+SCALED_LABEL_COMPOSABLES = {"ReadableLabels"}
 # The calendar grids' gutters, block titles and day cells — dense by design.
 GRID_COMPOSABLES = {"PlanView", "WeekGridView", "MonthGridView", "MonthGrid", "TimelineBody"}
 # The phone's week strip and the Timeline's day header: every text in them is a cell's.
@@ -313,6 +315,7 @@ def classify(s: Site) -> str:
     if s.composable in NODE_COMPOSABLES: return "NODE_LABEL"
     if s.composable in PREVIEW_COMPOSABLES and not (s.index == 0 and s.container == "Row"): return "PREVIEW_LINE"
     if s.composable in ICON_LABEL_COMPOSABLES: return "ICON_LABEL"
+    if s.composable in SCALED_LABEL_COMPOSABLES: return "SCALED_LABEL"
     if grey and s.container == "Box" and any(c in TEXT_FIELDS for c in s.siblings): return "PLACEHOLDER"
     # 4. headers and labels
     if s.content == "TIME_DATE" and s.index == 0 and plain and (s.raw_style in ("titleMedium", "titleSmall") or s.style == "heading"):

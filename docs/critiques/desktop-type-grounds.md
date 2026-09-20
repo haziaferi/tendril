@@ -82,4 +82,6 @@ keeps its two lines at 14 (its fit is 1).
 | chrome — rows, labels, values, chips, headings | 9–10 |
 | captions, eyebrows | 9 |
 | a block's text | 12 |
-| a canvas embed's card text at a 0.5 fit | absent (was ≈ 7) |
+| a canvas embed's card text at a 0.5 fit | 9 — `caption` over the bare box (was ≈ 7; hidden for one build) |
+
+**Amended the same day** — the user, on the build: "the text in the mind map disappears completely", and *Look at Garden plan* (the embed's boxes bare). Hiding was Obsidian's rule for a board, and wrong for a card whose boxes mean nothing without their words. Below the threshold the layer still draws the boxes alone, and `ReadableLabels` (`ui/pages/ReadableLabels.kt`) writes each box's words over it at `caption` — one to three lines by the box's scaled height, an ellipsis past that — for the canvas embed (a card's text, a page card's title, a frame's label) and the mind-map card (the root at Medium). The words never shrink and never vanish; the class `SCALED_LABEL` → `caption` in the type table.

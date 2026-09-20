@@ -29,6 +29,7 @@
   "PREVIEW_LINE": "description",
   "ACTION_ROW": "body",
   "ICON_LABEL": "caption",
+  "SCALED_LABEL": "caption",
   "ERROR_LINE": "description",
   "GROUP_HEADER": "label"
  },
