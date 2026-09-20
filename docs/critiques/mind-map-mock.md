@@ -86,6 +86,17 @@ draws none).
 - The relationship kept visibly distinct from the branch (dashed, headed, labelled) — every
   ground agrees, and Tendril's existing arrows become it without a migration of meaning.
 
+## The user's look (the same day)
+
+*Map*, *The structure* and *The outline's mind map* accepted; *Down* had branches out of
+alignment (the elbows left the root ten pixels off its centre) and a frame over strips it did
+not hold. Redrawn: every elbow leaves the parent's bottom centre and enters the child's top
+centre with one shared knee; the frame follows the *Beds* subtree alone and Tidy spaces the
+siblings around it — **a frame never overlaps a node it does not hold** is now a rule of the
+layout, not a hope of the mock; the fold badge sits under a folded strip in Down (at the
+branch's end, as in Map). A mock defect too: the page card's class collided with the page
+frame's and drew it 700 px wide.
+
 ## Cannot verify
 
 - Tidy's balance on real boards (the mock is placed by hand); the frame's auto-fit padding
