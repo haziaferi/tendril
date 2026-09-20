@@ -95,7 +95,11 @@ centre with one shared knee; the frame follows the *Beds* subtree alone and Tidy
 siblings around it — **a frame never overlaps a node it does not hold** is now a rule of the
 layout, not a hope of the mock; the fold badge sits under a folded strip in Down (at the
 branch's end, as in Map). A mock defect too: the page card's class collided with the page
-frame's and drew it 700 px wide.
+frame's and drew it 700 px wide. A second look: still not centred — the root's centre (498), its
+children's (520) and the board's (508) were three numbers; the frame is now placed from one
+`CX` by arithmetic, which is what the build does: **Tidy puts the root over its children's
+centre**, and the mock is an approximation of the app's look (its tokens, its sizes) with
+positions typed by hand — never a render of the app.
 
 ## Cannot verify
 
