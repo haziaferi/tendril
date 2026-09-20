@@ -108,7 +108,7 @@ card's words; `ScaledLabel(pill = true)` now places it as the board does. And th
 was pulled back from the target's centre by half its *height*: a 200 × 48 strip is met from the
 side far more often than from above, and the tip sat under the card; `boxEdgeDistance` (pure,
 tested) puts it on the target's edge from whichever side the line arrives — the frame's box too.
-Both seen on the build at the embed's fit and on the board. Then, on that build: the name "is very small and blends in" — at `label` (12.5 / 500) in `onSurfaceVariant` at rest it read as one more caption; a frame's name is the one text on a board that names a group, the board's section heading: `heading` (14 / 600) in `onSurface`, on the board's pill and the overlay's.
+Both seen on the build at the embed's fit and on the board. Then, on that build: the name "is very small and blends in" — at `label` (12.5 / 500) in `onSurfaceVariant` at rest it read as one more caption; a frame's name is the one text on a board that names a group, the board's section heading: `heading` (14 / 600) in `onSurface`, on the board's pill and the overlay's. And, after the merge: an arrow "falls underneath the border of the frame" — the edge canvas was drawn under the frames' bodies; the order is now frames → edges → cards → labels, seen on the board.
 
 The user's next brief, on the same grabs: consider the structure of mind-mapping apps for this
 part — decided as its own PR after the merge (both the visual grammar and a structured mode; one

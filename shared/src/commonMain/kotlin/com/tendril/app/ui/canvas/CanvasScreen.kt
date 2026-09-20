@@ -541,6 +541,13 @@ internal fun CanvasLayer(
         modifier = Modifier
             .graphicsLayer(scaleX = scale, scaleY = scale, translationX = pan.x, translationY = pan.y, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)),
     ) {
+        // Item 15 — frames first, so every card sits over its region; the edges over the frames
+        // (the user, 2026-09-20: an arrow "falls underneath the border of the frame" — Obsidian
+        // draws its edges above groups), then the cards, then the frames' labels.
+        val frames = nodes.filter { it.type == CanvasNodeType.FRAME }
+        frames.forEach { node ->
+            key(node.id) { CanvasFrameBox(node = node, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
+        }
         Canvas(modifier = Modifier.size(4000.dp).then(
             if (interactive == null) Modifier else Modifier.pointerInput(edges, nodes, scale) {
                 // A tap on an arrow opens its editor. Item 15's walk found the previous form — a
@@ -567,11 +574,6 @@ internal fun CanvasLayer(
             }
         }
 
-        // Item 15 — frames first, so every card sits over its region.
-        val frames = nodes.filter { it.type == CanvasNodeType.FRAME }
-        frames.forEach { node ->
-            key(node.id) { CanvasFrameBox(node = node, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
-        }
         nodes.filter { it.type != CanvasNodeType.FRAME }.forEach { node ->
             key(node.id) {
                 CanvasNodeCard(
