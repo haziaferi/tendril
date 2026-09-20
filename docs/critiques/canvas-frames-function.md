@@ -40,6 +40,8 @@ And one of this PR's own: the phone's tap detector on a card used `detectTapGest
 Desktop: the frame 383 × 210 px at rest (388 × 212 dp), the label pill 22 dp, the handle 14 dp, the ring 2 dp; the fill 3 % of `text` on the ground (Obsidian's 1.09 : 1), the hairline `faint`. Phone: the pill 26 dp with the 20 dp delete disc, the handle 20 dp; the frame 388 dp on a 360 dp screen (its left edge off-screen when centred — *Fit* is the bar's, the FAB's menu has no Fit on the phone: recorded).
 
 ## Recorded, not changed
+
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
 - Collapsible frames (Advanced Canvas's) — decided *not now*; after item 6, when the export's shape is settled. §0.10 item 15 keeps the line.
 - The phone has no *Fit*: a frame made at the centre of a 360 dp screen is wider than the screen. A Fit in the phone's `···` is one line — folded into item 24.
 - The New sheet's template row shows the kind's glyph only, not the mock's *canvas · 3 frames · 7 cards* meta (a query per template for a label; not worth it).

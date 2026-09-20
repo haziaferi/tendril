@@ -14,6 +14,35 @@ import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
 import com.tendril.app.domain.canvas.CANVAS_NODE_W
 import com.tendril.app.domain.canvas.CANVAS_NODE_H
+import androidx.compose.foundation.layout.ColumnScope
+import com.tendril.app.ui.theme.eyebrow
+import com.tendril.app.domain.plural
+import com.tendril.app.ui.components.SubmenuItem
+import com.tendril.app.ui.components.PointerMenu
+import com.tendril.app.ui.components.KeyChip
+import com.tendril.app.ui.components.MenuCheck
+import com.tendril.app.ui.components.BarPillButton
+import com.tendril.app.ui.components.BarMenuButton
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathEffect
+import com.tendril.app.ui.theme.caption
+import com.tendril.app.ui.components.onSecondaryClick
+import com.tendril.app.domain.canvas.tidy
+import com.tendril.app.domain.canvas.relationRoute
+import com.tendril.app.domain.canvas.newChildPosition
+import com.tendril.app.domain.canvas.leafUnderline
+import com.tendril.app.domain.canvas.foldBadgeAt
+import com.tendril.app.domain.canvas.branchAnchors
+import com.tendril.app.domain.canvas.TreeSide
+import com.tendril.app.domain.canvas.TreeLevel
+import com.tendril.app.domain.canvas.RelationRoute
+import com.tendril.app.domain.canvas.NodeBox
+import com.tendril.app.domain.canvas.FOLD_BADGE
+import com.tendril.app.domain.canvas.CanvasTree
+import com.tendril.app.domain.canvas.CanvasStructure
 import com.tendril.app.domain.canvas.CANVAS_CARD_MAX_LINES
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.rememberUpdatedState
@@ -129,7 +158,7 @@ import com.tendril.app.ui.components.TendrilMenuItem
 internal const val NODE_W = CANVAS_NODE_W
 internal const val NODE_H = CANVAS_NODE_H
 /** A card's own height — the strip its text asks for (`nodeBox`); `NODE_H` is the one-line minimum. */
-internal fun CanvasNode.boxH(): Float = nodeBox(this).h
+internal fun CanvasNode.boxH(): Float = nodeBox(this).h   // a free card's; the tree's boxes come from `CanvasTree.box`
 private const val MIN_SCALE = 0.3f
 private const val MAX_SCALE = 2.5f
 
@@ -167,6 +196,11 @@ fun CanvasScreen(
     val nodes by viewModel.nodes.collectAsState()
     val edges by viewModel.edges.collectAsState()
     val embeddedPages by viewModel.embeddedPages.collectAsState()
+    // The mind-map pass — the board's structure and the tree it makes of the nodes.
+    val structure by viewModel.structure.collectAsState()
+    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    var showStructureMenu by remember { mutableStateOf(false) }
+    val hasTree = nodes.any { it.parentId != null && it.type != CanvasNodeType.FRAME }
 
     var titleField by remember(page?.id) { mutableStateOf(page?.title ?: "") }
     var showAddMenu by remember { mutableStateOf(false) }
@@ -175,6 +209,7 @@ fun CanvasScreen(
     var showTrashCanvas by remember { mutableStateOf(false) }
     var editingNode by remember { mutableStateOf<CanvasNode?>(null) }
     var editingEdge by remember { mutableStateOf<CanvasEdge?>(null) }
+    var nodeToDelete by remember { mutableStateOf<CanvasNode?>(null) }
 
     var scale by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -196,7 +231,7 @@ fun CanvasScreen(
     }
     fun newCardOrigin(): Pair<Float, Float> = contentAtPaneCentre(paneSize.width.toFloat(), paneSize.height.toFloat(), scale, pan.x, pan.y, density, NODE_W, NODE_H)
     fun fit() {
-        val f = fitToBoxes(nodes.map { nodeBox(it) }, paneSize.width.toFloat(), paneSize.height.toFloat(), density)
+        val f = fitToBoxes(nodes.filter { tree.isVisible(it) }.map { tree.box(it) }, paneSize.width.toFloat(), paneSize.height.toFloat(), density)
         scale = f.scale.coerceIn(MIN_SCALE, MAX_SCALE); pan = Offset(f.panX, f.panY)
     }
     val addMenu: @Composable () -> Unit = {
@@ -215,6 +250,44 @@ fun CanvasScreen(
                 viewModel.addFrame(c.first, c.second) { pendingNewNodeId = it }
             })
         }
+    }
+
+    // The mind-map pass — the structure's check-menu: the board's, then *Tidy now*.
+    val structureItems: @Composable ColumnScope.(close: () -> Unit) -> Unit = { close ->
+        CanvasStructure.entries.forEach { s ->
+            TendrilMenuItem(text = { Text(s.label) }, trailingIcon = { MenuCheck(structure == s) }, onClick = { close(); if (s != structure) viewModel.setBoardStructure(s) })
+        }
+        HorizontalDivider()
+        TendrilMenuItem(text = { Text("Tidy now") }, enabled = hasTree, onClick = { close(); viewModel.tidy() })
+    }
+    // A node's tree verbs — the desktop's right-click menu and the phone's sheet draw the same list.
+    val nodeVerbs: @Composable ColumnScope.(node: CanvasNode, close: () -> Unit) -> Unit = { node, close ->
+        val kids = tree.children(node.id)
+        val frame = node.type == CanvasNodeType.FRAME
+        if (!frame) {
+            // Under a pointer the menu is the way in, so it offers the editor; the phone's sheet *is* the editor.
+            if (pointer || node.type == CanvasNodeType.PAGE_EMBED) TendrilMenuItem(text = { Text(if (node.type == CanvasNodeType.PAGE_EMBED) "Open page" else "Edit") }, onClick = { close(); if (node.type == CanvasNodeType.TEXT) editingNode = node else node.embeddedPageId?.let(onOpenPage) })
+            if (!viewOnly) {
+                TendrilMenuItem(text = { Text("Add child") }, trailingIcon = if (pointer) ({ KeyChip("Insert") }) else null, onClick = { close(); viewModel.addChild(node) { pendingNewNodeId = it } })
+                TendrilMenuItem(text = { Text("Add sibling") }, trailingIcon = if (pointer) ({ KeyChip("Enter") }) else null, onClick = { close(); viewModel.addSibling(node) { pendingNewNodeId = it } })
+                if (kids.isNotEmpty() || node.folded) {
+                    val hidden = tree.hiddenCount(node.id)
+                    TendrilMenuItem(text = { Text(if (node.folded) "Unfold ($hidden hidden)" else "Fold") }, onClick = { close(); viewModel.toggleFold(node) })
+                }
+                SubmenuItem(text = { Text("Structure") }) { closeSub ->
+                    TendrilMenuItem(text = { Text("Inherit") }, trailingIcon = { MenuCheck(node.structure == null) }, onClick = { closeSub(); close(); viewModel.setNodeStructure(node, null) })
+                    CanvasStructure.entries.forEach { s ->
+                        TendrilMenuItem(text = { Text(s.label) }, trailingIcon = { MenuCheck(node.structure == s.key) }, onClick = { closeSub(); close(); viewModel.setNodeStructure(node, s) })
+                    }
+                }
+                if (kids.isNotEmpty()) TendrilMenuItem(text = { Text("Frame this subtree") }, onClick = { close(); viewModel.frameSubtree(node) { pendingNewNodeId = it } })
+                if (node.parentId != null) TendrilMenuItem(text = { Text("Detach from the tree") }, onClick = { close(); viewModel.setParent(node, null) })
+                HorizontalDivider()
+            }
+        } else {
+            TendrilMenuItem(text = { Text("Rename") }, onClick = { close(); editingNode = node })
+        }
+        if (!viewOnly) TendrilMenuItem(text = { Text("Delete") }, onClick = { close(); nodeToDelete = node })
     }
 
     // screen_px = (content_dp * density) * scale + pan, so a screen point inverts back to
@@ -242,6 +315,12 @@ fun CanvasScreen(
                 navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } else paneChrome?.leading?.invoke() },
                 actions = {
                     if (wide) {
+                        // The mind-map pass — the structure's name in the bar (the Calendar's `Week ▾` pattern) and *Tidy*.
+                        Box {
+                            BarMenuButton(label = structure.label, open = showStructureMenu, onClick = { showStructureMenu = true })
+                            TendrilMenu(expanded = showStructureMenu, onDismissRequest = { showStructureMenu = false }) { structureItems { showStructureMenu = false } }
+                        }
+                        if (hasTree && !viewOnly) BarPillButton(label = "Tidy", onClick = { viewModel.tidy() }, modifier = Modifier.padding(start = 4.dp))
                         IconButton(onClick = { fit() }, enabled = nodes.isNotEmpty()) { Icon(Icons.Outlined.FitScreen, contentDescription = "Fit every card") }
                         if (!viewOnly) Box {
                             IconButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "New card") }
@@ -253,6 +332,7 @@ fun CanvasScreen(
                     if (paneChrome == null) Box {
                         IconButton(onClick = { showOwnMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                         TendrilMenu(expanded = showOwnMenu, onDismissRequest = { showOwnMenu = false }) {
+                            if (!wide) { SubmenuItem(text = { Text("Structure") }) { closeSub -> structureItems { closeSub(); showOwnMenu = false } }; HorizontalDivider() }
                             if (onShowOnRoadMap != null) TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showOwnMenu = false; onShowOnRoadMap(pageId) })
                             if (!viewOnly) TendrilMenuItem(text = { Text("Save as template") }, onClick = { showOwnMenu = false; viewModel.saveAsTemplate() })
                             if (!viewOnly) TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { showOwnMenu = false; showTrashCanvas = true })
@@ -264,6 +344,7 @@ fun CanvasScreen(
                         Box {
                             IconButton(onClick = { showPaneMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                             TendrilMenu(expanded = showPaneMenu, onDismissRequest = { showPaneMenu = false }) {
+                                if (!wide) { SubmenuItem(text = { Text("Structure") }) { closeSub -> structureItems { closeSub(); showPaneMenu = false } }; HorizontalDivider() }
                                 // §0.10 item 15 — the canvas's own verb before the workspace's (the page's `···` has the same).
                                 if (!viewOnly) { TendrilMenuItem(text = { Text("Save as template") }, onClick = { showPaneMenu = false; viewModel.saveAsTemplate() }); HorizontalDivider() }
                                 paneChrome.menuItems(this) { showPaneMenu = false }
@@ -309,6 +390,7 @@ fun CanvasScreen(
                 nodes = nodes,
                 edges = edges,
                 embeddedPages = embeddedPages,
+                structure = structure,
                 scale = scale,
                 pan = pan,
                 onScaleChange = { scale = it },
@@ -323,6 +405,11 @@ fun CanvasScreen(
                 },
                 onDeleteNode = { viewModel.deleteNode(it); if (selectedNodeId == it.id) selectedNodeId = null },
                 onConnect = { from, to -> viewModel.addEdge(from.id, to.id) },
+                onSetParent = { node, parent -> viewModel.setParent(node, parent) },
+                onFoldToggle = { viewModel.toggleFold(it) },
+                onAddChild = { viewModel.addChild(it) { id -> pendingNewNodeId = id } },
+                onAddSibling = { viewModel.addSibling(it) { id -> pendingNewNodeId = id } },
+                nodeVerbs = nodeVerbs,
                 onTapEdge = { editingEdge = it },
                 viewOnly = viewOnly,
                 selectedNodeId = selectedNodeId,
@@ -348,7 +435,19 @@ fun CanvasScreen(
             if (text != null) viewModel.setNodeText(node, text)
             editingNode = null
         }
-        TextNodeEditor(node = node, viewOnly = viewOnly, onDismiss = { closeEditor(null) }, onSave = { closeEditor(it) })
+        TextNodeEditor(node = node, viewOnly = viewOnly, onDismiss = { closeEditor(null) }, onSave = { closeEditor(it) }, verbs = if (pointer || viewOnly) null else { close -> nodeVerbs(node) { editingNode = null; close() } })
+    }
+
+    nodeToDelete?.takeIf { !viewOnly }?.let { node ->
+        val frame = node.type == CanvasNodeType.FRAME
+        val kids = tree.children(node.id).size
+        AlertDialog(
+            onDismissRequest = { nodeToDelete = null },
+            title = { Text(if (frame) "Delete this frame?" else "Delete this card?", style = MaterialTheme.typography.heading) },
+            text = { Text(if (frame) "Its cards stay." else if (kids > 0) "Its ${plural(kids, "child", "children")} move up a level; any relationships go too." else "Any relationships go too.") },
+            confirmButton = { TextButton(onClick = { viewModel.deleteNode(node); if (selectedNodeId == node.id) selectedNodeId = null; nodeToDelete = null }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { nodeToDelete = null }) { Text("Cancel") } },
+        )
     }
 
     editingEdge?.let { edge ->
@@ -394,6 +493,7 @@ private fun CanvasBoard(
     nodes: List<CanvasNode>,
     edges: List<CanvasEdge>,
     embeddedPages: Map<Long, Page>,
+    structure: CanvasStructure,
     scale: Float,
     pan: Offset,
     onScaleChange: (Float) -> Unit,
@@ -404,6 +504,12 @@ private fun CanvasBoard(
     onTapNode: (CanvasNode) -> Unit,
     onDeleteNode: (CanvasNode) -> Unit,
     onConnect: (CanvasNode, CanvasNode) -> Unit,
+    /** The mind-map pass — a node dropped on a card becomes its child; Tab and Enter add a child and a sibling of the selected node. */
+    onSetParent: (CanvasNode, CanvasNode) -> Unit,
+    onFoldToggle: (CanvasNode) -> Unit,
+    onAddChild: (CanvasNode) -> Unit,
+    onAddSibling: (CanvasNode) -> Unit,
+    nodeVerbs: @Composable ColumnScope.(node: CanvasNode, close: () -> Unit) -> Unit,
     onTapEdge: (CanvasEdge) -> Unit,
     /** §3.1.2 — pan, zoom, tapping a card open and tapping an arrow to read its label all stay
      * live; only the four things that write (move, delete, connect, edit) come off the board. */
@@ -420,6 +526,16 @@ private fun CanvasBoard(
     val currentScale by rememberUpdatedState(scale)
     var linkDrag by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
     var nodeMenuFor by remember { mutableStateOf<CanvasNode?>(null) }
+    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    var dropTargetId by remember { mutableStateOf<Long?>(null) }
+    // The node's menu at the pointer (board px) — a right-click on a card.
+    var contextMenu by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
+    /** The card under a layer point that a dragged node may become a child of — not itself, not its own descendant. */
+    fun dropCandidate(dragged: CanvasNode, layerPx: Offset): CanvasNode? {
+        val hit = tree.hit(layerPx.x / density.density, layerPx.y / density.density, except = dragged.id) ?: return null
+        if (hit.id == dragged.id || tree.descendants(dragged.id).any { it.id == hit.id }) return null
+        return hit
+    }
     // L10 — the board takes focus when a card is selected, so Delete / Backspace reach it and
     // open the same dialog the badge opens (the desktop's key for a selection; the lock still
     // gates the dialog below). A finger never selects, so the phone never focuses the board.
@@ -434,9 +550,15 @@ private fun CanvasBoard(
             .focusable()
             .onPreviewKeyEvent { event ->
                 val selected = selectedNodeId?.let { id -> nodes.firstOrNull { it.id == id } }
-                if (event.type == KeyEventType.KeyDown && (event.key == Key.Delete || event.key == Key.Backspace) && selected != null && !viewOnly) {
-                    nodeMenuFor = selected; true
-                } else false
+                if (event.type != KeyEventType.KeyDown || selected == null || viewOnly) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.Delete, Key.Backspace -> { nodeMenuFor = selected; true }
+                    // The mind-map pass — Xmind's Tab and Freeplane's Insert for a child (AWT keeps Tab for focus
+                    // traversal on the desktop, so Insert is the key that always arrives), Enter for a sibling.
+                    Key.Tab, Key.Insert -> { if (selected.type != CanvasNodeType.FRAME) onAddChild(selected); true }
+                    Key.Enter -> { if (selected.type != CanvasNodeType.FRAME) onAddSibling(selected); true }
+                    else -> false
+                }
             }
             .pointerInput(Unit) {
                 // Item 15's walk: `pan` and `scale` read through `rememberUpdatedState` — the lambda
@@ -460,28 +582,33 @@ private fun CanvasBoard(
             embeddedPages = embeddedPages,
             scale = scale,
             pan = pan,
+            structure = structure,
             interactive = CanvasInteraction(
                 viewOnly = viewOnly,
                 selectedNodeId = selectedNodeId,
                 linkDrag = linkDrag,
+                dropTargetId = dropTargetId,
+                onDragOver = { node, p -> dropTargetId = dropCandidate(node, p)?.id },
+                onDropAt = { node, p -> dropCandidate(node, p)?.let { onSetParent(node, it) }; dropTargetId = null },
+                onFoldToggle = onFoldToggle,
+                onContextMenu = { node, p -> contextMenu = node to (p * scale + pan) },
                 onMoveNode = onMoveNode,
                 onResizeFrame = onResizeFrame,
                 onTapNode = onTapNode,
                 onDeleteRequest = { nodeMenuFor = it },
                 onTapEdge = onTapEdge,
-                onLinkDragStart = { node -> linkDrag = node to Offset((node.x + NODE_W / 2) * density.density, (node.y + node.boxH() / 2) * density.density) },
+                onLinkDragStart = { node -> val b = tree.box(node); linkDrag = node to Offset((b.x + b.w / 2) * density.density, (b.y + b.h / 2) * density.density) },
                 onLinkDrag = { pointerInParent -> linkDrag = linkDrag?.let { (n, _) -> n to pointerInParent } },
                 onLinkDragEnd = { node, pointerInParent ->
-                    val target = nodes.firstOrNull { candidate ->
-                        candidate.id != node.id &&
-                            pointerInParent.x / density.density >= candidate.x && pointerInParent.x / density.density <= candidate.x + NODE_W &&
-                            pointerInParent.y / density.density >= candidate.y && pointerInParent.y / density.density <= candidate.y + candidate.boxH()
-                    }
+                    val target = tree.hit(pointerInParent.x / density.density, pointerInParent.y / density.density, except = node.id)
                     if (target != null) onConnect(node, target)
                     linkDrag = null
                 },
             ),
         )
+        contextMenu?.let { (node, at) ->
+            PointerMenu(expanded = true, at = at, fallback = IntOffset.Zero, onDismiss = { contextMenu = null }) { nodeVerbs(node) { contextMenu = null } }
+        }
     }
 
     // The `takeIf` is not redundant with the hidden badge: the badge is the only way to *open*
@@ -506,6 +633,8 @@ internal class CanvasInteraction(
     val viewOnly: Boolean,
     val selectedNodeId: Long?,
     val linkDrag: Pair<CanvasNode, Offset>?,
+    /** The mind-map pass — the card a dragged node is over (its ring lights): a drop makes the dragged node its child. */
+    val dropTargetId: Long? = null,
     val onMoveNode: (CanvasNode, Float, Float) -> Unit,
     val onResizeFrame: (CanvasNode, Float, Float) -> Unit,
     val onTapNode: (CanvasNode) -> Unit,
@@ -514,6 +643,14 @@ internal class CanvasInteraction(
     val onLinkDragStart: (CanvasNode) -> Unit,
     val onLinkDrag: (Offset) -> Unit,
     val onLinkDragEnd: (CanvasNode, Offset) -> Unit,
+    /** A node being dragged, with the pointer in the layer's px — the board names the card under it. */
+    val onDragOver: (CanvasNode, Offset) -> Unit = { _, _ -> },
+    /** The drag ended at this point in the layer's px — over a card, the dragged node becomes its child. */
+    val onDropAt: (CanvasNode, Offset) -> Unit = { _, _ -> },
+    /** The fold badge at a branch's end. */
+    val onFoldToggle: (CanvasNode) -> Unit = {},
+    /** A right-click (or the phone's long press) on a node: the node's menu at the pointer (layer px). */
+    val onContextMenu: (CanvasNode, Offset) -> Unit = { _, _ -> },
 )
 
 /**
@@ -523,6 +660,16 @@ internal class CanvasInteraction(
  * gesture on it — the block list scrolls over it). With [interactive] null nothing here reads a
  * pointer; with [showContent] false the cards are their boxes alone (a fit under
  * `CANVAS_CONTENT_MIN_SCALE`, where text would be unreadable — Obsidian hides it the same way).
+ *
+ * The mind-map pass (2026-09-20, `docs/critiques/mind-map-grounds.md`) — **one grammar**: the
+ * layer draws from a [CanvasTree]. A node with a parent hangs on a *branch* — a headless curve
+ * from the parent's side (an elbow under DOWN), one colour per main branch, 2 dp at the first
+ * level and 1.5 deeper; a leaf's branch runs on as its underline. A `canvas_edges` row is a
+ * *relationship*: dashed, 1.5 dp, `dim`, a head on the target's edge, its label on the line —
+ * routed from the outer sides so it never crosses the branch it relates (`relationRoute`). A
+ * folded node ends its branch in a badge with the hidden count. A frame with a parent follows
+ * that subtree's box. The order: frames, branches and relationships, cards, badges, the frames'
+ * labels (an arrow over a frame's border — #121).
  */
 @Composable
 internal fun CanvasLayer(
@@ -533,23 +680,30 @@ internal fun CanvasLayer(
     pan: Offset,
     interactive: CanvasInteraction?,
     showContent: Boolean = true,
+    structure: CanvasStructure = CanvasStructure.FREE,
 ) {
     val density = LocalDensity.current
     val edgeInk = MaterialTheme.colorScheme.onSurfaceVariant
     val draftInk = MaterialTheme.colorScheme.primary
+    val palette = LocalTendrilPalette.current
+    val branchInks = remember(palette) { listOf(palette.event, palette.habit, palette.third) }
+    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    val visible = remember(tree) { nodes.filter { tree.isVisible(it) } }
+    val labelStyle = MaterialTheme.typography.caption
+    val labelGround = MaterialTheme.colorScheme.surface
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     Box(
         modifier = Modifier
             .graphicsLayer(scaleX = scale, scaleY = scale, translationX = pan.x, translationY = pan.y, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)),
     ) {
         // Item 15 — frames first, so every card sits over its region; the edges over the frames
-        // (the user, 2026-09-20: an arrow "falls underneath the border of the frame" — Obsidian
-        // draws its edges above groups), then the cards, then the frames' labels.
-        val frames = nodes.filter { it.type == CanvasNodeType.FRAME }
+        // (#121 — Obsidian draws its edges above groups), then the cards, then the frames' labels.
+        val frames = visible.filter { it.type == CanvasNodeType.FRAME }
         frames.forEach { node ->
-            key(node.id) { CanvasFrameBox(node = node, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
+            key(node.id) { CanvasFrameBox(node = node, box = tree.box(node), following = tree.followedBy(node) != null, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
         }
         Canvas(modifier = Modifier.size(4000.dp).then(
-            if (interactive == null) Modifier else Modifier.pointerInput(edges, nodes, scale) {
+            if (interactive == null) Modifier else Modifier.pointerInput(edges, tree, scale) {
                 // A tap on an arrow opens its editor. Item 15's walk found the previous form — a
                 // `detectDragGestures` "so it composes with the pan" — consumed every drag past
                 // touch slop and so cancelled the board's pan on both platforms (a 380 px swipe
@@ -558,26 +712,54 @@ internal fun CanvasLayer(
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     val up = waitForUpOrCancellation() ?: return@awaitEachGesture
-                    val hit = nearestEdge(up.position, nodes, edges, density.density)
+                    val hit = nearestEdge(up.position, tree, edges, density.density)
                     if (hit != null) { up.consume(); interactive.onTapEdge(hit) }
                 }
             },
         )) {
+            val d = density.density
+            // The branches: every visible node with a visible parent.
+            for (node in visible) {
+                if (node.type == CanvasNodeType.FRAME) continue
+                val parent = tree.parentOf(node) ?: continue
+                if (!tree.isVisible(parent)) continue
+                val ink = branchInks[tree.mainBranchIndex(node).coerceAtLeast(0) % branchInks.size]
+                val width = (if (tree.depthOf(node.id) == 1) 2f else 1.5f) * d
+                drawBranch(tree.box(parent), tree.box(node), tree.sideOf(node), tree.structureOf(parent).curved, d, ink, width)
+                if (tree.levelOf(node) == TreeLevel.LEAF) {
+                    val u = leafUnderline(tree.box(node))
+                    drawLine(ink, Offset(u.x1 * d, u.y1 * d), Offset(u.x2 * d, u.y2 * d), strokeWidth = width, cap = StrokeCap.Round)
+                }
+            }
+            // The relationships.
             edges.forEach { edge ->
-                val from = nodes.find { it.id == edge.fromNodeId } ?: return@forEach
-                val to = nodes.find { it.id == edge.toNodeId } ?: return@forEach
-                drawCanvasEdge(from, to, edge, density.density, edgeInk)
+                val from = tree.byId[edge.fromNodeId] ?: return@forEach
+                val to = tree.byId[edge.toNodeId] ?: return@forEach
+                if (!tree.isVisible(from) || !tree.isVisible(to)) return@forEach
+                val route = relationRoute(tree.box(from), tree.parentOf(from)?.let { tree.box(it) }, tree.box(to), tree.parentOf(to)?.let { tree.box(it) })
+                drawRelationship(route, edge, d, edgeInk)
+                val label = edge.label?.takeIf { it.isNotBlank() }
+                if (label != null && showContent) {
+                    val measured = textMeasurer.measure(label, labelStyle)
+                    val w = measured.size.width + 8 * d; val h = measured.size.height + 2 * d
+                    val x = route.midX * d - w / 2f; val y = route.midY * d - h / 2f
+                    drawRoundRect(labelGround, Offset(x, y), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(4 * d))
+                    drawText(measured, edgeInk, Offset(x + 4 * d, y + d))
+                }
             }
             interactive?.linkDrag?.let { (fromNode, pointer) ->
-                val start = Offset((fromNode.x + NODE_W / 2) * density.density, (fromNode.y + fromNode.boxH() / 2) * density.density)
+                val fb = tree.box(fromNode)
+                val start = Offset((fb.x + fb.w / 2) * d, (fb.y + fb.h / 2) * d)
                 drawLine(color = draftInk, start = start, end = pointer, strokeWidth = 3f)
             }
         }
 
-        nodes.filter { it.type != CanvasNodeType.FRAME }.forEach { node ->
+        visible.filter { it.type != CanvasNodeType.FRAME }.forEach { node ->
             key(node.id) {
                 CanvasNodeCard(
                     node = node,
+                    box = tree.box(node),
+                    level = tree.levelOf(node),
                     embeddedPage = node.embeddedPageId?.let { embeddedPages[it] },
                     density = density.density,
                     interactive = interactive,
@@ -585,10 +767,33 @@ internal fun CanvasLayer(
                 )
             }
         }
+        // The fold badges: at a folded node's branch end, with the hidden count.
+        visible.filter { it.folded && it.type != CanvasNodeType.FRAME }.forEach { node ->
+            val count = tree.hiddenCount(node.id)
+            if (count == 0) return@forEach
+            val (cx, cy) = foldBadgeAt(tree.box(node), tree.sideOf(node))
+            key("fold", node.id) { FoldBadge(count = count, x = cx, y = cy, density = density.density, onClick = interactive?.let { i -> { i.onFoldToggle(node) } }) }
+        }
         // The labels over the cards: a card that overlaps a frame's top edge must not hide its handle.
         frames.forEach { node ->
-            key("label", node.id) { CanvasFrameBox(node = node, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.LABEL) }
+            key("label", node.id) { CanvasFrameBox(node = node, box = tree.box(node), following = tree.followedBy(node) != null, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.LABEL) }
         }
+    }
+}
+
+/** The mind-map pass — a folded branch's end: a disc with the hidden count; a click unfolds. */
+@Composable
+private fun FoldBadge(count: Int, x: Float, y: Float, density: Float, onClick: (() -> Unit)?) {
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(((x - FOLD_BADGE / 2f) * density).roundToInt(), ((y - FOLD_BADGE / 2f) * density).roundToInt()) }
+            .size(FOLD_BADGE.dp)
+            .background(MaterialTheme.colorScheme.surface, CircleShape)
+            .border(1.5.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(count.toString(), style = MaterialTheme.typography.caption, color = MaterialTheme.colorScheme.onSurface) // type: BADGE — the fold's hidden count
     }
 }
 
@@ -628,7 +833,7 @@ private fun Modifier.touchNodeGestures(density: Float, viewOnly: Boolean, node: 
 private enum class FramePart { BODY, LABEL }
 
 @Composable
-private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: CanvasInteraction?, showContent: Boolean, part: FramePart) {
+private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, density: Float, interactive: CanvasInteraction?, showContent: Boolean, part: FramePart) {
     val current by rememberUpdatedState(node)
     val palette = LocalTendrilPalette.current
     val pointer = LocalDensityProfile.current.pointer
@@ -640,14 +845,16 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = Modifier
-            .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
-            .size(node.width.dp, node.height.dp),
+            .offset { IntOffset((box.x * density).roundToInt(), (box.y * density).roundToInt()) }
+            .size(box.w.dp, box.h.dp),
     ) {
+        // The mind-map pass — a frame following a subtree is a drawn structure: its stroke at `dim`
+        // (`faint` measured 3.56 : 1 on the ground, the mock critique's #2); the hand-sized frame keeps `faint`.
         if (part == FramePart.BODY) Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(palette.text.copy(alpha = 0.03f), shape)
-                .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else palette.textFaint, shape),
+                .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else if (following) palette.textDim else palette.textFaint, shape),
         )
         if (showContent && part == FramePart.LABEL) {
             val pillHeight = if (pointer) 24.dp else 28.dp
@@ -708,8 +915,9 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
                 }
             }
         }
-        // The resize handle at the corner: on the selected frame under a pointer, always on the phone.
-        if (part == FramePart.BODY && interactive != null && !viewOnly && (selected || !pointer)) {
+        // The resize handle at the corner: on the selected frame under a pointer, always on the phone;
+        // never on a following frame — its subtree sizes it.
+        if (part == FramePart.BODY && !following && interactive != null && !viewOnly && (selected || !pointer)) {
             val handle = if (pointer) 14.dp else 20.dp
             Box(
                 modifier = Modifier
@@ -730,55 +938,31 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
     }
 }
 
-/** 14g·2 — a canvas edge is drawn in the register's dim (B§13.8.3), as the Road Map's mention edges are. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasEdge(from: CanvasNode, to: CanvasNode, edge: CanvasEdge, density: Float, ink: Color) {
-    val fb = nodeBox(from)
-    val tb = nodeBox(to)
-    val start = Offset((fb.x + fb.w / 2) * density, (fb.y + fb.h / 2) * density)
-    val end = Offset((tb.x + tb.w / 2) * density, (tb.y + tb.h / 2) * density)
-    drawLine(color = ink, start = start, end = end, strokeWidth = 3f)
-    val d = end - start
-    // The tip on the target's edge, from whichever side the line arrives (`boxEdgeDistance`).
-    if (edge.direction == CanvasArrowDirection.ONE_WAY || edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(start, end, boxEdgeDistance(d.x, d.y, tb.w * density / 2f, tb.h * density / 2f), ink)
-    }
-    if (edge.direction == CanvasArrowDirection.TWO_WAY) {
-        drawCanvasArrowhead(end, start, boxEdgeDistance(d.x, d.y, fb.w * density / 2f, fb.h * density / 2f), ink)
-    }
+/** The cubic's points at ten steps, for the tap test. */
+private fun RelationRoute.samples(density: Float): List<Offset> = (0..10).map { i ->
+    val t = i / 10f; val u = 1 - t
+    Offset(
+        (u * u * u * x1 + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * x2) * density,
+        (u * u * u * y1 + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * y2) * density,
+    )
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCanvasArrowhead(from: Offset, to: Offset, pullBack: Float, ink: Color) {
-    val delta = to - from
-    val len = delta.getDistance()
-    if (len < 1f) return
-    val unit = delta / len
-    val perp = Offset(-unit.y, unit.x)
-    val tip = to - unit * pullBack
-    val path = Path().apply {
-        moveTo(tip.x, tip.y)
-        lineTo((tip - unit * 14f + perp * 7f).x, (tip - unit * 14f + perp * 7f).y)
-        lineTo((tip - unit * 14f - perp * 7f).x, (tip - unit * 14f - perp * 7f).y)
-        close()
-    }
-    drawPath(path, color = ink)
-}
-
-/** Point-to-segment distance across every edge, nearest under a small screen-space threshold
- * wins — the simplest reliable way to hit-test a tap against a drawn line. [tap] arrives in
- * this Canvas's own pixel space (matching [drawCanvasEdge]'s drawing coordinates), so node
- * positions (stored as dp-equivalent floats) need the same `* density` conversion before
- * comparing — comparing raw dp values against a pixel-space tap would silently never hit on
- * any non-1.0-density device. */
-private fun nearestEdge(tap: Offset, nodes: List<CanvasNode>, edges: List<CanvasEdge>, density: Float): CanvasEdge? {
+/** Point-to-segment distance along every relationship's route, nearest under a small screen-space
+ * threshold wins — the simplest reliable way to hit-test a tap against a drawn line. [tap] arrives
+ * in this Canvas's own pixel space (matching the drawing's coordinates), so the route's dp go
+ * through the same `* density`. */
+private fun nearestEdge(tap: Offset, tree: CanvasTree, edges: List<CanvasEdge>, density: Float): CanvasEdge? {
     var best: CanvasEdge? = null
     var bestDist = 24f
     edges.forEach { edge ->
-        val from = nodes.find { it.id == edge.fromNodeId } ?: return@forEach
-        val to = nodes.find { it.id == edge.toNodeId } ?: return@forEach
-        val a = Offset((from.x + NODE_W / 2) * density, (from.y + from.boxH() / 2) * density)
-        val b = Offset((to.x + NODE_W / 2) * density, (to.y + to.boxH() / 2) * density)
-        val dist = distanceToSegment(tap, a, b)
-        if (dist < bestDist) { bestDist = dist; best = edge }
+        val from = tree.byId[edge.fromNodeId] ?: return@forEach
+        val to = tree.byId[edge.toNodeId] ?: return@forEach
+        if (!tree.isVisible(from) || !tree.isVisible(to)) return@forEach
+        val pts = relationRoute(tree.box(from), tree.parentOf(from)?.let { tree.box(it) }, tree.box(to), tree.parentOf(to)?.let { tree.box(it) }).samples(density)
+        for (i in 0 until pts.size - 1) {
+            val dist = distanceToSegment(tap, pts[i], pts[i + 1])
+            if (dist < bestDist) { bestDist = dist; best = edge }
+        }
     }
     return best
 }
@@ -796,10 +980,17 @@ private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
  * near-zero-movement-on-release pattern as [com.tendril.app.ui.roadmap.RoadMapNode] — one
  * gesture detector per hit target (body, link handle, delete badge), never two competing
  * detectors on the same target. No long-press timer: a long-press-triggered menu is easy to
- * fire by accident mid-drag, so delete gets its own always-visible small badge instead. */
+ * fire by accident mid-drag, so delete gets its own always-visible small badge instead.
+ *
+ * The mind-map pass — the card by its [level]: a ROOT is `pageTitle` in a box with the accent's
+ * border; a BRANCH the strip; a LEAF bare text whose branch is its underline (no badges — a
+ * leaf's verbs are its menu's). A drag reports the pointer to the board so the card under it can
+ * light as a drop target; the drop makes the dragged node its child. */
 @Composable
 private fun CanvasNodeCard(
     node: CanvasNode,
+    box: NodeBox,
+    level: TreeLevel,
     embeddedPage: Page?,
     density: Float,
     /** Null on the inert card in a page (item 7): no gesture, no badge, no hover. */
@@ -808,6 +999,7 @@ private fun CanvasNodeCard(
 ) {
     val viewOnly = interactive?.viewOnly ?: true
     val selected = interactive?.selectedNodeId == node.id
+    val dropTarget = interactive?.dropTargetId == node.id
     // The gesture reads the card as it is now, not as it was when the detector started.
     val current by rememberUpdatedState(node)
     // L10 — under a pointer the badges show on hover or on the selected card (14d's rule for row
@@ -816,14 +1008,28 @@ private fun CanvasNodeCard(
     val hovered by interaction.collectIsHoveredAsState()
     val pointer = LocalDensityProfile.current.pointer
     val badgesAlpha = if (!pointer || hovered || selected) 1f else 0f
+    val leaf = level == TreeLevel.LEAF
+    val root = level == TreeLevel.ROOT
+    val ring = when {
+        dropTarget -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        selected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        root -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
+        else -> null
+    }
     Surface(
-        color = if (node.type == CanvasNodeType.PAGE_EMBED) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(8.dp),
-        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        color = when {
+            leaf -> Color.Transparent
+            root -> MaterialTheme.colorScheme.background
+            node.type == CanvasNodeType.PAGE_EMBED -> MaterialTheme.colorScheme.secondaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        },
+        shape = RoundedCornerShape(if (root) 10.dp else 8.dp),
+        border = ring,
         modifier = Modifier
-            .offset { IntOffset((node.x * density).roundToInt(), (node.y * density).roundToInt()) }
-            .size((NODE_W).dp, node.boxH().dp)
+            .offset { IntOffset((box.x * density).roundToInt(), (box.y * density).roundToInt()) }
+            .size(box.w.dp, box.h.dp)
             .then(if (interactive == null) Modifier else if (!pointer) Modifier.touchNodeGestures(density, viewOnly, { current }, interactive) else Modifier.hoverable(interaction)
+            .onSecondaryClick { at -> interactive.onContextMenu(current, Offset(current.x * density, current.y * density) + at) }
             // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
             // same lambda until a key changes, so a board already on screen when the eye toggle
             // is flipped would otherwise go on dragging against the value captured at first
@@ -840,26 +1046,72 @@ private fun CanvasNodeCard(
                     // detector on the outer Box (see RoadMapNode's own fix for the same issue).
                     down.consume()
                     var totalDrag = Offset.Zero
+                    var last = down.position
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                         if (change.pressed) {
                             val delta = change.position - change.previousPosition
+                            last = change.position
                             if (delta != Offset.Zero) {
                                 // Accumulated even under View-Only, so the tap-vs-drag test below
                                 // stays honest: a smeared finger that would have been a drag must
                                 // not fall through and open the card's editor instead.
                                 totalDrag += delta
-                                if (!viewOnly) interactive.onMoveNode(current, current.x + delta.x / density, current.y + delta.y / density)
+                                if (!viewOnly) {
+                                    interactive.onMoveNode(current, current.x + delta.x / density, current.y + delta.y / density)
+                                    interactive.onDragOver(current, Offset(current.x * density, current.y * density) + change.position)
+                                }
                             }
                             change.consume()
                         }
                     } while (event.changes.any { it.pressed })
                     if (totalDrag.getDistance() < 12f) interactive.onTapNode(current)
+                    else if (!viewOnly) interactive.onDropAt(current, Offset(current.x * density, current.y * density) + last)
                 }
             }),
     ) {
         if (!showContent) return@Surface
+        if (leaf) {
+            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+                Text( // type: TITLE — a leaf is its text on its branch, one line
+                    node.text.orEmpty().ifBlank { "…" },
+                    style = MaterialTheme.typography.body,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            return@Surface
+        }
+        if (root) {
+            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+                Text( // type: CARD_TITLE — the root's name, the map's title
+                    node.text.orEmpty().ifBlank { embeddedPage?.title ?: "Untitled" },
+                    style = MaterialTheme.typography.pageTitle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                if (interactive != null && !viewOnly) Box(
+                    modifier = Modifier.align(Alignment.CenterEnd).alpha(badgesAlpha)
+                        .size(20.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .pointerInput(node.id, density) {
+                            var parentPointer = Offset.Zero
+                            detectDragGestures(
+                                onDragStart = { parentPointer = Offset((node.x + box.w) * density, node.y * density); interactive.onLinkDragStart(node) },
+                                onDrag = { change, dragAmount -> change.consume(); parentPointer += dragAmount; interactive.onLinkDrag(parentPointer) },
+                                onDragEnd = { interactive.onLinkDragEnd(node, parentPointer) },
+                                onDragCancel = { interactive.onLinkDragEnd(node, parentPointer) },
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Link, contentDescription = "Draw a relationship to another card", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(3.dp)) }
+            }
+            return@Surface
+        }
         // The size count (2026-09-20): a card is a 48 dp strip, so the badges' reserved space is a
         // column at the right edge (× above the link handle), and the text keeps a 28 dp end margin —
         // the width the strip has to spare, never its height. The rule stands: the text never moves.
@@ -873,21 +1125,21 @@ private fun CanvasNodeCard(
             // so both come off the card entirely while View-Only is on rather than sitting there
             // greyed out. The row itself goes with them: with nothing left to reserve space for,
             // an empty strip would only push the card's own text down for no reason.
+            // A folded node draws no link handle: its badge sits where the handle's column is (the critique's #3).
             if (interactive != null && !viewOnly) Column(modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).alpha(badgesAlpha), verticalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
                         .background(MaterialTheme.colorScheme.errorContainer, CircleShape)
-                        .clickable(enabled = badgesAlpha > 0f, onClick = { interactive.onDeleteRequest(node) }),
+                        .clickable { interactive.onDeleteRequest(current) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Delete card", tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(3.dp))
                 }
-
-                // The connect handle — its own dedicated pointerInput scoped just to its own
-                // bounds, so dragging it never competes with the card body's own
+                // The link handle's own detector, separate from the body's, so the initial
+                // touch position (not a delta) can seed the parent-space pointer for the
                 // reposition-drag gesture.
-                Box(
+                if (!node.folded) Box(
                     modifier = Modifier
                         .size(20.dp)
                         .background(MaterialTheme.colorScheme.primary, CircleShape)
@@ -895,7 +1147,7 @@ private fun CanvasNodeCard(
                             var parentPointer = Offset.Zero
                             detectDragGestures(
                                 onDragStart = {
-                                    parentPointer = Offset((node.x + NODE_W) * density, node.y * density)
+                                    parentPointer = Offset((node.x + box.w) * density, node.y * density)
                                     interactive.onLinkDragStart(node)
                                 },
                                 onDrag = { change, dragAmount ->
@@ -909,7 +1161,7 @@ private fun CanvasNodeCard(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Link, contentDescription = "Draw arrow to another card", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(3.dp))
+                    Icon(Icons.Filled.Link, contentDescription = "Draw a relationship to another card", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(3.dp))
                 }
             }
 
@@ -944,7 +1196,7 @@ private fun CanvasNodeCard(
 }
 
 @Composable
-private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit, verbs: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null) {
     var text by remember(node.id) { mutableStateOf(node.text.orEmpty()) }
     // L10 — the field takes focus as the editor opens: a double-click's card is typed into at once
     // (Obsidian's), and a card left blank is discarded by the caller's rule.
@@ -968,6 +1220,12 @@ private fun TextNodeEditor(node: CanvasNode, viewOnly: Boolean, onDismiss: () ->
                     Spacer(Modifier.width(8.dp))
                     TextButton(onClick = { onSave(text) }) { Text("Save") }
                 }
+            }
+            // The mind-map pass — the phone's way to the tree's verbs (the desktop's right-click menu draws the same list).
+            if (verbs != null) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Tree", style = MaterialTheme.typography.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp)) // type: EYEBROW
+                verbs(onDismiss)
             }
         }
     }

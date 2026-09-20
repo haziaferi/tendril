@@ -289,8 +289,10 @@ class PagesSyncEngine(
                     uid = n.uid, type = n.type.name, x = n.x, y = n.y, width = n.width, height = n.height,
                     text = n.text, embeddedPageUid = n.embeddedPageId?.let { pageIdToUid[it] },
                     createdAt = n.createdAt.toEpochMilli(), updatedAt = n.updatedAt.toEpochMilli(),
+                    parentUid = n.parentId?.let { nodeIdToUid[it] }, folded = n.folded, structure = n.structure,
                 )
             },
+            structure = canvas.structure,
             edges = canvasEdgeDao.getForCanvas(canvas.id).mapNotNull { e ->
                 val from = nodeIdToUid[e.fromNodeId] ?: return@mapNotNull null
                 val to = nodeIdToUid[e.toNodeId] ?: return@mapNotNull null
@@ -608,8 +610,9 @@ class PagesSyncEngine(
             if (page.record.canvas == null) continue
             val pageId = uidToId.getValue(page.uid)
             val now = Instant.ofEpochMilli(page.updatedAt)
-            val pageCanvasId = pageCanvasDao.getByPageId(pageId)?.also { pageCanvasDao.update(it.copy(updatedAt = now)) }?.id
-                ?: pageCanvasDao.insert(PageCanvas(pageId = pageId, createdAt = now, updatedAt = now))
+            val structure = page.record.canvas.structure ?: "free"
+            val pageCanvasId = pageCanvasDao.getByPageId(pageId)?.also { pageCanvasDao.update(it.copy(updatedAt = now, structure = structure)) }?.id
+                ?: pageCanvasDao.insert(PageCanvas(pageId = pageId, createdAt = now, updatedAt = now, structure = structure))
             // The clear below is reached only because every node type and arrow direction in this
             // record already decoded — the same decode-then-mutate rule Pass 5 exists to enforce.
             canvasEdgeDao.deleteForCanvas(pageCanvasId)
@@ -622,8 +625,15 @@ class PagesSyncEngine(
                         x = n.x, y = n.y, width = n.width, height = n.height, text = n.text,
                         embeddedPageId = n.embeddedPageUid?.let { uidToId[it] },
                         createdAt = Instant.ofEpochMilli(n.createdAt), updatedAt = Instant.ofEpochMilli(n.updatedAt),
+                        folded = n.folded, structure = n.structure,
                     )
                 )
+            }
+            // v23 — the parent links, once every node of the record has an id (a parent may come after its child).
+            for ((n, _) in page.nodes) {
+                val parent = n.parentUid?.let { nodeUidToId[it] } ?: continue
+                val id = nodeUidToId.getValue(n.uid)
+                canvasNodeDao.setParent(id, parent)
             }
             for ((e, direction) in page.edges) {
                 val from = nodeUidToId[e.fromNodeUid] ?: continue

@@ -41,6 +41,8 @@ The desktop's database read `user_version 22` on launch with the two rows.
 
 ## Recorded, not changed
 
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
+
 - The desktop's page bar shows the Journal day's raw title (*journal/2026-09-19*) where the tree,
   the shelf and the switcher show *19 Sep 2026* (L12's list did not include the page bar) — one
   line for the small-things list, not this PR's.

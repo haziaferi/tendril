@@ -399,6 +399,10 @@ class FakeCanvasNodeDao(private val store: FakePageStore) : CanvasNodeDao {
     override suspend fun getForCanvas(canvasId: Long): List<CanvasNode> =
         store.canvasNodes.values.filter { it.canvasId == canvasId }
 
+    override suspend fun setParent(id: Long, parentId: Long?) {
+        store.canvasNodes[id]?.let { store.canvasNodes[id] = it.copy(parentId = parentId) }
+    }
+
     override fun observeForCanvas(canvasId: Long): Flow<List<CanvasNode>> =
         flowOf(store.canvasNodes.values.filter { it.canvasId == canvasId })
 }

@@ -37,7 +37,7 @@ import kotlin.math.roundToInt
  * board's section heading; never scaled). (The user, 2026-09-20, on Garden plan at the embed's
  * fit: *Beds* written over a card's words, then "very small, blends in".)
  */
-internal data class ScaledLabel(val x: Float, val y: Float, val w: Float, val h: Float, val text: String, val emphasis: Boolean = false, val pill: Boolean = false)
+internal data class ScaledLabel(val x: Float, val y: Float, val w: Float, val h: Float, val text: String, val emphasis: Boolean = false, val pill: Boolean = false, val underline: Boolean = false)
 
 @Composable
 internal fun ReadableLabels(labels: List<ScaledLabel>, scale: Float, pan: Offset, density: Float, color: Color) {
@@ -71,13 +71,14 @@ internal fun ReadableLabels(labels: List<ScaledLabel>, scale: Float, pan: Offset
                 .padding(horizontal = 4.dp, vertical = 2.dp),
             contentAlignment = Alignment.Center,
         ) {
+            // A leaf on the line (the mind-map pass): the word keeps the rule that says what it is.
             Text(
                 l.text,
-                style = if (l.emphasis) strong else style,
+                style = if (l.emphasis) strong else if (l.underline) style.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline) else style,
                 color = color,
                 maxLines = lines,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
+                textAlign = if (l.underline) TextAlign.Start else TextAlign.Center,
             )
         }
     }

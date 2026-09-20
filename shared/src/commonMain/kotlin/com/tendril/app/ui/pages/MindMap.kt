@@ -39,9 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import com.tendril.app.domain.canvas.CANVAS_CONTENT_MIN_SCALE
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,8 +49,23 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.page.Block
 import com.tendril.app.domain.MindMapLayout
+import androidx.compose.ui.graphics.StrokeCap
+import com.tendril.app.ui.theme.pageTitle
+import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.canvas.drawBranch
+import com.tendril.app.domain.canvas.leafWidth
+import com.tendril.app.domain.canvas.leafUnderline
+import com.tendril.app.domain.canvas.cardHeight
+import com.tendril.app.domain.canvas.TreeSide
+import com.tendril.app.domain.canvas.TREE_SIBLING_GAP
+import com.tendril.app.domain.canvas.TREE_LEVEL_GAP
+import com.tendril.app.domain.canvas.NodeBox
+import com.tendril.app.domain.canvas.CANVAS_ROOT_W
+import com.tendril.app.domain.canvas.CANVAS_ROOT_H
+import com.tendril.app.domain.canvas.CANVAS_NODE_W
+import com.tendril.app.domain.canvas.CANVAS_LEAF_H
+import com.tendril.app.domain.MapNode
 import com.tendril.app.domain.OutlineBlock
-import com.tendril.app.domain.estimateNodeSize
 import com.tendril.app.domain.layoutMindMap
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
@@ -77,12 +90,39 @@ private const val MIN_SCALE = 0.25f
 private const val MAX_SCALE = 3f
 private const val CARD_HEIGHT_DP = 220
 
-/** Content-unit sizes for [layoutMindMap]; the screen turns them into dp one-to-one. */
-private fun measureNode(block: Block): Pair<Float, Float> = estimateNodeSize(block.content, charWidth = 7.5f, lineHeight = 18f, maxChars = 22, padding = 20f)
+/**
+ * The mind-map pass (2026-09-20) — the outline's map takes **the canvas's grammar** (`ui/canvas/TreeGrammar.kt`,
+ * `domain/canvas/Tree.kt`): the root at `pageTitle` in a bordered box (220 × 64), its children the
+ * 200 × 48 strip (taller by the line for longer text), deeper nodes as text on the line — the branch
+ * is the word's underline; branches headless curves, one colour per main branch. The layout stays
+ * `layoutMindMap` (the RIGHT structure — the map's only one, since the outline gives the tree). Sizes
+ * by depth, in content units; the screen turns them into dp one-to-one.
+ */
+private fun measureAt(depth: Int, block: Block): Pair<Float, Float> = when {
+    depth == 0 -> CANVAS_ROOT_W to CANVAS_ROOT_H
+    depth == 1 -> CANVAS_NODE_W to cardHeight(block.content)
+    else -> leafWidth(block.content) to CANVAS_LEAF_H
+}
+
+private fun layoutByGrammar(subtree: List<OutlineBlock>): MindMapLayout {
+    val rootDepth = subtree.firstOrNull()?.depth ?: 0
+    val depthOf = subtree.associate { it.block.id to it.depth - rootDepth }
+    return layoutMindMap(subtree, { block -> measureAt(depthOf[block.id] ?: 0, block) }, hGap = TREE_LEVEL_GAP, vGap = TREE_SIBLING_GAP)
+}
+
+/** The main branch a map node hangs from — its depth-1 ancestor's index among the root's children; −1 for the root. */
+private fun mainBranchIndex(layout: MindMapLayout, node: MapNode): Int {
+    var cur = node
+    while (true) {
+        val parent = cur.parentId?.let(layout::nodeFor) ?: return -1
+        if (parent.parentId == null) return layout.nodes.filter { it.parentId == parent.block.id }.indexOfFirst { it.block.id == cur.block.id }
+        cur = parent
+    }
+}
 
 @Composable
 internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
-    val layout = remember(subtree) { layoutMindMap(subtree, ::measureNode) }
+    val layout = remember(subtree) { layoutByGrammar(subtree) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     Box(
         modifier = Modifier
@@ -102,7 +142,7 @@ internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
             val readable = fit >= CANVAS_CONTENT_MIN_SCALE
             MapLayer(layout, scale = fit, pan = Offset(pad, pad), selectedId = null, onTapNode = null, interactive = false, showContent = readable)
             if (!readable) ReadableLabels(
-                labels = layout.nodes.map { n -> ScaledLabel(n.x, n.y, n.width, n.height, n.block.content.ifBlank { "…" }, emphasis = n.parentId == null) },
+                labels = layout.nodes.map { n -> ScaledLabel(n.x, n.y, n.width, n.height, n.block.content.ifBlank { "…" }, emphasis = n.parentId == null, underline = n.depth >= 2) },
                 scale = fit, pan = Offset(pad, pad), density = density, color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -125,7 +165,7 @@ internal fun MindMapFullScreen(
     onAddChild: (Block, String) -> Unit,
     onDelete: (Block) -> Unit,
 ) {
-    val layout = remember(subtree) { layoutMindMap(subtree, ::measureNode) }
+    val layout = remember(subtree) { layoutByGrammar(subtree) }
     var scale by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset(24f, 24f)) }
     var selectedId by remember { mutableStateOf<Long?>(null) }
@@ -198,15 +238,16 @@ private fun hitTest(layout: MindMapLayout, tap: Offset, scale: Float, pan: Offse
 /**
  * The drawing, in content units scaled by density then by [scale] and moved by [pan] — one
  * `graphicsLayer` on one layer, the Canvas board's rule (§3.7), so edges and boxes cannot drift
- * apart at any zoom.
+ * apart at any zoom. The nodes by level and the branches through `TreeGrammar` — the canvas's own.
  */
 @Composable
 private fun MapLayer(layout: MindMapLayout, scale: Float, pan: Offset, selectedId: Long?, onTapNode: ((Long) -> Unit)?, interactive: Boolean, showContent: Boolean = true) {
     val density = androidx.compose.ui.platform.LocalDensity.current.density
-    val edgeColor = MaterialTheme.colorScheme.outline
+    val palette = LocalTendrilPalette.current
+    val branchInks = remember(palette) { listOf(palette.event, palette.habit, palette.third) }
     val nodeFill = MaterialTheme.colorScheme.surfaceVariant
-    val rootFill = MaterialTheme.colorScheme.primaryContainer
-    val selectedStroke = MaterialTheme.colorScheme.primary
+    val ground = MaterialTheme.colorScheme.background
+    val accent = MaterialTheme.colorScheme.primary
     val textColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
@@ -216,36 +257,46 @@ private fun MapLayer(layout: MindMapLayout, scale: Float, pan: Offset, selectedI
         Canvas(modifier = Modifier.fillMaxSize()) {
             for (node in layout.nodes) {
                 val parent = node.parentId?.let(layout::nodeFor) ?: continue
-                val start = Offset(parent.right * density, parent.centerY * density)
-                val end = Offset(node.x * density, node.centerY * density)
-                val mid = (start.x + end.x) / 2f
-                val path = Path().apply {
-                    moveTo(start.x, start.y)
-                    cubicTo(mid, start.y, mid, end.y, end.x, end.y)
+                val ink = branchInks[mainBranchIndex(layout, node).coerceAtLeast(0) % branchInks.size]
+                val width = (if (node.depth == 1) 2f else 1.5f) * density
+                val pb = NodeBox(parent.x, parent.y, parent.width, parent.height)
+                val nb = NodeBox(node.x, node.y, node.width, node.height)
+                drawBranch(pb, nb, TreeSide.RIGHT, curved = true, density = density, ink = ink, width = width)
+                if (node.depth >= 2) {
+                    val u = leafUnderline(nb)
+                    drawLine(ink, Offset(u.x1 * density, u.y1 * density), Offset(u.x2 * density, u.y2 * density), strokeWidth = width, cap = StrokeCap.Round)
                 }
-                drawPath(path, edgeColor, style = Stroke(width = 2f * density))
             }
         }
         for (node in layout.nodes) {
             val isRoot = node.parentId == null
+            val leaf = node.depth >= 2
             val isSelected = node.block.id == selectedId
+            val shape = RoundedCornerShape(if (isRoot) 10.dp else 8.dp)
             Box(
                 modifier = Modifier
                     .padding(start = node.x.dp, top = node.y.dp)
                     .width(node.width.dp)
                     .height(node.height.dp)
-                    .background(if (isRoot) rootFill else nodeFill, RoundedCornerShape(10.dp))
-                    .border(if (isSelected) 2.dp else 1.dp, if (isSelected) selectedStroke else edgeColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .then(if (leaf) Modifier else Modifier.background(if (isRoot) ground else nodeFill, shape))
+                    .then(
+                        when {
+                            isSelected -> Modifier.border(2.dp, accent, shape)
+                            isRoot -> Modifier.border(2.dp, accent.copy(alpha = 0.8f), shape)
+                            else -> Modifier
+                        },
+                    )
                     .then(if (interactive && onTapNode != null) Modifier.clickable { onTapNode(node.block.id) } else Modifier),
-                contentAlignment = Alignment.Center,
+                contentAlignment = if (leaf) Alignment.CenterStart else if (isRoot) Alignment.Center else Alignment.CenterStart,
             ) {
                 if (showContent) Text(  // type: TITLE — a node shows its block's text
                     node.block.content.ifBlank { "…" },
-                    style = if (isRoot) MaterialTheme.typography.body else MaterialTheme.typography.description,
+                    style = if (isRoot) MaterialTheme.typography.pageTitle else if (leaf) MaterialTheme.typography.body else MaterialTheme.typography.description,
                     color = textColor,
-                    maxLines = 3,
+                    maxLines = if (isRoot) 2 else if (leaf) 1 else 3,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    textAlign = if (isRoot) androidx.compose.ui.text.style.TextAlign.Center else null,
+                    modifier = Modifier.padding(horizontal = if (leaf) 6.dp else if (isRoot) 12.dp else 8.dp, vertical = 2.dp),
                 )
             }
         }
