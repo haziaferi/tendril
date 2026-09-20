@@ -66,7 +66,7 @@ fun leafWidth(text: String?): Float {
     return n * CANVAS_LEAF_CHAR + CANVAS_LEAF_PAD
 }
 
-class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure) {
+class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /** A page card's title by page id — its width (`cardWidth`). */ private val titleOf: (Long) -> String? = { null }) {
     val nodes: List<CanvasNode> = nodes
     val byId: Map<Long, CanvasNode> = nodes.associateBy { it.id }
     private val childrenOf: Map<Long, List<CanvasNode>> = nodes
@@ -195,7 +195,7 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure) {
     /** The box a node draws in, by its level; a following frame's from its subtree's visible boxes plus [FRAME_FOLLOW_PAD]. */
     fun box(node: CanvasNode): NodeBox = boxMemo.getOrPut(node.id) {
         if (node.type == CanvasNodeType.FRAME) {
-            val anchor = followedBy(node) ?: return@getOrPut nodeBox(node)
+            val anchor = followedBy(node) ?: return@getOrPut nodeBox(node, titleOf = titleOf)
             val boxes = (listOf(anchor) + descendants(anchor.id).filter { it.type != CanvasNodeType.FRAME && isVisible(it) }).map { box(it) }
             val x = boxes.minOf { it.x } - FRAME_FOLLOW_PAD
             val y = boxes.minOf { it.y } - FRAME_FOLLOW_PAD
@@ -205,7 +205,7 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure) {
         }
         when (levelOf(node)) {
             TreeLevel.ROOT -> NodeBox(node.x, node.y, CANVAS_ROOT_W, CANVAS_ROOT_H)
-            TreeLevel.BRANCH -> nodeBox(node)
+            TreeLevel.BRANCH -> nodeBox(node, titleOf = titleOf)
             TreeLevel.LEAF -> NodeBox(node.x, node.y, leafWidth(node.text), CANVAS_LEAF_H)
         }
     }
@@ -318,7 +318,7 @@ fun tidy(tree: CanvasTree, rootId: Long): Map<Long, Pair<Float, Float>> {
 }
 
 /** Where a new child goes without moving its siblings: after the last one, beside or under the parent. */
-fun newChildPosition(tree: CanvasTree, parent: CanvasNode, childW: Float = CANVAS_NODE_W, childH: Float = CANVAS_NODE_H): Pair<Float, Float> {
+fun newChildPosition(tree: CanvasTree, parent: CanvasNode, childW: Float = cardWidth(null), childH: Float = CANVAS_NODE_H): Pair<Float, Float> {
     val pb = tree.box(parent)
     val kids = tree.children(parent.id)
     val structure = tree.structureOf(parent)

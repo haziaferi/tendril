@@ -2,6 +2,7 @@
 
 package com.tendril.app.ui.canvas
 
+import com.tendril.app.domain.canvas.CANVAS_CARD_MIN_W
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.canvas.CanvasArrowDirection
@@ -198,7 +199,8 @@ class CanvasViewModel(
     val structure: StateFlow<CanvasStructure> = canvas.map { CanvasStructure.fromKey(it?.structure) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CanvasStructure.FREE)
 
-    private fun tree(): CanvasTree = CanvasTree(nodes.value, structure.value)
+    private fun titleOf(id: Long): String? = embeddedPages.value[id]?.title
+    private fun tree(): CanvasTree = CanvasTree(nodes.value, structure.value, ::titleOf)
 
     /** A node moves with its subtree (Xmind's, Freeplane's); a following frame moves the node it follows. */
     fun moveNode(node: CanvasNode, x: Float, y: Float) {
@@ -233,7 +235,7 @@ class CanvasViewModel(
         val current = canvas.value ?: return
         launchAndTouch {
             pageCanvasDao.update(current.copy(structure = structure.key, updatedAt = Instant.now()))
-            val tree = CanvasTree(nodes.value, structure)
+            val tree = CanvasTree(nodes.value, structure, ::titleOf)
             val now = Instant.now()
             for (r in nodes.value.filter { it.parentId == null && it.type != CanvasNodeType.FRAME && tree.children(it.id).isNotEmpty() }) {
                 for ((id, at) in tidy(tree, r.id)) tree.byId[id]?.let { n -> canvasNodeDao.update(n.copy(x = at.first, y = at.second, updatedAt = now)) }
@@ -246,7 +248,7 @@ class CanvasViewModel(
         launchAndTouch {
             canvasNodeDao.update(node.copy(structure = structure?.key, updatedAt = Instant.now()))
             val updated = nodes.value.map { if (it.id == node.id) it.copy(structure = structure?.key) else it }
-            val tree = CanvasTree(updated, this.structure.value)
+            val tree = CanvasTree(updated, this.structure.value, ::titleOf)
             val now = Instant.now()
             for ((id, at) in tidy(tree, node.id)) tree.byId[id]?.let { n -> canvasNodeDao.update(n.copy(x = at.first, y = at.second, updatedAt = now)) }
         }
@@ -330,6 +332,14 @@ class CanvasViewModel(
             canvasNodeDao.update(frame.copy(x = x, y = y, updatedAt = now))
             carried.forEach { canvasNodeDao.update(it.copy(x = it.x + dx, y = it.y + dy, updatedAt = now)) }
         }
+    }
+
+    /** The card's width by hand (Obsidian's rule): the left edge moved by [dx] dp — the right edge stays, `width` is written,
+     * the text keeps deciding the height; never under [CANVAS_CARD_MIN_W]. */
+    fun resizeCard(card: CanvasNode, dx: Float) {
+        val w0 = tree().box(card).w
+        val w1 = (w0 - dx).coerceAtLeast(CANVAS_CARD_MIN_W)
+        launchAndTouch { canvasNodeDao.update(card.copy(x = card.x + (w0 - w1), width = w1, updatedAt = Instant.now())) }
     }
 
     fun resizeFrame(frame: CanvasNode, width: Float, height: Float) {

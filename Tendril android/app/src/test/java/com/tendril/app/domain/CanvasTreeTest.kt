@@ -4,7 +4,7 @@ import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.domain.canvas.CANVAS_LEAF_H
 import com.tendril.app.domain.canvas.CANVAS_NODE_H
-import com.tendril.app.domain.canvas.CANVAS_NODE_W
+import com.tendril.app.domain.canvas.cardWidth
 import com.tendril.app.domain.canvas.CANVAS_ROOT_H
 import com.tendril.app.domain.canvas.CANVAS_ROOT_W
 import com.tendril.app.domain.canvas.CanvasStructure
@@ -59,7 +59,7 @@ class CanvasTreeTest {
         assertEquals(TreeLevel.ROOT, tree.levelOf(root)); assertEquals(TreeLevel.BRANCH, tree.levelOf(a)); assertEquals(TreeLevel.LEAF, tree.levelOf(a1))
         assertEquals(TreeLevel.BRANCH, tree.levelOf(free))   // a parentless card with no children is a strip
         assertEquals(NodeBox(400f, 200f, CANVAS_ROOT_W, CANVAS_ROOT_H), tree.box(root))
-        assertEquals(CANVAS_NODE_W, tree.box(a).w); assertEquals(CANVAS_NODE_H, tree.box(a).h)
+        assertEquals(cardWidth("Beds"), tree.box(a).w); assertEquals(CANVAS_NODE_H, tree.box(a).h)   // the strip is as wide as its text asks
         assertEquals(CANVAS_LEAF_H, tree.box(a1).h)
         // Under DOWN every level is the strip.
         val down = CanvasTree(n, CanvasStructure.DOWN)
@@ -114,7 +114,7 @@ class CanvasTreeTest {
         val right = listOf(n[1], n[2]).map { pos.getValue(it.id) }
         val left = pos.getValue(n[3].id)
         assertTrue(right.all { it.first == rb.right + TREE_LEVEL_GAP })
-        assertEquals(rb.x - TREE_LEVEL_GAP - CANVAS_NODE_W, left.first, 0.01f)
+        assertEquals(rb.x - TREE_LEVEL_GAP - tree.box(n[3]).w, left.first, 0.01f)
         // The lone left child sits on the root's centre line.
         assertEquals(rb.y + rb.h / 2f, left.second + CANVAS_NODE_H / 2f, 0.01f)
         // The right stack of *bands* is centred on the root: Beds' band is its two leaves (24 + 12 + 24 = 60),
@@ -128,7 +128,7 @@ class CanvasTreeTest {
         assertEquals(CANVAS_LEAF_H + TREE_SIBLING_GAP, a2y - a1y, 0.01f)
         assertTrue(pos.getValue(n[2].id).second >= a2y + CANVAS_LEAF_H + TREE_SIBLING_GAP - 0.01f)
         // Leaves sit right of Beds' strip.
-        assertEquals(right[0].first + CANVAS_NODE_W + TREE_LEVEL_GAP, pos.getValue(n[4].id).first, 0.01f)
+        assertEquals(right[0].first + tree.box(n[1]).w + TREE_LEVEL_GAP, pos.getValue(n[4].id).first, 0.01f)
         assertNull(pos[n[7].id])   // a free card is not the tree's
     }
 
@@ -140,14 +140,14 @@ class CanvasTreeTest {
         val rb = tree.box(root)
         val kids = listOf(n[1], n[2], n[3]).map { pos.getValue(it.id) }
         assertTrue(kids.all { it.second == rb.bottom + DOWN_LEVEL_GAP })
-        // The bands are centred under the root: Beds' band is its two strips (200 + 24 + 200), the others their own 200.
-        val bedsBand = 2 * CANVAS_NODE_W + 24f
-        val bandLeft = kids[0].first - (bedsBand - CANVAS_NODE_W) / 2f
-        val bandRight = kids[2].first + CANVAS_NODE_W
+        // The bands are centred under the root: Beds' band is its two strips (each its text's width, 24 between), the others their own.
+        val bedsBand = tree.box(n[4]).w + 24f + tree.box(n[5]).w
+        val bandLeft = kids[0].first - (bedsBand - tree.box(n[1]).w) / 2f
+        val bandRight = kids[2].first + tree.box(n[3]).w
         assertEquals(rb.x + rb.w / 2f, (bandLeft + bandRight) / 2f, 0.01f)
         val a = pos.getValue(n[1].id); val a1 = pos.getValue(n[4].id); val a2 = pos.getValue(n[5].id)
-        assertEquals(a.first + CANVAS_NODE_W / 2f, (a1.first + a2.first + CANVAS_NODE_W) / 2f, 0.01f)
-        assertTrue(a2.first >= a1.first + CANVAS_NODE_W)
+        assertEquals(a.first + tree.box(n[1]).w / 2f, (a1.first + a2.first + tree.box(n[5]).w) / 2f, 0.01f)
+        assertTrue(a2.first >= a1.first + tree.box(n[4]).w)
     }
 
     @Test
@@ -164,7 +164,7 @@ class CanvasTreeTest {
         assertEquals(down.box(n[5]).right + 24f, dx, 0.01f); assertEquals(down.box(n[5]).y, dy, 0.01f)
         val leaf = n[4]
         val (ex, ey) = newChildPosition(down, leaf)
-        assertEquals(down.box(leaf).x + down.box(leaf).w / 2f - CANVAS_NODE_W / 2f, ex, 0.01f); assertEquals(down.box(leaf).bottom + DOWN_LEVEL_GAP, ey, 0.01f)
+        assertEquals(down.box(leaf).x + down.box(leaf).w / 2f - cardWidth(null) / 2f, ex, 0.01f); assertEquals(down.box(leaf).bottom + DOWN_LEVEL_GAP, ey, 0.01f)
     }
 
     @Test

@@ -62,7 +62,7 @@ import com.tendril.app.domain.canvas.TREE_LEVEL_GAP
 import com.tendril.app.domain.canvas.NodeBox
 import com.tendril.app.domain.canvas.CANVAS_ROOT_W
 import com.tendril.app.domain.canvas.CANVAS_ROOT_H
-import com.tendril.app.domain.canvas.CANVAS_NODE_W
+import com.tendril.app.domain.canvas.cardWidth
 import com.tendril.app.domain.canvas.CANVAS_LEAF_H
 import com.tendril.app.domain.MapNode
 import com.tendril.app.domain.OutlineBlock
@@ -100,7 +100,7 @@ private const val CARD_HEIGHT_DP = 220
  */
 private fun measureAt(depth: Int, block: Block): Pair<Float, Float> = when {
     depth == 0 -> CANVAS_ROOT_W to CANVAS_ROOT_H
-    depth == 1 -> CANVAS_NODE_W to cardHeight(block.content)
+    depth == 1 -> cardWidth(block.content).let { w -> w to cardHeight(block.content, width = w) }
     else -> leafWidth(block.content) to CANVAS_LEAF_H
 }
 

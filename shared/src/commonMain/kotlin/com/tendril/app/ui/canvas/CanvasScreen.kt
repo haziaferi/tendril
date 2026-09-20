@@ -2,6 +2,8 @@
 
 package com.tendril.app.ui.canvas
 
+import androidx.compose.foundation.gestures.drag
+import com.tendril.app.domain.canvas.CANVAS_EMPTY_CARD_TEXT
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import com.tendril.app.ui.theme.label
@@ -12,7 +14,7 @@ import com.tendril.app.domain.canvas.fitToBoxes
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_W
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_LABEL
 import com.tendril.app.domain.canvas.FRAME_DEFAULT_H
-import com.tendril.app.domain.canvas.CANVAS_NODE_W
+import com.tendril.app.domain.canvas.cardWidth
 import com.tendril.app.domain.canvas.CANVAS_NODE_H
 import androidx.compose.foundation.layout.ColumnScope
 import com.tendril.app.ui.theme.eyebrow
@@ -56,7 +58,6 @@ import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.ui.nav.ShellLayout
 import com.tendril.app.ui.nav.LocalShellLayout
 import com.tendril.app.ui.nav.LocalDensityProfile
-import com.tendril.app.ui.components.openVerb
 import com.tendril.app.domain.canvas.contentAtPaneCentre
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
@@ -155,7 +156,6 @@ import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
 
-internal const val NODE_W = CANVAS_NODE_W
 internal const val NODE_H = CANVAS_NODE_H
 /** A card's own height — the strip its text asks for (`nodeBox`); `NODE_H` is the one-line minimum. */
 internal fun CanvasNode.boxH(): Float = nodeBox(this).h   // a free card's; the tree's boxes come from `CanvasTree.box`
@@ -198,7 +198,7 @@ fun CanvasScreen(
     val embeddedPages by viewModel.embeddedPages.collectAsState()
     // The mind-map pass — the board's structure and the tree it makes of the nodes.
     val structure by viewModel.structure.collectAsState()
-    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    val tree = remember(nodes, structure, embeddedPages) { CanvasTree(nodes, structure) { embeddedPages[it]?.title } }
     var showStructureMenu by remember { mutableStateOf(false) }
     val hasTree = nodes.any { it.parentId != null && it.type != CanvasNodeType.FRAME }
 
@@ -229,7 +229,7 @@ fun CanvasScreen(
         val id = pendingNewNodeId ?: return@LaunchedEffect
         nodes.firstOrNull { it.id == id }?.let { if (editingNode?.id != id) editingNode = it }
     }
-    fun newCardOrigin(): Pair<Float, Float> = contentAtPaneCentre(paneSize.width.toFloat(), paneSize.height.toFloat(), scale, pan.x, pan.y, density, NODE_W, NODE_H)
+    fun newCardOrigin(): Pair<Float, Float> = contentAtPaneCentre(paneSize.width.toFloat(), paneSize.height.toFloat(), scale, pan.x, pan.y, density, cardWidth(null), NODE_H)
     fun fit() {
         val f = fitToBoxes(nodes.filter { tree.isVisible(it) }.map { tree.box(it) }, paneSize.width.toFloat(), paneSize.height.toFloat(), density)
         scale = f.scale.coerceIn(MIN_SCALE, MAX_SCALE); pan = Offset(f.panX, f.panY)
@@ -296,7 +296,7 @@ fun CanvasScreen(
     fun screenToContent(screen: Offset): Offset = ((screen - pan) / scale) / density
     fun addAtDoubleTap(tap: Offset) {
         val c = screenToContent(tap)
-        viewModel.addTextNode(c.x - NODE_W / 2f, c.y - NODE_H / 2f) { pendingNewNodeId = it }
+        viewModel.addTextNode(c.x - cardWidth(null) / 2f, c.y - NODE_H / 2f) { pendingNewNodeId = it }
     }
 
     Scaffold(
@@ -332,7 +332,15 @@ fun CanvasScreen(
                     if (paneChrome == null) Box {
                         IconButton(onClick = { showOwnMenu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = "More") }
                         TendrilMenu(expanded = showOwnMenu, onDismissRequest = { showOwnMenu = false }) {
-                            if (!wide) { SubmenuItem(text = { Text("Structure") }) { closeSub -> structureItems { closeSub(); showOwnMenu = false } }; HorizontalDivider() }
+                            // The phone's bar holds only `···` (L·P2): Structure, Tidy and Fit live in it — the desktop's bar
+                            // buttons. Fit was missing here (canvas-frames' walk; S-list 2026-09-20): a frame made at the centre
+                            // of a 360 dp screen is wider than the screen, and nothing brought it back.
+                            if (!wide) {
+                                SubmenuItem(text = { Text("Structure") }) { closeSub -> structureItems { closeSub(); showOwnMenu = false } }
+                                if (hasTree && !viewOnly) TendrilMenuItem(text = { Text("Tidy") }, onClick = { showOwnMenu = false; viewModel.tidy() })
+                                TendrilMenuItem(text = { Text("Fit every card") }, enabled = nodes.isNotEmpty(), onClick = { showOwnMenu = false; fit() })
+                                HorizontalDivider()
+                            }
                             if (onShowOnRoadMap != null) TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showOwnMenu = false; onShowOnRoadMap(pageId) })
                             if (!viewOnly) TendrilMenuItem(text = { Text("Save as template") }, onClick = { showOwnMenu = false; viewModel.saveAsTemplate() })
                             if (!viewOnly) TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { showOwnMenu = false; showTrashCanvas = true })
@@ -397,6 +405,7 @@ fun CanvasScreen(
                 onPanChange = { pan = it },
                 onMoveNode = { node, x, y -> if (node.type == CanvasNodeType.FRAME) viewModel.moveFrame(node, x, y) else viewModel.moveNode(node, x, y) },
                 onResizeFrame = { frame, w, h -> viewModel.resizeFrame(frame, w, h) },
+                onResizeCard = { card, dx -> viewModel.resizeCard(card, dx) },
                 onTapNode = { node ->
                     // Under a pointer a first click selects, a second opens (Obsidian's); the phone opens at once.
                     if (pointer && selectedNodeId != node.id) selectedNodeId = node.id
@@ -501,6 +510,7 @@ private fun CanvasBoard(
     onMoveNode: (CanvasNode, Float, Float) -> Unit,
     /** §0.10 item 15 — a frame's corner handle. */
     onResizeFrame: (CanvasNode, Float, Float) -> Unit,
+    onResizeCard: (CanvasNode, Float) -> Unit,
     onTapNode: (CanvasNode) -> Unit,
     onDeleteNode: (CanvasNode) -> Unit,
     onConnect: (CanvasNode, CanvasNode) -> Unit,
@@ -526,7 +536,7 @@ private fun CanvasBoard(
     val currentScale by rememberUpdatedState(scale)
     var linkDrag by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
     var nodeMenuFor by remember { mutableStateOf<CanvasNode?>(null) }
-    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    val tree = remember(nodes, structure, embeddedPages) { CanvasTree(nodes, structure) { embeddedPages[it]?.title } }
     var dropTargetId by remember { mutableStateOf<Long?>(null) }
     // The node's menu at the pointer (board px) — a right-click on a card.
     var contextMenu by remember { mutableStateOf<Pair<CanvasNode, Offset>?>(null) }
@@ -594,6 +604,7 @@ private fun CanvasBoard(
                 onContextMenu = { node, p -> contextMenu = node to (p * scale + pan) },
                 onMoveNode = onMoveNode,
                 onResizeFrame = onResizeFrame,
+                onResizeCard = onResizeCard,
                 onTapNode = onTapNode,
                 onDeleteRequest = { nodeMenuFor = it },
                 onTapEdge = onTapEdge,
@@ -637,6 +648,8 @@ internal class CanvasInteraction(
     val dropTargetId: Long? = null,
     val onMoveNode: (CanvasNode, Float, Float) -> Unit,
     val onResizeFrame: (CanvasNode, Float, Float) -> Unit,
+    /** The card's width by hand — the handle at its left edge on a selected card under a pointer; the value is the edge's move in dp (left grows). */
+    val onResizeCard: (CanvasNode, Float) -> Unit = { _, _ -> },
     val onTapNode: (CanvasNode) -> Unit,
     val onDeleteRequest: (CanvasNode) -> Unit,
     val onTapEdge: (CanvasEdge) -> Unit,
@@ -687,7 +700,7 @@ internal fun CanvasLayer(
     val draftInk = MaterialTheme.colorScheme.primary
     val palette = LocalTendrilPalette.current
     val branchInks = remember(palette) { listOf(palette.event, palette.habit, palette.third) }
-    val tree = remember(nodes, structure) { CanvasTree(nodes, structure) }
+    val tree = remember(nodes, structure, embeddedPages) { CanvasTree(nodes, structure) { embeddedPages[it]?.title } }
     val visible = remember(tree) { nodes.filter { tree.isVisible(it) } }
     val labelStyle = MaterialTheme.typography.caption
     val labelGround = MaterialTheme.colorScheme.surface
@@ -1014,20 +1027,25 @@ private fun CanvasNodeCard(
         dropTarget -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         selected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         root -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
-        else -> null
+        leaf -> null
+        // The user (2026-09-20): a 1 px border around the cards — the register's hairline, so a card holds its shape on every tint.
+        else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     }
-    Surface(
-        color = when {
-            leaf -> Color.Transparent
-            root -> MaterialTheme.colorScheme.background
-            node.type == CanvasNodeType.PAGE_EMBED -> MaterialTheme.colorScheme.secondaryContainer
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        },
-        shape = RoundedCornerShape(if (root) 10.dp else 8.dp),
-        border = ring,
+    // A `Box`, not a `Surface`: a Surface clips its content to its shape, and the badges and the width
+    // handle straddle the card's right edge (the frame's handle straddles its corner the same way).
+    val fill = when {
+        leaf -> Color.Transparent
+        root -> MaterialTheme.colorScheme.background
+        node.type == CanvasNodeType.PAGE_EMBED -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val shape = RoundedCornerShape(if (root) 10.dp else 8.dp)
+    Box(
         modifier = Modifier
             .offset { IntOffset((box.x * density).roundToInt(), (box.y * density).roundToInt()) }
             .size(box.w.dp, box.h.dp)
+            .background(fill, shape)
+            .then(if (ring != null) Modifier.border(ring, shape) else Modifier)
             .then(if (interactive == null) Modifier else if (!pointer) Modifier.touchNodeGestures(density, viewOnly, { current }, interactive) else Modifier.hoverable(interaction)
             .onSecondaryClick { at -> interactive.onContextMenu(current, Offset(current.x * density, current.y * density) + at) }
             // `viewOnly` is a key, not just a captured value: `pointerInput` keeps running the
@@ -1071,7 +1089,7 @@ private fun CanvasNodeCard(
                 }
             }),
     ) {
-        if (!showContent) return@Surface
+        if (!showContent) return@Box
         if (leaf) {
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
                 Text( // type: TITLE — a leaf is its text on its branch, one line
@@ -1082,7 +1100,7 @@ private fun CanvasNodeCard(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            return@Surface
+            return@Box
         }
         if (root) {
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
@@ -1110,7 +1128,7 @@ private fun CanvasNodeCard(
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Link, contentDescription = "Draw a relationship to another card", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(3.dp)) }
             }
-            return@Surface
+            return@Box
         }
         // The size count (2026-09-20): a card is a 48 dp strip, so the badges' reserved space is a
         // column at the right edge (× above the link handle), and the text keeps a 28 dp end margin —
@@ -1126,7 +1144,30 @@ private fun CanvasNodeCard(
             // greyed out. The row itself goes with them: with nothing left to reserve space for,
             // an empty strip would only push the card's own text down for no reason.
             // A folded node draws no link handle: its badge sits where the handle's column is (the critique's #3).
-            if (interactive != null && !viewOnly) Column(modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).alpha(badgesAlpha), verticalArrangement = Arrangement.SpaceBetween) {
+            // The width handle (the user, 2026-09-20 — a hand may set a card's width, Obsidian's rule): on a selected card
+            // under a pointer, straddling the **left** edge's middle — the right edge is the badges' (on a one-line card
+            // the two discs fill its height); the right edge stays put, the text keeps deciding the height.
+            if (interactive != null && !viewOnly && pointer && selected && !leaf && !root) Box(
+                modifier = Modifier.align(Alignment.CenterStart).offset(x = (-7).dp).size(14.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
+                    .pointerInput(node.id, density) {
+                        // The down is consumed at once: the card's body consumes every unconsumed change to move the
+                        // card, and `detectDragGestures` would leave the first ones to it while waiting for slop.
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            down.consume()
+                            drag(down.id) { change ->
+                                val dx = change.position.x - change.previousPosition.x
+                                change.consume()
+                                if (dx != 0f) interactive.onResizeCard(current, dx / density)
+                            }
+                        }
+                    },
+            )
+            // The badges straddle the card's right edge (the frame's handle straddles its corner the same way), so the
+            // text keeps the whole card: with the width fit to the text, a reserved 28 dp column was half of a short card.
+            if (interactive != null && !viewOnly) Column(modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).offset(x = 10.dp).alpha(badgesAlpha), verticalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
@@ -1165,12 +1206,12 @@ private fun CanvasNodeCard(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 28.dp, top = 2.dp, bottom = 2.dp), contentAlignment = Alignment.CenterStart) {
+            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 2.dp), contentAlignment = Alignment.CenterStart) {
                 when (node.type) {
                     // The caption's verb by the profile (14h·2's `openVerb`); `onSurface` on the card's tint
                     // (`onSurfaceVariant` measured 3.45 : 1 there — `canvas-cards-mock.md` #1).
                     CanvasNodeType.TEXT -> Text( // type: PREVIEW_LINE — a card shows at most three lines of its text; the editor holds the rest
-                        node.text.orEmpty().ifBlank { "Empty card — ${openVerb()}" },
+                        node.text.orEmpty().ifBlank { CANVAS_EMPTY_CARD_TEXT },   // the caption the box is sized for; the card itself is the verb
                         style = MaterialTheme.typography.description,
                         maxLines = CANVAS_CARD_MAX_LINES,
                         overflow = TextOverflow.Ellipsis,
