@@ -20,6 +20,8 @@ type scale, one Touch row, the stacked chrome folded, Material's components on t
 Calendar → `Day ▾` → the four views; `···` → *Layers ▸* → the pushed level, *Habits* toggled on and off with the menu open, ← back; *Plan the day* on the Day; *Calendar settings…* opens the sheet. Tasks → the header's tabs switch the kind, `This month ▾` the range; the rows at 16 sp with *sab 12 · due ven 11 · 0/1 steps*. Pages → the cards at the new scale; a page's `···` menu rows at `body` 16.
 
 ## Recorded, not changed
+
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
 - T·P3 `pageTitle` at two line heights (the sheet's title vs the bar's) — Low, open.
 - The Postpone sheet's unit chips wrapping; the Timeline's English initials; the Day header's Italian order (P10) — Low, open.
 - The Tasks rows at 59 against Todoist's 57: the difference is the 48 dp checkbox target's air; left.

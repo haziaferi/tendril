@@ -58,6 +58,8 @@ six blocks under a mind map). The mock and its critique: `docs/mockups/block-sel
 
 ## Recorded, not changed
 
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
+
 - On the desktop a right-click inside a selected block's *text* opens the field's own menu
   (14d's rule) with *Block actions…* as its last item; the row's margin opens the sheet at once.
 - On the phone a long press *in the text* is the platform's word selection; the block's long

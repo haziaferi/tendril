@@ -49,6 +49,8 @@ are each tree's own).
 
 ## Recorded, not fixed
 
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
+
 - Sibling order is creation order; dragging a sibling above another does not reorder (Xmind
   does). A later PR.
 - The relationship between a Down child and a card above it crosses the tree on its way up —

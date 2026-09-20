@@ -48,6 +48,8 @@ it a line-height defect. Two causes, both general, neither a site:
 The phone: the bar, a card, a menu, the Postpone sheet measured (the T·P3 row); Calendar → the Day header, `Dentist fri 14:30` → the chips at the field's edge, cleared; `···` → *Calendar settings…* → *Opens on* on two rows; Settings → the three backup buttons; Pages → *Errands* → Timeline → the initials; *Trip* → History (two revisions) → a long-press on *Packing* → History (the same two) → *Find in page* → the three labels. The desktop (the shared changes): Tasks → *Pane task* → *Postpone…* → the slide-over with *2 · days ▾* → the menu of five; rows 28 px at this 931-px-tall window (29 dp × 0.79 × 1.25 — the scale's own number, not a change: the earlier 30 px were at 1039).
 
 ## Recorded, not changed
+
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
 - F·P5 — cannot reproduce; the code offers no path.
 - The desktop's text bands are their line heights now (body 20 dp, caption 16, pageTitle 24) where they were the font's natural height; every measured pitch sits on a `heightIn(min)` floor and did not move (rows 28 px at 931 tall, menus 29).
 

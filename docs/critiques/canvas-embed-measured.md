@@ -38,6 +38,8 @@ its block actions. Phone: *Trip* scrolled to the block (two swipes that began in
 did nothing — recorded below; one over the cards scrolled).
 
 ## Recorded, not changed (new Lows — §0.10 item 24)
+
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
 - **S1** the row page's strip shows a Date cell's value as ISO (*Read on 2026-09-19*) on both platforms — the Table's cell format; F·P4's rule (*ven 25*) has not reached the database's date cells.
 - **S2** the *Insert block* and *Block actions* slide-overs list their rows at ≈ 47 px on the desktop, not the profile's 29 (Material `ListItem`/`TextButton` rows, outside the type-class audit's reach).
 - **S3** a text field's right-click on the desktop opens Compose's default context menu — white on a dark register, the system's Italian labels (*Taglia · Copia · Incolla · Seleziona tutto*) — with *Block actions…* appended; the menu wants the register's colours.

@@ -25,6 +25,8 @@ Ctrl+3 → Habits → `+` → *Pages read*, *Counts something*: the three fields
 The chips carry the number alone — *+ 1*, *Undo the last one* — because the unit is the person's word as typed (*cups*) and *+ 1 cups* read wrong; the sentences carry the unit where the number fits it (*2 cups today*). The unit field's placeholder says how to write it.
 
 ## Recorded, not changed
+
+*Assessed 2026-09-20 against the build — kept or struck in `tendril-spec.md` §0.10 item 24.*
 - The Journal's Today strip and the Merged list check a counting habit with their plain checkbox: a tap still adds one amount (the use case is the same), but no `+` disc there yet — one composable to swap in each, after this ships.
 - A habit's fields are not editable after creation (there is no edit-habit sheet today for any field); recorded with the habit's other fields, not new here.
 - No Loop Habit Tracker ground (not installed); TickTick's desktop form of the row [Assumed] the phone's.
