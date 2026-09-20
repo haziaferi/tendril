@@ -648,7 +648,7 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
                 .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else palette.textFaint, shape),
         )
         if (showContent && part == FramePart.LABEL) {
-            val pillHeight = if (pointer) 22.dp else 26.dp
+            val pillHeight = if (pointer) 24.dp else 28.dp
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -683,10 +683,12 @@ private fun CanvasFrameBox(node: CanvasNode, density: Float, interactive: Canvas
                     )
                     .padding(horizontal = 8.dp),
             ) {
-                Text( // type: SLOT_CHIP — a frame's label pill, the FocusBar's chip style
+                // The user (2026-09-20, on the build): the name "blends in / disappears" at `label` in the
+                // dim colour — a frame's name is the board's section heading: `heading`, `onSurface` at rest.
+                Text( // type: SECTION_HEADING — a frame's name, the one text on a board that names a group
                     node.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL },
-                    style = MaterialTheme.typography.label,
-                    color = if (live) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.heading,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

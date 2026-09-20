@@ -33,8 +33,9 @@ import kotlin.math.roundToInt
  *
  * A `pill` label is a frame's: the board draws it as a chip *above* the frame's top-left edge
  * (`CanvasFrameBox`), never inside the frame where a card may sit, and the overlay places it the
- * same way — at the chip's own height, one line, left-aligned, on `surface`. (The user, 2026-09-20,
- * on Garden plan at the embed's fit: *Beds* written over a card's words.)
+ * same way — at the chip's own height, one line, left-aligned, on `surface`, at `heading` (the
+ * board's section heading; never scaled). (The user, 2026-09-20, on Garden plan at the embed's
+ * fit: *Beds* written over a card's words, then "very small, blends in".)
  */
 internal data class ScaledLabel(val x: Float, val y: Float, val w: Float, val h: Float, val text: String, val emphasis: Boolean = false, val pill: Boolean = false)
 
@@ -43,7 +44,8 @@ internal fun ReadableLabels(labels: List<ScaledLabel>, scale: Float, pan: Offset
     val style = MaterialTheme.typography.caption
     val strong = style.copy(fontWeight = MaterialTheme.typography.heading.fontWeight)
     val lineDp = style.lineHeight.value
-    val pillDp = lineDp + 4f
+    val pillStyle = MaterialTheme.typography.heading
+    val pillDp = pillStyle.lineHeight.value + 4f
     val pillGround = MaterialTheme.colorScheme.surface
     labels.forEach { l ->
         if (l.pill) {
@@ -56,7 +58,7 @@ internal fun ReadableLabels(labels: List<ScaledLabel>, scale: Float, pan: Offset
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Text(l.text, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(l.text, style = pillStyle, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis) // type: SECTION_HEADING — a frame's name, as the board draws it
             }
             return@forEach
         }
