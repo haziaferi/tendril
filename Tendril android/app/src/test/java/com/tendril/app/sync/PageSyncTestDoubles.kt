@@ -285,6 +285,7 @@ class FakePageDatabaseDao(private val store: FakePageStore) : PageDatabaseDao {
     override fun observeDatabasesForLabels(labelIds: List<Long>): Flow<List<PageDatabase>> =
         flowOf(store.databases.values.filter { it.labelId in labelIds && store.pages[it.pageId]?.deletedAt == null })
     override fun observeBoundLabelIds(): Flow<List<Long>> = flowOf(store.databases.values.mapNotNull { it.labelId })
+    override fun observeAll(): Flow<List<PageDatabase>> = flowOf(store.databases.values.toList())
 }
 
 class FakePropertyDao(private val store: FakePageStore) : PropertyDao {

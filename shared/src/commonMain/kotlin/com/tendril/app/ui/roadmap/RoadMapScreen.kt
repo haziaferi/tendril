@@ -52,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.theme.databaseHueColours
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -680,14 +681,17 @@ internal fun RoadMapNode(
     // 14g·2 (B§13.8.3) — a page is the lifted ground, a database a fill (the third hue's tint until
     // the slider PR gives it its own), a canvas an outline in the third hue: a board is drawn, a
     // database is filled. The degree still thickens the accent border on pages and databases.
-    val borderColor = when (page.kind) {
-        PageKind.CANVAS -> MaterialTheme.colorScheme.tertiary
+    // S13 (B§13.8.2) — a database is filled in its own hue's tint, its border the hue; the icon stays the second channel.
+    val databaseHue = if (page.kind == PageKind.DATABASE) databaseHueColours(page.id, page.title) else null
+    val borderColor = when {
+        databaseHue != null -> databaseHue.hue
+        page.kind == PageKind.CANVAS -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary.copy(alpha = (0.25f + min(degree, 6) * 0.1f).coerceAtMost(0.9f))
     }
 
     Surface(
         color = when (page.kind) {
-            PageKind.DATABASE -> MaterialTheme.colorScheme.tertiaryContainer
+            PageKind.DATABASE -> databaseHue!!.tint
             PageKind.CANVAS -> MaterialTheme.colorScheme.surfaceVariant
             PageKind.PAGE -> MaterialTheme.colorScheme.surfaceVariant
         },

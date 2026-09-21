@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import kotlinx.coroutines.flow.map
+import com.tendril.app.ui.theme.LocalDatabaseHues
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -70,7 +72,9 @@ fun WorkbenchEnvironment(
     // The desktop's small styles step up one size too (2026-09-20, measured beside Notion and the
     // Claude app: chrome text is one size there, hierarchy is weight and colour) — `pointerTypography`.
     val typography = if (profile == DensityProfile.TOUCH) touchTypography(MaterialTheme.typography) else pointerTypography(MaterialTheme.typography)
-    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile, LocalTitleBar provides titleBar) {
+    // S13 — every database's hue, read wherever a database is drawn.
+    val databaseHues by remember(core) { core.database.pageDatabaseDao().observeAll().map { list -> list.associate { it.pageId to it.hue } } }.collectAsState(initial = emptyMap())
+    CompositionLocalProvider(LocalViewOnly provides viewOnly, LocalDensity provides scaledDensity, LocalDensityProfile provides profile, LocalTitleBar provides titleBar, LocalDatabaseHues provides databaseHues) {
         MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = typography) {
             // S3 (small things IV) — the platform's text context menu (cut · copy · paste) drawn in the
             // register's colours with the app's words; nothing on Android.

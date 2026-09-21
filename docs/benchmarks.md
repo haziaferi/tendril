@@ -1014,6 +1014,8 @@ Timeline's dependency line, which mean something else.
 
 #### 13.8.2 Databases — any hue on the wheel, the icon mandatory
 
+*Built 2026-09-21 (S13, v24): the hue bar with Obsidian's six presets as marks, the default from the title's hash, the hue on the Road Map, the calendar and the glyph; a canvas card's and frame's colour by the same sheet; `tendril-spec.md` §2.3 *The token map*.*
+
 A database takes **any hue** (a hue slider; the lightness is solved to the register's ground),
 defaulting from the title's hash over the whole circle kept ≥ 30° from the accent — not a fixed set
 of six, which was the CVD-safe *simultaneous* answer to a question databases don't pose (they are

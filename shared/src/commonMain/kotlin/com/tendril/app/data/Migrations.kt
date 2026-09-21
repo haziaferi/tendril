@@ -290,3 +290,11 @@ val MIGRATION_22_23 = object : Migration(22, 23) {
         connection.execSQL("ALTER TABLE `page_canvases` ADD COLUMN `structure` TEXT NOT NULL DEFAULT 'free'")
     }
 }
+
+/** v24 — S13 (B§13.8.2): a hue on a database and on a canvas node, null for the default / none. */
+val MIGRATION_23_24 = object : Migration(23, 24) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `page_databases` ADD COLUMN `hue` INTEGER")
+        connection.execSQL("ALTER TABLE `canvas_nodes` ADD COLUMN `hue` INTEGER")
+    }
+}

@@ -745,6 +745,14 @@ class PageDatabaseViewModel(
         viewModelScope.launch { templateManager.saveAsTemplate(current) }
     }
 
+    /** S13 (B§13.8.2) — the database's hue on the wheel; null returns to the default hashed from the title. */
+    fun setHue(hue: Int?) {
+        launchAndTouch(pageId) {
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouch
+            pageDatabaseDao.update(db.copy(hue = hue))
+        }
+    }
+
     fun updateTitle(title: String) {
         if (locked()) return
         viewModelScope.launch {

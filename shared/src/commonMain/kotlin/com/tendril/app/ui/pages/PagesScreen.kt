@@ -75,6 +75,7 @@ import androidx.compose.material3.TextButton
 import com.tendril.app.ui.nav.ShellTopBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.theme.databaseHueColours
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import com.tendril.app.ui.nav.LocalDensityProfile
@@ -432,7 +433,8 @@ private fun PageCard(page: Page, onClick: () -> Unit, onShowOnRoadMap: () -> Uni
             if (pageIcon != null) {
                 Text(pageIcon, style = MaterialTheme.typography.heading)
             } else if (icon != null) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                // S13 — a database's glyph in its hue.
+                Icon(icon, contentDescription = null, tint = if (page.kind == PageKind.DATABASE) databaseHueColours(page.id, page.title).hue else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.width(12.dp))
