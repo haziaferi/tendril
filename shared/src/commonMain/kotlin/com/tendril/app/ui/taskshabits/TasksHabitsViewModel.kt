@@ -1,5 +1,6 @@
 package com.tendril.app.ui.taskshabits
 
+import com.tendril.app.data.habit.edited
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
@@ -193,6 +194,11 @@ class TasksHabitsViewModel(
      * action calls, so unchecking here and unchecking there behave identically. */
     fun undoCheckInHabit(habitId: Long) {
         viewModelScope.launch { checkInHabitUseCase.undoCheckIn(habitId); rearm(habitId) }
+    }
+
+    /** S10 — the habit's fields edited after creation (`Habit.edited`); the alarm re-arms from the row as it now is (§9.7). */
+    fun updateHabit(habit: Habit, title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?, unit: String?, amountPerCheckIn: Double?, dailyAmount: Double?) {
+        viewModelScope.launch { habitDao.update(habit.edited(title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount, Instant.now())); rearm(habit.id) }
     }
 
     fun trashHabit(habitId: Long) {

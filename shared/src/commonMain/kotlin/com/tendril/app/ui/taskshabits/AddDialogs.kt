@@ -2,6 +2,7 @@
 
 package com.tendril.app.ui.taskshabits
 
+import com.tendril.app.data.habit.Habit
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -215,27 +216,29 @@ fun AddTaskDialog(
     }
 
     @Composable
+    /** S10 (2026-09-20): with [initial] the same sheet **edits** a habit — its fields filled in, the title *Edit habit*, the button *Save*. */
     fun AddHabitDialog(
         onDismiss: () -> Unit,
         onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?, unit: String?, amountPerCheckIn: Double?, dailyAmount: Double?) -> Unit,
+        initial: Habit? = null,
     ) {
-        var title by remember { mutableStateOf("") }
+        var title by remember { mutableStateOf(initial?.title ?: "") }
         // §0.10 item 3 — a habit that counts something: the unit, what a tap adds, and the optional number for a day.
-        var counts by remember { mutableStateOf(false) }
-        var countUnit by remember { mutableStateOf("") }
-        var perCheckIn by remember { mutableStateOf("1") }
-        var perDay by remember { mutableStateOf("") }
-        var count by remember { mutableStateOf("1") }
-        var unit by remember { mutableStateOf(IntervalUnit.DAY) }
-        var hasTime by remember { mutableStateOf(false) }
-        var time by remember { mutableStateOf(DEFAULT_TIME_OF_DAY) }
+        var counts by remember { mutableStateOf(initial?.amountPerCheckIn != null) }
+        var countUnit by remember { mutableStateOf(initial?.unit ?: "") }
+        var perCheckIn by remember { mutableStateOf(initial?.amountPerCheckIn?.let(::amountText) ?: "1") }
+        var perDay by remember { mutableStateOf(initial?.dailyAmount?.let(::amountText) ?: "") }
+        var count by remember { mutableStateOf(initial?.frequency?.count?.toString() ?: "1") }
+        var unit by remember { mutableStateOf(initial?.frequency?.unit ?: IntervalUnit.DAY) }
+        var hasTime by remember { mutableStateOf(initial?.time != null) }
+        var time by remember { mutableStateOf(initial?.time ?: DEFAULT_TIME_OF_DAY) }
         var showTimePicker by remember { mutableStateOf(false) }
-        var durationMinutes by remember { mutableStateOf("") }
+        var durationMinutes by remember { mutableStateOf(initial?.duration?.toMinutes()?.takeIf { it > 0 }?.toString() ?: "") }
 
         // L15 + T3 (PR B, 2026-09-18): the one modal that was neither a slide-over nor a picker is a
         // `TendrilSheet` now — a slide-over on a wide window, a bottom sheet on the phone — with the
         // edit sheet's frame, the 36 dp field and the sheet's title style.
-        TendrilSheet(onDismiss = onDismiss, title = stringResource(Res.string.taskshabits_add_habit)) {
+        TendrilSheet(onDismiss = onDismiss, title = if (initial == null) stringResource(Res.string.taskshabits_add_habit) else "Edit habit") {
             Column {
                 TendrilField(value = title, onValueChange = { title = it }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
@@ -312,7 +315,7 @@ fun AddTaskDialog(
                     if (counts) perDay.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } else null,
                 )
                 onDismiss()
-            }) { Text("Add") }
+            }) { Text(if (initial == null) "Add" else "Save") }
         }
     }
 
@@ -324,6 +327,9 @@ fun AddTaskDialog(
         )
     }
 }
+
+/** An amount as the person typed it — whole numbers without the *.0*. */
+private fun amountText(v: Double): String = if (v == Math.floor(v)) v.toLong().toString() else v.toString()
 
 /** 9am, matching the default [com.tendril.app.ui.reminders.ReminderSheet] offers for an
  * all-day reminder's anchor — the same "a sensible hour to mean by default" choice. */

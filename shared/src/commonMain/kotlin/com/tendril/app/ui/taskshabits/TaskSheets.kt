@@ -2,6 +2,7 @@
 
 package com.tendril.app.ui.taskshabits
 
+import com.tendril.app.ui.pages.LocalViewOnly
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -167,9 +168,13 @@ internal fun DeadlineDialog(current: LocalDate?, onSet: (LocalDate?) -> Unit, on
  * Settings, and then as a plain number with no adjective.
  */
 @Composable
-internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onDismiss: () -> Unit) {
+internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onDismiss: () -> Unit, onEdit: () -> Unit = {}) {
     TendrilSheet(title = habit.title, onDismiss = onDismiss) {
         HabitDetailContent(habit, viewModel, showStreak)
+        // S10 — the phone's way to every field (the desktop's pane has the chip).
+        if (!LocalViewOnly.current) Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            TextButton(onClick = onEdit) { Text("Edit…") }
+        }
     }
 }
 

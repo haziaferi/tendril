@@ -225,6 +225,8 @@ private fun TasksHabitsBody(
     var subtaskParent by remember { mutableStateOf<Entry?>(null) }
     var deadlineTarget by remember { mutableStateOf<Entry?>(null) }
     var habitDetail by remember { mutableStateOf<Habit?>(null) }
+    // S10 — the habit being edited: the Add sheet with its fields filled in (the row's menu, the pane's chip, the sheet's button).
+    var editHabit by remember { mutableStateOf<Habit?>(null) }
     val runningTarget by core.timeTracker.runningTargetState()
     val loggedToday by viewModel.loggedToday.collectAsState()
     // 14f·1 — on a wide window the tab is two panes: a click or ↵ selects a task or a habit for
@@ -320,7 +322,7 @@ private fun TasksHabitsBody(
                         tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
                         onAdd = { showAddDialog = true },
                     ) { reminderTarget = it }
-                    TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = openHabit, onAdd = { showAddDialog = true }, selectedId = (selected as? Selected.Habit)?.id)
+                    TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = openHabit, onAdd = { showAddDialog = true }, selectedId = (selected as? Selected.Habit)?.id, onEdit = { editHabit = it })
                     TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions, { reminderTarget = it }, onOpenHabit = openHabit, selectedHabitId = (selected as? Selected.Habit)?.id)
                 }
             }
@@ -350,7 +352,7 @@ private fun TasksHabitsBody(
                             onOpenReminders = if (reminderSheet != null) ({ reminderTarget = taskGroup.task }) else null,
                             onTrash = { viewModel.trashTask(taskGroup.task.id); selected = null },
                         )
-                        habit != null -> HabitDetailPane(habit, viewModel, showStreak = showStreaks, runningTarget = runningTarget, onTrash = { viewModel.trashHabit(habit.id); selected = null })
+                        habit != null -> HabitDetailPane(habit, viewModel, showStreak = showStreaks, runningTarget = runningTarget, onTrash = { viewModel.trashHabit(habit.id); selected = null }, onEdit = { editHabit = habit })
                         else -> EmptyTaskPane()
                     }
                 }
@@ -358,6 +360,13 @@ private fun TasksHabitsBody(
         }
     }
 
+    editHabit?.let { habit ->
+        AddHabitDialog(
+            onDismiss = { editHabit = null },
+            onAdd = { title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount -> viewModel.updateHabit(habit, title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount) },
+            initial = habit,
+        )
+    }
     if (showAddDialog) {
         if (tab == TabSelection.HABITS) {
             AddHabitDialog(onDismiss = { showAddDialog = false }, onAdd = viewModel::addHabit)
@@ -382,7 +391,7 @@ private fun TasksHabitsBody(
         DeadlineDialog(entry.dueDate, onSet = { viewModel.setDeadline(entry.id, it) }, onDismiss = { deadlineTarget = null })
     }
     habitDetail?.let { habit ->
-        HabitDetailSheet(habit, viewModel, showStreak = showStreaks, onDismiss = { habitDetail = null })
+        HabitDetailSheet(habit, viewModel, showStreak = showStreaks, onDismiss = { habitDetail = null }, onEdit = { habitDetail = null; editHabit = habit })
     }
 
     if (showTrash) {
@@ -683,6 +692,7 @@ private fun HabitsList(
     onOpen: (Habit) -> Unit,
     onAdd: () -> Unit,
     selectedId: Long? = null,
+    onEdit: (Habit) -> Unit = {},
 ) {
     if (habits.isEmpty()) {
         EmptyState(
@@ -712,6 +722,7 @@ private fun HabitsList(
             HabitRow(
                 habit, viewModel, showStreaks, runningTarget, loggedToday,
                 onOpen = { keyState.clickedRow(index); onOpen(habit) },
+                onEdit = { onEdit(habit) },
                 onKeyboardFocus = { keyState.focused = index },
                 keyFocused = keyState.focused == index && keyboardCursorShown(),
                 typed = keyState.typed,
@@ -737,6 +748,7 @@ private fun HabitRow(
     runningTarget: TrackTarget?,
     loggedToday: Map<Long, Int>,
     onOpen: () -> Unit,
+    onEdit: () -> Unit = {},
     keyFocused: Boolean = false,
     /** The design layer — Tab landed here: the list's cursor moves to this row. */
     onKeyboardFocus: () -> Unit = {},
@@ -800,6 +812,7 @@ private fun HabitRow(
     }
     PointerMenu(expanded = menuOpen, at = menuAt, fallback = IntOffset(maxOf(0, rowSize.width - moreEndPx), rowSize.height), onDismiss = { menuOpen = false }) {
         TendrilMenuItem(text = { Text("Open") }, onClick = { menuOpen = false; onOpen() })
+        TendrilMenuItem(text = { Text("Edit…") }, onClick = { menuOpen = false; onEdit() })
         TendrilMenuItem(text = { Text("Move to Trash") }, onClick = { menuOpen = false; viewModel.trashHabit(habit.id) })
     }
     }
