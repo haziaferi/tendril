@@ -78,6 +78,8 @@ data class CanvasNode(
     val folded: Boolean = false,
     /** A [com.tendril.app.domain.canvas.CanvasStructure] key for this node's subtree, null to inherit. */
     val structure: String? = null,
+    /** S13 (v24) — a card's or a frame's hue on the wheel, 0–359, null for none (Obsidian's canvas colour). */
+    val hue: Int? = null,
 )
 
 /** NONE renders a plain line — used for the rare case someone wants to connect two cards

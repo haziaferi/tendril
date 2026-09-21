@@ -29,6 +29,10 @@ interface PageDatabaseDao {
     @Query("SELECT * FROM page_databases WHERE pageId = :pageId")
     fun observeByPageId(pageId: Long): Flow<PageDatabase?>
 
+    /** S13 — every database, for the hues the tree, the map and the calendar read (`LocalDatabaseHues`). */
+    @Query("SELECT * FROM page_databases")
+    fun observeAll(): Flow<List<PageDatabase>>
+
     /** §0.6.8 — the databases a label opens the door to. More than one is allowed: a page
      * carrying `#book` can be a row of *Books* and of *2026 reading* alike. */
     @Query("SELECT * FROM page_databases WHERE labelId = :labelId")
@@ -110,8 +114,9 @@ interface PropertyValueDao {
      * task, so nothing is drawn twice.
      */
     @Query(
-        "SELECT pg.id AS pageId, pg.title AS title, p.name AS propertyName, pv.value AS value " +
+        "SELECT pg.id AS pageId, pg.title AS title, p.name AS propertyName, pv.value AS value, d.pageId AS databasePageId, dpg.title AS databaseTitle " +
             "FROM property_values pv INNER JOIN properties p ON p.id = pv.propertyId INNER JOIN pages pg ON pg.id = pv.rowPageId " +
+            "INNER JOIN page_databases d ON d.id = p.databaseId INNER JOIN pages dpg ON dpg.id = d.pageId " +
             "WHERE p.type = 'DATE' AND pv.value IS NOT NULL AND pg.deletedAt IS NULL"
     )
     fun observeDateCells(): Flow<List<DateCell>>
@@ -123,7 +128,7 @@ interface PropertyValueDao {
 }
 
 /** One stored DATE cell and the row that holds it — [PropertyValueDao.observeDateCells]. */
-data class DateCell(val pageId: Long, val title: String, val propertyName: String, val value: String)
+data class DateCell(val pageId: Long, val title: String, val propertyName: String, val value: String, /** S13 — the database the column belongs to, for its hue. */ val databasePageId: Long, val databaseTitle: String)
 
 /** Room's `@Upsert` resolves conflicts on the primary key, not the `(propertyId, rowPageId)`
  * unique index this table actually keys cell identity on — a fresh [PropertyValue] always has

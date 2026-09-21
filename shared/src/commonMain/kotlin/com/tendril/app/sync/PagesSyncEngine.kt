@@ -257,6 +257,7 @@ class PagesSyncEngine(
             dueDatePropertyUid = db.dueDatePropertyId?.let { propertyIdToUid[it] },
             blockedByPropertyUid = db.blockedByPropertyId?.let { propertyIdToUid[it] },
             recurrencePropertyUid = db.recurrencePropertyId?.let { propertyIdToUid[it] },
+            hue = db.hue,
             labelName = db.labelId?.let { labelDao.getById(it)?.name },
             labelConfirmed = db.labelConfirmed,
             lastReviewedAt = db.lastReviewedAt?.toEpochMilli(),
@@ -289,7 +290,7 @@ class PagesSyncEngine(
                     uid = n.uid, type = n.type.name, x = n.x, y = n.y, width = n.width, height = n.height,
                     text = n.text, embeddedPageUid = n.embeddedPageId?.let { pageIdToUid[it] },
                     createdAt = n.createdAt.toEpochMilli(), updatedAt = n.updatedAt.toEpochMilli(),
-                    parentUid = n.parentId?.let { nodeIdToUid[it] }, folded = n.folded, structure = n.structure,
+                    parentUid = n.parentId?.let { nodeIdToUid[it] }, folded = n.folded, structure = n.structure, hue = n.hue,
                 )
             },
             structure = canvas.structure,
@@ -592,6 +593,7 @@ class PagesSyncEngine(
                     dueDatePropertyId = db.dueDatePropertyUid?.let { propertyUidToId[it] },
                     blockedByPropertyId = db.blockedByPropertyUid?.let { propertyUidToId[it] },
                     recurrencePropertyId = db.recurrencePropertyUid?.let { propertyUidToId[it] },
+                    hue = db.hue,
                     // §0.6.8 — resolved by name exactly as Pass 5 resolves a page's labels, and
                     // created the same way when this device has never seen it.
                     labelId = db.labelName?.let { name -> labelDao.findByName(name)?.id ?: labelDao.insert(Label(name = name)) },
@@ -625,7 +627,7 @@ class PagesSyncEngine(
                         x = n.x, y = n.y, width = n.width, height = n.height, text = n.text,
                         embeddedPageId = n.embeddedPageUid?.let { uidToId[it] },
                         createdAt = Instant.ofEpochMilli(n.createdAt), updatedAt = Instant.ofEpochMilli(n.updatedAt),
-                        folded = n.folded, structure = n.structure,
+                        folded = n.folded, structure = n.structure, hue = n.hue,
                     )
                 )
             }

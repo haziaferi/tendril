@@ -34,6 +34,9 @@ data class PageDatabase(
     val dueDatePropertyId: Long? = null,
     /** §5.2.2 — optional; only ever binds an `Interval`-type Property. */
     val recurrencePropertyId: Long? = null,
+    /** S13 (v24, B§13.8.2) — the database's hue on the wheel, 0–359, null for the default hashed from its
+     * title (`defaultDatabaseHue`). A hue, never a colour: the register solves it on each ground. */
+    val hue: Int? = null,
     /** §0.6.14 (v19) — which RELATION property (pointing at this database itself) means
      * "blocked by". A pointer only: unlike the bindings above nothing is proxied through an
      * Entry and the relation values stay stored, so it is not a [com.tendril.app.domain.BindingRole]. */

@@ -48,6 +48,9 @@ import com.tendril.app.ui.components.BarPillButton
 import com.tendril.app.ui.components.TendrilDatePicker
 import com.tendril.app.ui.nav.LocalDensityProfile
 import com.tendril.app.ui.theme.LocalTendrilPalette
+import com.tendril.app.ui.theme.toHsl
+import com.tendril.app.ui.theme.toSrgb
+import com.tendril.app.domain.colour.defaultDatabaseHue
 import com.tendril.app.ui.calendar.OccurrenceChip
 import com.tendril.app.ui.calendar.MonthItem
 import com.tendril.app.ui.calendar.MonthGrid
@@ -100,6 +103,7 @@ import com.tendril.app.ui.theme.label
 import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.HueSheet
 import com.tendril.app.ui.components.rowButtonModifier
 import com.tendril.app.ui.components.rowGlyphModifier
 import com.tendril.app.domain.word
@@ -167,6 +171,7 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
     var showAddProperty by remember { mutableStateOf(false) }
     var showAddView by remember { mutableStateOf(false) }
     var showViewConfig by remember { mutableStateOf(false) }
+    var showHue by remember { mutableStateOf(false) }
     // F5 / F4 (PR C): the active chip's ▾ opens the view's two verbs; *Delete view…* asks first.
     var viewMenuOpen by remember { mutableStateOf(false) }
     var showDeleteView by remember { mutableStateOf(false) }
@@ -197,6 +202,8 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
                         val syncOn = database?.syncToTasks == true
                         onShowOnRoadMap?.let { show -> TendrilMenuItem(text = { Text("Show on Road Map") }, onClick = { showMenu = false; show(pageId) }) }
                         TendrilMenuItem(text = { Text("Save as template") }, onClick = { showMenu = false; viewModel.saveAsTemplate() })
+                        // S13 — the database's hue (B§13.8.2): any hue on the wheel, the default from the title.
+                        TendrilMenuItem(text = { Text("Colour…") }, onClick = { showMenu = false; showHue = true })
                         HorizontalDivider()
                         TendrilMenuItem(text = { Text("Configure this view…") }, onClick = { showMenu = false; showViewConfig = true })
                         TendrilMenuItem(text = { Text("Add property") }, onClick = { showMenu = false; showAddProperty = true })
@@ -298,6 +305,14 @@ fun PageDatabaseScreen(core: WorkbenchCore, pageId: Long, onBack: (() -> Unit)?,
         AddViewSheet(onDismiss = { showAddView = false }, onAdd = { name, type -> viewModel.addView(name, type); showAddView = false })
     }
 
+    if (showHue) HueSheet(
+        title = (page?.title?.ifBlank { null } ?: "Database") + " — colour",
+        current = database?.hue,
+        unsetLabel = "Default — from the title",
+        onDone = { viewModel.setHue(it); showHue = false },
+        onDismiss = { showHue = false },
+        defaultHue = defaultDatabaseHue(page?.title.orEmpty(), LocalTendrilPalette.current.accent.toSrgb().toHsl().first.toInt()),
+    )
     if (showViewConfig) {
         selectedView?.let { view ->
             ViewConfigSheet(

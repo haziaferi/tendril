@@ -249,6 +249,11 @@ class CanvasViewModel(
     }
 
     /** A node's own structure for its subtree (null inherits), then that subtree tidied. */
+    /** S13 — a card's or a frame's hue on the wheel; null for none. */
+    fun setNodeHue(node: CanvasNode, hue: Int?) {
+        launchAndTouch { canvasNodeDao.update(node.copy(hue = hue, updatedAt = Instant.now())) }
+    }
+
     fun setNodeStructure(node: CanvasNode, structure: CanvasStructure?) {
         launchAndTouch {
             canvasNodeDao.update(node.copy(structure = structure?.key, updatedAt = Instant.now()))

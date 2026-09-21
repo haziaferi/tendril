@@ -162,6 +162,8 @@ import com.tendril.app.ui.theme.heading
 import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
+import com.tendril.app.ui.components.HueSheet
+import com.tendril.app.ui.theme.hueColours
 
 internal const val NODE_H = CANVAS_NODE_H
 /** A card's own height — the strip its text asks for (`nodeBox`); `NODE_H` is the one-line minimum. */
@@ -215,6 +217,7 @@ fun CanvasScreen(
     var showOwnMenu by remember { mutableStateOf(false) }
     var showTrashCanvas by remember { mutableStateOf(false) }
     var editingNode by remember { mutableStateOf<CanvasNode?>(null) }
+    var hueNode by remember { mutableStateOf<CanvasNode?>(null) }
     var editingEdge by remember { mutableStateOf<CanvasEdge?>(null) }
     var nodeToDelete by remember { mutableStateOf<CanvasNode?>(null) }
 
@@ -299,6 +302,8 @@ fun CanvasScreen(
                 TendrilMenuItem(text = { Text(if (node.folded) "Expand ($held hidden)" else "Collapse ($held inside)") }, onClick = { close(); viewModel.toggleFold(node) })
             }
         }
+        // S13 — a hue for a text card or a frame (Obsidian's canvas colour); a page card keeps its own tint.
+        if (!viewOnly && node.type != CanvasNodeType.PAGE_EMBED) TendrilMenuItem(text = { Text("Colour…") }, onClick = { close(); hueNode = node })
         if (!viewOnly) TendrilMenuItem(text = { Text("Delete") }, onClick = { close(); nodeToDelete = node })
     }
 
@@ -449,6 +454,15 @@ fun CanvasScreen(
     // a card shows at most three lines on the board and an arrow's label is not drawn at all,
     // so refusing to open them would hide content rather than protect it. What they lose is
     // every control that writes — see each one's own note.
+    hueNode?.let { node ->
+        HueSheet(
+            title = (node.text?.ifBlank { null } ?: if (node.type == CanvasNodeType.FRAME) FRAME_DEFAULT_LABEL else "Card") + " — colour",
+            current = node.hue,
+            unsetLabel = "None",
+            onDone = { viewModel.setNodeHue(node, it); hueNode = null },
+            onDismiss = { hueNode = null },
+        )
+    }
     editingNode?.let { node ->
         // The discard rule: a double-click's card whose editor closes with nothing typed is deleted.
         fun closeEditor(text: String?) {
@@ -920,6 +934,8 @@ private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, h
     val hovered by interaction.collectIsHoveredAsState()
     val live = interactive != null && (!pointer || hovered || selected)
     val shape = RoundedCornerShape(12.dp)
+    // S13 — a coloured frame: an 8 % tint of its hue with the border in the hue (its strip at 14 %).
+    val frameHue = node.hue?.let { hueColours(it, palette) }
     Box(
         modifier = Modifier
             .offset { IntOffset((box.x * density).roundToInt(), (box.y * density).roundToInt()) }
@@ -935,8 +951,8 @@ private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, h
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(palette.text.copy(alpha = 0.03f), shape)
-                    .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else if (following) palette.textDim else palette.textFaint, shape)
+                    .background(frameHue?.tint ?: palette.text.copy(alpha = 0.03f), shape)
+                    .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else frameHue?.hue ?: if (following) palette.textDim else palette.textFaint, shape)
                     .then(
                         when {
                             interactive == null -> Modifier
@@ -989,8 +1005,8 @@ private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, h
         if (part == FramePart.BODY) Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(palette.text.copy(alpha = 0.03f), shape)
-                .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else if (following) palette.textDim else palette.textFaint, shape),
+                .background(frameHue?.frameTint ?: palette.text.copy(alpha = 0.03f), shape)
+                .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else frameHue?.hue ?: if (following) palette.textDim else palette.textFaint, shape),
         )
         if (showContent && part == FramePart.LABEL) {
             val pillHeight = if (pointer) 24.dp else 28.dp
@@ -1160,13 +1176,18 @@ private fun CanvasNodeCard(
         selected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         root -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
         leaf -> null
+        node.hue != null && node.type != CanvasNodeType.PAGE_EMBED -> BorderStroke(1.dp, hueColours(node.hue, LocalTendrilPalette.current).hue)
         // The user (2026-09-20): a 1 px border around the cards — the register's hairline, so a card holds its shape on every tint.
         else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     }
     // A `Box`, not a `Surface`: a Surface clips its content to its shape, and the badges and the width
     // handle straddle the card's right edge (the frame's handle straddles its corner the same way).
+    // S13 — a coloured card: a 14 % tint of its hue with the border in the hue (Obsidian's canvas colour, measured);
+    // a leaf keeps its line, a page card its own tint, the selection ring still wins.
+    val hueColours = node.hue?.takeIf { !leaf && node.type != CanvasNodeType.PAGE_EMBED }?.let { hueColours(it, LocalTendrilPalette.current) }
     val fill = when {
         leaf -> Color.Transparent
+        hueColours != null -> hueColours.tint
         root -> MaterialTheme.colorScheme.background
         node.type == CanvasNodeType.PAGE_EMBED -> MaterialTheme.colorScheme.secondaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant

@@ -1,6 +1,7 @@
 package com.tendril.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import com.tendril.app.domain.colour.normalHue
 
 /**
  * 14g·2 (B§13.8.3) — a *stored* hue rendered by the register. A label's `color` and a callout's
@@ -55,6 +56,43 @@ fun calloutColours(storedHex: String, palette: TendrilPalette): CalloutColours {
 }
 
 const val LABEL_TINT = 0.14
+
+/**
+ * S13 (B§13.8.2) — a **hue** on the wheel, stored as an integer on a database or a canvas node and solved
+ * here on each ground: the hue at [HUE_SATURATION], its lightness walked to [Floors.DATA] (`solveHue`'s
+ * rule, the labels' — 4.6 : 1 on the ground *and* on its own tint); the tint at 14 % (a card, a chip,
+ * a Road Map node), the frame's at 8 %; what reads on the solid hue by `onColour`.
+ */
+data class HueColours(
+    val hue: Color,
+    val tint: Color,
+    val frameTint: Color,
+    val onHue: Color,
+)
+
+const val HUE_SATURATION = 0.55
+const val HUE_TINT = 0.14
+const val HUE_FRAME_TINT = 0.08
+
+private val hueCache = HashMap<Pair<Int, Color>, HueColours>()
+
+fun hueColours(hue: Int, palette: TendrilPalette): HueColours {
+    val dark = palette.dark
+    val h = normalHue(hue)
+    val key = h to palette.bg
+    synchronized(hueCache) { hueCache[key]?.let { return it } }
+    val bg = palette.bg.toSrgb()
+    val solved = solveHue(hslToSrgb(h.toDouble(), HUE_SATURATION, 0.5), bg, Floors.DATA, lighten = dark, tintShare = HUE_TINT)
+    val out = HueColours(
+        hue = solved.toColor(),
+        tint = mix(solved, bg, HUE_TINT).toColor(),
+        frameTint = mix(solved, bg, HUE_FRAME_TINT).toColor(),
+        onHue = onColour(solved, bg, palette.text.toSrgb(), dark).toColor(),
+    )
+    synchronized(hueCache) { hueCache[key] = out }
+    return out
+}
+
 
 /** §P3 — the callout's seven stored hues, the same shape as [com.tendril.app.data.page.LabelColors]'s
  * small fixed palette rather than a full colour picker. Since 14g·2 they are hues, not fills: each

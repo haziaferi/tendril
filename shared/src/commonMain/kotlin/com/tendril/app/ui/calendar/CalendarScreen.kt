@@ -102,6 +102,7 @@ import androidx.compose.ui.graphics.Color
 import com.tendril.app.generated.resources.calendar_view_agenda
 import java.time.LocalTime
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.ui.theme.databaseHueColours
 import com.tendril.app.ui.taskshabits.AddHabitDialog
 import com.tendril.app.ui.settings.TaskSettings
 import com.tendril.app.ui.taskshabits.HabitDetailSheet
@@ -537,7 +538,9 @@ fun CalendarScreen(
                     val palette = LocalTendrilPalette.current
                     val taskTint = layerTint(BlockKind.TASK)
                     val eventTint = layerTint(BlockKind.EVENT)
-                    val itemsByDay = remember(occurrences, extras, showUrgency, today, palette) {
+                    val hueTints: Map<Long, Color> = extras.filterIsInstance<CalendarExtra.RowDate>().map { it.cell }.distinctBy { it.databasePageId }
+                        .associate { it.databasePageId to databaseHueColours(it.databasePageId, it.databaseTitle).tint }
+                    val itemsByDay = remember(occurrences, extras, showUrgency, today, palette, hueTints) {
                         val out = mutableMapOf<LocalDate, MutableList<MonthItem>>()
                         occurrences.forEach { o ->
                             val stripe = if (showUrgency && o.entry.kind == EntryKind.TASK) palette.urgencyColour(com.tendril.app.domain.urgency.urgencyOf(o.entry, today).level) else null
@@ -547,8 +550,9 @@ fun CalendarScreen(
                             )
                         }
                         // §3.2 (2026-09-21) — the Month never shows a habit; a database date keeps its chip.
+                        // S13 — a database date's chip in its database's hue: a database is a calendar (B§13.8.2).
                         extras.filterIsInstance<CalendarExtra.RowDate>().forEach { x ->
-                            out.getOrPut(x.date) { mutableListOf() } += MonthItem("d_${x.cell.pageId}_${x.date}", x.title, null, palette.thirdSoft, null, false, x)
+                            out.getOrPut(x.date) { mutableListOf() } += MonthItem("d_${x.cell.pageId}_${x.date}", x.title, null, hueTints.getValue(x.cell.databasePageId), null, false, x)
                         }
                         out.values.forEach { list -> list.sortWith(compareBy({ it.time == null }, { it.time }, { it.title })) }
                         out
@@ -800,14 +804,19 @@ private fun ExtraRow(extra: CalendarExtra, onOpenPage: (Long) -> Unit) {
         modifier = Modifier.fillMaxWidth().then(if (open != null) Modifier.clickable { open() } else Modifier).listRow(profile),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // S13 — a database date's row wears its database's hue; a habit row the habit hue (B§13.8.3's rule 1: the accent is reserved).
+        val rowHue = when (extra) {
+            is CalendarExtra.RowDate -> databaseHueColours(extra.cell.databasePageId, extra.cell.databaseTitle).hue
+            is CalendarExtra.HabitAt -> LocalTendrilPalette.current.habit
+        }
         Icon(
             if (extra is CalendarExtra.HabitAt) Icons.Filled.LocalFireDepartment else Icons.Filled.TableChart,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = rowHue,
             modifier = rowGlyphModifier(profile.pointer),
         )
         Spacer(Modifier.width(12.dp))
-        TitleAndMeta(extra.title, extra.subtitle, modifier = Modifier.weight(1f), titleColor = MaterialTheme.colorScheme.primary)
+        TitleAndMeta(extra.title, extra.subtitle, modifier = Modifier.weight(1f), titleColor = rowHue)
     }
 }
 
@@ -1038,7 +1047,12 @@ private fun MonthGridView(
                         modifier = Modifier.size(24.dp).then(if (isToday) Modifier.background(MaterialTheme.colorScheme.primary, CircleShape) else Modifier).wrapContentSize(Alignment.Center),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.padding(top = 2.dp)) {
-                        kinds.forEach { kind -> Box(modifier = Modifier.size(5.dp).background(dotColour(kind), CircleShape)) }
+                        // S13 — the database dot in the day's first database's hue.
+                        val firstCell = extras.firstOrNull { it.date == day && it is CalendarExtra.RowDate } as? CalendarExtra.RowDate
+                        kinds.forEach { kind ->
+                            val colour = if (kind == DotKind.DATABASE && firstCell != null) databaseHueColours(firstCell.cell.databasePageId, firstCell.cell.databaseTitle).hue else dotColour(kind)
+                            Box(modifier = Modifier.size(5.dp).background(colour, CircleShape))
+                        }
                     }
                 }
             }

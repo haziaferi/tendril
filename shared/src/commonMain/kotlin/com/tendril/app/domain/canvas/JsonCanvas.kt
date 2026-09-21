@@ -4,6 +4,7 @@ import com.tendril.app.data.canvas.CanvasArrowDirection
 import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
+import com.tendril.app.domain.colour.jsonCanvasColour
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -25,7 +26,7 @@ import kotlin.math.roundToInt
  *
  * Coordinates are the board's dp rounded to the integers the spec asks for; a card takes the
  * as wide as its text asks (`cardWidth`) and as tall as its lines (`cardHeight`), a frame its own box. Ids are the rows' uids, so a
- * re-export of the same board writes the same ids. No colours: Tendril's cards have none.
+ * re-export of the same board writes the same ids. A card's or frame's hue (S13) is the spec's `color`.
  * Import is not here — the item asked where the files go.
  */
 @Serializable
@@ -39,6 +40,8 @@ data class JsonCanvasNode(
     val text: String? = null,
     val file: String? = null,
     val label: String? = null,
+    /** S13 — a preset `"1"`–`"6"` or a hex, from the node's hue; absent when it has none. */
+    val color: String? = null,
 )
 
 @Serializable
@@ -70,7 +73,7 @@ object JsonCanvas {
         val tree = CanvasTree(nodes, structure, titleFor)
         val outNodes = nodes.map { node ->
             val box = tree.box(node)
-            val base = JsonCanvasNode(id = node.uid, type = "text", x = box.x.roundToInt(), y = box.y.roundToInt(), width = box.w.roundToInt(), height = box.h.roundToInt())
+            val base = JsonCanvasNode(id = node.uid, type = "text", x = box.x.roundToInt(), y = box.y.roundToInt(), width = box.w.roundToInt(), height = box.h.roundToInt(), color = node.hue?.let(::jsonCanvasColour))
             when (node.type) {
                 CanvasNodeType.TEXT -> base.copy(text = node.text.orEmpty())
                 CanvasNodeType.FRAME -> base.copy(type = "group", label = node.text?.takeIf { it.isNotBlank() })

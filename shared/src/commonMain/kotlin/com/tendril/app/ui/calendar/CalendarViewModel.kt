@@ -104,7 +104,7 @@ class CalendarViewModel(
 
     /** Every stored DATE cell, parsed; a cell that does not parse as a date is not a day. */
     val dateCells: StateFlow<List<DatedCell>> = propertyValueDao.observeDateCells()
-        .map { cells -> cells.mapNotNull { c -> runCatching { LocalDate.parse(c.value) }.getOrNull()?.let { DatedCell(c.pageId, c.title, c.propertyName, it) } } }
+        .map { cells -> cells.mapNotNull { c -> runCatching { LocalDate.parse(c.value) }.getOrNull()?.let { DatedCell(c.pageId, c.title, c.propertyName, it, c.databasePageId, c.databaseTitle) } } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** §0.8 step 6b — the edit sheet's save; kind invariants are the editor's. */
@@ -156,4 +156,4 @@ class CalendarViewModel(
 }
 
 /** A database row's DATE cell, on the Calendar (§0.8 step 6d). */
-data class DatedCell(val pageId: Long, val title: String, val propertyName: String, val date: LocalDate)
+data class DatedCell(val pageId: Long, val title: String, val propertyName: String, val date: LocalDate, /** S13 — the database the column belongs to, for its hue. */ val databasePageId: Long, val databaseTitle: String)

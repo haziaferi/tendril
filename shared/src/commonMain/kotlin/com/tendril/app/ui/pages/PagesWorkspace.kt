@@ -47,6 +47,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import com.tendril.app.ui.theme.databaseHueColours
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
@@ -446,7 +447,8 @@ private fun TreeRow(
                     PageKind.PAGE -> Icons.Outlined.Description
                 },
                 contentDescription = null,
-                tint = if (current) colour else MaterialTheme.colorScheme.onSurfaceVariant,
+                // S13 — a database's glyph in its hue, everywhere it is drawn.
+                tint = if (page.kind == PageKind.DATABASE) databaseHueColours(page.id, page.title).hue else if (current) colour else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
         }

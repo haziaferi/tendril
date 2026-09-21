@@ -119,6 +119,8 @@ data class PageDatabaseSnapshotRecord(
     val recurrencePropertyUid: String? = null,
     /** §0.6.14 — the "blocked by" relation column, by uid like the bindings above. */
     val blockedByPropertyUid: String? = null,
+    /** S13 (v24) — the database's hue, a plain integer; a v23 peer's record reads as the default. */
+    val hue: Int? = null,
     /** §0.6.8 (v13) — the bound label, by *name*, the same way a page's [PageSnapshotRecord.labels]
      * travel: a name resolves on any device with `findByName ?: insert`, a uid would not. Defaults
      * so a v12 peer's record reads as "no label bound". */
@@ -187,6 +189,8 @@ data class CanvasNodeSnapshotRecord(
     val parentUid: String? = null,
     val folded: Boolean = false,
     val structure: String? = null,
+    /** S13 (v24) — the card's or frame's hue; null for none. */
+    val hue: Int? = null,
 )
 
 /** No `uid` of its own — an edge is never referenced from anywhere else, so its identity only
