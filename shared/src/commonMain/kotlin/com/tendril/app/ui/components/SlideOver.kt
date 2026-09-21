@@ -40,11 +40,12 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.tendril.app.ui.nav.TOP_BAR_HEIGHT
 import com.tendril.app.ui.nav.LocalTitleBar
+import com.tendril.app.ui.theme.Scrim
 import com.tendril.app.ui.theme.pageTitle
 
 /**
  * B§13.4 14b — a sheet's frame on a wide window, as `docs/mockups/desktop-shell.html` draws it
- * (`.scrim.right .dlg`): a scrim of the text colour at 32 % over the whole window, a 440 dp panel
+ * (`.scrim.right .dlg`): a scrim over the whole window ([Scrim] — black at 24 % since 2026-09-21), a 440 dp panel
  * flush right and full height with a soft shadow to its left, a header with the title and a
  * close × (none when the sheet draws its own first row), a body of bounded height. The page stays readable beside it — Notion's side peek — which
  * is why a slide-over and not a centred dialog (B§13.5 #2). Scrim click, Escape (the desktop's
@@ -68,7 +69,7 @@ internal fun SlideOver(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.32f))
+                        .background(Scrim)
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
                 )
             }
