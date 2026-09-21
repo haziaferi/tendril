@@ -48,7 +48,7 @@ import kotlin.math.roundToInt
  * S13 (B§13.8.2) — the one control for a hue: a database's, a card's, a frame's. A bar of the wheel
  * (0–360°) with a knob, Obsidian's six presets as marks under it (measured live: 20 px discs at a
  * 29 px pitch — 28 dp targets here), a *Default* / *None* row above that returns null, the swatch
- * reading the solved colour and its contrast on this ground. Stores a hue, never a colour — the
+ * reading the solved colour and its contrast on this ground (the phone's walk: *on this ground* ellipsised at Touch's 16 sp — the ratio alone). Stores a hue, never a colour — the
  * register solves it on each ground, as it solves a label's.
  */
 @Composable
@@ -66,7 +66,7 @@ fun HueSheet(title: String, current: Int?, unsetLabel: String, onDone: (Int?) ->
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                if (solved != null && effective != null) (if (hue == null) "Default · " else "") + "hue ${effective}° — ${"%.1f".format(java.util.Locale.ROOT, contrast(solved.hue.toSrgb(), palette.bg.toSrgb()))} : 1 on this ground" else unsetLabel,
+                if (solved != null && effective != null) (if (hue == null) "Default · " else "") + "hue ${effective}° · ${"%.1f".format(java.util.Locale.ROOT, contrast(solved.hue.toSrgb(), palette.bg.toSrgb()))} : 1" else unsetLabel,
                 style = MaterialTheme.typography.body, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }

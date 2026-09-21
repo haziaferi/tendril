@@ -51,3 +51,10 @@ The desktop at the dev window, native grabs; the phone by dump and screencap.*
    child under Down does the same in its row). Recorded, not changed: Tidy is on demand by design.
 
 Tests 905 → 909.
+
+## The phone (2026-09-21)
+
+*Map testx* (Root → Child one → Shredded paper; Root → Weeds), `···` → *Structure* (a pushed level under
+Touch) → *Timeline*: the spine from the root, *Child one* above on its stem and dot, *Weeds* below, *Shredded
+paper* an org-chart strip above *Child one*. → *Fishbone*: the two ribs leaning forward off the spine,
+*Shredded paper* as a bone — text on the line off the rib. Both by the same geometry as the desktop's.

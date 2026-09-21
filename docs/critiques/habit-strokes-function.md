@@ -56,3 +56,10 @@ grabs; the phone by dump and screencap.*
    (§0.6.6's *not turned into "due today"*). Recorded in §3.2.
 3. Nothing else: the stroke under a block, the click through bare wash only, the Layers switch, the
    Month without a habit, the dot on today's lane alone — all as the mock said.
+
+## The phone (2026-09-21)
+
+Day → `···` → *Plan the day*: *Stretch* at 09:00 as a wash of the habit hue — measured **12.3 %** of the
+name's ink over the white ground (the rule's 12), **28 dp** tall (the short stroke's 30 with the feather), the
+name in the hue at Regular, no time. Nothing on the Month (the 13th carried a task and an event dot, no
+habit).

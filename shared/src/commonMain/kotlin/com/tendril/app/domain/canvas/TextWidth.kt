@@ -51,22 +51,25 @@ fun textWidth(text: String): Float {
 fun wrappedLines(text: String, innerWidth: Float): Int {
     var lines = 0
     val space = charWidth(' ') * TEXT_WIDTH_MARGIN
+    // A line's words summed here and the same line measured whole by `textWidth` differ by float
+    // rounding; a card as wide as its own text must hold it on one line, so the edge is forgiven.
+    val fits = innerWidth + 0.05f
     for (hard in text.split('\n')) {
         var used = 0f
         var count = 1
         for (word in hard.split(' ')) {
             val w = textWidth(word)
-            if (w > innerWidth) {
+            if (w > fits) {
                 if (used > 0f) { count++; used = 0f }
                 for (c in word) {
                     val cw = charWidth(c) * TEXT_WIDTH_MARGIN
-                    if (used + cw > innerWidth && used > 0f) { count++; used = 0f }
+                    if (used + cw > fits && used > 0f) { count++; used = 0f }
                     used += cw
                 }
                 continue
             }
             val lead = if (used == 0f) 0f else space
-            if (used + lead + w > innerWidth) { count++; used = w } else used += lead + w
+            if (used + lead + w > fits) { count++; used = w } else used += lead + w
         }
         lines += count
     }

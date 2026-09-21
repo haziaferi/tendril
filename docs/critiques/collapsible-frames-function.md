@@ -46,3 +46,9 @@ dev window, native grabs; the phone by dump and screencap.*
   Obsidian's (containment by rectangle) and stays; a following frame is the tree's own frame.
 
 Tests 909 → 913.
+
+## The phone (2026-09-21)
+
+*Route ideas* → the *Stops* pill → the frame's sheet → *Collapse (1 inside)*: the strip — *Stops · 1 hidden*
+and the chevron (content-description *Expand*), the card gone; a tap on the strip → the frame and *Empty
+card* back.
