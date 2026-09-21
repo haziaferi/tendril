@@ -36,6 +36,11 @@ import com.tendril.app.domain.canvas.tidy
 import com.tendril.app.domain.canvas.relationRoute
 import com.tendril.app.domain.canvas.newChildPosition
 import com.tendril.app.domain.canvas.leafUnderline
+import com.tendril.app.domain.canvas.spineY
+import com.tendril.app.domain.canvas.spineEnd
+import com.tendril.app.domain.canvas.stemAnchors
+import com.tendril.app.domain.canvas.ribOf
+import com.tendril.app.domain.canvas.SPINE_DOT
 import com.tendril.app.domain.canvas.foldBadgeAt
 import com.tendril.app.domain.canvas.branchAnchors
 import com.tendril.app.domain.canvas.TreeSide
@@ -743,6 +748,14 @@ internal fun CanvasLayer(
             },
         )) {
             val d = density.density
+            // S9 — a spine per spine root: `dim`, 2 dp, from the root's right edge past its last topic and bone.
+            for (node in visible) {
+                if (node.type == CanvasNodeType.FRAME || !tree.isSpineRoot(node) || node.folded) continue
+                val extents = tree.descendants(node.id).filter { it.type != CanvasNodeType.FRAME && tree.isVisible(it) }.map { tree.box(it) }
+                if (extents.isEmpty()) continue
+                val rb = tree.box(node); val sy = spineY(rb)
+                drawLine(edgeInk, Offset(rb.right * d, sy * d), Offset(spineEnd(rb, extents) * d, sy * d), strokeWidth = 2f * d, cap = StrokeCap.Round)
+            }
             // The branches: every visible node with a visible parent.
             for (node in visible) {
                 if (node.type == CanvasNodeType.FRAME) continue
@@ -750,7 +763,27 @@ internal fun CanvasLayer(
                 if (!tree.isVisible(parent)) continue
                 val ink = branchInks[tree.mainBranchIndex(node).coerceAtLeast(0) % branchInks.size]
                 val width = (if (tree.depthOf(node.id) == 1) 2f else 1.5f) * d
-                drawBranch(tree.box(parent), tree.box(node), tree.sideOf(node), tree.structureOf(parent).curved, d, ink, width)
+                val structure = tree.structureOf(node)
+                if (structure.spine && tree.isSpineRoot(parent)) {
+                    // S9 — a topic on the spine: a timeline's dot and stem; a fishbone's rib, leaning forward.
+                    val sy = spineY(tree.box(parent)); val nb = tree.box(node); val side = tree.sideOf(node)
+                    if (structure == CanvasStructure.TIMELINE) {
+                        val st = stemAnchors(nb, sy, side)
+                        drawLine(ink, Offset(st.x1 * d, st.y1 * d), Offset(st.x2 * d, st.y2 * d), strokeWidth = width, cap = StrokeCap.Round)
+                        drawCircle(ink, radius = SPINE_DOT / 2f * d, center = Offset(st.x1 * d, st.y1 * d))
+                    } else {
+                        val rib = ribOf(nb, sy, side)
+                        drawLine(ink, Offset(rib.footX * d, rib.spineY * d), Offset(rib.topX * d, rib.topY * d), strokeWidth = width, cap = StrokeCap.Round)
+                    }
+                } else if (structure == CanvasStructure.FISHBONE && tree.isRibTopic(parent)) {
+                    // S9 — a bone: from the rib, at the word's baseline, to the word; the underline carries on from there.
+                    val root = tree.spineRootOf(parent)
+                    val nb = tree.box(node)
+                    if (root != null) {
+                        val rib = ribOf(tree.box(parent), spineY(tree.box(root)), tree.sideOf(parent))
+                        drawLine(ink, Offset(rib.xAt(nb.bottom) * d, nb.bottom * d), Offset(nb.x * d, nb.bottom * d), strokeWidth = width, cap = StrokeCap.Round)
+                    }
+                } else drawBranch(tree.box(parent), tree.box(node), tree.sideOf(node), tree.structureOf(parent).curved, d, ink, width)
                 if (tree.levelOf(node) == TreeLevel.LEAF) {
                     val u = leafUnderline(tree.box(node))
                     drawLine(ink, Offset(u.x1 * d, u.y1 * d), Offset(u.x2 * d, u.y2 * d), strokeWidth = width, cap = StrokeCap.Round)

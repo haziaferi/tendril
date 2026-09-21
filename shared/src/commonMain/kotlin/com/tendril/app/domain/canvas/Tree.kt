@@ -2,6 +2,10 @@ package com.tendril.app.domain.canvas
 
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.tan
 
 /**
  * The mind-map pass (2026-09-20, `docs/critiques/mind-map-grounds.md`) — **the tree on the
@@ -25,10 +29,18 @@ enum class CanvasStructure(val key: String, val label: String) {
     /** Every branch to the right — markmap's, Ideascape's shape. */
     RIGHT("right", "Right"),
     /** An org chart: children under their parent, elbowed branches, the strip at every level. */
-    DOWN("down", "Down");
+    DOWN("down", "Down"),
+    /** S9 (2026-09-21) — a spine from the root's right; main topics on it, alternating above and below (Xmind's off-axis
+     * timeline, measured), each subtree an org chart growing away from the spine; the strip at every level. */
+    TIMELINE("timeline", "Timeline"),
+    /** S9 — a fishbone: the head at the left, ribs leaning forward at 60° (Xmind's, measured), a main topic at each rib's end,
+     * level 2 as horizontal bones off the rib — text on the line — and deeper levels stacked right of their bone. */
+    FISHBONE("fishbone", "Fishbone");
 
-    /** Branches are curves in the map structures and elbows under DOWN. */
-    val curved: Boolean get() = this != DOWN
+    /** Branches are curves in the map structures and elbows under DOWN and the spine structures. */
+    val curved: Boolean get() = this == FREE || this == MAP || this == RIGHT
+    /** A spine structure lays its root's children along a line (S9). */
+    val spine: Boolean get() = this == TIMELINE || this == FISHBONE
 
     companion object {
         fun fromKey(key: String?): CanvasStructure = entries.firstOrNull { it.key == key } ?: FREE
@@ -38,8 +50,8 @@ enum class CanvasStructure(val key: String, val label: String) {
 /** What a node draws as, by its depth and its structure. */
 enum class TreeLevel { ROOT, BRANCH, LEAF }
 
-/** Where a node's subtree grows from it. */
-enum class TreeSide { RIGHT, LEFT, DOWN }
+/** Where a node's subtree grows from it. UP is a spine's upper side (S9). */
+enum class TreeSide { RIGHT, LEFT, DOWN, UP }
 
 const val CANVAS_ROOT_W = 220f
 const val CANVAS_ROOT_H = 64f
@@ -59,6 +71,19 @@ const val DOWN_SIBLING_GAP = 24f
 const val FRAME_FOLLOW_PAD = 12f
 /** The count badge at a folded branch's end. */
 const val FOLD_BADGE = 20f
+/** S9 — a spine: the stem from the spine to a timeline topic (Xmind's 24 px), the dot on the spine, the least distance between
+ * two topics' anchors along it (the order stays readable), the spine's tail past its last topic. */
+const val SPINE_STEM = 24f
+const val SPINE_DOT = 8f
+const val SPINE_MIN_STEP = 48f
+const val SPINE_TAIL = 24f
+/** S9 — a fishbone: the rib's lean from the spine (Xmind's ≈ 59°, measured), its least length, the bones' spacing along it,
+ * a bone's inset from the rib to its word, and the least rib length past the bones. */
+const val RIB_ANGLE_DEG = 60f
+const val RIB_MIN = 96f
+const val BONE_GAP = 28f
+const val BONE_INSET = 18f
+const val RIB_END_PAD = 40f
 
 /** A leaf's width from its text, as `estimateNodeSize` guesses a map node's. */
 fun leafWidth(text: String?): Float {
@@ -89,6 +114,12 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         val structure = structureOf(parent)
         return when {
             structure == CanvasStructure.DOWN -> kids.sortedWith(compareBy({ it.x }, { it.y }, { it.createdAt }, { it.id }))
+            // S9 — along a spine by x; a timeline topic's org chart by x; a fishbone topic's bones by their distance from the spine.
+            structure == CanvasStructure.TIMELINE || isSpineRoot(parent) -> kids.sortedWith(compareBy({ it.x }, { it.y }, { it.createdAt }, { it.id }))
+            structure == CanvasStructure.FISHBONE && parentOf(parent)?.let { isSpineRoot(it) } == true -> {
+                val sy = spineRootOf(parent)?.let { spineY(box(it)) } ?: 0f
+                kids.sortedWith(compareBy({ abs(it.y + box(it).h / 2f - sy) }, { it.x }, { it.createdAt }, { it.id }))
+            }
             structure == CanvasStructure.MAP && parent.parentId == null ->
                 kids.sortedWith(compareBy({ if (sideOf(it) == TreeSide.LEFT) 1 else 0 }, { it.y }, { it.x }, { it.createdAt }, { it.id }))
             else -> kids.sortedWith(compareBy({ it.y }, { it.x }, { it.createdAt }, { it.id }))
@@ -116,6 +147,30 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         return cur
     }
 
+    /** S9 — the node a spine hangs from: a node under a spine structure whose parent is not under the same one (the board's
+     * root, or a node given the structure itself). */
+    fun isSpineRoot(node: CanvasNode): Boolean {
+        val s = structureOf(node)
+        if (!s.spine) return false
+        val p = parentOf(node) ?: return true
+        return structureOf(p) != s
+    }
+
+    /** The spine root above [node] (itself when it is one), or null outside a spine structure. */
+    fun spineRootOf(node: CanvasNode): CanvasNode? {
+        var cur: CanvasNode? = node
+        val seen = HashSet<Long>()
+        while (cur != null && seen.add(cur.id)) {
+            if (!structureOf(cur).spine) return null
+            if (isSpineRoot(cur)) return cur
+            cur = parentOf(cur)
+        }
+        return null
+    }
+
+    /** S9 — a fishbone topic: a spine root's child under FISHBONE. Its children are the bones. */
+    fun isRibTopic(node: CanvasNode): Boolean = structureOf(node) == CanvasStructure.FISHBONE && parentOf(node)?.let { isSpineRoot(it) } == true
+
     /** The structure that lays this node's subtree out: its own, else the nearest ancestor's, else the board's. */
     fun structureOf(node: CanvasNode): CanvasStructure = structureMemo.getOrPut(node.id) {
         if (node.structure != null) CanvasStructure.fromKey(node.structure)
@@ -133,6 +188,13 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         val parent = parentOf(node) ?: return TreeSide.RIGHT
         val parentStructure = structureOf(parent)
         if (node.structure != null && structure != parentStructure) return TreeSide.RIGHT
+        if (structure.spine) {
+            // S9 — a spine root's child is on the side its own centre lies on (S8's rule, turned on its side); under a timeline
+            // every deeper node keeps its topic's side (the org chart grows away from the spine); a fishbone's bones and
+            // what hangs from them grow right.
+            if (isSpineRoot(parent)) return if (node.y + box(node).h / 2f < spineY(box(parent))) TreeSide.UP else TreeSide.DOWN
+            return if (structure == CanvasStructure.TIMELINE) sideOf(parent) else TreeSide.RIGHT
+        }
         if (parentStructure == CanvasStructure.MAP && parent.parentId == null) {
             // The side is the node's own: its centre against the root's (the boxes' widths differ, so centres, not edges).
             val pb = box(parent)
@@ -148,7 +210,10 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         val depth = depthOf(node.id)
         if (depth == 0) return if (childrenOf[node.id].isNullOrEmpty()) TreeLevel.BRANCH else TreeLevel.ROOT
         if (node.type == CanvasNodeType.PAGE_EMBED) return TreeLevel.BRANCH
-        if (structureOf(node) == CanvasStructure.DOWN) return TreeLevel.BRANCH
+        val structure = structureOf(node)
+        if (structure == CanvasStructure.DOWN || structure == CanvasStructure.TIMELINE) return TreeLevel.BRANCH
+        // S9 — a fishbone: the rib's topic is a strip, its bones and everything past them text on the line.
+        if (structure == CanvasStructure.FISHBONE) return if (isRibTopic(node) || spineRootOf(node) == node) TreeLevel.BRANCH else TreeLevel.LEAF
         return if (depth == 1) TreeLevel.BRANCH else TreeLevel.LEAF
     }
 
@@ -226,7 +291,37 @@ fun branchAnchors(parent: NodeBox, child: NodeBox, side: TreeSide): BranchAnchor
     TreeSide.RIGHT -> BranchAnchors(parent.right, parent.y + parent.h / 2f, child.x, child.y + child.h / 2f)
     TreeSide.LEFT -> BranchAnchors(parent.x, parent.y + parent.h / 2f, child.right, child.y + child.h / 2f)
     TreeSide.DOWN -> BranchAnchors(parent.x + parent.w / 2f, parent.bottom, child.x + child.w / 2f, child.y)
+    TreeSide.UP -> BranchAnchors(parent.x + parent.w / 2f, parent.y, child.x + child.w / 2f, child.bottom)
 }
+
+/** S9 — a spine's line: the root's centre height. */
+fun spineY(root: NodeBox): Float = root.y + root.h / 2f
+
+/** S9 — where a spine ends: past its last topic (and any bone), by the tail. */
+fun spineEnd(root: NodeBox, extents: List<NodeBox>): Float = maxOf(root.right, extents.maxOfOrNull { it.right } ?: root.right) + SPINE_TAIL
+
+/** S9 — a timeline topic's anchor on the spine and the edge its stem reaches. */
+fun stemAnchors(topic: NodeBox, spineY: Float, side: TreeSide): BranchAnchors {
+    val cx = topic.x + topic.w / 2f
+    return BranchAnchors(cx, spineY, cx, if (side == TreeSide.UP) topic.bottom else topic.y)
+}
+
+/** S9 — a rib from its foot on the spine to the topic's near edge, leaning forward at [RIB_ANGLE_DEG]; derived from the
+ * topic's box alone, so a dragged topic keeps a straight rib. */
+data class Rib(val footX: Float, val spineY: Float, val topX: Float, val topY: Float) {
+    /** The rib's x at a height between its ends (a bone's attachment). */
+    fun xAt(y: Float): Float = if (topY == spineY) footX else footX + (topX - footX) * (y - spineY) / (topY - spineY)
+}
+
+fun ribOf(topic: NodeBox, spineY: Float, side: TreeSide): Rib {
+    val topY = if (side == TreeSide.UP) topic.bottom else topic.y
+    val topX = topic.x + topic.w / 2f
+    val dy = abs(spineY - topY)
+    return Rib(topX - dy / tan(Math.toRadians(RIB_ANGLE_DEG.toDouble())).toFloat(), spineY, topX, topY)
+}
+
+/** S9 — a rib long enough for [bones] bones at [BONE_GAP], never under [RIB_MIN]. */
+fun ribLength(bones: Int): Float = maxOf(RIB_MIN, RIB_END_PAD + BONE_GAP * (bones + 1))
 
 /** A leaf's branch runs on as its underline: the line's ends at the word's baseline. */
 fun leafUnderline(leaf: NodeBox): BranchAnchors = BranchAnchors(leaf.x, leaf.bottom, leaf.right, leaf.bottom)
@@ -236,6 +331,7 @@ fun foldBadgeAt(box: NodeBox, side: TreeSide): Pair<Float, Float> = when (side) 
     TreeSide.RIGHT -> (box.right + FOLD_BADGE / 2f + 4f) to (box.y + box.h / 2f)
     TreeSide.LEFT -> (box.x - FOLD_BADGE / 2f - 4f) to (box.y + box.h / 2f)
     TreeSide.DOWN -> (box.x + box.w / 2f) to (box.bottom + FOLD_BADGE / 2f + 4f)
+    TreeSide.UP -> (box.x + box.w / 2f) to (box.y - FOLD_BADGE / 2f - 4f)
 }
 
 /**
@@ -254,18 +350,21 @@ fun tidy(tree: CanvasTree, rootId: Long): Map<Long, Pair<Float, Float>> {
     fun boxNow(n: CanvasNode): NodeBox = moved[n.id] ?: tree.box(n)
     fun visibleKids(n: CanvasNode): List<CanvasNode> = if (n.folded) emptyList() else tree.children(n.id)
 
+    // S9 — how a node's children are arranged: beside it (a stack), under or over it (a row), along a spine, along a rib.
+    fun columns(n: CanvasNode): Boolean { val s = tree.structureOf(n); return s == CanvasStructure.DOWN || (s == CanvasStructure.TIMELINE && !tree.isSpineRoot(n)) }
+    fun stacks(n: CanvasNode): Boolean = !columns(n) && !tree.isSpineRoot(n) && !tree.isRibTopic(n)
     val bandH = HashMap<Long, Float>()
     fun bandHeight(n: CanvasNode): Float = bandH.getOrPut(n.id) {
         val own = tree.box(n).h
         val kids = visibleKids(n)
-        if (kids.isEmpty() || tree.structureOf(n) == CanvasStructure.DOWN) own
+        if (kids.isEmpty() || !stacks(n)) own
         else maxOf(own, kids.sumOf { bandHeight(it).toDouble() }.toFloat() + TREE_SIBLING_GAP * (kids.size - 1))
     }
     val bandW = HashMap<Long, Float>()
     fun bandWidth(n: CanvasNode): Float = bandW.getOrPut(n.id) {
         val own = tree.box(n).w
         val kids = visibleKids(n)
-        if (kids.isEmpty() || tree.structureOf(n) != CanvasStructure.DOWN) own
+        if (kids.isEmpty() || !columns(n)) own
         else maxOf(own, kids.sumOf { bandWidth(it).toDouble() }.toFloat() + DOWN_SIBLING_GAP * (kids.size - 1))
     }
 
@@ -281,14 +380,69 @@ fun tidy(tree: CanvasTree, rootId: Long): Map<Long, Pair<Float, Float>> {
         val pb = boxNow(n)
         val structure = tree.structureOf(n)
         when {
-            structure == CanvasStructure.DOWN -> {
+            // S9 — a timeline's spine: topics along it in order, each on its own side, a slot as wide as its org chart's band;
+            // slots on one side never overlap, the two sides may interleave, anchors at least SPINE_MIN_STEP apart.
+            structure == CanvasStructure.TIMELINE && tree.isSpineRoot(n) -> {
+                val sy = spineY(pb)
+                val x0 = pb.right + DOWN_SIBLING_GAP
+                val sideRight = HashMap<TreeSide, Float>().apply { put(TreeSide.UP, x0 - DOWN_SIBLING_GAP); put(TreeSide.DOWN, x0 - DOWN_SIBLING_GAP) }
+                var lastAnchor = x0 - SPINE_MIN_STEP
+                for (k in kids) {
+                    val side = if (tree.sideOf(k) == TreeSide.UP) TreeSide.UP else TreeSide.DOWN
+                    val band = bandWidth(k)
+                    val kb = tree.box(k)
+                    val left = maxOf(sideRight.getValue(side) + DOWN_SIBLING_GAP, lastAnchor + SPINE_MIN_STEP - band / 2f)
+                    val anchor = left + band / 2f
+                    place(k, anchor - kb.w / 2f, if (side == TreeSide.UP) sy - SPINE_STEM - kb.h else sy + SPINE_STEM)
+                    layoutChildren(k)
+                    sideRight[side] = left + band
+                    lastAnchor = anchor
+                }
+            }
+            // S9 — a fishbone's spine: a rib per topic, leaning forward, as long as its bones need; a foot after the same
+            // side's previous rib is clear (its strip, and its bones brought back to the spine along the slope).
+            structure == CanvasStructure.FISHBONE && tree.isSpineRoot(n) -> {
+                val sy = spineY(pb)
+                val x0 = pb.right + DOWN_SIBLING_GAP
+                val rad = Math.toRadians(RIB_ANGLE_DEG.toDouble())
+                val cosA = cos(rad).toFloat(); val sinA = sin(rad).toFloat()
+                val sideBones = HashMap<TreeSide, Float>().apply { put(TreeSide.UP, x0 - DOWN_SIBLING_GAP); put(TreeSide.DOWN, x0 - DOWN_SIBLING_GAP) }
+                val sideStrip = HashMap<TreeSide, Float>().apply { put(TreeSide.UP, x0 - DOWN_SIBLING_GAP); put(TreeSide.DOWN, x0 - DOWN_SIBLING_GAP) }
+                var lastFoot = x0 - SPINE_MIN_STEP
+                for (k in kids) {
+                    val side = if (tree.sideOf(k) == TreeSide.UP) TreeSide.UP else TreeSide.DOWN
+                    val kb = tree.box(k)
+                    val bones = visibleKids(k)
+                    val rib = ribLength(bones.size)
+                    val dx = rib * cosA; val dy = rib * sinA
+                    val foot = maxOf(sideBones.getValue(side) + DOWN_SIBLING_GAP, sideStrip.getValue(side) + DOWN_SIBLING_GAP + kb.w / 2f - dx, lastFoot + SPINE_MIN_STEP)
+                    val topX = foot + dx
+                    place(k, topX - kb.w / 2f, if (side == TreeSide.UP) sy - dy - kb.h else sy + dy)
+                    var reach = foot
+                    bones.forEachIndexed { j, b ->
+                        val f = (j + 1).toFloat() / (bones.size + 1)
+                        val by = if (side == TreeSide.UP) sy - dy * f else sy + dy * f
+                        val bx = foot + dx * f
+                        val bb = tree.box(b)
+                        place(b, bx + BONE_INSET, by - bb.h)
+                        layoutChildren(b)
+                        // the bone's subtree, brought back to the spine along the slope
+                        val right = (listOf(b) + tree.descendants(b.id).filter { tree.isVisible(it) && it.type != CanvasNodeType.FRAME }).maxOf { boxNow(it).right }
+                        reach = maxOf(reach, right - dx * f)
+                    }
+                    sideBones[side] = reach
+                    sideStrip[side] = topX + kb.w / 2f
+                    lastFoot = foot
+                }
+            }
+            columns(n) -> {
                 val total = kids.sumOf { bandWidth(it).toDouble() }.toFloat() + DOWN_SIBLING_GAP * (kids.size - 1)
                 var left = pb.x + pb.w / 2f - total / 2f
-                val top = pb.bottom + DOWN_LEVEL_GAP
+                val up = tree.sideOf(n) == TreeSide.UP
                 for (k in kids) {
                     val bw = bandWidth(k)
                     val kb = tree.box(k)
-                    place(k, left + (bw - kb.w) / 2f, top)
+                    place(k, left + (bw - kb.w) / 2f, if (up) pb.y - DOWN_LEVEL_GAP - kb.h else pb.bottom + DOWN_LEVEL_GAP)
                     layoutChildren(k)
                     left += bw + DOWN_SIBLING_GAP
                 }
@@ -322,9 +476,27 @@ fun newChildPosition(tree: CanvasTree, parent: CanvasNode, childW: Float = cardW
     val pb = tree.box(parent)
     val kids = tree.children(parent.id)
     val structure = tree.structureOf(parent)
-    if (structure == CanvasStructure.DOWN) {
+    // S9 — along a spine: after the last topic, on the other side (the sides alternate as the map grows); a fishbone's new
+    // bone at the rib's next place; a timeline topic's new child in its row, over or under it.
+    if (structure.spine && tree.isSpineRoot(parent)) {
+        val sy = spineY(pb)
+        val last = kids.lastOrNull()
+        val side = if (last == null || tree.sideOf(last) == TreeSide.DOWN) TreeSide.UP else TreeSide.DOWN
+        val x = (last?.let { tree.box(it).right } ?: pb.right) + DOWN_SIBLING_GAP
+        val lift = if (structure == CanvasStructure.TIMELINE) SPINE_STEM else RIB_MIN * sin(Math.toRadians(RIB_ANGLE_DEG.toDouble())).toFloat()
+        return x to (if (side == TreeSide.UP) sy - lift - childH else sy + lift)
+    }
+    if (tree.isRibTopic(parent)) {
+        val root = tree.spineRootOf(parent)!!
+        val rib = ribOf(pb, spineY(tree.box(root)), tree.sideOf(parent))
+        val f = (kids.size + 1).toFloat() / (kids.size + 2)
+        val y = rib.spineY + (rib.topY - rib.spineY) * f
+        return (rib.xAt(y) + BONE_INSET) to (y - CANVAS_LEAF_H)
+    }
+    if (structure == CanvasStructure.DOWN || (structure == CanvasStructure.TIMELINE)) {
         val last = kids.lastOrNull()?.let { tree.box(it) }
-        return if (last == null) (pb.x + pb.w / 2f - childW / 2f) to (pb.bottom + DOWN_LEVEL_GAP)
+        val up = tree.sideOf(parent) == TreeSide.UP
+        return if (last == null) (pb.x + pb.w / 2f - childW / 2f) to (if (up) pb.y - DOWN_LEVEL_GAP - childH else pb.bottom + DOWN_LEVEL_GAP)
         else (last.right + DOWN_SIBLING_GAP) to last.y
     }
     // A MAP root's new child goes to the side with fewer children, the right on a tie (the map stays balanced as it grows).
@@ -352,10 +524,10 @@ fun outerSide(box: NodeBox, away: NodeBox?, other: NodeBox): TreeSide {
     val dx = (box.x + box.w / 2f) - (ref.x + ref.w / 2f)
     val dy = (box.y + box.h / 2f) - (ref.y + ref.h / 2f)
     return if (away != null) {
-        if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) (if (dx >= 0) TreeSide.RIGHT else TreeSide.LEFT) else TreeSide.DOWN
+        if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) (if (dx >= 0) TreeSide.RIGHT else TreeSide.LEFT) else (if (dy >= 0) TreeSide.DOWN else TreeSide.UP)
     } else {
         // Toward the other box: the side that faces it.
-        if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) (if (dx >= 0) TreeSide.LEFT else TreeSide.RIGHT) else TreeSide.DOWN
+        if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) (if (dx >= 0) TreeSide.LEFT else TreeSide.RIGHT) else (if (dy >= 0) TreeSide.UP else TreeSide.DOWN)
     }
 }
 
@@ -364,6 +536,7 @@ fun relationRoute(from: NodeBox, fromParent: NodeBox?, to: NodeBox, toParent: No
         TreeSide.RIGHT -> b.right to (b.y + b.h / 2f)
         TreeSide.LEFT -> b.x to (b.y + b.h / 2f)
         TreeSide.DOWN -> (b.x + b.w / 2f) to b.bottom
+        TreeSide.UP -> (b.x + b.w / 2f) to b.y
     }
     val fs = outerSide(from, fromParent, to)
     val ts = outerSide(to, toParent, from)
@@ -371,7 +544,7 @@ fun relationRoute(from: NodeBox, fromParent: NodeBox?, to: NodeBox, toParent: No
     val (x2, y2) = anchor(to, ts)
     val dist = kotlin.math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
     val bow = maxOf(40f, dist / 3f)
-    fun normal(side: TreeSide): Pair<Float, Float> = when (side) { TreeSide.RIGHT -> 1f to 0f; TreeSide.LEFT -> -1f to 0f; TreeSide.DOWN -> 0f to 1f }
+    fun normal(side: TreeSide): Pair<Float, Float> = when (side) { TreeSide.RIGHT -> 1f to 0f; TreeSide.LEFT -> -1f to 0f; TreeSide.DOWN -> 0f to 1f; TreeSide.UP -> 0f to -1f }
     val (nx1, ny1) = normal(fs)
     val (nx2, ny2) = normal(ts)
     return RelationRoute(x1, y1, x1 + nx1 * bow, y1 + ny1 * bow, x2 + nx2 * bow, y2 + ny2 * bow, x2, y2)
