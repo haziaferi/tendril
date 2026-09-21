@@ -39,6 +39,7 @@ import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.domain.ai.AI_MODEL_KEY
 import com.tendril.app.domain.ai.AiModels
 import com.tendril.app.domain.ai.AiVerb
+import com.tendril.app.domain.ai.OutlineRow
 import com.tendril.app.domain.ai.ClaudeClient
 import com.tendril.app.domain.history.PageHistory
 import com.tendril.app.domain.indentTargetFor
@@ -882,6 +883,35 @@ class PageDetailViewModel(
                 val id = blockDao.insert(b.copy(id = 0, uid = java.util.UUID.randomUUID().toString(), pageId = pageId, order = at + i, parentBlockId = parent, imagePath = null, createdAt = now, updatedAt = now))
                 newIds[b.id] = id
             }
+        }
+    }
+
+    /** §0.6.15's fourth verb — the reply's rows become bulleted blocks after [after] (at its
+     * depth, as a paste lands), each row's parent the nearest shallower row before it; the root
+     * carries §0.6.2's flag when [asMindMap], so the page draws the map at once. One recorded
+     * edit, so one undo removes the whole subtree. Nothing is written until this is called. */
+    fun insertOutline(after: Block, rows: List<OutlineRow>, asMindMap: Boolean) = launchRecorded("mind map") { blocks ->
+        if (rows.isEmpty()) return@launchRecorded
+        val ordered = blocks.sortedBy { it.order }
+        val subtreeEnd = outlineOf(blocks, expandAll = true).let { outline ->
+            val i = outline.indexOfFirst { it.block.id == after.id }
+            if (i < 0) return@let after.order
+            var end = i
+            while (end + 1 < outline.size && outline[end + 1].depth > outline[i].depth) end++
+            outline[end].block.order
+        }
+        val at = ordered.indexOfFirst { it.order == subtreeEnd }.let { if (it < 0) ordered.size else it + 1 }
+        ordered.drop(at).forEach { b -> blockDao.update(b.copy(order = b.order + rows.size)) }
+        val now = Instant.now()
+        val parents = ArrayDeque<Long>()   // parents[d] = the id of the last row at depth d
+        rows.forEachIndexed { i, row ->
+            while (parents.size > row.depth) parents.removeLast()
+            val parent = if (row.depth == 0) after.parentBlockId else parents.lastOrNull()
+            val id = blockDao.insert(
+                Block(pageId = pageId, type = BlockType.BULLETED_LIST_ITEM, order = at + i, parentBlockId = parent,
+                    content = row.text, mindMap = asMindMap && i == 0, createdAt = now, updatedAt = now)
+            )
+            parents.addLast(id)
         }
     }
 

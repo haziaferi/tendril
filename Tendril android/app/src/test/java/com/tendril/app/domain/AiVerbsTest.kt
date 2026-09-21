@@ -30,7 +30,7 @@ class AiVerbsTest {
 
     @Test
     fun `every verb has its own instruction`() {
-        assertEquals(3, AiVerb.entries.map { it.instruction }.toSet().size)
+        assertEquals(4, AiVerb.entries.map { it.instruction }.toSet().size)
         AiVerb.entries.forEach { assertTrue(it.instruction.contains("Return only")) }
     }
 

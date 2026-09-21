@@ -146,6 +146,7 @@ second copy of the reasoning.
 | 2026-09-21 (S14 — the text's width) | Item 24's last line: a leaf's and a card's width from **the font's own advances** (`domain/canvas/TextWidth.kt` — Inter at 14 sp measured from the bundled file; DM Sans within 1 %, the serif narrower), summed with a 5 % margin, words wrapped on them; the flat 7.5 / 8.5 dp a character gone, and with them the 4 dp `CANVAS_CARD_PAD` had understated (8 declared, 12 drawn — every card ellipsised once the width was exact). Walked on Garden plan under Down and Right: every word whole, *Shredded paper*'s leaf 127 dp over 108 of ink; the tree's rows agree with the table to 0.3 %. `docs/critiques/leaf-width-function.md`. Tests 916 → 917. **Item 24 closed.** | §3.7, §0.10 |
 | 2026-09-21 (the phone's walk of #128–#134) | Habit strokes (12.3 %, 28 dp), S9 (Timeline, Fishbone), S11 (31.4 dp), S12 (the strip), **S13** (the glyph, the sheet under a finger, the dot in the database's hue; v24 on the phone) and S14 walked on the phone. Two defects fixed: **a drawing keeps the desktop's type** under Touch (`DrawingType`, `LocalDrawingTypography` — the Touch step had reached the canvas's and the mind map's text while their boxes were sized for 14 sp; every card cut) and the phone's badges 16 dp out; the hue sheet's swatch line shortened (it ellipsised at 16 sp). #134's generator had dropped `wrappedLines`' float tolerance on regeneration — restored in `tools/make_textwidth.py`; 917 / 0. The phone's walk is current. | §3.2, §3.7, §2.3 |
 | 2026-09-21 (the spec levelled with the build) | The user: match the build exactly, future objectives kept. Read against `main` at 3943cb4: **§4's register** completed to schema v24 — the four rows it said were unwritten (`PropertyValue`, `PageRelation`, `PurgedRecord`, `PageFts`) plus `HabitCompletion` and `TimeLog`, and every row's key fields re-read from the entity classes (`uid`, `hue`, `FRAME`, the Entry's deadline / step / estimate / provider ids, the Database's label and review columns, `order`, `deleted_at`); §0.10 items 14, 20, 22 and 24 struck (closed in their bodies, never in their headings); six "the phone walk is pending" claims in the body pointed at the 2026-09-18 catch-up; §9.2 gains the toolchain as built (AGP 9.3.2, Kotlin 2.4.10, CMP 1.12.0, Room 2.8.4, Gradle 9.7.1, SDK 37 / 30 / 36); §3.5 the Settings sections as built on both platforms; §10's "four tabs render `NotAvailableOnDesktop`" superseded; the header's `../` paths explained (the file is at the root); the windows spec's §8 tail ("still not click-verified") and its §3 gate (answered by §0.6.13's merge-loser capture) amended. Nothing deferred was dropped: the API-generated mind map, the Notion API import, the widget wallpaper model, block-level FTS, syntax highlighting and the device id stay deferred in §10. | §4, §0.10, §9.2, §3.5, §10, §1 |
+| 2026-09-22 (the fourth verb — Mind map) | The deferred list ordered and scored in one batch (Tier 1 + block FTS chosen; the selection is what is sent; a named language set for highlighting; one mock — the sheet). **§10's Claude-generated mind map built** as §0.6.15's fourth verb: `AiVerb.MIND_MAP` (one instruction — a nested Markdown list, one root), `domain/ai/OutlineReply.kt` (`parseOutline`: markers, tabs or any step, a preamble dropped, a depth jump clamped — pure, 6 cases), `PageDetailViewModel.insertOutline` (bulleted blocks after the selection's block at its depth, the parent chain, §0.6.2's flag on the root, one recorded edit — one undo), the sheet's rows preview (`heading` root, 18 dp a level, ellipsised) with *Insert as a mind map* / *Insert as a list*; the verb row a `FlowRow`. `docs/mockups/ai-mind-map.html`, `docs/critiques/ai-mind-map-mock.md` (three findings, all applied: no accent dot, no `nowrap`, no *Cancel* under Touch) and `-function.md`. Walked on both devices against the real endpoint (a dummy key, a genuine 401); the success path pinned by `WritePathSyncTest` (the tree on both devices, one undo). Two defects fixed on the walk: the phone's verb row had 20 px for the fourth button (letter-wrapped) and the saved-key line named three verbs. Tests 917 → 924. | §0.6.15, §10 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -619,7 +620,7 @@ whose start column is deleted falls back to the configure prompt. **Done 2026-09
 `domain/timeline/Timeline.kt` (pure, tested), `ui/pages/TimelineView.kt`, `MIGRATION_18_19`.
 Verified on desktop and phone.
 
-**0.6.15 Three verbs on a selection, with the person's own key, and nothing else.** Finding
+**0.6.15 Three verbs on a selection — four since 2026-09-22 — with the person's own key, and nothing else.** Finding
 **[Verified]**: §3.5's key field has stored an Anthropic key in the Keystore since 2026-07 with
 nothing using it; the app already speaks HTTP through `HttpURLConnection` (§9.5) and the build is
 offline, so no library can be added; §0.1/§0.2 stand — offline-first, no telemetry, opt-in.
@@ -639,13 +640,31 @@ Settings section (key, model, "what is sent") replaces Android's private one, an
 first Settings pane holds it — no `NotAvailableOnDesktop` stand-in remains. **Out, on purpose:**
 page-wide or vault-wide context in a request, an agent over the Markdown export, a local-model
 option (§0.10 item 17 — the export is the honest interface for an agent, and nothing here
-precludes one); the Claude-generated mind map stays deferred (§10). Acceptance: with no key the
+precludes one); ~~the Claude-generated mind map stays deferred (§10)~~. Acceptance: with no key the
 toolbar is unchanged and no connection is ever opened; a wrong key yields a real 401 and the
 sheet's "rejected" line; the request body never contains the key. **Done 2026-09-13** —
 `domain/ai/AiVerbs.kt` (pure, tested) and `ClaudeClient.kt`, `ui/pages/AiResultSheet.kt`,
 `ui/settings/AiSettingsSection.kt`, `data/prefs/AiKeyStore.kt` (+ `FileAiKeyStore`,
 `AndroidAiKeyStore`). Verified on desktop and phone against the real endpoint (the failure path,
 by design — a dummy key, a genuine 401). **§0.8 step 8 complete.**
+
+*[Amended] 2026-09-22 — the fourth verb, **Mind map** (§10's Claude-generated map, the reason
+the Road Map was renamed; decided in one batch with the rest of the deferred list, the mock
+`docs/mockups/ai-mind-map.html` critiqued in `docs/critiques/ai-mind-map-mock.md`).* The same
+rule, the same path: **the selection and one instruction** go out (*a nested Markdown list, one
+root, two spaces a level, nothing else*), and the reply is **parsed, not trusted** —
+`domain/ai/OutlineReply.kt`'s `parseOutline` reads `-` / `*` / `•` / numbered markers, tabs or any
+consistent space step, drops a preamble, trims a trailing colon, and clamps a depth jump to its
+parent + 1, so the rows are always a tree with one root. The sheet previews them **as the rows
+they will become** (the tree's 18 dp indent, the root at `heading`, one line each ellipsised; the
+accent nowhere — it is reserved) and offers **Insert as a mind map** — `insertOutline` writes
+bulleted blocks after the selection's block at its depth with §0.6.2's `mindMap` flag on the root,
+so the page draws the map at once — or **Insert as a list**, the same rows without the flag. No
+*Replace selection*: a nested list cannot live in one field. A reply with no list is a failure
+with *Try again*; under Touch the sheet's dismiss is the cancel (no third button). One recorded
+edit — one undo removes the subtree (§0.10 item 19's stack). Acceptance: the request body carries
+the selection alone (`AiVerbsTest`); `OutlineReplyTest` (6 cases) pins the parse; a real reply
+inserted on both devices and drawn by the existing map.
 
 ### 0.7 Explicitly out of scope
 
@@ -4916,8 +4935,8 @@ section):
 - Secret storage — local-first until toggled, then Keystore-backed (§3.5).
 
 **Deferred (not needed for v1, worth keeping on record):**
-- In-page mind-map block, **Claude-API-generated** (§3.4) — the reason Road Map was renamed away
-  from "Mind Map" in the first place. *(**Corrected 2026-09-04:** this read "user-drawn or
+- ~~In-page mind-map block, **Claude-API-generated** (§3.4) — the reason Road Map was renamed away
+  from "Mind Map" in the first place.~~ **Built 2026-09-22** as §0.6.15's fourth verb. *(**Corrected 2026-09-04:** this read "user-drawn or
   Claude-API-generated ... entirely separate feature, not started." The user-drawn half shipped as
   the Canvas page kind and is no longer deferred — see §3.4. Only the API-generated half remains
   unbuilt.)*

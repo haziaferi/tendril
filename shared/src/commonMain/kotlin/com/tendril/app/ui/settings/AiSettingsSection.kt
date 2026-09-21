@@ -60,7 +60,7 @@ fun AiSettingsSection(aiKeyStore: AiKeyStore, keyValueStore: KeyValueStore) {
             Column {
                 Text("Claude (opt-in)", style = MaterialTheme.typography.body)
                 Text(
-                    text = if (storedKey != null) "Key saved — Rewrite, Expand and Summarise appear on a selection" else "No key — nothing is sent anywhere",
+                    text = if (storedKey != null) "Key saved — Rewrite, Expand, Summarise and Mind map appear on a selection" else "No key — nothing is sent anywhere",
                     style = MaterialTheme.typography.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
