@@ -158,7 +158,7 @@ internal fun TaskDetailPane(
 
 /** A habit read in full: the presence sentences and the month of dots the sheet shows, inline. */
 @Composable
-internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, runningTarget: TrackTarget?, onTrash: () -> Unit) {
+internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, runningTarget: TrackTarget?, onTrash: () -> Unit, onEdit: () -> Unit = {}) {
     // The audit's fixes (2026-09-17, F3): the pane read only §0.6.5's presence — *Here whenever
     // you want it.* on a habit with no completions — so it looked like a stub. The habit's own
     // facts come first, the presence and the month of dots stay, and the row's verbs are chips
@@ -191,6 +191,7 @@ internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, show
                 label = { Text(if (running) "Stop timer" else "Start timer") },
                 leadingIcon = { Icon(if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null) },
             )
+            AssistChip(onClick = onEdit, label = { Text("Edit…") })   // S10 — every field, in the Add sheet's frame
             AssistChip(onClick = onTrash, label = { Text("Move to Trash") })
         }
     }
