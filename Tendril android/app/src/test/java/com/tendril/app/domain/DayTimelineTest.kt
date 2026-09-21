@@ -69,10 +69,11 @@ class DayTimelineTest {
     }
 
     @Test
-    fun `a habit at its time is a block too, with its duration or the default`() {
-        val b = blocks(extras = listOf(TimelineExtra("h1", "Stretch", LocalTime.of(7, 0), Duration.ofMinutes(10), BlockKind.HABIT))).single()
-        assertEquals(BlockKind.HABIT, b.kind)
-        assertEquals("a ten-minute habit still gets a tappable block", 15, b.minutes)
+    fun `an extra at its time is a block, with its duration or the default`() {
+        // A habit is a stroke since 2026-09-21 (`HabitStrokes.kt`); an extra is a database date or the like.
+        val b = blocks(extras = listOf(TimelineExtra("x1", "Read on", LocalTime.of(7, 0), Duration.ofMinutes(10), BlockKind.OTHER))).single()
+        assertEquals(BlockKind.OTHER, b.kind)
+        assertEquals("a ten-minute extra still gets a tappable block", 15, b.minutes)
     }
 
     @Test

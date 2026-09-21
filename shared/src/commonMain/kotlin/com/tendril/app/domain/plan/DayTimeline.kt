@@ -26,9 +26,10 @@ data class TimelineBlock(
     val minutes: Int get() = endMinute - startMinute
 }
 
-enum class BlockKind { EVENT, TASK, HABIT, OTHER }
+/** A block's layer. A habit is no block since 2026-09-21 — it is a stroke under them (`HabitStrokes.kt`). */
+enum class BlockKind { EVENT, TASK, OTHER }
 
-/** Something that is on the day but not an Entry — a habit at its time, say. */
+/** Something that is on the day but not an Entry (a database row's date, say — habits are strokes, not blocks). */
 data class TimelineExtra(val key: String, val title: String, val time: LocalTime, val duration: Duration?, val kind: BlockKind)
 
 /**

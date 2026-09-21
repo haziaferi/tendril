@@ -102,6 +102,12 @@ import androidx.compose.ui.graphics.Color
 import com.tendril.app.generated.resources.calendar_view_agenda
 import java.time.LocalTime
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.ui.taskshabits.AddHabitDialog
+import com.tendril.app.ui.settings.TaskSettings
+import com.tendril.app.ui.taskshabits.HabitDetailSheet
+import com.tendril.app.ui.taskshabits.TasksHabitsViewModel
+import com.tendril.app.domain.plan.habitStrokes
+import com.tendril.app.domain.plan.HabitStroke
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.foundation.rememberScrollState
@@ -247,6 +253,15 @@ fun CalendarScreen(
     val allEntries by viewModel.entries.collectAsState()
     val layers by viewModel.layers.collectAsState()
     val timedHabits by viewModel.timedHabits.collectAsState()
+    // §3.2 (2026-09-21) — a click on a habit stroke opens the habit's sheet, the Tasks tab's own (shared).
+    var habitSheet by remember { mutableStateOf<Habit?>(null) }
+    val habitsViewModel: TasksHabitsViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                TasksHabitsViewModel(core.database.entryDao(), core.database.habitDao(), core.database.habitCompletionDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.checkInHabitUseCase, core.timeTracker)
+            }
+        }
+    )
     val dateCells by viewModel.dateCells.collectAsState()
     // §0.8 step 6d — the Tasks and Events layers filter the rows before expansion.
     val entries = remember(allEntries, layers) { allEntries.filter { if (it.kind == EntryKind.TASK) layers.tasks else layers.events } }
@@ -294,6 +309,19 @@ fun CalendarScreen(
     // §0.8 step 7d — the selected day's logs and a ticking now, for Planned · Logged.
     val dayLogsNow by remember(selectedDate) { viewModel.logsOn(selectedDate) }.collectAsState(initial = emptyList<TimeLog>() to Instant.now())
 
+    // §3.2 (2026-09-21) — the habit's sheet from a stroke, the Tasks tab's own; *Edit…* opens the Add sheet on it (S10).
+    var editHabit by remember { mutableStateOf<Habit?>(null) }
+    habitSheet?.let { habit ->
+        val showStreak = remember(core) { TaskSettings(core.keyValueStore) }.observeShowHabitStreaks()
+        HabitDetailSheet(habit, habitsViewModel, showStreak = showStreak, onDismiss = { habitSheet = null }, onEdit = { habitSheet = null; editHabit = habit })
+    }
+    editHabit?.let { habit ->
+        AddHabitDialog(
+            onDismiss = { editHabit = null },
+            onAdd = { title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount -> habitsViewModel.updateHabit(habit, title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount); editHabit = null },
+            initial = habit,
+        )
+    }
     editTarget?.let { entry ->
         EntryEditSheet(
             entry = entry,
@@ -409,6 +437,10 @@ fun CalendarScreen(
                 else EntryOccurrences.expand(entries, range.first, range.second)
             }
             val extras = remember(layers, timedHabits, dateCells, range) { extrasIn(range.first, range.second, layers, timedHabits, dateCells) }
+            // §3.2 (2026-09-21) — the grids' habit strokes: every active timed habit on the day, under the Layers menu's *Habits*.
+            val strokesOn: (LocalDate) -> List<HabitStroke> = remember(layers, timedHabits, today) {
+                { day -> if (layers.habits) habitStrokes(timedHabits, day, today) else emptyList() }
+            }
 
             val trayDragStart: (Entry, Offset) -> Unit = { entry, pos -> trayDrag = TrayDrag(entry, pos) }
             val trayDragMove: (Offset) -> Unit = { delta -> trayDrag = trayDrag?.let { it.copy(position = it.position + delta) } }
@@ -454,6 +486,8 @@ fun CalendarScreen(
                     onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
                     showQuickAdd = !wide,
                     showNav = !wide,
+                    strokes = strokesOn(selectedDate),
+                    onHabitClick = { habitSheet = it },
                     onSetDone = viewModel::setDone,
                     onOpenReminders = if (reminderSheet != null) { { reminderTarget = it } } else null,
                     onEdit = { editTarget = it },
@@ -471,10 +505,8 @@ fun CalendarScreen(
                             scope.launch { snackbarHostState.showSnackbar("A series keeps its days — change it from its sheet") }
                         }
                     },
-                    habitExtras = { day ->
-                        extras.filterIsInstance<CalendarExtra.HabitAt>().filter { it.date == day }
-                            .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
-                    },
+                    habitStrokes = { day -> strokesOn(day) },
+                    onHabitClick = { habitSheet = it },
                     onEdit = { editTarget = it },
                     showUrgency = showUrgency,
                     onMove = { occurrence, toDate, time ->
@@ -514,11 +546,9 @@ fun CalendarScreen(
                                 tint = if (o.entry.kind == EntryKind.TASK) taskTint else eventTint, stripe = stripe, draggable = true, payload = o,
                             )
                         }
-                        extras.forEach { x ->
-                            out.getOrPut(x.date) { mutableListOf() } += when (x) {
-                                is CalendarExtra.HabitAt -> MonthItem("h_${x.habit.id}_${x.date}", x.title, x.habit.time, palette.habitSoft, null, false, x)
-                                is CalendarExtra.RowDate -> MonthItem("d_${x.cell.pageId}_${x.date}", x.title, null, palette.thirdSoft, null, false, x)
-                            }
+                        // §3.2 (2026-09-21) — the Month never shows a habit; a database date keeps its chip.
+                        extras.filterIsInstance<CalendarExtra.RowDate>().forEach { x ->
+                            out.getOrPut(x.date) { mutableListOf() } += MonthItem("d_${x.cell.pageId}_${x.date}", x.title, null, palette.thirdSoft, null, false, x)
                         }
                         out.values.forEach { list -> list.sortWith(compareBy({ it.time == null }, { it.time }, { it.title })) }
                         out
@@ -531,7 +561,6 @@ fun CalendarScreen(
                             when (val x = item.payload) {
                                 is EntryOccurrence -> editTarget = x.entry
                                 is CalendarExtra.RowDate -> onOpenPage(x.cell.pageId)
-                                is CalendarExtra.HabitAt -> { selectedDate = x.date; view = CalendarView.DAY }
                             }
                         },
                         onItemMove = { item, toDate ->
@@ -633,6 +662,9 @@ private fun DayView(
     onOpenReminders: ((Entry) -> Unit)?,
     onEdit: (Entry) -> Unit,
     showUrgency: Boolean = true,
+    /** §3.2 (2026-09-21) — Plan mode's habit strokes; the list below keeps its habit rows. */
+    strokes: List<HabitStroke> = emptyList(),
+    onHabitClick: (Habit) -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (showNav) Row(
@@ -646,9 +678,8 @@ private fun DayView(
         }
         // §0.6.5 — compare: two numbers side by side, no score and no colour (§0.5.2). Absent
         // when the day holds nothing planned and nothing logged.
-        val habitExtras = extras.filterIsInstance<CalendarExtra.HabitAt>()
-            .map { TimelineExtra("habit_${it.habit.id}", it.habit.title, it.habit.time!!, it.habit.duration, BlockKind.HABIT) }
-        val blocks = remember(occurrences, habitExtras) { timelineBlocks(occurrences, habitExtras) }
+        // A habit is a stroke, not a block (§3.2, 2026-09-21): it is not in the blocks and not in *Planned* — reserved, not booked.
+        val blocks = remember(occurrences) { timelineBlocks(occurrences) }
         val planned = remember(blocks, occurrences) { plannedMinutes(blocks, occurrences.filter { it.startTime == null }.map { it.entry }) }
         val logged = remember(dayLogs, now) { loggedMinutes(dayLogs, Instant.MIN, Instant.MAX, now) }
         val loggedPerEntry = remember(dayLogs, now) { loggedByEntry(dayLogs, now) }
@@ -707,6 +738,8 @@ private fun DayView(
                 onPlace = onPlace,
                 onMoveBlock = onMoveBlock,
                 showUrgency = showUrgency,
+                strokes = strokes,
+                onHabitClick = onHabitClick,
             )
         } else if (occurrences.isEmpty() && extras.isEmpty()) {
             EmptyState(icon = Icons.Filled.ChevronRight, message = "Nothing scheduled", modifier = Modifier.fillMaxSize())
@@ -979,7 +1012,8 @@ private fun MonthGridView(
                 val kinds = remember(occurrences, extras, day) {
                     monthDots(
                         occurrences.filter { it.date == day }.map { if (it.entry.kind == EntryKind.TASK) DotKind.TASK else DotKind.EVENT } +
-                            extras.filter { it.date == day }.map { if (it is CalendarExtra.HabitAt) DotKind.HABIT else DotKind.DATABASE }
+                            // §3.2 (2026-09-21) — no habit dot: the Month never shows a habit.
+                            extras.filter { it.date == day && it is CalendarExtra.RowDate }.map { DotKind.DATABASE }
                     )
                 }
                 val isToday = day == LocalDate.now()

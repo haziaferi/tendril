@@ -51,6 +51,8 @@ import com.tendril.app.data.entry.Entry
 import com.tendril.app.domain.plan.BlockKind
 import com.tendril.app.domain.plan.LoggedSpan
 import com.tendril.app.domain.plan.TimelineBlock
+import com.tendril.app.domain.plan.HabitStroke
+import com.tendril.app.data.habit.Habit
 import com.tendril.app.domain.plan.snapMinute
 import com.tendril.app.domain.plan.timeOfMinute
 import com.tendril.app.domain.recurrence.EntryOccurrence
@@ -86,6 +88,9 @@ internal fun PlanView(
     onMoveBlock: (EntryOccurrence, LocalTime) -> Unit,
     /** 14g·3 — the task blocks' urgency stripe; off hides it. */
     showUrgency: Boolean = true,
+    /** §3.2 (2026-09-21) — the day's habit strokes, painted under the blocks; a click opens the habit's sheet. */
+    strokes: List<HabitStroke> = emptyList(),
+    onHabitClick: (Habit) -> Unit = {},
 ) {
     val today = LocalDate.now()
     val density = LocalDensity.current
@@ -145,6 +150,10 @@ internal fun PlanView(
                             color = labelColor,
                             modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) },
                         )
+                    }
+                    // The habit strokes first, so the blocks composed after them cover them (§3.2).
+                    strokes.forEach { stroke ->
+                        HabitStrokeBox(stroke, xPx = gutterPx, widthPx = widthPx - gutterPx, hourPx = hourPx, hourDp = HOUR_DP.toFloat(), onClick = { onHabitClick(stroke.habit) })
                     }
                     blocks.forEach { block ->
                         val laneWidth = laneAreaPx / block.lanes

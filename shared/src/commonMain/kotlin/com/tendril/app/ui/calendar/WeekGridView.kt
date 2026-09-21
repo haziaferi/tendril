@@ -55,7 +55,8 @@ import androidx.compose.ui.unit.dp
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.domain.plan.BlockKind
 import com.tendril.app.domain.plan.TimelineBlock
-import com.tendril.app.domain.plan.TimelineExtra
+import com.tendril.app.domain.plan.HabitStroke
+import com.tendril.app.data.habit.Habit
 import com.tendril.app.domain.plan.laneAt
 import com.tendril.app.domain.plan.openScrollMinute
 import com.tendril.app.domain.plan.plannedLabel
@@ -94,7 +95,9 @@ private const val DAY_MINUTES = 24 * 60
 internal fun WeekGridView(
     weekStart: LocalDate,
     occurrences: List<EntryOccurrence>,
-    habitExtras: (LocalDate) -> List<TimelineExtra>,
+    /** §3.2 (2026-09-21) — the day's habit strokes, painted under the blocks; a click opens the habit's sheet. */
+    habitStrokes: (LocalDate) -> List<HabitStroke> = { emptyList() },
+    onHabitClick: (Habit) -> Unit = {},
     onEdit: (Entry) -> Unit,
     onMove: (EntryOccurrence, LocalDate, LocalTime) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
@@ -123,7 +126,7 @@ internal fun WeekGridView(
     val perDay = remember(occurrences, days) {
         days.map { day ->
             val dayOcc = occurrences.filter { it.date == day }
-            val blocks = timelineBlocks(dayOcc, habitExtras(day))
+            val blocks = timelineBlocks(dayOcc)
             val allDay = dayOcc.filter { it.startTime == null || !it.isFirstDay }
             DayColumn(day, blocks, allDay, plannedMinutes(blocks, allDay.map { it.entry }))
         }
@@ -257,6 +260,13 @@ internal fun WeekGridView(
                     }
                     for (h in 0..23) {
                         Text("%02d".format(h), style = MaterialTheme.typography.caption, color = labelColor, modifier = Modifier.offset { IntOffset(8, (h * hourPx).roundToInt() - 6) })
+                    }
+                    // The habit strokes first, so the blocks composed after them cover them (§3.2).
+                    perDay.forEachIndexed { i, col ->
+                        val laneX = gutterPx + i * laneWidthPx
+                        habitStrokes(col.day).forEach { stroke ->
+                            HabitStrokeBox(stroke, xPx = laneX + 1f, widthPx = laneWidthPx - 1f, hourPx = hourPx, hourDp = HOUR_DP.toFloat(), onClick = { onHabitClick(stroke.habit) })
+                        }
                     }
                     perDay.forEachIndexed { i, col ->
                         val laneX = gutterPx + i * laneWidthPx
