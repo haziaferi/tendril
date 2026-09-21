@@ -64,8 +64,8 @@ ICON_LABEL_COMPOSABLES = {"ShellRail", "ShellItem", "ShellBottomBar"}
 SCALED_LABEL_COMPOSABLES = {"ReadableLabels"}
 # The calendar grids' gutters, block titles and day cells — dense by design.
 GRID_COMPOSABLES = {"PlanView", "WeekGridView", "MonthGridView", "MonthGrid", "TimelineBody"}
-# The phone's week strip and the Timeline's day header: every text in them is a cell's.
-DENSE_COMPOSABLES = {"WeekStripView", "DayHeader", "OccurrenceChip"}
+# The phone's week strip, the Timeline's day header, a grid's chip and a habit stroke: every text in them is a cell's.
+DENSE_COMPOSABLES = {"WeekStripView", "DayHeader", "OccurrenceChip", "HabitStrokeBox"}
 # A grid's weekday header: a DayOfWeek's short or narrow name in a grid composable is its eyebrow row.
 WEEKDAY_RE = re.compile(r"getDisplayName\(\s*TextStyle\.")
 STYLE_RE = re.compile(r"\bstyle\s*=\s*([^,()]+(?:\([^()]*\))?)")
