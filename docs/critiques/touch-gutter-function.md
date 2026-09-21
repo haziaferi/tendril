@@ -33,3 +33,9 @@ prefix and its 8 dp gap are as they were. The desktop is untouched.
 | desktop | a page's blocks | the 16 dp margin as before; the right-click and the ground click unchanged |
 
 No test: a constant, no logic. Tests 909.
+
+## The phone (2026-09-21)
+
+*Trip* → the first paragraph's ink starts 80 px from the pane's edge at 480 dpi × 0.85 — **31.4 dp** (the
+rule's 32; the desktop measured 31.6). The property strip's labels start at 54 px, so the block's text sits
+26 px (≈ 10 dp) inside the strip's — the gutter reads as the blocks' own margin, not a misalignment.

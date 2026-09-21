@@ -7,6 +7,7 @@ import com.tendril.app.domain.canvas.CANVAS_EMPTY_CARD_TEXT
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.theme.DrawingType
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.domain.canvas.boxEdgeDistance
 import com.tendril.app.domain.canvas.nodeBox
@@ -734,6 +735,18 @@ internal fun CanvasLayer(
     interactive: CanvasInteraction?,
     showContent: Boolean = true,
     structure: CanvasStructure = CanvasStructure.FREE,
+) = DrawingType { CanvasLayerBody(nodes, edges, embeddedPages, scale, pan, interactive, showContent, structure) }
+
+@Composable
+private fun CanvasLayerBody(
+    nodes: List<CanvasNode>,
+    edges: List<CanvasEdge>,
+    embeddedPages: Map<Long, Page>,
+    scale: Float,
+    pan: Offset,
+    interactive: CanvasInteraction?,
+    showContent: Boolean,
+    structure: CanvasStructure,
 ) {
     val density = LocalDensity.current
     val edgeInk = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1320,7 +1333,7 @@ private fun CanvasNodeCard(
             )
             // The badges straddle the card's right edge (the frame's handle straddles its corner the same way), so the
             // text keeps the whole card: with the width fit to the text, a reserved 28 dp column was half of a short card.
-            if (interactive != null && !viewOnly) Column(modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).offset(x = 10.dp).alpha(badgesAlpha), verticalArrangement = Arrangement.SpaceBetween) {
+            if (interactive != null && !viewOnly) Column(modifier = Modifier.fillMaxHeight().align(Alignment.CenterEnd).offset(x = if (pointer) 10.dp else 16.dp).alpha(badgesAlpha), verticalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)

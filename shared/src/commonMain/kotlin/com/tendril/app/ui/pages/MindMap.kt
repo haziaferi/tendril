@@ -54,6 +54,7 @@ import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.theme.LocalTendrilPalette
 import com.tendril.app.ui.canvas.drawBranch
 import com.tendril.app.domain.canvas.leafWidth
+import com.tendril.app.ui.theme.DrawingType
 import com.tendril.app.domain.canvas.leafUnderline
 import com.tendril.app.domain.canvas.cardHeight
 import com.tendril.app.domain.canvas.TreeSide
@@ -121,7 +122,10 @@ private fun mainBranchIndex(layout: MindMapLayout, node: MapNode): Int {
 }
 
 @Composable
-internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
+internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) = DrawingType { MindMapCardBody(subtree, onArm) }
+
+@Composable
+private fun MindMapCardBody(subtree: List<OutlineBlock>, onArm: () -> Unit) {
     val layout = remember(subtree) { layoutByGrammar(subtree) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     Box(
@@ -157,6 +161,17 @@ internal fun MindMapCard(subtree: List<OutlineBlock>, onArm: () -> Unit) {
 
 @Composable
 internal fun MindMapFullScreen(
+    title: String,
+    subtree: List<OutlineBlock>,
+    locked: Boolean,
+    onClose: () -> Unit,
+    onEditText: (Block, String) -> Unit,
+    onAddChild: (Block, String) -> Unit,
+    onDelete: (Block) -> Unit,
+) = DrawingType { MindMapFullScreenBody(title, subtree, locked, onClose, onEditText, onAddChild, onDelete) }
+
+@Composable
+private fun MindMapFullScreenBody(
     title: String,
     subtree: List<OutlineBlock>,
     locked: Boolean,

@@ -54,3 +54,18 @@ below as pending.*
   two databases' dates — one dot per kind is the rule (L4); a dot per database is not.
 
 Tests 913 → 916.
+
+## The phone (2026-09-21, the v24 build after #134; dumps and screencaps at 480 dpi × 0.85)
+
+| tried | observed |
+|---|---|
+| the Pages list | *Errands*' glyph in its hashed default — #6139C6, hue 257° (the sheet names the same) |
+| *Errands* → `···` → *Colour…* | the sheet under the finger: the swatch *Default · hue 257° — 7.2 : 1 …*, the bar, the six marks, *Default — from the title*, Cancel · Done |
+| a drag along the bar, 300 → 600 px | the knob follows; *hue 203°* at 600 px — (600 − 63) / 954 × 360 = 202.6 |
+| the cyan mark → *Done* → back | the glyph teal at once (35, 113, 121 — hue 185 solved on the light ground); `page_databases.hue` = 185 |
+| a Date property *Read ons* on *Errands*, the 24th on a row; Calendar → Month, *Database dates* on | the 24th's dot in the same teal (35, 113, 121) — the day's first database's hue |
+| the migration | `PRAGMA user_version` 24 on the phone's database; `hue` on both tables |
+
+Found and fixed: **the swatch line ellipsised** at Touch's 16 sp (*Default · hue 257° — 7.2 : 1 on this…*) — the
+line is *hue n° · 7.2 : 1* now, the ground being the sheet's own. The *Database dates* layer had been off on
+the phone (its persisted layers), which is why the first Month showed no dot — a setting, not a defect.
