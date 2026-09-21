@@ -99,6 +99,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
@@ -291,6 +293,11 @@ fun CanvasScreen(
             }
         } else {
             TendrilMenuItem(text = { Text("Rename") }, onClick = { close(); editingNode = node })
+            // S12 — a frame collapses to its strip and expands again; the count is what it holds.
+            if (!viewOnly) {
+                val held = tree.hiddenCount(node.id)
+                TendrilMenuItem(text = { Text(if (node.folded) "Expand ($held hidden)" else "Collapse ($held inside)") }, onClick = { close(); viewModel.toggleFold(node) })
+            }
         }
         if (!viewOnly) TendrilMenuItem(text = { Text("Delete") }, onClick = { close(); nodeToDelete = node })
     }
@@ -413,8 +420,10 @@ fun CanvasScreen(
                 onResizeCard = { card, dx -> viewModel.resizeCard(card, dx) },
                 onDroppedInTree = { node -> viewModel.tidyTreeOf(node) },
                 onTapNode = { node ->
+                    // S12 — a tap on a collapsed frame's strip expands it (the phone's; the desktop's strip handles its own click).
+                    if (node.type == CanvasNodeType.FRAME && node.folded) viewModel.toggleFold(node)
                     // Under a pointer a first click selects, a second opens (Obsidian's); the phone opens at once.
-                    if (pointer && selectedNodeId != node.id) selectedNodeId = node.id
+                    else if (pointer && selectedNodeId != node.id) selectedNodeId = node.id
                     else if (node.type == CanvasNodeType.TEXT || node.type == CanvasNodeType.FRAME) editingNode = node
                     else node.embeddedPageId?.let(onOpenPage)
                 },
@@ -730,7 +739,7 @@ internal fun CanvasLayer(
         // (#121 — Obsidian draws its edges above groups), then the cards, then the frames' labels.
         val frames = visible.filter { it.type == CanvasNodeType.FRAME }
         frames.forEach { node ->
-            key(node.id) { CanvasFrameBox(node = node, box = tree.box(node), following = tree.followedBy(node) != null, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
+            key(node.id) { CanvasFrameBox(node = node, box = tree.box(node), following = tree.followedBy(node) != null, hiddenCount = tree.hiddenCount(node.id), density = density.density, interactive = interactive, showContent = showContent, part = FramePart.BODY) }
         }
         Canvas(modifier = Modifier.size(4000.dp).then(
             if (interactive == null) Modifier else Modifier.pointerInput(edges, tree, scale) {
@@ -755,6 +764,16 @@ internal fun CanvasLayer(
                 if (extents.isEmpty()) continue
                 val rb = tree.box(node); val sy = spineY(rb)
                 drawLine(edgeInk, Offset(rb.right * d, sy * d), Offset(spineEnd(rb, extents) * d, sy * d), strokeWidth = 2f * d, cap = StrokeCap.Round)
+            }
+            // S12 — a collapsed following frame stands where its anchor stood: the branch from the anchor's parent ends on the strip.
+            for (frame in visible) {
+                if (frame.type != CanvasNodeType.FRAME || !frame.folded) continue
+                val anchor = tree.followedBy(frame) ?: continue
+                val parent = tree.parentOf(anchor) ?: continue
+                if (!tree.isVisible(parent)) continue
+                val ink = branchInks[tree.mainBranchIndex(anchor).coerceAtLeast(0) % branchInks.size]
+                val width = (if (tree.depthOf(anchor.id) == 1) 2f else 1.5f) * d
+                drawBranch(tree.box(parent), tree.box(frame), tree.sideOf(anchor), tree.structureOf(parent).curved, d, ink, width)
             }
             // The branches: every visible node with a visible parent.
             for (node in visible) {
@@ -834,7 +853,7 @@ internal fun CanvasLayer(
         }
         // The labels over the cards: a card that overlaps a frame's top edge must not hide its handle.
         frames.forEach { node ->
-            key("label", node.id) { CanvasFrameBox(node = node, box = tree.box(node), following = tree.followedBy(node) != null, density = density.density, interactive = interactive, showContent = showContent, part = FramePart.LABEL) }
+            key("label", node.id) { CanvasFrameBox(node = node, box = tree.box(node), following = tree.followedBy(node) != null, hiddenCount = tree.hiddenCount(node.id), density = density.density, interactive = interactive, showContent = showContent, part = FramePart.LABEL) }
         }
     }
 }
@@ -891,7 +910,7 @@ private fun Modifier.touchNodeGestures(density: Float, viewOnly: Boolean, node: 
 private enum class FramePart { BODY, LABEL }
 
 @Composable
-private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, density: Float, interactive: CanvasInteraction?, showContent: Boolean, part: FramePart) {
+private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, hiddenCount: Int, density: Float, interactive: CanvasInteraction?, showContent: Boolean, part: FramePart) {
     val current by rememberUpdatedState(node)
     val palette = LocalTendrilPalette.current
     val pointer = LocalDensityProfile.current.pointer
@@ -908,6 +927,65 @@ private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, d
     ) {
         // The mind-map pass — a frame following a subtree is a drawn structure: its stroke at `dim`
         // (`faint` measured 3.56 : 1 on the ground, the mock critique's #2); the hand-sized frame keeps `faint`.
+        // S12 — a collapsed frame is its strip: the label, `· n hidden`, a chevron; a click expands it; the
+        // strip is the handle (a hand-sized frame carries its hidden cards along, as its label does). Drawn
+        // in the label pass, over the cards — the body pass sits under the board's ground, which takes the down.
+        if (node.folded) {
+            if (part == FramePart.LABEL) Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(palette.text.copy(alpha = 0.03f), shape)
+                    .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else if (following) palette.textDim else palette.textFaint, shape)
+                    .then(
+                        when {
+                            interactive == null -> Modifier
+                            !pointer -> Modifier.touchNodeGestures(density, viewOnly, { current }, interactive)
+                            else -> Modifier.hoverable(interaction).onSecondaryClick { at -> interactive.onContextMenu(current, Offset(box.x * density, box.y * density) + at) }.pointerInput(node.id, density, viewOnly) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(); down.consume()
+                                    var totalDrag = Offset.Zero
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (change.pressed) {
+                                            val delta = change.position - change.previousPosition
+                                            if (delta != Offset.Zero) {
+                                                totalDrag += delta
+                                                if (!viewOnly) interactive.onMoveNode(current, current.x + delta.x / density, current.y + delta.y / density)
+                                            }
+                                            change.consume()
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                    if (totalDrag.getDistance() < 12f) interactive.onFoldToggle(current)
+                                }
+                            }
+                        },
+                    )
+                    .padding(start = 10.dp, end = 8.dp),
+            ) {
+                if (showContent) {
+                    Text( // type: SECTION_HEADING — the collapsed frame's name, the strip's own heading
+                        node.text.orEmpty().ifBlank { FRAME_DEFAULT_LABEL },
+                        style = MaterialTheme.typography.heading,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text( // type: META — the hidden count beside the name
+                        "· $hiddenCount hidden",
+                        style = MaterialTheme.typography.description,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.Filled.ChevronRight, contentDescription = "Expand", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                }
+            }
+            return
+        }
         if (part == FramePart.BODY) Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -927,7 +1005,8 @@ private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, d
                         when {
                             interactive == null -> Modifier
                             !pointer -> Modifier.touchNodeGestures(density, viewOnly, { current }, interactive)
-                            else -> Modifier.hoverable(interaction).pointerInput(node.id, density, viewOnly) {
+                            // S12 — a right-click on the pill opens the frame's menu (Rename · Collapse · Delete), as a card's does.
+                            else -> Modifier.hoverable(interaction).onSecondaryClick { at -> interactive.onContextMenu(current, Offset(box.x * density, box.y * density) + at) }.pointerInput(node.id, density, viewOnly) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(); down.consume()
                                     var totalDrag = Offset.Zero
@@ -959,6 +1038,14 @@ private fun CanvasFrameBox(node: CanvasNode, box: NodeBox, following: Boolean, d
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // S12 — the collapse's handle on the pill: a chevron under a pointer (the phone's sheet has the verb).
+                if (interactive != null && !viewOnly && live && pointer) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Filled.ExpandMore, contentDescription = "Collapse", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp).clickable { interactive.onFoldToggle(current) },
+                    )
+                }
                 if (interactive != null && !viewOnly && live) {
                     Spacer(Modifier.width(8.dp))
                     Box(
