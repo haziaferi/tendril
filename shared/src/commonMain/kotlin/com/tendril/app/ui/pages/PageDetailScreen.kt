@@ -1085,7 +1085,11 @@ private fun BlockRow(
                 )
                 // B§13.4 14d — right-click is the pointer's long-press: the same block action sheet.
                 .onSecondaryClick { if (!locked) { if (!selected) onSelect(false); onLongPress() } }
-                .padding(start = 8.dp + indent, end = 8.dp, top = 2.dp, bottom = 2.dp)
+                // S11 (2026-09-21) — under Touch the margin before the prefix is 24 dp, not 8: with the
+                // prefix's gap the block's long press has 32 dp before a paragraph's text (16 was thin
+                // for a thumb — `block-selection-function.md`). The measure pays 16 dp; the gestures are
+                // untouched — the option that meets none of the field's (`docs/mockups/touch-gutter.html`).
+                .padding(start = (if (pointer) 8.dp else TOUCH_BLOCK_GUTTER) + indent, end = 8.dp, top = 2.dp, bottom = 2.dp)
                 .then(
                     // §P3 — a callout always has a tinted background, even before a swatch is
                     // chosen, matching the "icon + colored background" design §3.1.1 called for.
@@ -1489,6 +1493,9 @@ private class AboveAnchor(private val gapPx: Int) : PopupPositionProvider {
  * this (§3.1.1 — "no syntax highlighting required for v1"), so it only needs to round-trip
  * with the Notion importer's fence-tag strings (`NotionMarkdownParser`), and a short tap
  * list is faster than typing on every device. Lowercase to match the importer's own tags. */
+/** S11 — the Touch margin before a block's prefix; a pointer keeps 8 dp. With the prefix's 8 dp gap, 32 dp before a paragraph's text. */
+internal val TOUCH_BLOCK_GUTTER = 24.dp
+
 private val CODE_LANGUAGES = listOf(
     "kotlin", "java", "swift", "python", "javascript", "typescript",
     "bash", "sql", "json", "yaml", "html", "css", "c", "cpp", "csharp", "go", "rust", "ruby", "php", "markdown",
