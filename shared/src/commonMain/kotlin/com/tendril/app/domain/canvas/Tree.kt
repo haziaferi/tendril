@@ -71,6 +71,8 @@ const val DOWN_SIBLING_GAP = 24f
 const val FRAME_FOLLOW_PAD = 12f
 /** The count badge at a folded branch's end. */
 const val FOLD_BADGE = 20f
+/** S12 — a collapsed frame's strip: its label's card width plus the room for *· n hidden* (≈ 70 dp at `description`), the chevron and the paddings. */
+const val FRAME_COLLAPSED_EXTRA = 120f
 /** S9 — a spine: the stem from the spine to a timeline topic (Xmind's 24 px), the dot on the spine, the least distance between
  * two topics' anchors along it (the order stays readable), the spine's tail past its last topic. */
 const val SPINE_STEM = 24f
@@ -242,17 +244,45 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
         return out
     }
 
-    /** The nodes a fold hides: every descendant of a folded node (and a frame following one). */
+    /** S12 — what a frame holds: a following frame its anchor and the anchor's subtree (frames following
+     * nodes in it included); a hand-sized frame every node whose box lies inside its rectangle (nested
+     * frames too, by their own rectangles). Never the frame itself. */
+    fun frameContents(frame: CanvasNode): List<CanvasNode> {
+        if (frame.type != CanvasNodeType.FRAME) return emptyList()
+        val anchor = followedBy(frame)
+        if (anchor != null) return (listOf(anchor) + descendants(anchor.id)).filter { it.id != frame.id }
+        val f = nodeBox(frame)
+        return nodes.filter { other ->
+            if (other.id == frame.id) return@filter false
+            val b = when {
+                other.type != CanvasNodeType.FRAME -> nodeBox(other, titleOf = titleOf)
+                followedBy(other) == null -> nodeBox(other)   // a nested hand-sized frame, by its own rectangle
+                else -> null                                  // a following frame goes with its anchor (`hidden`)
+            }
+            b != null && b.x >= f.x && b.y >= f.y && b.right <= f.right && b.bottom <= f.bottom
+        }
+    }
+
+    /** The nodes a fold hides: every descendant of a folded node (and a frame following one); S12 — a
+     * collapsed frame hides what it holds. Positions are kept, as a fold keeps them. */
     val hidden: Set<Long> by lazy {
         val out = HashSet<Long>()
-        for (n in nodes) if (n.folded && n.id !in out) descendants(n.id).forEach { out += it.id }
+        for (n in nodes) if (n.folded && n.id !in out) {
+            if (n.type == CanvasNodeType.FRAME) frameContents(n).forEach { out += it.id }
+            else descendants(n.id).forEach { out += it.id }
+        }
+        // A frame following a hidden anchor is hidden with it — unless it is the collapsed frame that hides the anchor.
+        nodes.filter { it.type == CanvasNodeType.FRAME && !it.folded && followedBy(it)?.id in out }.forEach { out += it.id }
         out
     }
 
     fun isVisible(node: CanvasNode): Boolean = node.id !in hidden
 
-    /** What a fold hides under this node, for the badge. */
-    fun hiddenCount(id: Long): Int = descendants(id).count { it.type != CanvasNodeType.FRAME }
+    /** What a fold hides under this node, for the badge; a frame's count is its contents' cards (S12). */
+    fun hiddenCount(id: Long): Int {
+        val n = byId[id] ?: return 0
+        return (if (n.type == CanvasNodeType.FRAME) frameContents(n) else descendants(id)).count { it.type != CanvasNodeType.FRAME }
+    }
 
     /** A frame's anchor: the node whose subtree it follows, if it has one. */
     fun followedBy(frame: CanvasNode): CanvasNode? = if (frame.type == CanvasNodeType.FRAME) parentOf(frame) else null
@@ -260,7 +290,13 @@ class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /
     /** The box a node draws in, by its level; a following frame's from its subtree's visible boxes plus [FRAME_FOLLOW_PAD]. */
     fun box(node: CanvasNode): NodeBox = boxMemo.getOrPut(node.id) {
         if (node.type == CanvasNodeType.FRAME) {
-            val anchor = followedBy(node) ?: return@getOrPut nodeBox(node, titleOf = titleOf)
+            val anchor = followedBy(node)
+            // S12 — a collapsed frame is a strip at its own top-left (a following one where its anchor stood).
+            if (node.folded) {
+                val w = cardWidth(node.text.orEmpty().ifBlank { "Frame" }) + FRAME_COLLAPSED_EXTRA
+                return@getOrPut if (anchor != null) NodeBox(anchor.x, anchor.y, w, CANVAS_NODE_H) else NodeBox(node.x, node.y, w, CANVAS_NODE_H)
+            }
+            if (anchor == null) return@getOrPut nodeBox(node, titleOf = titleOf)
             val boxes = (listOf(anchor) + descendants(anchor.id).filter { it.type != CanvasNodeType.FRAME && isVisible(it) }).map { box(it) }
             val x = boxes.minOf { it.x } - FRAME_FOLLOW_PAD
             val y = boxes.minOf { it.y } - FRAME_FOLLOW_PAD
@@ -348,7 +384,7 @@ fun tidy(tree: CanvasTree, rootId: Long): Map<Long, Pair<Float, Float>> {
     val out = HashMap<Long, Pair<Float, Float>>()
     val moved = HashMap<Long, NodeBox>()
     fun boxNow(n: CanvasNode): NodeBox = moved[n.id] ?: tree.box(n)
-    fun visibleKids(n: CanvasNode): List<CanvasNode> = if (n.folded) emptyList() else tree.children(n.id)
+    fun visibleKids(n: CanvasNode): List<CanvasNode> = if (n.folded) emptyList() else tree.children(n.id).filter { tree.isVisible(it) }
 
     // S9 — how a node's children are arranged: beside it (a stack), under or over it (a row), along a spine, along a rib.
     fun columns(n: CanvasNode): Boolean { val s = tree.structureOf(n); return s == CanvasStructure.DOWN || (s == CanvasStructure.TIMELINE && !tree.isSpineRoot(n)) }
