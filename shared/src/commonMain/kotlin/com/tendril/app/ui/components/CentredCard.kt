@@ -25,11 +25,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.tendril.app.ui.theme.Scrim
 import com.tendril.app.ui.theme.caption
 
 /**
  * L6 (2026-09-17) — the frame the F1 card and the quick switcher share: a `Popup` over the
- * 32 % scrim, one card at most [cardMaxWidth] wide and never more than 60 % of the window, radius
+ * [Scrim], one card at most [cardMaxWidth] wide and never more than 60 % of the window, radius
  * 10 (the hover card's — the audit's radius family), a hairline and a soft shadow. [top] places
  * the card's top edge at that share of the window's height (the switcher's 0.2 — Notion
  * Calendar's command menu measured at 21 %); null centres it (the F1 card, a reference). Esc,
@@ -48,7 +49,7 @@ fun CentredCard(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.32f))
+                .background(Scrim)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
             contentAlignment = if (top == null) Alignment.Center else Alignment.TopCenter,
         ) {

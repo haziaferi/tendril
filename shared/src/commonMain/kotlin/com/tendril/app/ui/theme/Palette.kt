@@ -81,3 +81,16 @@ enum class TendrilTypeface(val key: String, val label: String) {
         fun fromKey(key: String?): TendrilTypeface = entries.firstOrNull { it.key == key?.lowercase() } ?: INTER
     }
 }
+
+/**
+ * The scrim under a slide-over and a centred card (2026-09-21, `docs/critiques/scrim-mock.md`):
+ * black at 24 %, the same in every register and mode. It was the text colour at 32 % — Material's
+ * share on Material's black scrim, which on a dark ground *lightened* the page (Ink dark's #1B1D21
+ * to #57595C) and left the panel darker than what it covered. Every ground darkens (Notion #0F0F0F
+ * at 30 % dark / 60 % light, Obsidian #0A0A0A at 40 %, Material black at 32 %); the share is chosen
+ * for the light ground, where it does the work — the page's text 7.9 : 1 through it — since a dark
+ * ground can barely darken and the panel's separation there is its shadow's. The phone's bottom
+ * sheet keeps Material's own (black, 32 %).
+ */
+const val SCRIM_SHARE = 0.24f
+val Scrim: Color = Color.Black.copy(alpha = SCRIM_SHARE)
