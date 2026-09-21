@@ -87,6 +87,7 @@ Companion" / "§12" rows) and isn't repeated here.
 | 2026-09-21 (the scrim) | Shared; walked on Ink dark and Chalk light. | §8 |
 | 2026-09-21 (S14 — the text's width) | Shared; walked on the desktop (Garden plan, Down and Right). | §8 |
 | 2026-09-21 (the phone's walk) | Shared; the desktop's drawings unchanged (`DrawingType` provides the desktop's own typography). | §8 |
+| 2026-09-21 (the spec levelled with the build) | §8's tail ("still not click-verified") amended — all three verified since; §3's gate amended — answered by `tendril-spec.md` §0.6.13's merge-loser capture. Nothing desktop-only changed. | §3, §8 |
 | 2026-09-16 (the type vocabulary) | Anti-drift: shared throughout — `ui/theme/Type.kt` (the fonts at true weights: the desktop was the platform that showed the defect, Skia synthesising bold but not Medium), `ui/theme/TendrilType.kt`, the audit rule; `DesktopSettingsScreen`'s section titles read `titleMedium` = heading and needed no edit. Verified beside Notion at the user's 967-px window: Settings, the tree, the editor, the Calendar's Week and tray, Typeface → DM Sans / Serif / Inter at true weights; the measurements in `docs/critiques/type-vocabulary-function.md`. | §8 |
 | 2026-09-16 (hover previews) | Anti-drift: shared throughout — `domain/preview/PagePreview.kt`, `ui/components/HoverPreview.kt`; nothing in `Main.kt` beyond what `LocalDensityProfile.pointer` already decides. Verified: the inline `@mention` (the span outlined, the card under the line), the mention block, the block reference (its line marked), the Road Map's nodes (a database's Table line, a canvas's cards), the flip above at the window's foot, the clamp at its right edge, the shelf's neighbourhood, a pop-out, typing with the pointer on the mention (no card). **Density:** Compact 0.85 / Comfortable 0.95 / Touch 1.23 (were 0.9 / 1.0 / 1.3) — the user's note beside Notion at the same window; measured in `docs/critiques/hover-preview-function.md`. Next: the type PR (Inter bundled at true weights — the desktop loaded DM Sans at its default instance only; headers bold, not large). | §8 |
 | 2026-09-16 (drag between panes) | Anti-drift: shared throughout — `domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt`, `DropGeometry.kt`, `ui/components/Pointer.kt` `dragSource`, `EntryEditor.clearWhen`; the Timeline's *No date* drag and its title-wide bars. `calendar_tray_width`, `calendar_tray_collapsed` in `prefs.properties`. Verified: a task onto Thursday's header (its time kept), onto Friday 17:30 (the slot lit), a block back to the tray (*Clear When*), a series refused, collapse/expand and the handle, a *No date* row onto the 22nd. **Process:** the first build's `detectDragGestures` start offset was the node's far edge on the desktop — `dragSource` is hand-rolled. | §8 |
@@ -278,6 +279,12 @@ this gate was watching for a collision that could not yet occur. It can now: eve
 genuinely wins or loses. The granularity question is untouched — whole-page LWW is still
 `tendril-spec.md` §9.4's to state, not this file's to re-explain — but the gate has stopped being a
 precaution about traffic that might one day exist.
+
+*(**Answered 2026-09-13 — `tendril-spec.md` §0.6.13.** The merge's loser is no longer lost: when a sync
+overwrites this device's version of a page, `PageHistory.captureBeforeMerge` keeps the overwritten title
+and blocks as a revision on this device (History → Restore). Whole-page LWW is still the rule the merge
+applies — the granularity question is unchanged — but the risk this section names, an edit vanishing
+without a record, is closed on both devices.)*
 
 ## 4. Why this content ever lived in `tendril-spec.md`, and why it's here now (documentation-structure decision, scored 2026-08-29 via `optimization-engines:meta-optimizer`, Harmony Search over four discrete candidates)
 
@@ -619,4 +626,7 @@ time), but the mechanism §3 flags is now demonstrated to work end-to-end, not j
 
 Still not click-verified: in-block formatting (bold/italic/slash-command menu/mentions),
 PageDatabaseScreen's table view, and the four placeholder tabs correctly showing
-`NotAvailableOnDesktop` rather than crashing.
+`NotAvailableOnDesktop` rather than crashing. *(**Amended 2026-09-21:** all three since verified —
+the formatting and the slash sheet in the Pages passes of 2026-09-15 (`docs/critiques/pages-function.md`),
+the Table in the desktop audit of 2026-09-17 (`desktop-function-full.md`), and the placeholder tabs are
+gone (§8's note of 2026-09-13: no stand-ins remain).)*

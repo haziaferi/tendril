@@ -57,10 +57,10 @@ import java.time.LocalDate
  * desktop. Two Android-only capabilities that have no desktop equivalent (App Lock's
  * `BiometricPrompt` unlock, and the checkbox-only lock-screen-bypass window flags) are threaded
  * in as nullable callbacks rather than `expect`/`actual`, since only one platform ever supplies
- * a real implementation. The four screens this pass doesn't port (Calendar/Tasks&Habits/Road
- * Map/Settings) and the Canvas page kind are injected as composable slots so this file never
- * references an Android-only screen directly — Android's call site passes the real screens,
- * `Tendril windows`'s passes a placeholder for each (see `NotAvailableOnDesktop`).
+ * a real implementation. Settings is still injected as a composable slot (`settingsContent`) —
+ * each platform draws its own pane — while every other tab and the Canvas page kind are shared
+ * code; the `NotAvailableOnDesktop` placeholders this slot pattern was made for are gone
+ * (Canvas 2026-09-11, Calendar and Tasks 2026-09-12, Road Map and Settings 2026-09-13).
  */
 @Composable
 fun WorkbenchScaffold(
