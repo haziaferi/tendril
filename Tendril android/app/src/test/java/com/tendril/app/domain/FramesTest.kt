@@ -4,10 +4,14 @@ import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.domain.canvas.CANVAS_NODE_H
 import com.tendril.app.domain.canvas.CANVAS_CARD_MIN_W
+import com.tendril.app.domain.canvas.CANVAS_CARD_PAD
 import com.tendril.app.domain.canvas.CANVAS_CARD_WRAP_W
 import com.tendril.app.domain.canvas.CANVAS_LEGACY_CARD_W
 import com.tendril.app.domain.canvas.cardWidth
-import com.tendril.app.domain.canvas.cardChars
+import com.tendril.app.domain.canvas.charWidth
+import com.tendril.app.domain.canvas.textWidth
+import com.tendril.app.domain.canvas.wrappedLines
+import com.tendril.app.domain.canvas.TEXT_WIDTH_MARGIN
 import com.tendril.app.domain.canvas.handWidth
 import com.tendril.app.domain.canvas.FRAME_MIN_H
 import com.tendril.app.domain.canvas.FRAME_MIN_W
@@ -20,6 +24,10 @@ import com.tendril.app.domain.canvas.cardLines
 import com.tendril.app.domain.canvas.nodeBox
 import com.tendril.app.domain.canvas.nodesInside
 import org.junit.Assert.assertEquals
+import com.tendril.app.domain.canvas.leafWidth
+import com.tendril.app.domain.canvas.CANVAS_LEAF_PAD
+import com.tendril.app.domain.canvas.TEXT_AVG_CHAR
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
@@ -33,8 +41,9 @@ class FramesTest {
     @Test
     fun `a node is inside a frame only when its whole box is`() {
         val f = frame(0f, 0f, 400f, 300f)
-        val inside = card(10f, 10f)                       // an empty card is 101 wide (its caption): 10…111 × 10…58
-        val onTheEdge = card(299f, 252f)                  // right 400, bottom 300 — touching counts as inside
+        val w = cardWidth(null)                           // an empty card is as wide as its caption (≈ 103): 10…113 × 10…58
+        val inside = card(10f, 10f)
+        val onTheEdge = card(400f - w, 252f)              // right 400, bottom 300 — touching counts as inside
         val straddling = card(370f, 10f)                  // right 430 > 400
         val outside = card(500f, 500f)
         val innerFrame = frame(20f, 120f, 300f, 150f)     // wholly inside: carried too
@@ -58,7 +67,7 @@ class FramesTest {
     @Test
     fun `a card grows a line at a time with its text and stops at three`() {
         assertEquals(1, cardLines(null)); assertEquals(1, cardLines("Compost bins"))
-        assertEquals(1, cardLines("a".repeat(24))); assertEquals(2, cardLines("a".repeat(25)))   // the wrap width holds 24
+        assertEquals(1, cardLines("a".repeat(23))); assertEquals(2, cardLines("a".repeat(25)))   // 'a' is 8.26 dp with the margin: 23 fit the 196 dp inside the wrap width, 25 do not
         assertEquals(2, cardLines("one\ntwo")); assertEquals(3, cardLines("one\ntwo\nthree\nfour"))
         assertEquals(3, cardLines("x".repeat(500)))
         assertEquals(48f, cardHeight("Compost bins")); assertEquals(68f, cardHeight("one\ntwo")); assertEquals(88f, cardHeight("x".repeat(500)))
@@ -68,13 +77,13 @@ class FramesTest {
     /** The card's width (2026-09-20, `meta-optimizer` over the user's texts): fit to the text between 60 and 220, 8 dp a side; a hand's width wins. */
     @Test
     fun `a card is as wide as its text between the minimum and the wrap width, a hand's width wins`() {
-        assertEquals(101f, cardWidth(null)); assertEquals(CANVAS_CARD_MIN_W, cardWidth("Water"))                      // the caption's 10 × 8.5 + 16; 5 × 8.5 + 16 = 58.5 → 60
-        assertEquals(135f, cardWidth("Kitchen scraps"))                                                              // 14 × 8.5 + 16
+        assertEquals(textWidth("Empty card") + 2 * CANVAS_CARD_PAD, cardWidth(null), 0.01f); assertEquals(CANVAS_CARD_MIN_W, cardWidth("Ok"))      // the caption's own; Ok 20 + 24 = 44 → the 60 floor
+        assertEquals(textWidth("Kitchen scraps") + 2 * CANVAS_CARD_PAD, cardWidth("Kitchen scraps"), 0.01f)
         assertEquals(CANVAS_CARD_WRAP_W, cardWidth("Turn the compost every second week in spring"))                  // capped, then wrapped
-        assertEquals(135f, cardWidth("Kitchen scraps\nok"))                                                          // the longest line decides
-        assertEquals(24, cardChars(CANVAS_CARD_WRAP_W)); assertEquals(5, cardChars(CANVAS_CARD_MIN_W))
-        assertEquals(2, cardLines("Turn the compost every second week in spring"))                                   // 44 chars over 24
-        assertEquals(3, cardLines("Turn the compost every second week in spring", width = 100f))                     // a narrower hand width wraps more
+        assertEquals(cardWidth("Kitchen scraps"), cardWidth("Kitchen scraps\nok"))                                   // the widest line decides
+        assertEquals(2, cardLines("Turn the compost every second week in spring"))                                   // 327 dp of words over 196
+        assertEquals(6, wrappedLines("Turn the compost every second week in spring", 84f))                           // a narrower width wraps more (compost, 60.5 dp, sits alone on its line)…
+        assertEquals(3, cardLines("Turn the compost every second week in spring", width = 100f))                     // …and the card stops at three
         assertEquals(100f, cardWidth("Kitchen scraps", handWidth = 100f)); assertEquals(CANVAS_CARD_MIN_W, cardWidth("x", handWidth = 10f))
         // The stored `width`: the entity's default and zero read as derived, anything else as a hand's.
         assertEquals(null, card(0f, 0f).handWidth()); assertEquals(null, card(0f, 0f).copy(width = CANVAS_LEGACY_CARD_W).handWidth())
@@ -91,5 +100,18 @@ class FramesTest {
         assertEquals(300f, fit.panX, 0.001f); assertEquals(250f, fit.panY, 0.001f)
         // The embed: a 400 × 300 board in a 328 column → 280 × 300/400 + 48 = 258.
         assertEquals(258f, embedHeightForBoxes(boxes, 328f), 0.01f)
+    }
+
+    /** S14 (2026-09-21): a text's width is the font's own — Inter's advances at 14 sp — not a flat rate per character. */
+    @Test
+    fun `a text is as wide as its letters - Weeds wider per character than Lawn clippings, and no seed word is cut`() {
+        assertTrue(textWidth("Weeds") / 5 > textWidth("Lawn clippings") / 14)                       // 9.7 against 7.4 dp a character
+        assertEquals(106.94f * TEXT_WIDTH_MARGIN, textWidth("Shredded paper"), 0.05f)              // measured from inter_variable.ttf, opsz 14 / wght 400
+        assertEquals(charWidth('W'), 13.80f, 0.01f); assertEquals(charWidth('i'), 3.40f, 0.01f); assertEquals(charWidth('é'), TEXT_AVG_CHAR, 0f)
+        for (word in listOf("Weeds", "Wormery", "Compost", "Shredded paper", "Twigs and prunings", "MMMMMM"))
+            assertTrue(word, leafWidth(word) - CANVAS_LEAF_PAD >= textWidth(word))                 // the leaf's inner width holds its word
+        assertEquals(1, wrappedLines("one two", 100f)); assertEquals(2, wrappedLines("one two", 40f))
+        assertEquals(3, wrappedLines("x".repeat(30), 84f))                                          // a word wider than the line breaks by characters: 10 × 8.0 a line
+        assertEquals(2, wrappedLines("a\nb", 1000f)); assertEquals(1, wrappedLines("", 10f))
     }
 }

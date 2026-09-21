@@ -55,9 +55,8 @@ enum class TreeSide { RIGHT, LEFT, DOWN, UP }
 
 const val CANVAS_ROOT_W = 220f
 const val CANVAS_ROOT_H = 64f
-/** A leaf's line: `body` at 14 sp sits in 24 dp; its width from its characters. */
+/** A leaf's line: `body` at 14 sp sits in 24 dp; its width from its text (`textWidth`, S14). */
 const val CANVAS_LEAF_H = 24f
-const val CANVAS_LEAF_CHAR = 7.5f
 const val CANVAS_LEAF_PAD = 12f
 const val CANVAS_LEAF_MAX_CHARS = 40
 /** Between a parent's side and its children (horizontal structures) — Xmind's ≈ 48 px at 125 %. */
@@ -87,11 +86,8 @@ const val BONE_GAP = 28f
 const val BONE_INSET = 18f
 const val RIB_END_PAD = 40f
 
-/** A leaf's width from its text, as `estimateNodeSize` guesses a map node's. */
-fun leafWidth(text: String?): Float {
-    val n = text.orEmpty().ifBlank { "…" }.length.coerceIn(1, CANVAS_LEAF_MAX_CHARS)
-    return n * CANVAS_LEAF_CHAR + CANVAS_LEAF_PAD
-}
+/** A leaf's width from its text — the font's own advances (S14; `TextWidth.kt`) plus the padding, the text held to [CANVAS_LEAF_MAX_CHARS]. */
+fun leafWidth(text: String?): Float = textWidth(text.orEmpty().ifBlank { "…" }.take(CANVAS_LEAF_MAX_CHARS)) + CANVAS_LEAF_PAD
 
 class CanvasTree(nodes: List<CanvasNode>, val boardStructure: CanvasStructure, /** A page card's title by page id — its width (`cardWidth`). */ private val titleOf: (Long) -> String? = { null }) {
     val nodes: List<CanvasNode> = nodes
