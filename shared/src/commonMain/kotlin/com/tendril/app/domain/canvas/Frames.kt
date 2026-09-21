@@ -26,14 +26,16 @@ const val CANVAS_CARD_MAX_LINES = 3
  * user's own texts (`docs/critiques/card-width-optimizer.md`): **fit to the text between 60 and
  * 220 dp, 8 dp of padding a side** — 0.847 against 0.466 for the fixed strip and 0.761 for widths
  * snapped to steps; Xmind's rule measured live (a topic is its text plus padding, capped at a
- * "Lunghezza" then wrapped — 307 px at 18 px, 17 em; Tendril's 220 at 14 sp is 15.7 em). A
- * character is estimated at [CANVAS_CARD_CHAR] dp (the mind map's estimate), so the board's
- * hit-tests, the arrows' anchors, Tidy, the embed's fit and the JSON Canvas export all see one box.
+ * "Lunghezza" then wrapped — 307 px at 18 px, 17 em; Tendril's 220 at 14 sp is 15.7 em). The
+ * text's width is the font's own (S14, 2026-09-21 — `TextWidth.kt`: Inter's advances at 14 sp; it
+ * had been 8.5 dp a character), so the board's hit-tests, the arrows' anchors, Tidy, the embed's fit
+ * and the JSON Canvas export all see one box.
  */
 const val CANVAS_CARD_MIN_W = 60f
 const val CANVAS_CARD_WRAP_W = 220f
-const val CANVAS_CARD_PAD = 8f
-const val CANVAS_CARD_CHAR = 8.5f   // 0.6 em of the 14 sp text: 7.5 and 8 left no slack, and a word a hair over the estimate wrapped and was cut (the walk's first two grabs)
+/** The card's own padding beside its text — what `CanvasNodeCard` draws (4 dp around the badges' box + 8 inside). It was declared 8 while the
+ * card drew 12; the flat 8.5 dp a character hid the 4 dp, and the font's own advances (S14) showed every card 8 dp short. */
+const val CANVAS_CARD_PAD = 12f
 /** What an empty card shows, and the width it takes (the caption's own); the desktop discards an empty card whose editor closes. */
 const val CANVAS_EMPTY_CARD_TEXT = "Empty card"
 
@@ -43,30 +45,23 @@ const val CANVAS_LEGACY_CARD_W = 180f
 /** A card's `width` when a hand set it (the corner handle; Obsidian's rule), else null — the text decides. */
 fun CanvasNode.handWidth(): Float? = width.takeIf { type != CanvasNodeType.FRAME && it > 0f && it != CANVAS_LEGACY_CARD_W }
 
-/** The width a card takes for [text]: its longest line's estimate plus the padding, clamped; a [handWidth] wins, never under the minimum. */
+/** The width a card takes for [text]: its widest line (`textWidth`) plus the padding, clamped; a [handWidth] wins, never under the minimum. */
 fun cardWidth(text: String?, handWidth: Float? = null): Float {
     handWidth?.let { return it.coerceAtLeast(CANVAS_CARD_MIN_W) }
-    val longest = text.orEmpty().ifBlank { CANVAS_EMPTY_CARD_TEXT }.split('\n').maxOf { it.length }
-    return (longest * CANVAS_CARD_CHAR + 2 * CANVAS_CARD_PAD).coerceIn(CANVAS_CARD_MIN_W, CANVAS_CARD_WRAP_W)
+    val widest = text.orEmpty().ifBlank { CANVAS_EMPTY_CARD_TEXT }.split('\n').maxOf { textWidth(it) }
+    return (widest + 2 * CANVAS_CARD_PAD).coerceIn(CANVAS_CARD_MIN_W, CANVAS_CARD_WRAP_W)
 }
-
-/** The characters one line holds in a card [width] wide. */
-fun cardChars(width: Float): Int = ((width - 2 * CANVAS_CARD_PAD) / CANVAS_CARD_CHAR).toInt().coerceAtLeast(1)
 
 /**
  * The size count (2026-09-20, the user: the cards were "disproportionately big" — 180 × 90 dp
  * around one line): a card is **a strip that grows with its text**, Obsidian's proportion
  * (250 × 60 CSS px at rest, measured on L9; its cards grow when typed into). One line sits in
- * 48 dp, two in 68, three in 88 — the estimate the mind map uses (characters per line, hard
- * breaks counted), so the board's hit-tests, the arrows' anchors, the embed's fit and the JSON
- * Canvas export all see one box. A page card is one line (its title). Frames keep their own.
+ * 48 dp, two in 68, three in 88 — the estimate the mind map uses (`wrappedLines`: words on the
+ * font's advances, hard breaks counted), so the board's hit-tests, the arrows' anchors, the embed's
+ * fit and the JSON Canvas export all see one box. A page card is one line (its title). Frames keep their own.
  */
-fun cardLines(text: String?, width: Float = cardWidth(text)): Int {
-    val shown = text.orEmpty().ifBlank { " " }
-    val chars = cardChars(width)
-    val lines = shown.split('\n').sumOf { line -> ((line.length + chars - 1) / chars).coerceAtLeast(1) }
-    return lines.coerceIn(1, CANVAS_CARD_MAX_LINES)
-}
+fun cardLines(text: String?, width: Float = cardWidth(text)): Int =
+    wrappedLines(text.orEmpty().ifBlank { " " }, width - 2 * CANVAS_CARD_PAD).coerceIn(1, CANVAS_CARD_MAX_LINES)
 
 fun cardHeight(text: String?, nodeH: Float = CANVAS_NODE_H, width: Float = cardWidth(text)): Float = nodeH + (cardLines(text, width) - 1) * CANVAS_CARD_LINE
 
