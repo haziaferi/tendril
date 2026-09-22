@@ -429,6 +429,8 @@ class FakeCanvasEdgeDao(private val store: FakePageStore) : CanvasEdgeDao {
 
     override fun observeForCanvas(canvasId: Long): Flow<List<CanvasEdge>> =
         flowOf(store.canvasEdges.values.filter { it.canvasId == canvasId })
+
+    override suspend fun getById(id: Long): CanvasEdge? = store.canvasEdges[id]
 }
 
 class FakePageRelationDao(private val store: FakePageStore) : PageRelationDao {

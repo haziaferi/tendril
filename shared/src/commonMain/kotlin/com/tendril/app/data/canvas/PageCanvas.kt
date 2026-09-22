@@ -166,4 +166,12 @@ interface CanvasEdgeDao {
 
     @Query("SELECT * FROM canvas_edges WHERE canvasId = :canvasId")
     suspend fun getForCanvas(canvasId: Long): List<CanvasEdge>
+
+    /** §3.7 — the arrow editor's writes re-read through this rather than trusting the
+     * [CanvasEdge] the sheet was opened with. An edge is a small row edited by two controls at
+     * once (direction and label), and a whole-row `copy()` from a stale snapshot puts the other
+     * control's value back; re-reading makes that impossible instead of asking each caller to
+     * hold fresh state. */
+    @Query("SELECT * FROM canvas_edges WHERE id = :id")
+    suspend fun getById(id: Long): CanvasEdge?
 }

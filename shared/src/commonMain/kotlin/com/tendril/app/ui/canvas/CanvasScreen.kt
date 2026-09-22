@@ -489,7 +489,13 @@ fun CanvasScreen(
         )
     }
 
-    editingEdge?.let { edge ->
+    editingEdge?.let { captured ->
+        // §3.7 — the board's own list is the source of truth, not the value the tap captured.
+        // Without this the sheet's "Direction: …" line reads the row as it stood when it opened
+        // and never changes, however many times *Change* is pressed. The ViewModel refuses to
+        // write a stale row either way; this is what makes the sheet *show* the new one.
+        // Falls back to the captured value for the one frame between a delete and the dismiss.
+        val edge = edges.firstOrNull { it.id == captured.id } ?: captured
         EdgeEditor(
             edge = edge,
             viewOnly = viewOnly,

@@ -154,6 +154,7 @@ second copy of the reasoning.
 | 2026-09-22 (audit: every bulk write re-arms what it moved) | §9.7's invariant — every write that moves when something is next due re-arms it — held in the ViewModels and nowhere else. Four write paths reached Room around them and armed nothing: an Import and a Restore (`PortableArchive`, which now takes a required `rearmAlarms` supplier wired to `reconcileAlarms`), the folder merge (`SyncCoordinator`, unconditionally after a successful pass — `SnapshotMergeResult` does not report whether entries changed, and a flag for it would put the invariant behind a boolean a later path could forget to set), and the Habits widget's check-in callback (the one of five check-in paths that did not re-arm; its undo direction does not self-heal). A Restore was the worst of them: `reconcileAlarms` runs only in `MainActivity.onCreate` and the boot receiver, and `configChanges` swallows a rotation, so every restored reminder sat unarmed until the next cold start. Proved red-to-green on the two archive paths; the widget's is pinned by the compiler and a walk, a Glance `ActionCallback` being unreachable from the JVM suite. 941 tests. | §9.7 |
 | 2026-09-22 (audit: an ordinal `BYDAY` that can only limit) | §4.1.1 amended. `RecurrenceSpec.parse` returns null for an ordinal `BYDAY` beside `BYMONTHDAY`, and for one under DAILY or WEEKLY (RFC 5545 forbids a numeric `BYDAY` there) — the expander could only *expand*, so it dropped the term and emitted every `BYMONTHDAY` date: `FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR` produced all twelve 13ths of 2026, eleven phantom, against §4.1.1's own doctrine that a missing occurrence beats a phantom one. Such a rule now falls to its first occurrence alone. A plain `BYDAY` still limits (`BYMONTHDAY=13;BYDAY=FR` — Friday the 13th) and an ordinal alone still expands. Reachable from any imported `.ics` (`IcsImporter` passes an RRULE through verbatim), not only from the Google pull. Found by `/tendril-audit`; `RecurrenceExpansionTest` gains 2 cases. 947 tests. | §3.2, §4.1.1 |
 | 2026-09-22 (audit: a stale comment about the desktop's scheduler) | Comment only, no behaviour change. `WorkbenchCore`'s KDoc said desktop's `entryScheduleCoordinator` is "a no-op (see `NoOpEntryScheduleCoordinator` there)" — that class no longer exists anywhere in the tree, and desktop has wired the real `DesktopReminderScheduler` since B§13.6 #7 (which `DesktopAppContainer`'s own KDoc records). Read literally the old text says the desktop never arms anything, which is the wrong conclusion that let the merge go unplanned there (audit row 1.17). Logged because it is a `shared/` edit, not because a decision changed. | §9.7 |
+| 2026-09-22 (audit: the arrow editor wrote from a stale snapshot) | §3.7 traced against the tree, claim by claim — the first spec-trace pass this repository has run (both recorded `--full` audits skipped it for want of an `--against`). Four claims checked, three stale, one accurate and understated. **Stale:** "not available on desktop" (it has been since 2026-09-11, which the *companion spec already recorded* — the two documents disagreed for eleven days); "the screen and ViewModel live in `Tendril android`" (both in `shared/commonMain/ui/canvas/`, routed by `PageRoute`); "`updateTitle` is the one mutation outside the funnel" (three are — `trashPage` and `saveAsTemplate` joined it, all three gated, so the count was stale and not the guarantee). **Accurate:** the arrow editor writes from the snapshot it was opened with. Its recorded consequence, a direction stuck one step past the start, is the mild half: the label field fires per keystroke and wrote `edge.copy(label = …)` on that same snapshot, so typing a label put the *opening* direction back — a change that had landed, silently undone, in a section that claimed neither defect was data-loss. `CanvasEdgeDao.getById` added (a `@Query`, so no schema version and no migration); `cycleEdgeDirection` and `setEdgeLabel` re-read through it and take only `id` from their argument, following §9.7's precedent that correctness belongs to the write rather than to each caller's freshness; `CanvasScreen` resolves `editingEdge` against the live `edges` list so the sheet shows the new value. `CanvasStaleEdgeTest` (3 cases), both defect cases red before green. The display half is pinned by the walk, not by a test. 945 → 948 tests. | §3.7, §9.4 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -2486,9 +2487,14 @@ nobody chose from one they did. What shipped:
 - One gate, in `launchAndTouch`. Every node and edge mutation already funnelled through that helper
   (see the sync note below), so the gate is a property of *making a canvas write* rather than a line
   each future mutation has to remember to add.
-- `updateTitle` carries its own gate, because it is the one mutation outside the funnel: it writes
-  the `pages` row directly, and a guard placed only in the funnel would have left the rename — and
-  the `updatedAt` bump it carries — completely ungated.
+- `updateTitle` carries its own gate, because it writes the `pages` row directly and a guard
+  placed only in the funnel would have left the rename — and the `updatedAt` bump it carries —
+  completely ungated. *(**Corrected 2026-09-22, spec trace.** This read "the one mutation outside
+  the funnel". Two more have joined it since: `trashPage` (the phone's fix PR, P5 2026-09-18) and
+  `saveAsTemplate` (§0.10 item 15). Both carry the same `if (locked()) return`, so the lock holds
+  on all three — the count was stale, not the guarantee. Pinned by `ViewOnlySurfacesGuardTest`,
+  which has a case for the rename and one for the trash; `saveAsTemplate` under the lock is
+  gated and untested.)*
 - Refusing before the write also refuses the bump. A bump under the lock would be a claim of
   authorship for an edit nobody made, which is enough on its own to outrank a real edit waiting on
   another device (§9.4).
@@ -2538,6 +2544,26 @@ desktop sync reads, merges and re-exports canvas nodes and edges it has no way t
 correct behaviour — a client must not drop what it cannot render — but it means the desktop is a
 full participant in canvas sync while showing a placeholder.
 
+*(**Superseded 2026-09-22, spec trace — the paragraph above describes a state that no longer
+exists, and is kept only so the drift is legible.** Canvas is on the desktop and has been since
+the screen moved: `CanvasScreen` and `CanvasViewModel` are in
+`shared/src/commonMain/kotlin/com/tendril/app/ui/canvas/`, not in `Tendril android`, and
+`ui/nav/PageRoute.kt` routes `PageKind.CANVAS` straight to `CanvasScreen` for both callers. The
+desktop reaches that route through `WorkbenchScaffold` (`Main.kt:326`) and through its pop-out
+windows (`PopOutWindows.kt:224`). No `NotAvailableOnDesktop("Canvas")` stand-in remains anywhere
+in `Tendril windows/src` — `WorkbenchScaffold`'s own comment records that the placeholders the
+slot pattern was built for are gone. So the sync asymmetry this paragraph explains is not a
+live consideration: the desktop draws what it merges.
+
+The part worth keeping: **the companion spec was right and this one was not.** `Tendril
+windows/tendril-windows-spec.md` has carried a Revision Log row reading "2026-09-11 (Canvas on
+desktop) — `shared/` gains `ui/canvas/` … moved from the Android app" since the day it happened,
+and records the stand-in being replaced. So the two documents contradicted each other for eleven
+days and nothing noticed, because nothing reads them together. That is the same failure the
+both-platforms rule was written for after row 1.17, one level up: the rule says to check the other
+platform's *code* before writing a finding, and this says to check the other platform's *record*
+before trusting this one. Found by tracing §3.7's claims against the tree; no code changed.)*
+
 **Known open defects, recorded here rather than only in `docs/audit-2026-09-04.md`** (§1.1 and §1.2
 there; both re-read against the tree on 2026-09-07 and both still present): the arrow hit-test is
 implemented inside a drag detector, whose callback only fires after touch slop, so a *tap* on an
@@ -2546,6 +2572,31 @@ which also makes the View-Only note above ("tapping an arrow to read its label s
 describe an affordance that does not currently work. And the arrow editor operates on the captured
 snapshot of the edge it was opened with, so direction never cycles past one step and the displayed
 direction goes stale. Neither is a data-loss bug; both make a shipped feature partly unreachable.
+
+**Both closed 2026-09-22 (spec trace), and the second was worse than this recorded.**
+
+*The hit-test* had already been fixed before this trace, on Item 15's walk, and the paragraph above
+simply never caught up: the tap is now an `awaitEachGesture` loop that takes the first down without
+consuming it and acts on `waitForUpOrCancellation`, so a drag pans and a tap picks. The comment at
+the call site records why the old `detectDragGestures` form had to go — it consumed every drag past
+touch slop and cancelled the board's pan on both platforms, moving a 380 px swipe by 40.
+
+*The stale editor* was still live, and the consequence recorded here — a direction that will not
+cycle past one step — is the mild half. The sheet's label field calls `onSetLabel` on **every
+keystroke**, and `setEdgeLabel` wrote `edge.copy(label = …)` on the snapshot the sheet was opened
+with. So changing an arrow's direction and then typing in its label put the *opening* direction
+back: a change that had landed was silently undone by typing, which is a data-loss bug, and this
+section said there was none. Proved red before green by `CanvasStaleEdgeTest` (3 cases), which
+drives the ViewModel the way the sheet does — one captured `CanvasEdge`, used more than once.
+
+The fix follows §9.7's precedent rather than patching the two symptoms. Leaving correctness to
+each call site holding fresh state is what produced four separate re-arm defects, so both edge
+writes now re-read the row through the new `CanvasEdgeDao.getById` and take only `id` from their
+argument; a stale snapshot is merely stale. `?: return` covers an edge deleted under an open sheet,
+or replaced wholesale by a merge — §9.4's Pass 4 re-inserts, so the id genuinely goes. Separately
+`CanvasScreen` resolves `editingEdge` against the live `edges` list, which is what makes the
+sheet's "Direction: …" line *show* the new value; that half is pinned by the walk, not by a test.
+A `@Query` adds no schema version, so the migration chain is untouched.
 
 ---
 
