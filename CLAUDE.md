@@ -54,6 +54,7 @@ it promised, or whether a test would notice if a guard disappeared.
 python tools/spec_trace.py                        # which declarations no test even names
 python tools/mutate.py --symbol addEdge --list    # which guards there are, and what would run
 python tools/mutate.py --symbol addEdge           # delete one, run its tests, expect red
+python tools/mutate.py --self-check --quick       # before trusting a batch (free)
 ```
 
 `spec_trace.py` resolves each spec section to the production declarations that cite it — a `§` in
@@ -66,6 +67,20 @@ four minutes for `shared/`, so `--list` first.
 Neither belongs in `audit.py`'s PASS/FAIL. An unpinned claim is a question, not a regression, and a
 check that fails on every honest tree gets suppressed within a week — taking the real findings with
 it.
+
+**A SURVIVED is a claim about the tool before it is a claim about the code.** `mutate.py` has
+produced one wrong report, and the cause was not a coding mistake: it was validated with `--symbol`
+on a public function, then trusted with `--section` over private helpers — a shape it had never
+been asked — and scoping collapsed to one unrelated test class. So the rule, which generalises past
+this tool: **validate an instrument in the same mode, and on the same shape of input, as the run
+you are about to trust, including one case whose answer you already know.** `--self-check` is that
+rule made executable; its static tier runs automatically before any batch and aborts on failure.
+
+Three specific ways a SURVIVED can still be an artefact rather than a finding, all of them now
+reported rather than silent: the symbol has no unit test at all (skipped); its only coverage is in
+`androidTest/`, which this tool does not run (skipped, or flagged on the verdict); or the guard is
+inside a private helper whose callers are what the tests actually name (fixed by scoping through
+the enclosing type).
 
 ## A finding is a hypothesis until a command proves it
 

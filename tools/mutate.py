@@ -21,7 +21,26 @@ Usage:
     python3 tools/mutate.py --symbol launchAndTouch --list   # what it would do, no build
     python3 tools/mutate.py --symbol launchAndTouch          # run it
     python3 tools/mutate.py --section 3.7 --list             # every guard a section's code carries
+    python3 tools/mutate.py --self-check --quick             # the free half of the known answers
+    python3 tools/mutate.py --self-check                     # all of them, ~3 Gradle runs
     python3 tools/mutate.py --restore                        # after a crash
+
+**Why there is a self-check at all.** This tool has produced exactly one wrong report, and it
+was not a coding mistake: it was validated with `--symbol` on a public function and then trusted
+with `--section` over private helpers, a shape it had never been asked. Scoping collapsed to one
+unrelated test class and the last-write-wins guard came back SURVIVED — an artefact presented as
+a finding, which is the failure this tool exists to prevent.
+
+So `SELF_CHECK` holds known answers, each recording the way the tool was wrong and demanding one
+verdict in each direction: an instrument that answered KILLED for everything would satisfy every
+KILLED anchor and mean nothing. The **static tier runs before every batch** because it costs
+milliseconds and two of the three real defects were visible in it — a guard the planner refused
+to see, and a scope collapsed to one class. A failure there aborts the run: no verdict from a
+wrong planner is worth the half-hour it takes to produce.
+
+A `KILLED` anchor that stops killing means the tool or its test broke. A `SURVIVED` anchor that
+starts killing means somebody wrote the missing test, which is good news and a **stale** anchor
+rather than a fault; they are reported differently, because a check that cries wolf gets ignored.
 
 **It never touches your working tree.** Every mutation is applied inside a throwaway `git
 worktree`, and the run refuses to start unless that worktree is clean. `tools/hooks/` exists
@@ -174,8 +193,19 @@ def find_declaration(symbol: str):
             if not m or m.group(2) != symbol:
                 continue
             depth, started, end = 0, False, None
+            own_indent = len(m.group(1))
             for j in range(i, min(i + 400, len(lines))):
                 probe = blanked[j] if j < len(blanked) else ""
+                # An expression body has no braces at all: `fun hasPermission(): Boolean =` runs
+                # to the end of its expression and stops. Without this the scan kept going until
+                # it found some *later* function's `{` and closed there, so a guard belonging to
+                # the next function was attributed to this one -- the fourth time a body range
+                # over-ran in this file's history, and the one the self-check anchor caught.
+                if not started and j > i:
+                    nxt = DECL_START.match(lines[j])
+                    if nxt and len(nxt.group(1)) <= own_indent:
+                        end = j - 1
+                        break
                 depth += probe.count("{") - probe.count("}")
                 if "{" in probe:
                     started = True
@@ -380,8 +410,9 @@ def first_failure(out: str) -> str:
     return m.group(1).strip() if m else ""
 
 
-def mutate_one(rel_path, lineno, text, classes, index, total, instrumented=()):
-    say("\n[%d/%d] %s:%d" % (index, total, rel_path, lineno))
+def mutate_one(rel_path, lineno, text, classes, index, total, instrumented=(), label=None):
+    head = (label + "\n        ") if label else ""
+    say("\n[%d/%d] %s%s:%d" % (index, total, head, rel_path, lineno))
     say("        %s" % text)
     started = time.time()
     original = apply_deletion(rel_path, lineno)
@@ -409,6 +440,188 @@ def mutate_one(rel_path, lineno, text, classes, index, total, instrumented=()):
 
 
 # --------------------------------------------------------------------- cli
+
+# ------------------------------------------------------- the known-answer set
+
+# Every entry records a way this tool has actually been wrong, in the shape that made it wrong.
+# The rule they enforce: **validate an instrument in the same mode, and on the same shape of
+# input, as the run you are about to trust.** The one wrong report this tool has produced came
+# from validating it on a public function with `--symbol` and then trusting it over a section
+# full of private helpers — a case it had never been asked.
+#
+# `expect` is the verdict a mutation must produce. `needs` is a static property of the planner,
+# checked for free.
+SELF_CHECK = (
+    {
+        "name": "a guard that returns a value is planned, not skipped",
+        "symbol": "resolveFromNotification",
+        "needs": "planned",
+        "guard": "return false",
+        "catches": "GUARD accepted only a bare `return`, so `if (appLockEnabled) return false` "
+                   "planned nothing and printed 'no single-line guard in its body' — a blind "
+                   "spot that reads like a clean result",
+    },
+    {
+        "name": "a private helper is scoped through its owner",
+        "symbol": "mergeEntryContent",
+        "needs": "scope-includes",
+        "test": "MergeTouchedEntriesTest",
+        "catches": "scoping by the helper's own name selected one unrelated class, and the "
+                   "last-write-wins guard came back SURVIVED — the session's one wrong report",
+    },
+    {
+        "name": "an instrumented-only symbol is skipped rather than run",
+        "symbol": "OverdueAlarmReceiver",
+        "needs": "instrumented-only",
+        "catches": "a SURVIVED for a symbol the JVM suite cannot reach would be an artefact of "
+                   "scope, not a finding",
+    },
+    {
+        "name": "the last-write-wins guard is pinned",
+        "symbol": "mergeEntryContent",
+        "guard": "!remoteUpdatedAt.isAfter(local.updatedAt)",
+        "expect": "KILLED",
+        "catches": "the private-helper scoping bug, end to end and in the verdict itself",
+    },
+    {
+        "name": "the View-Only funnel gate is pinned",
+        "symbol": "launchAndTouch",
+        "guard": "if (locked()) return",
+        "expect": "KILLED",
+        "catches": "basic wiring — mutation applied, tests scoped, verdict read back",
+    },
+    {
+        "name": "a guard no unit test covers survives",
+        "symbol": "onCreate",
+        "guard": "notificationsSettled",
+        "expect": "SURVIVED",
+        "optional": True,
+        "catches": "the other half of the discrimination: a tool that returned KILLED for "
+                   "everything would pass every case above and mean nothing",
+    },
+)
+
+
+def guard_line_for(symbol: str, needle: str):
+    """The first guard inside `symbol` whose text contains `needle`, as (rel_path, lineno, text).
+
+    Located by text rather than by line number on purpose: an anchor pinned to
+    `SnapshotSyncOrchestrator.kt:1523` would rot on the next edit above it and report a tool
+    failure that is really a line shift.
+    """
+    hit = find_declaration(symbol)
+    if not hit:
+        return None
+    path, start, end = hit
+    guards, _skipped = guards_in(path, start, end)
+    for no, text in guards:
+        if needle in text:
+            return spec_trace.rel(path), no, text
+    return None
+
+
+def scope_for(symbol: str):
+    """The unit and instrumented classes a run of `symbol` would use — planner logic, shared."""
+    unit, instrumented = test_classes_naming(symbol)
+    hit = find_declaration(symbol)
+    if hit:
+        owner = owner_of(hit[0], hit[1])
+        if owner and owner != symbol:
+            o_unit, o_instr = test_classes_naming(owner)
+            unit = sorted(set(unit) | set(o_unit))
+            instrumented = sorted(set(instrumented) | set(o_instr))
+    return unit, instrumented
+
+
+def static_self_check(verbose=True):
+    """The free tier: everything checkable without starting Gradle.
+
+    Run before every batch, because two of the three real defects were visible here — a guard the
+    planner refused to see, and a scope collapsed to one class — and finding them costs
+    milliseconds rather than the half-hour the batch would have wasted producing wrong verdicts.
+    """
+    failures = []
+    for case in SELF_CHECK:
+        need = case.get("needs")
+        if not need:
+            continue
+        ok, detail = True, ""
+        if need == "planned":
+            found = guard_line_for(case["symbol"], case["guard"])
+            ok = found is not None
+            detail = found[2] if found else "no guard matching %r in %s" % (case["guard"], case["symbol"])
+        elif need == "scope-includes":
+            unit, _ = scope_for(case["symbol"])
+            ok = any(c.endswith(case["test"]) for c in unit)
+            detail = "%d class(es) in scope" % len(unit)
+        elif need == "instrumented-only":
+            unit, instrumented = scope_for(case["symbol"])
+            ok = not unit and bool(instrumented)
+            detail = "unit=%d instrumented=%d" % (len(unit), len(instrumented))
+        if verbose:
+            say("  %-4s %-52s %s" % ("ok" if ok else "FAIL", case["name"], detail))
+        if not ok:
+            failures.append(case)
+    return failures
+
+
+def self_check(dynamic=True) -> int:
+    say("static checks (no build):")
+    failures = static_self_check()
+    if failures:
+        say("\n%d static check(s) failed — the planner is wrong, so no verdict it produces "
+            "means anything. Not running the mutations." % len(failures))
+        for c in failures:
+            say("   %s\n      catches: %s" % (c["name"], c["catches"]))
+        return 1
+    if not dynamic:
+        say("\nstatic only (--quick). The verdict checks below were not run.")
+        return 0
+
+    runnable = [c for c in SELF_CHECK if c.get("expect")]
+    say("\n%d verdict check(s), one Gradle run each — several minutes." % len(runnable))
+    if not worktree_ready():
+        return 1
+
+    bad, stale = [], []
+    for i, case in enumerate(runnable, 1):
+        found = guard_line_for(case["symbol"], case["guard"])
+        if not found:
+            if case.get("optional"):
+                say("\n[%d/%d] %s — no matching guard; skipped (optional anchor)"
+                    % (i, len(runnable), case["name"]))
+                continue
+            bad.append((case, "the guard this anchor names is gone"))
+            continue
+        rel_path, no, text = found
+        unit, instrumented = scope_for(case["symbol"])
+        if not unit:
+            say("\n[%d/%d] %s — nothing in the unit suite names it; skipped"
+                % (i, len(runnable), case["name"]))
+            continue
+        got = mutate_one(rel_path, no, text, unit, i, len(runnable), instrumented,
+                         label=case["name"])
+        if got == case["expect"]:
+            continue
+        # A KILLED anchor that stops killing means the tool (or the test) broke. A SURVIVED
+        # anchor that starts killing means somebody wrote the missing test — good news, and a
+        # stale anchor rather than a fault. Saying "FAIL" for both would teach people to ignore
+        # this.
+        if case["expect"] == "SURVIVED" and got == "KILLED":
+            stale.append((case, got))
+        else:
+            bad.append((case, "expected %s, got %s" % (case["expect"], got)))
+
+    say("")
+    for case, why in bad:
+        say("FAIL  %s — %s\n      catches: %s" % (case["name"], why, case["catches"]))
+    for case, got in stale:
+        say("STALE %s — now %s. Coverage improved; retire or replace this anchor."
+            % (case["name"], got))
+    if not bad:
+        say("self-check passed%s." % (" (%d anchor(s) stale)" % len(stale) if stale else ""))
+    return 1 if bad else 0
+
 
 def targets_for(args):
     """[(symbol, path, start, end)] for whatever was asked for."""
@@ -438,12 +651,18 @@ def main() -> int:
     g.add_argument("--symbol", help="one declaration, by name")
     g.add_argument("--section", help="every declaration citing this spec section")
     g.add_argument("--restore", action="store_true", help="clean the worktree after a crash")
+    g.add_argument("--self-check", action="store_true", dest="self_check",
+                   help="reproduce the known-answer set before trusting a run")
     ap.add_argument("--list", action="store_true", help="show what would run; build nothing")
     ap.add_argument("--max", type=int, default=0, help="stop after this many mutations")
+    ap.add_argument("--quick", action="store_true", help="with --self-check: static tier only")
     args = ap.parse_args()
 
     if args.restore:
         return restore()
+
+    if args.self_check:
+        return self_check(dynamic=not args.quick)
 
     found = targets_for(args)
     if not found:
@@ -504,7 +723,16 @@ def main() -> int:
     if not runnable:
         print("\nnothing to run.")
         return 0
-    if not worktree_ready():
+    # The free tier, before anything expensive. Two of the three defects that produced wrong
+    # verdicts were visible here, and finding them costs milliseconds against the half-hour a
+    # batch takes to produce answers nobody can trust.
+    broken = static_self_check(verbose=False)
+    if broken:
+        print("\nself-check failed before running anything:")
+        for c in broken:
+            print("   %s\n      catches: %s" % (c["name"], c["catches"]))
+        print("Run `python tools/mutate.py --self-check --quick` for detail. No verdict this "
+              "tool produced would mean anything until that passes.")
         return 1
 
     print("\n%d mutation(s), one Gradle run each, in %s" % (len(runnable), WORKTREE))

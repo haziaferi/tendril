@@ -194,3 +194,64 @@ def test_a_private_helper_is_scoped_through_its_owner():
     combined = set(own) | set(via_owner)
     assert len(combined) > len(own), "the owner added nothing; scoping is back to the helper alone"
     assert any(c.endswith("MergeTouchedEntriesTest") for c in combined), sorted(combined)
+
+
+# --- the self-check itself ----------------------------------------------------
+
+def test_the_static_tier_passes_on_the_real_tree():
+    assert mu.static_self_check(verbose=False) == []
+
+
+def test_the_static_tier_catches_the_guard_regex_regression(monkeypatch):
+    # Revert GUARD to the bare-`return` form it had when it planned nothing for
+    # `if (appLockEnabled) return false` and printed "no single-line guard in its body".
+    import re as _re
+    monkeypatch.setattr(
+        mu, "GUARD",
+        _re.compile(r"^(\s*)if\s*\(.+\)\s*(?:return|continue|break)(?:@\w+)?\s*(?://.*)?$"),
+    )
+    failed = [c["needs"] for c in mu.static_self_check(verbose=False)]
+    assert "planned" in failed, failed
+
+
+def test_the_static_tier_catches_the_scoping_regression(monkeypatch):
+    # The bug that produced this session's one wrong report: without the owner, a private
+    # helper's scope collapses to whatever happens to name it, and its guard reads SURVIVED.
+    monkeypatch.setattr(mu, "owner_of", lambda path, line: None)
+    failed = [c["needs"] for c in mu.static_self_check(verbose=False)]
+    assert "scope-includes" in failed, failed
+
+
+def test_the_static_tier_catches_instrumented_tests_being_counted_as_unit_coverage(monkeypatch):
+    # If androidTest classes leaked into the unit bucket, a symbol the JVM suite cannot reach
+    # would be run anyway and its guard reported SURVIVED.
+    real = mu.test_classes_naming
+    monkeypatch.setattr(mu, "test_classes_naming", lambda s: (sum(real(s), []), []))
+    failed = [c["needs"] for c in mu.static_self_check(verbose=False)]
+    assert "instrumented-only" in failed, failed
+
+
+def test_every_anchor_records_what_it_catches():
+    # An anchor whose reason is not written down becomes a case nobody dares delete and nobody
+    # understands — which is how a check ends up suppressed instead of fixed.
+    for case in mu.SELF_CHECK:
+        assert case.get("catches"), case["name"]
+        assert case.get("needs") or case.get("expect"), case["name"]
+
+
+def test_the_anchor_set_discriminates_in_both_directions():
+    # A tool that answered KILLED for everything would satisfy every KILLED anchor. The set is
+    # only meaningful if it also demands a SURVIVED.
+    verdicts = {c["expect"] for c in mu.SELF_CHECK if c.get("expect")}
+    assert "KILLED" in verdicts and "SURVIVED" in verdicts, verdicts
+
+
+def test_an_expression_bodied_function_does_not_swallow_the_next_one():
+    # `fun hasPermission(): Boolean =` has no braces. The scan used to run on until it found some
+    # later function's `{`, so a guard belonging to that function was attributed here — the
+    # fourth time a body range over-ran, and the one the self-check's own anchor caught.
+    hit = mu.find_declaration("hasPermission")
+    assert hit, "CalendarProviderSync.hasPermission went missing"
+    path, start, end = hit
+    assert end - start < 10, "expression body spans %d lines" % (end - start)
+    assert mu.guards_in(path, start, end)[0] == [], "it has no guard of its own"
