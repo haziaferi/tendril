@@ -65,6 +65,14 @@ android {
     }
 }
 
+// PopulatedMigrationTest builds its starting file from `shared/schemas/<version>.json`, read off
+// the disk rather than from the test classpath, so Gradle does not see those files as inputs of
+// the unit-test task and keeps a cached pass through a schema-only change (2026-09-22 audit: a
+// byte appended to 8.json, `testDebugUnitTest UP-TO-DATE`). Declared here so the task re-runs.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("../shared/schemas")).withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -76,7 +84,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
-    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment.ktx)
