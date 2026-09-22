@@ -145,3 +145,50 @@ fun auditContrast(
     val ratio = worstCaseContrast(fg, widgetBg, opacityPct)
     ContrastResult(role, ratio, ratio >= role.threshold)
 }
+
+/**
+ * §8.6 resolved (2026-09-22, §10's "widget wallpaper model"): the wallpaper the widget actually
+ * sits on, as the system reports it — `WallpaperColors`' primary colour and its dark-text hint.
+ * The bracket (§8.2) stays the worst case; this is the phone's own case, so the readout can say
+ * what a role reads like here and name the smallest opacity that passes on it.
+ */
+data class Wallpaper(val primary: Rgb, val light: Boolean)
+
+/** [textRgb] against the widget background composited over the one wallpaper colour. */
+fun wallpaperContrast(textRgb: Rgb, widgetBg: Rgb, opacityPct: Int, wallpaper: Rgb): Double =
+    contrastRatio(textRgb, compositeRgb(widgetBg, wallpaper, opacityPct))
+
+/** The §8.4 readout over the real wallpaper rather than the bracket; roles and thresholds the same. */
+fun auditOnWallpaper(
+    register: Register,
+    dark: Boolean,
+    widgetBg: Rgb,
+    opacityPct: Int,
+    shade: Int,
+    hueOffsetDeg: Int,
+    wallpaper: Rgb,
+    roleRgb: (ContrastRole) -> Rgb,
+): List<ContrastResult> = ContrastRole.entries.map { role ->
+    val fg = if (role == ContrastRole.ACCENT2) currentAccent2(register, dark, shade, hueOffsetDeg) else roleRgb(role)
+    val ratio = wallpaperContrast(fg, widgetBg, opacityPct, wallpaper)
+    ContrastResult(role, ratio, ratio >= role.threshold)
+}
+
+/**
+ * The smallest opacity (a multiple of [step]) at which every role passes on [wallpaper] — the
+ * suggestion the configure screen offers in the one control it has (§8.7 keeps mode off it).
+ * Null when even 100 % fails, which the register's own solve makes impossible on a plain ground
+ * but a shade / hue choice can reach.
+ */
+fun suggestedOpacity(
+    register: Register,
+    dark: Boolean,
+    widgetBg: Rgb,
+    shade: Int,
+    hueOffsetDeg: Int,
+    wallpaper: Rgb,
+    roleRgb: (ContrastRole) -> Rgb,
+    step: Int = 5,
+): Int? = (0..100 step step).firstOrNull { pct ->
+    auditOnWallpaper(register, dark, widgetBg, pct, shade, hueOffsetDeg, wallpaper, roleRgb).all { it.pass }
+}
