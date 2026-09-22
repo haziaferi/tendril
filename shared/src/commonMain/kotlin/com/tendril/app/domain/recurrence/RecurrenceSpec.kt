@@ -106,6 +106,17 @@ data class RecurrenceSpec(
 
             val weekStart = parts["WKST"]?.let { WEEKDAYS[it.trim().uppercase()] ?: return null } ?: DayOfWeek.MONDAY
 
+            // An ordinal BYDAY term ("the first Friday") can only *expand*, and only under
+            // MONTHLY or YEARLY — RFC5545 forbids a numeric BYDAY under any other FREQ. Beside
+            // BYMONTHDAY it would have to limit instead, which this expander cannot do, so the
+            // term was dropped and every BYMONTHDAY date emitted: `BYMONTHDAY=13;BYDAY=1FR`
+            // asks for a 13th that is also a first Friday, which no month has, and produced all
+            // twelve 13ths of the year. That is the phantom occurrence this class refuses, so
+            // the combination joins [UNSUPPORTED] — the caller shows the first occurrence alone.
+            if (byDay.any { it.ordinal != null } &&
+                (byMonthDay.isNotEmpty() || frequency == Frequency.DAILY || frequency == Frequency.WEEKLY)
+            ) return null
+
             return RecurrenceSpec(frequency, interval, count, until, byDay, byMonthDay, byMonth, weekStart)
         }
 
