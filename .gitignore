@@ -50,7 +50,13 @@ core.*
 .kotlin/
 
 # --- Local agent/tool state -----------------------------------------------------
-.claude/
+# The contents, not the directory itself: git does not descend into an excluded directory, so
+# `.claude/` would make the negation below unreachable.
+.claude/*
+# Project skills are shared work, not local state: a skill is a checked-in procedure this repo's
+# work depends on, the same way tools/audit.py is. Settings, worktrees and run directories stay
+# ignored by the line above.
+!.claude/skills/
 
 # --- OS -------------------------------------------------------------------------
 .DS_Store
