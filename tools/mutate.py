@@ -380,7 +380,7 @@ def first_failure(out: str) -> str:
     return m.group(1).strip() if m else ""
 
 
-def mutate_one(rel_path, lineno, text, classes, index, total):
+def mutate_one(rel_path, lineno, text, classes, index, total, instrumented=()):
     say("\n[%d/%d] %s:%d" % (index, total, rel_path, lineno))
     say("        %s" % text)
     started = time.time()
@@ -394,6 +394,16 @@ def mutate_one(rel_path, lineno, text, classes, index, total):
         io.open(p, "w", encoding="utf-8", newline="").write("\n".join(s))
     mins = (time.time() - started) / 60.0
     note = first_failure(out) if verdict == "KILLED" else ""
+    if verdict == "SURVIVED" and instrumented:
+        # The third way a SURVIVED can be an artefact rather than a finding. A symbol with *no*
+        # unit tests is skipped outright, but one with unit tests that happen not to cover this
+        # guard, plus real coverage in `androidTest/`, gets run and comes back green.
+        # `AlarmScheduler`'s `if (!triggerAt.isAfter(Instant.now())) return` is pinned by
+        # `aPastDueTaskSchedulesNothing` — an instrumented test this tool does not run — and was
+        # reported as unprotected.
+        note = "but %s names it and runs only on the phone; check there before believing this" % (
+            ", ".join(c.split(".")[-1] for c in instrumented)
+        )
     say("        %-9s %.1f min  %s" % (verdict, mins, note))
     return verdict
 
@@ -500,7 +510,7 @@ def main() -> int:
     print("\n%d mutation(s), one Gradle run each, in %s" % (len(runnable), WORKTREE))
     tally = {}
     for i, (symbol, rel_path, no, text, classes, _instr) in enumerate(runnable, 1):
-        v = mutate_one(rel_path, no, text, classes, i, len(runnable))
+        v = mutate_one(rel_path, no, text, classes, i, len(runnable), _instr)
         tally[v] = tally.get(v, 0) + 1
 
     print("\n" + "  ".join("%s %d" % (k, v) for k, v in sorted(tally.items())))

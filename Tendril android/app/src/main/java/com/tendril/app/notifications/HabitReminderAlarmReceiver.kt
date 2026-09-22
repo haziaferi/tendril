@@ -49,10 +49,14 @@ class HabitReminderAlarmReceiver : BroadcastReceiver() {
                 // lock is on. Posting the reminder itself stays allowed: reading a habit title
                 // on the lock screen is the exposure §3.6 accepts for widgets, and suppressing
                 // the reminder would break the feature to protect nothing new.
-                if (checkingOff && container.appLockPreferences.enabled.value) return@launch
                 if (checkingOff) {
-                    container.checkInHabitUseCase.checkIn(habitId)
-                    NotificationManagerCompat.from(context).cancel(notificationId(habitId))
+                    val checked = checkInFromNotification(
+                        appLockEnabled = container.appLockPreferences.enabled.value,
+                        habitId = habitId,
+                    ) { container.checkInHabitUseCase.checkIn(it) }
+                    // Only a write earns the dismissal, as on the entry side: clearing a refused
+                    // notification would make "nothing happened" look like "checked off".
+                    if (checked) NotificationManagerCompat.from(context).cancel(notificationId(habitId))
                 } else {
                     postReminder(context, container, habitId)
                 }
@@ -122,4 +126,32 @@ class HabitReminderAlarmReceiver : BroadcastReceiver() {
         fun notificationId(habitId: Long): Int =
             NOTIFICATION_ID_BASE + (habitId and 0x7FFF).toInt()
     }
+}
+
+/**
+ * §3.6 — whether the habit reminder's check-off action may write.
+ *
+ * The third surface of the App Lock hole, and the one §3.6 never recorded: it reconciled the
+ * Habits widget on 2026-09-04, recorded the overdue notification on 2026-09-06, and missed the
+ * habit *notification* sitting between them, which reaches the same
+ * [com.tendril.app.domain.CheckInHabitUseCase] write by a third route.
+ *
+ * Lifted out of [HabitReminderAlarmReceiver.onReceive] for the same reason as
+ * [resolveFromNotification]: a receiver body only runs inside a broadcast dispatch, so the JVM
+ * suite cannot reach it, and an instrumented test would write to the device's real database. The
+ * first version of this fix left the rule inline and `tools/mutate.py` reported the guard
+ * SURVIVED — deleting it broke nothing — which is how a guard added *for* a security hole ends
+ * up with nothing defending it.
+ *
+ * `false` means refused. Posting the reminder itself stays ungated: reading a habit title on the
+ * lock screen is the exposure §3.6 already accepts for widgets.
+ */
+internal suspend fun checkInFromNotification(
+    appLockEnabled: Boolean,
+    habitId: Long,
+    checkIn: suspend (Long) -> Unit,
+): Boolean {
+    if (appLockEnabled) return false
+    checkIn(habitId)
+    return true
 }

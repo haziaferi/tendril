@@ -102,4 +102,24 @@ class NotificationActionAppLockTest {
             resolveFromNotification(true, 1L, EntryActionReceiver.ACTION_DONE, recorder::resolve),
         )
     }
+
+    @Test
+    fun `checking a habit off from the keyguard writes nothing while App Lock is on`() = runBlocking {
+        // The third surface (see `checkInFromNotification`). Added after `tools/mutate.py`
+        // reported the first version of this guard SURVIVED: it was written inline in
+        // `onReceive`, where nothing could reach it, so a guard added for a security hole had
+        // nothing defending it.
+        val checked = mutableListOf<Long>()
+        val wrote = checkInFromNotification(appLockEnabled = true, habitId = 3L) { checked += it }
+        assertFalse("the action reported a check-in it did not make", wrote)
+        assertEquals(emptyList<Long>(), checked)
+    }
+
+    @Test
+    fun `checking a habit off still works when App Lock is off`() = runBlocking {
+        val checked = mutableListOf<Long>()
+        val wrote = checkInFromNotification(appLockEnabled = false, habitId = 3L) { checked += it }
+        assertTrue(wrote)
+        assertEquals(listOf(3L), checked)
+    }
 }
