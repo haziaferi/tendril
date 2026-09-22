@@ -72,7 +72,12 @@ PRODUCTION = (
 # happening. `return@launchAndTouch`, `continue`, `break` all count — the last two are how the
 # merge skips a record it should not write (the last-write-wins guard is a `continue`).
 GUARD = re.compile(
-    r"^(\s*)if\s*\(.+\)\s*(?:return|continue|break)(?:@\w+)?\s*(?://.*)?$"
+    # `return` may carry a value: `return false`, `return null`, `return emptyList()` are guards
+    # too, and requiring a bare `return` made the tool plan nothing for them while reporting "no
+    # single-line guard in its body" — which reads like a clean result rather than a blind spot.
+    # `[^{]` keeps the multi-line `if (…) {` form out, since deleting its first line orphans a
+    # block and only ever produces INVALID.
+    r"^(\s*)if\s*\(.+\)\s*(?:return|continue|break)(?:@\w+)?(?:\s+[^{]*?)?\s*(?://.*)?$"
 )
 
 # What `--list` shows as present-but-unsupported, so the silence is explained.
@@ -82,6 +87,13 @@ DECL_START = re.compile(
     r"^(\s*)(?:(?:public|private|internal|protected|abstract|open|override|suspend|inline|operator|data|sealed|value|expect|actual)\s+)*"
     r"(?:fun|class|object|interface)\s+(?:<[^>]*>\s*)?(?:[\w.]+\.)?(\w+)\b"
 )
+
+
+def say(*a):
+    """Print and flush. stdout is block-buffered when piped, so a long run showed nothing at
+    all until it finished — and a tool that looks hung is one people kill."""
+    print(*a)
+    sys.stdout.flush()
 
 
 def run(cmd, cwd=None, timeout=1800):
@@ -194,14 +206,45 @@ def guards_in(path: str, start: int, end: int):
     return found, skipped
 
 
+def owner_of(path: str, line_index: int) -> str | None:
+    """The top-level type enclosing `line_index` — what a test constructs to reach inside it.
+
+    Scoping a mutation to tests naming the mutated declaration alone is right for a public entry
+    point and wrong for everything a private helper does. The last-write-wins `continue` lives in
+    `private suspend fun mergeEntryContent`; the suites that exercise it call
+    `orchestrator.readAndMerge(...)` and never write the private name, so the scope collapsed to
+    one unrelated class and the guard came back SURVIVED — an artefact reported as a finding.
+
+    Scanning *backward* from the declaration rather than forward from the top of the file, because
+    a file often opens with something else: `SnapshotSyncOrchestrator.kt` begins with
+    `data class SnapshotMergeResult`, and taking the first match attributed every symbol in it to
+    that instead of to the orchestrator.
+    """
+    lines = io.open(path, encoding="utf-8", errors="replace").read().split("\n")
+    for j in range(min(line_index, len(lines) - 1), -1, -1):
+        m = DECL_START.match(lines[j])
+        if m and not m.group(1) and re.search(r"\b(?:class|object|interface)\b", lines[j]):
+            return m.group(2)
+    return None
+
+
 def test_classes_naming(symbol: str):
-    """Fully-qualified test classes that mention the symbol — the scope of the run."""
-    out = []
+    """Test classes that mention the symbol, split by which suite they live in.
+
+    Returns `(unit, instrumented)`. Only the first is the scope of a run: `testDebugUnitTest`
+    never sees `androidTest/`. The split exists because "nothing names this" and "the only thing
+    naming this is a test no gate runs" are different facts and lead somewhere different.
+    `OverdueAlarmReceiver` is the second kind — `AlarmSchedulerInstrumentedTest` names it, and
+    that suite is reachable only through `adb shell am instrument`, since AGP routes
+    `connectedAndroidTest` through artifacts this offline cache does not have.
+    """
+    unit, instrumented = [], []
     pat = re.compile(r"\b%s\b" % re.escape(symbol))
     for base, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in spec_trace.SKIP_DIRS]
-        r = spec_trace.rel(base)
-        if "/test/" not in r + "/":
+        r = spec_trace.rel(base) + "/"
+        bucket = unit if "/test/" in r else (instrumented if "/androidTest/" in r else None)
+        if bucket is None:
             continue
         for f in files:
             if not f.endswith(".kt"):
@@ -211,8 +254,8 @@ def test_classes_naming(symbol: str):
                 continue
             pkg = re.search(r"^package\s+([\w.]+)", src, re.M)
             for cls in re.finditer(r"^(?:internal\s+|private\s+)?class\s+(\w*Test)\b", src, re.M):
-                out.append("%s.%s" % (pkg.group(1), cls.group(1)) if pkg else cls.group(1))
-    return sorted(set(out))
+                bucket.append("%s.%s" % (pkg.group(1), cls.group(1)) if pkg else cls.group(1))
+    return sorted(set(unit)), sorted(set(instrumented))
 
 
 # --------------------------------------------------------------------- the worktree
@@ -228,27 +271,37 @@ def worktree_ready(verbose=True):
             print("could not create the worktree:\n" + r.stderr)
             return False
 
-    dirty = run(["git", "status", "--porcelain"], cwd=WORKTREE).stdout.strip()
-    if dirty:
-        if verbose:
-            print("worktree was dirty; discarding (it is a scratch copy)")
-        run(["git", "checkout", "--", "."], cwd=WORKTREE)
+    # Hard reset, not `checkout -- .`: the latter leaves a staged change and any file carried in
+    # by a previous run behind, and the next run's `git apply` then failed with "patch does not
+    # apply" against residue rather than against HEAD. This is a scratch copy — nothing here is
+    # anyone's work, and a half-reset worktree silently tests the wrong tree.
     run(["git", "checkout", "--detach", head], cwd=WORKTREE)
+    run(["git", "reset", "--hard", head], cwd=WORKTREE)
+    # `-fd` and not `-fdx`: ignored files stay, because `local.properties` is one of them and a
+    # build without it fails before it compiles anything.
+    run(["git", "clean", "-fd"], cwd=WORKTREE)
 
     # Mirror the working tree, not just the last commit. The question this tool answers is
     # "does anything notice if this guard goes", and it is usually asked about code that is
     # still being written — including the test just added to close a SURVIVED. Syncing to HEAD
     # alone would run the old suite against the new code and quietly answer the wrong question.
-    patch = run(["git", "diff", "HEAD"], cwd=ROOT).stdout
+    # Bytes, never text. `subprocess` with `text=True` decodes using the locale encoding — cp1252
+    # on this machine — and this repository's comments are full of `§` and em-dashes. Round-
+    # tripping them through cp1252 mangled the patch, and `git apply` rejected it with "patch
+    # does not apply", which reads like worktree residue rather than an encoding bug.
+    patch = subprocess.run(
+        ["git", "diff", "HEAD"], cwd=ROOT, capture_output=True
+    ).stdout
     carried = 0
     if patch.strip():
         tmp = os.path.join(tempfile.gettempdir(), "tendril-mutate-uncommitted.patch")
-        io.open(tmp, "w", encoding="utf-8", newline="").write(patch)
+        with open(tmp, "wb") as fh:
+            fh.write(patch)
         r = run(["git", "apply", tmp], cwd=WORKTREE)
         if r.returncode:
             print("could not carry uncommitted changes into the worktree:\n" + r.stderr)
             return False
-        carried = len([l for l in patch.splitlines() if l.startswith("+++ ")])
+        carried = len([l for l in patch.split(b"\n") if l.startswith(b"+++ ")])
     untracked = [
         f for f in run(["git", "ls-files", "--others", "--exclude-standard"], cwd=ROOT).stdout.split("\n")
         if f.strip().endswith((".kt", ".kts"))
@@ -328,8 +381,8 @@ def first_failure(out: str) -> str:
 
 
 def mutate_one(rel_path, lineno, text, classes, index, total):
-    print("\n[%d/%d] %s:%d" % (index, total, rel_path, lineno))
-    print("        %s" % text)
+    say("\n[%d/%d] %s:%d" % (index, total, rel_path, lineno))
+    say("        %s" % text)
     started = time.time()
     original = apply_deletion(rel_path, lineno)
     try:
@@ -341,7 +394,7 @@ def mutate_one(rel_path, lineno, text, classes, index, total):
         io.open(p, "w", encoding="utf-8", newline="").write("\n".join(s))
     mins = (time.time() - started) / 60.0
     note = first_failure(out) if verdict == "KILLED" else ""
-    print("        %-9s %.1f min  %s" % (verdict, mins, note))
+    say("        %-9s %.1f min  %s" % (verdict, mins, note))
     return verdict
 
 
@@ -389,7 +442,12 @@ def main() -> int:
     plan = []
     for symbol, path, start, end in found:
         guards, skipped = guards_in(path, start, end)
-        classes = test_classes_naming(symbol)
+        classes, instrumented = test_classes_naming(symbol)
+        owner = owner_of(path, start)
+        if owner and owner != symbol:
+            o_unit, o_instr = test_classes_naming(owner)
+            classes = sorted(set(classes) | set(o_unit))
+            instrumented = sorted(set(instrumented) | set(o_instr))
         rel_path = spec_trace.rel(path)
         if args.list:
             print("\n%s  (%s:%d)" % (symbol, rel_path, start + 1))
@@ -400,10 +458,16 @@ def main() -> int:
             for no, text in skipped:
                 print("   skipped :%-5d %s" % (no, text[:80]))
             if guards:
-                print("   tests   %s" % (", ".join(c.split(".")[-1] for c in classes) or
-                                         "NONE — a mutation here cannot be killed by anything"))
+                if classes:
+                    print("   tests   %s" % ", ".join(c.split(".")[-1] for c in classes))
+                elif instrumented:
+                    print("   tests   NONE in the unit suite; named only by %s, which runs on the"
+                          " phone via `am instrument` and not here."
+                          % ", ".join(c.split(".")[-1] for c in instrumented))
+                else:
+                    print("   tests   NONE — a mutation here cannot be killed by anything")
         for no, text in guards:
-            plan.append((symbol, rel_path, no, text, classes))
+            plan.append((symbol, rel_path, no, text, classes, instrumented))
 
     if args.list:
         shared = sum(1 for p in plan if p[1].startswith("shared/"))
@@ -414,10 +478,18 @@ def main() -> int:
     if args.max:
         plan = plan[: args.max]
     runnable = [p for p in plan if p[4]]
-    for symbol, rel_path, no, text, classes in plan:
-        if not classes:
-            print("\n%s %s:%d — no test names this symbol, so nothing could kill a mutation "
-                  "here. Skipped; that is spec_trace's finding, not this tool's." % (symbol, rel_path, no))
+    for symbol, rel_path, no, text, classes, instrumented in plan:
+        if classes:
+            continue
+        if instrumented:
+            print("\n%s %s:%d — no *unit* test names this symbol, only %s, which this tool "
+                  "does not run. Skipped: a SURVIVED here would be an artefact of the scope rather "
+                  "than a finding." % (symbol, rel_path, no,
+                                       ", ".join(c.split(".")[-1] for c in instrumented)))
+        else:
+            print("\n%s %s:%d — no test names this symbol at all, so nothing could kill a "
+                  "mutation here. Skipped; that is spec_trace's finding, not this tool's."
+                  % (symbol, rel_path, no))
 
     if not runnable:
         print("\nnothing to run.")
@@ -427,7 +499,7 @@ def main() -> int:
 
     print("\n%d mutation(s), one Gradle run each, in %s" % (len(runnable), WORKTREE))
     tally = {}
-    for i, (symbol, rel_path, no, text, classes) in enumerate(runnable, 1):
+    for i, (symbol, rel_path, no, text, classes, _instr) in enumerate(runnable, 1):
         v = mutate_one(rel_path, no, text, classes, i, len(runnable))
         tally[v] = tally.get(v, 0) + 1
 
@@ -437,7 +509,11 @@ def main() -> int:
 
     # Not `git status` — the worktree is deliberately dirty, carrying your uncommitted work.
     # What must not survive is a mutation, so look for the marker itself.
-    stragglers = run(["git", "grep", "-l", "MUTANT-DELETED"], cwd=WORKTREE).stdout.strip()
+    # `:!tools/` because this file contains the marker as a literal, and matching itself made
+    # every clean run end on a warning telling you to restore a worktree that was already fine.
+    stragglers = run(
+        ["git", "grep", "-l", "MUTANT-DELETED", "--", ":!tools/"], cwd=WORKTREE
+    ).stdout.strip()
     if stragglers:
         print("WARNING: a mutation was left in place — run `python tools/mutate.py --restore`\n"
               + stragglers)

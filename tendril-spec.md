@@ -2383,6 +2383,33 @@ medical-appointment (§5.1) and financial (§5.2.2) data on a personal, unrooted
     stop, reached by a route the bullet above never considered. The Habits widget was reconciled with
     App Lock on 2026-09-04 and its code comment states the reasoning; the notification path was
     never reconciled with anything.
+    *(**Closed 2026-09-22.** Both halves of the widget's pattern, and a third surface this bullet
+    did not know about.*
+    - *UI gate: `EntryActionReceiver.pendingIntent` returns an **Activity** PendingIntent while App
+      Lock is on, so the action opens the app through the lock instead of broadcasting. Decided in
+      that one factory rather than at each call site, so a future notification that adds a Done
+      button cannot forget it; targeting the Activity also sidesteps the background-activity-start
+      restriction a receiver launching one would hit.*
+    - *Guard: `resolveFromNotification` refuses while the lock is on, for a notification posted
+      before it was turned on or a PendingIntent that outlived the setting. A refusal deliberately
+      **leaves the notification standing** — cancelling it would make "nothing happened" look
+      exactly like "done", which is worse than the original defect, since the original at least did
+      what it appeared to do.*
+    - ***The third surface: the habit reminder's check-off action.*** *`HabitReminderAlarmReceiver`
+      handles `ACTION_CHECK_OFF` by calling `CheckInHabitUseCase.checkIn` — the same write the
+      widget bullet gates, by a route neither bullet considered. This section reconciled the widget
+      and then recorded the entry notification, and still missed it; it is gated now on both halves.
+      Posting the reminder stays ungated on purpose: reading a habit title on the lock screen is the
+      exposure this section already accepts for widgets, and suppressing the reminder would break
+      the feature to protect nothing new.*
+    - *Pinned by `NotificationActionAppLockTest` (5 cases). The rule is lifted out of
+      `onReceive` into `resolveFromNotification` precisely so it could be pinned: a
+      `BroadcastReceiver` body only runs inside a broadcast dispatch, since `goAsync()` requires
+      one, so the JVM suite could not reach it — and an instrumented test would run against the
+      real database on the device. That unreachability is why the hole survived sixteen days.
+      `tools/mutate.py` confirms the test bites: deleting the guard is **KILLED**.*
+    - *No desktop twin: `Tendril windows` has no App Lock at all (§1), and its reminder surface is
+      a tray toast with no action on it, so there is nothing to gate.)*
 - **Interaction with checkbox-only mode (§3.1.2): App Lock wins (corrected 2026-09-06).**
   ~~Independent, no precedence rule needed — App Lock gates entering the app at all; checkbox-only
   governs one already-open page's behavior over the lockscreen. A person can reasonably want the app

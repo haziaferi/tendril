@@ -120,10 +120,77 @@ def test_the_real_lock_guard_is_found_and_the_kdoc_around_it_is_not():
 
 
 def test_a_symbol_resolves_to_the_test_classes_that_name_it():
-    classes = mu.test_classes_naming("launchAndTouch")
-    assert any(c.endswith("ViewOnlySurfacesGuardTest") for c in classes), classes
-    assert all("." in c for c in classes), "classes must be fully qualified for --tests"
+    unit, _instrumented = mu.test_classes_naming("launchAndTouch")
+    assert any(c.endswith("ViewOnlySurfacesGuardTest") for c in unit), unit
+    assert all("." in c for c in unit), "classes must be fully qualified for --tests"
 
 
 def test_a_symbol_nothing_names_returns_no_classes():
-    assert mu.test_classes_naming("aSymbolNoTestCouldPossiblyMention") == []
+    assert mu.test_classes_naming("aSymbolNoTestCouldPossiblyMention") == ([], [])
+
+
+def test_an_instrumented_only_symbol_is_not_reported_as_unit_coverage():
+    # The distinction this split exists for. `OverdueAlarmReceiver` is named by
+    # `AlarmSchedulerInstrumentedTest` and by nothing in the JVM suite, so `testDebugUnitTest`
+    # cannot kill a mutation in it. Reporting a flat "no tests" would be wrong, and reporting it
+    # as covered would be worse — a SURVIVED would then look like a finding when it is an
+    # artefact of which suite was run.
+    unit, instrumented = mu.test_classes_naming("OverdueAlarmReceiver")
+    assert unit == [], unit
+    assert any(c.endswith("AlarmSchedulerInstrumentedTest") for c in instrumented), instrumented
+
+
+def test_a_symbol_with_neither_is_distinguishable_from_one_with_instrumented_only():
+    # `BootCompletedReceiver` has nothing in either suite — §9.7's boot re-arm, the thing that
+    # stops every reminder silently dying at the next restart, is named by no test at all.
+    assert mu.test_classes_naming("BootCompletedReceiver") == ([], [])
+
+
+def test_the_notification_action_path_is_no_longer_uncovered():
+    # This asserted `EntryActionReceiver` had nothing anywhere, which was true when it was
+    # written and is the reason §3.6's hole survived from 2026-09-06: nothing could have caught
+    # it. Kept, inverted, as the regression guard — if this list empties again, the App Lock
+    # refusal on the overdue notification has lost its only test.
+    unit, _ = mu.test_classes_naming("EntryActionReceiver")
+    assert any(c.endswith("NotificationActionAppLockTest") for c in unit), unit
+
+
+# --- guards that return a value -----------------------------------------------
+
+def test_a_guard_may_return_a_value():
+    # `if (appLockEnabled) return false` planned nothing while GUARD required a bare `return`,
+    # and the tool said "no single-line guard in its body" — a blind spot dressed as a clean
+    # result. Every shape below is a real guard somewhere in this repo.
+    assert mu.GUARD.match("    if (appLockEnabled) return false")
+    assert mu.GUARD.match("        val x = 1; if (a) return null" .replace("val x = 1; ", ""))
+    assert mu.GUARD.match("        if (a) return emptyList()")
+    assert mu.GUARD.match("            if (a) return@launch null")
+
+
+def test_a_returning_guard_is_still_distinguished_from_a_block():
+    assert not mu.GUARD.match("        if (locked()) {")
+    assert not mu.GUARD.match("        if (a) returnSomething()")
+
+
+# --- the owner, for scoping ---------------------------------------------------
+
+def test_the_owner_is_the_enclosing_type_not_the_first_in_the_file():
+    # SnapshotSyncOrchestrator.kt opens with `data class SnapshotMergeResult`. Taking the first
+    # top-level declaration attributed every symbol in the file to that, so the scope missed the
+    # suites that construct the orchestrator.
+    hit = mu.find_declaration("mergeEntryContent")
+    assert hit, "the merge helper went missing"
+    path, start, _end = hit
+    assert mu.owner_of(path, start) == "SnapshotSyncOrchestrator"
+
+
+def test_a_private_helper_is_scoped_through_its_owner():
+    # The bug that produced a false SURVIVED for the last-write-wins guard: the tests that
+    # exercise a private helper call the public entry point and never name the helper.
+    hit = mu.find_declaration("mergeEntryContent")
+    path, start, _end = hit
+    own, _ = mu.test_classes_naming("mergeEntryContent")
+    via_owner, _ = mu.test_classes_naming(mu.owner_of(path, start))
+    combined = set(own) | set(via_owner)
+    assert len(combined) > len(own), "the owner added nothing; scoping is back to the helper alone"
+    assert any(c.endswith("MergeTouchedEntriesTest") for c in combined), sorted(combined)

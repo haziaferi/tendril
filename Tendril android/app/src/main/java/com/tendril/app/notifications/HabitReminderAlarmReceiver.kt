@@ -41,6 +41,15 @@ class HabitReminderAlarmReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val container = AppContainer.from(context)
+                // §3.6 — the third surface, and the one that section does not mention. It
+                // reconciled the Habits widget on 2026-09-04 and recorded the entry Done/Skip
+                // path as still open on 2026-09-06; a habit checked off from its *notification*
+                // is the same write by a third route, and nothing had looked at it. Refused
+                // here, and [postReminder] posts an action that opens the app instead while the
+                // lock is on. Posting the reminder itself stays allowed: reading a habit title
+                // on the lock screen is the exposure §3.6 accepts for widgets, and suppressing
+                // the reminder would break the feature to protect nothing new.
+                if (checkingOff && container.appLockPreferences.enabled.value) return@launch
                 if (checkingOff) {
                     container.checkInHabitUseCase.checkIn(habitId)
                     NotificationManagerCompat.from(context).cancel(notificationId(habitId))
@@ -67,17 +76,29 @@ class HabitReminderAlarmReceiver : BroadcastReceiver() {
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val checkOffIntent = PendingIntent.getBroadcast(
-            context,
-            // A different request code from the alarm's own, or arming the next alarm would
-            // replace the check-off action's PendingIntent and vice versa.
-            AlarmScheduler.habitRequestCode(habitId) + 1,
-            Intent(context, HabitReminderAlarmReceiver::class.java).apply {
-                action = ACTION_CHECK_OFF
-                putExtra(AlarmScheduler.EXTRA_HABIT_ID, habitId)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        // A different request code from the alarm's own, or arming the next alarm would
+        // replace the check-off action's PendingIntent and vice versa.
+        val checkOffCode = AlarmScheduler.habitRequestCode(habitId) + 1
+        // §3.6 — with App Lock on the action opens the app through the lock instead of checking
+        // the habit off from the keyguard, matching the Habits widget and the overdue
+        // notification's Done/Skip. The receiver refuses as well, for a notification posted
+        // before the lock was turned on.
+        val checkOffIntent = if (container.appLockPreferences.enabled.value) {
+            PendingIntent.getActivity(
+                context, checkOffCode, Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        } else {
+            PendingIntent.getBroadcast(
+                context,
+                checkOffCode,
+                Intent(context, HabitReminderAlarmReceiver::class.java).apply {
+                    action = ACTION_CHECK_OFF
+                    putExtra(AlarmScheduler.EXTRA_HABIT_ID, habitId)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
 
         val notification = NotificationCompat.Builder(context, NotificationChannels.HABITS)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
