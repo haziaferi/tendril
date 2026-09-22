@@ -196,6 +196,7 @@ fun WorkbenchScaffold(
                         core = core,
                         commands = switcherCommands(core, navState),
                         onOpenPage = navState::openPage,
+                        onOpenBlock = navState::openBlock,
                         onDismiss = { switcher.open = false },
                     )
                 }

@@ -250,6 +250,7 @@ MAPPER_FILES = ("SnapshotMappers.kt", "PagesSyncEngine.kt", "SnapshotRecords.kt"
 # Read by something this text-level check cannot see. Permanent, not debt.
 FIELD_READ_OFF_LANGUAGE = {
     "PageFtsEntry.plainText",   # SQLite's FTS engine reads the column via MATCH, never by name
+    "BlockFtsEntry.plainText",  # the same, one row per block (v25)
 }
 
 # Fields that really are write-only today, each with the reason it still is.

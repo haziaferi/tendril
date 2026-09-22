@@ -63,7 +63,7 @@ class ImageSyncTest {
             canvasEdgeDao = FakeCanvasEdgeDao(store),
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = purgeRegistry,
-            pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store)),
+            pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store), FakeBlockFtsDao(store)),
             pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 

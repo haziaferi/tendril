@@ -1,6 +1,7 @@
 package com.tendril.app.domain
 
 import com.tendril.app.data.page.Page
+import com.tendril.app.data.page.BlockSearchHit
 import com.tendril.app.data.page.PageSearchHit
 
 /**
@@ -25,20 +26,32 @@ fun filterCommands(commands: List<SwitcherCommand>, query: String): List<Switche
     else commands.filter { query.lowercase() in (it.title + " " + it.keywords).lowercase() }
 
 /**
- * Pages whose **title** starts with the query come first, alphabetically; then the FTS hits
- * (which find the query anywhere, titles included since §0.8 step 8a) in the order the index
- * returned them. A page is listed once, as its higher entry. A blank query lists nothing —
- * the field is not a page list.
+ * Pages whose **title** starts with the query come first, alphabetically; then the block hits
+ * (v25 — `block_fts`, one row per matching block, its own snippet, in the index's order) with
+ * at most [perPage] rows for one page — the rest are one Ctrl+F away once the page is open — and
+ * none for a page already listed by its title. A blank query lists nothing — the field is not
+ * a page list.
  */
-fun rankPageHits(query: String, livePages: List<Page>, ftsHits: List<PageSearchHit>): List<PageSearchHit> {
+private val WHITESPACE = Regex("""\s+""")
+
+fun rankPageHits(query: String, livePages: List<Page>, blockHits: List<BlockSearchHit>, perPage: Int = 3): List<PageSearchHit> {
     if (query.isBlank()) return emptyList()
     val q = query.lowercase()
     val byTitle = livePages
         .filter { it.deletedAt == null && it.title.lowercase().startsWith(q) }
         .sortedBy { it.title.lowercase() }
         .map { PageSearchHit(pageId = it.id, title = it.title, icon = it.icon, snippet = "") }
-    val seen = byTitle.mapTo(mutableSetOf()) { it.pageId }
-    return byTitle + ftsHits.filter { seen.add(it.pageId) }
+    val titled = byTitle.mapTo(mutableSetOf()) { it.pageId }
+    val perPageCount = mutableMapOf<Long, Int>()
+    val blocks = blockHits.mapNotNull { hit ->
+        if (hit.pageId in titled) return@mapNotNull null
+        val n = perPageCount[hit.pageId] ?: 0
+        if (n >= perPage) return@mapNotNull null
+        perPageCount[hit.pageId] = n + 1
+        // A multi-line block's snippet on the row's one line — the match must not sit past a newline.
+        PageSearchHit(pageId = hit.pageId, title = hit.title, icon = hit.icon, snippet = hit.snippet.replace(WHITESPACE, " ").trim(), blockId = hit.blockId)
+    }
+    return byTitle + blocks
 }
 
 /**

@@ -15,6 +15,9 @@ import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.page.PageKind
 import com.tendril.app.data.page.PageRevision
 import com.tendril.app.data.page.PageRevisionDao
+import com.tendril.app.data.page.BlockFtsDao
+import com.tendril.app.data.page.BlockFtsEntry
+import com.tendril.app.data.page.BlockSearchHit
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.PageRelation
@@ -441,6 +444,17 @@ class FakePageRelationDao(private val store: FakePageStore) : PageRelationDao {
     override suspend fun countBetween(pageIdA: Long, pageIdB: Long): Int = store.relations.values.count {
         (it.fromPageId == pageIdA && it.toPageId == pageIdB) || (it.fromPageId == pageIdB && it.toPageId == pageIdA)
     }
+}
+
+/** v25 — one row per block; a substring match, as the page fake's, over the block's own text. */
+class FakeBlockFtsDao(private val store: FakePageStore) : BlockFtsDao {
+    val rows = linkedMapOf<Long, BlockFtsEntry>()   // by blockId
+    override suspend fun insert(entry: BlockFtsEntry) { rows[entry.blockId] = entry }
+    override suspend fun deleteForPage(pageId: Long) { rows.values.filter { it.pageId == pageId }.forEach { rows.remove(it.blockId) } }
+    override suspend fun indexedPageIds(): List<Long> = rows.values.map { it.pageId }.distinct()
+    override suspend fun search(query: String): List<BlockSearchHit> =
+        rows.values.filter { it.plainText.contains(query.removeSuffix("*"), ignoreCase = true) && store.pages[it.pageId]?.deletedAt == null }
+            .map { BlockSearchHit(it.pageId, it.blockId, store.pages[it.pageId]?.title.orEmpty(), store.pages[it.pageId]?.icon, it.plainText) }
 }
 
 class FakePageFtsDao(private val store: FakePageStore) : PageFtsDao {

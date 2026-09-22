@@ -22,6 +22,7 @@ import com.tendril.app.sync.FakeHabitDao
 import com.tendril.app.sync.FakeLabelDao
 import com.tendril.app.sync.FakePageDao
 import com.tendril.app.sync.FakePageDatabaseDao
+import com.tendril.app.sync.FakeBlockFtsDao
 import com.tendril.app.sync.FakePageFtsDao
 import com.tendril.app.sync.FakePageStore
 import com.tendril.app.sync.FakePropertyDao
@@ -70,7 +71,7 @@ class PhoneLayoutTest {
             PurgeRegistry(FakePurgedRecordDao(), pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator),
             DatabaseSyncManager(pageDao, pageDatabaseDao, FakePropertyValueDao(store), entryDao, FakeEntryCompletionDao(), resolve),
             TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, FakePageCanvasDao(store), FakeCanvasNodeDao(store), FakeCanvasEdgeDao(store)), ViewLockState(),
-            PageContentRepository(pageDao, blockDao, FakePageFtsDao(store)), entryDao, resolve,
+            PageContentRepository(pageDao, blockDao, FakePageFtsDao(store), FakeBlockFtsDao(store)), entryDao, resolve,
         )
         compose.setContent {
             TendrilTheme(register = Register.INK, dark = false, typeface = TendrilTypeface.INTER) {

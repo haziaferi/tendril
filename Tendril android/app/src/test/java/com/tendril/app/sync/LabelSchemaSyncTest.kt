@@ -49,7 +49,7 @@ class LabelSchemaSyncTest {
             pageCanvasDao = FakePageCanvasDao(store), canvasNodeDao = FakeCanvasNodeDao(store), canvasEdgeDao = FakeCanvasEdgeDao(store),
             pageRelationDao = FakePageRelationDao(store),
             purgeRegistry = PurgeRegistry(FakePurgedRecordDao(), pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator),
-            pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store)),
+            pageContentRepository = PageContentRepository(pageDao, blockDao, FakePageFtsDao(store), FakeBlockFtsDao(store)),
             pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
     }

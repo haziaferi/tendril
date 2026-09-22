@@ -69,6 +69,8 @@ data class PageSearchHit(
     val title: String,
     val icon: String?,
     val snippet: String,
+    /** v25 — set when the hit is one block's: the switcher opens the page at it. */
+    val blockId: Long? = null,
 )
 
 /** Matches a run of letters or digits — everything else is punctuation as far as search is
@@ -91,7 +93,10 @@ private val SEARCH_TOKEN = Regex("[\\p{L}\\p{N}]+")
  * the app down.
  */
 suspend fun PageFtsDao.searchPrefix(raw: String): List<PageSearchHit> {
-    val match = SEARCH_TOKEN.findAll(raw).joinToString(" ") { "${it.value}*" }
+    val match = ftsPrefixExpression(raw)
     if (match.isEmpty()) return emptyList()
     return runCatching { search(match) }.getOrDefault(emptyList())
 }
+
+/** The alphanumeric runs of [raw], each with FTS4's prefix operator, ANDed — shared by both indexes. */
+fun ftsPrefixExpression(raw: String): String = SEARCH_TOKEN.findAll(raw).joinToString(" ") { "${it.value}*" }

@@ -3,6 +3,8 @@ package com.tendril.app.domain
 import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockDao
 import com.tendril.app.data.page.PageDao
+import com.tendril.app.data.page.BlockFtsDao
+import com.tendril.app.data.page.BlockFtsEntry
 import com.tendril.app.data.page.PageFtsDao
 import com.tendril.app.data.page.PageFtsEntry
 import com.tendril.app.data.page.SpanStyle
@@ -17,6 +19,7 @@ class PageContentRepository(
     private val pageDao: PageDao,
     private val blockDao: BlockDao,
     private val pageFtsDao: PageFtsDao,
+    private val blockFtsDao: BlockFtsDao,
 ) {
     /** §3.1.1 — "a Room FTS4/5 virtual table indexing each page's concatenated block
      * plain-text, rebuilt on block write." Full delete+insert per page rather than an
@@ -36,6 +39,11 @@ class PageContentRepository(
         if (plainText.isNotBlank()) {
             pageFtsDao.insert(PageFtsEntry(pageId = pageId, plainText = plainText))
         }
+        // v25 — one row per block with text, beside the page's; the same delete-and-reinsert.
+        blockFtsDao.deleteForPage(pageId)
+        blocks.filter { it.content.isNotBlank() }.forEach { b ->
+            blockFtsDao.insert(BlockFtsEntry(pageId = pageId, blockId = b.id, plainText = b.content))
+        }
     }
 
     /**
@@ -45,7 +53,14 @@ class PageContentRepository(
      * re-indexes everything and every later run finds nothing missing. Returns how many it did.
      */
     suspend fun healIndex(): Int {
-        val missing = pageDao.getAll().filter { it.deletedAt == null && it.id !in pageFtsDao.indexedPageIds().toSet() }
+        val inPages = pageFtsDao.indexedPageIds().toSet()
+        val inBlocks = blockFtsDao.indexedPageIds().toSet()
+        // v25 — `block_fts` starts empty on the first launch after MIGRATION_24_25: a live page
+        // with a text block and no block row is re-indexed once; a page with no text has no
+        // row to miss.
+        val missing = pageDao.getAll().filter { page ->
+            page.deletedAt == null && (page.id !in inPages || (page.id !in inBlocks && blockDao.getForPage(page.id).any { it.content.isNotBlank() }))
+        }
         missing.forEach { rebuildFtsForPage(it.id) }
         return missing.size
     }

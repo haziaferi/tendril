@@ -142,7 +142,7 @@ class UnknownEnumQuarantineTest {
             canvasEdgeDao = edgeDao,
             pageRelationDao = relationDao,
             purgeRegistry = registry,
-            pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
+            pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao, FakeBlockFtsDao(db)),
             pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 

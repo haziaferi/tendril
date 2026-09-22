@@ -115,6 +115,8 @@ fun QuickSwitcher(
     core: WorkbenchCore,
     commands: List<SwitcherCommand>,
     onOpenPage: (Long) -> Unit,
+    /** v25 — a block hit: the page opened at the block, the find bar on the query. */
+    onOpenBlock: (pageId: Long, blockId: Long, query: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
@@ -139,7 +141,7 @@ fun QuickSwitcher(
         if (m is SwitcherMode.Pages && m.query.isNotBlank()) {
             delay(150)
             val live = core.database.pageDao().getAll()
-            hits = rankPageHits(m.query, live, core.database.pageFtsDao().searchPrefix(m.query))
+            hits = rankPageHits(m.query, live, core.database.blockFtsDao().searchPrefix(m.query))
         } else {
             hits = emptyList()
         }
@@ -148,7 +150,7 @@ fun QuickSwitcher(
         onDismiss()
         when (item) {
             is SwitcherItem.Cmd -> item.command.run()
-            is SwitcherItem.Hit -> onOpenPage(item.hit.pageId)
+            is SwitcherItem.Hit -> item.hit.blockId?.let { onOpenBlock(item.hit.pageId, it, parseSwitcherInput(text).let { m -> (m as? SwitcherMode.Pages)?.query.orEmpty() }) } ?: onOpenPage(item.hit.pageId)
         }
     }
     val keys: (KeyEvent) -> Boolean = { event ->

@@ -118,7 +118,7 @@ class ViewOnlySurfacesGuardTest {
     private val completionDao = RecordingEntryCompletionDao()
     private val coordinator = RecordingEntryScheduleCoordinator()
 
-    private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
+    private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao, FakeBlockFtsDao(store))
     private val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
     private val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
     private val databaseSyncManager =

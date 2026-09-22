@@ -61,6 +61,8 @@ fun PageRoute(
             onCheckboxOnlyUnlockRequest = onCheckboxOnlyUnlockRequest,
             paneChrome = paneChrome,
             findRequest = findRequest ?: navState.findRequested,
+            blockJump = navState.blockJump?.takeIf { it.pageId == pageId },
+            onJumpConsumed = { navState.blockJump = null },
         )
     }
 }
