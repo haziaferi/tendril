@@ -65,6 +65,7 @@ class AppWidgetConfigureActivity : ComponentActivity() {
 
         val container = AppContainer.from(this)
         val resolved = resolveThemeMode(container, this)
+        val wallpaper = readWallpaper(this)   // §8.6 — the phone's own wallpaper, beside the bracket
         val theme = resolved.register
         val mode = resolved.dark
         val palette = resolved.palette
@@ -76,8 +77,10 @@ class AppWidgetConfigureActivity : ComponentActivity() {
             val scope = rememberCoroutineScope()
 
             LaunchedEffect(appWidgetId) {
-                val glanceId = GlanceAppWidgetManager(this@AppWidgetConfigureActivity).getGlanceIdBy(appWidgetId)
+                // An id that is not one of this app's Glance widgets has no saved state (the
+                // lookup throws); the defaults stand, as for a widget configured the first time.
                 val saved = runCatching {
+                    val glanceId = GlanceAppWidgetManager(this@AppWidgetConfigureActivity).getGlanceIdBy(appWidgetId)
                     getAppWidgetState(this@AppWidgetConfigureActivity, PreferencesGlanceStateDefinition, glanceId).toWidgetColorConfig()
                 }.getOrNull()
                 if (saved != null) {
@@ -87,27 +90,28 @@ class AppWidgetConfigureActivity : ComponentActivity() {
                 }
             }
 
+            val roleRgb: (ContrastRole) -> Rgb = { role ->
+                when (role) {
+                    ContrastRole.TEXT -> palette.text
+                    ContrastRole.TEXT_DIM -> palette.textDim
+                    ContrastRole.TEXT_FAINT -> palette.textFaint
+                    ContrastRole.ACCENT -> palette.accent
+                    // auditContrast() always overrides ACCENT2 with currentAccent2()
+                    // internally — this branch exists only for when-exhaustiveness
+                    // and is never actually read.
+                    ContrastRole.ACCENT2 -> palette.accent
+                }.toRgb()
+            }
             val contrastRows = remember(opacity, shade, hueOffset) {
-                auditContrast(
-                    register = theme,
-                    dark = mode,
-                    widgetBg = palette.bg.toRgb(),
-                    opacityPct = opacity,
-                    shade = shade,
-                    hueOffsetDeg = hueOffset,
-                    roleRgb = { role ->
-                        when (role) {
-                            ContrastRole.TEXT -> palette.text
-                            ContrastRole.TEXT_DIM -> palette.textDim
-                            ContrastRole.TEXT_FAINT -> palette.textFaint
-                            ContrastRole.ACCENT -> palette.accent
-                            // auditContrast() always overrides ACCENT2 with currentAccent2()
-                            // internally — this branch exists only for when-exhaustiveness
-                            // and is never actually read.
-                            ContrastRole.ACCENT2 -> palette.accent
-                        }.toRgb()
-                    },
-                )
+                auditContrast(register = theme, dark = mode, widgetBg = palette.bg.toRgb(), opacityPct = opacity, shade = shade, hueOffsetDeg = hueOffset, roleRgb = roleRgb)
+            }
+            // §8.6 — the same roles on the wallpaper the system reports, and the smallest
+            // opacity that passes every one of them there.
+            val wallpaperRows = remember(opacity, shade, hueOffset) {
+                wallpaper?.let { auditOnWallpaper(theme, mode, palette.bg.toRgb(), opacity, shade, hueOffset, it.primary, roleRgb) }
+            }
+            val suggested = remember(shade, hueOffset) {
+                wallpaper?.let { suggestedOpacity(theme, mode, palette.bg.toRgb(), shade, hueOffset, it.primary, roleRgb) }
             }
 
             TendrilTheme(register = theme, dark = mode, typeface = com.tendril.app.ui.theme.TendrilTypeface.SANS, oled = resolved.oled) {
@@ -162,6 +166,45 @@ class AppWidgetConfigureActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
                         )
+
+                        Spacer(Modifier.height(20.dp))
+                        Text("On your wallpaper", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(4.dp))
+                        if (wallpaper == null || wallpaperRows == null) {
+                            Text(
+                                "The system reports no wallpaper colours here (a live wallpaper, or none set yet) — the bracket above is the guide.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            Text(
+                                "A ${if (wallpaper.light) "light" else "dark"} wallpaper, its main colour ${wallpaper.primary.toHex()} — what each role reads like on it at $opacity%:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            wallpaperRows.forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                                ) {
+                                    Text(row.role.name.lowercase().replace('_', ' '), style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        "%.1f:1 %s".format(row.ratio, if (row.pass) "✓" else "✗ (need ${row.role.threshold}:1)"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (row.pass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                            val allPass = wallpaperRows.all { it.pass }
+                            when {
+                                allPass && suggested != null && suggested < opacity -> TextButton(onClick = { opacity = suggested }) {
+                                    Text("Every role passes here — $suggested% would too, and shows more wallpaper")
+                                }
+                                allPass -> Text("Every role passes on this wallpaper at $opacity%.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                                suggested != null -> TextButton(onClick = { opacity = suggested }) { Text("Use $suggested% — the smallest opacity every role passes on it") }
+                                else -> Text("No opacity passes every role on this wallpaper with this shade and hue — change the colour.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
 
                         Spacer(Modifier.height(24.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
