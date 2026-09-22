@@ -525,22 +525,21 @@ internal fun SyncBar(
             },
         ) { Text(if (syncing) "Syncing…" else "Sync now") }
         }
+        // Audit 1.5 — one line, not two. This block was emitted twice: once here inside the
+        // Column and once again as a sibling after it closed, so every sync error was drawn
+        // twice, one under the other. Walked 2026-09-22 with a changed passphrase: "24 file(s)
+        // couldn't be decrypted — check the passphrase. Nothing was written." appeared on two
+        // consecutive lines, identical. The copy inside the Column is the one kept — a `SyncBar`
+        // that emits a Column *and* a loose Text as siblings is the accident — and it takes the
+        // stray's padding with it so the spacing below the message is unchanged.
         syncError?.let {
             Text(
                 it,
                 style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
             )
         }
-    }
-    syncError?.let {
-        Text(
-            it,
-            style = MaterialTheme.typography.description,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        )
     }
 }
 
