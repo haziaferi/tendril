@@ -502,6 +502,7 @@ class ViewOnlySurfacesGuardTest {
         localImages = InMemoryLocalImageStore(),
         passphrase = { null },
         viewLockState = viewLockState,
+        rearmAlarms = {},
     )
 
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }

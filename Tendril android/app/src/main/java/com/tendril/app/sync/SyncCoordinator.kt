@@ -2,6 +2,7 @@ package com.tendril.app.sync
 
 import android.content.Context
 import android.net.Uri
+import com.tendril.app.notifications.reconcileAlarms
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
@@ -172,6 +173,19 @@ class SyncCoordinator(
             } else {
                 orchestrator.writeSnapshots(store, passphrase)
                 statusPreferences.markSyncedNow()
+                // §9.7, the merge's half of the invariant (audit 2026-09-22, row 1.3). A merge
+                // writes entries, habits and reminders straight to Room without passing a
+                // ViewModel or the EntryScheduleCoordinator, so a reminder set on the desktop
+                // arrived here unarmed: `reconcileAlarms` runs in MainActivity.onCreate, which
+                // is *before* the onStart sync that merges, so it was armed only at the next
+                // Activity creation.
+                //
+                // Unconditional rather than gated on "did anything change", because
+                // SnapshotMergeResult does not report that and inventing a signal for it would
+                // put the invariant behind a boolean that a later merge path could forget to
+                // set — the exact shape of this bug. The sweep is idempotent and already runs on
+                // every app open; a sync pass is no more frequent than that.
+                reconcileAlarms(context)
                 // A quarantined record is a successful pass, not a failed one — the merge did
                 // everything it safely could — but it must not be silent. A device that quietly
                 // drops a peer's page on every pass looks exactly like a device in sync, and the

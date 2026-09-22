@@ -103,6 +103,14 @@ class CheckInHabitAction : ActionCallback {
         } else {
             container.checkInHabitUseCase.checkIn(habitId)
         }
+        // §9.7, as the four other check-in paths do it (TasksHabitsViewModel, PageDetailViewModel
+        // and HabitReminderAlarmReceiver): a check-in or an undo moves when this habit is next
+        // due, so re-arm from the row as it now stands. This path was the one that didn't
+        // (audit 2026-09-22, row 1.12). The check-in direction self-heals — the receiver re-tests
+        // `isHabitDueOn` at fire time, posts nothing and re-arms — but an undo does not: undoing
+        // from the widget after the day's alarm has already fired left the habit due again with
+        // nothing armed for it.
+        container.database.habitDao().getById(habitId)?.let(container.alarmScheduler::rescheduleHabit)
         HabitsWidget().update(context, glanceId)
     }
 }
