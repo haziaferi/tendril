@@ -44,12 +44,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import com.tendril.app.domain.ai.OutlineRow
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import java.time.Instant
 
@@ -254,6 +256,37 @@ class WritePathSyncTest {
         syncAtoB()
 
         assertEquals(listOf("first", "second"), b.blockDao.getForPage(b.pageIdOf(page.uid)).map { it.content })
+    }
+
+    /** §0.6.15's fourth verb (2026-09-22) — the reply's rows land as a tree after the selection's
+     * block, the root flagged as a mind map, and travel as ordinary blocks; one undo removes them. */
+    @Test
+    fun `a generated outline inserted on one device reaches the other as a tree, and one undo removes it`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Garden")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 0, content = "compost notes", createdAt = t0, updatedAt = t0))
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 1, content = "after", createdAt = t0, updatedAt = t0))
+        val first = a.blockDao.getForPage(page.id).first { it.content == "compost notes" }
+        val vm = a.detail(page.id)
+
+        vm.insertOutline(first, listOf(OutlineRow(0, "Compost"), OutlineRow(1, "Inputs"), OutlineRow(2, "Scraps"), OutlineRow(1, "Care")), asMindMap = true)
+
+        val rows = a.blockDao.getForPage(page.id).sortedBy { it.order }
+        assertEquals(listOf("compost notes", "Compost", "Inputs", "Scraps", "Care", "after"), rows.map { it.content })
+        val byText = rows.associateBy { it.content }
+        assertEquals(null, byText["Compost"]!!.parentBlockId)
+        assertEquals(byText["Compost"]!!.id, byText["Inputs"]!!.parentBlockId)
+        assertEquals(byText["Inputs"]!!.id, byText["Scraps"]!!.parentBlockId)
+        assertEquals(byText["Compost"]!!.id, byText["Care"]!!.parentBlockId)
+        assertTrue(byText["Compost"]!!.mindMap); assertFalse(byText["Inputs"]!!.mindMap)
+        assertTrue(rows.filter { it.parentBlockId != null || it.content == "Compost" }.all { it.type == BlockType.BULLETED_LIST_ITEM })
+
+        syncAtoB()
+        val onB = b.blockDao.getForPage(b.pageIdOf(page.uid)).sortedBy { it.order }
+        assertEquals(rows.map { it.content }, onB.map { it.content })
+        assertTrue(onB.first { it.content == "Compost" }.mindMap)
+
+        vm.undo()
+        assertEquals(listOf("compost notes", "after"), a.blockDao.getForPage(page.id).sortedBy { it.order }.map { it.content })
     }
 
     /** `setChecked` is the one block mutation deliberately outside `launchAndReindex` — §3.1.2's

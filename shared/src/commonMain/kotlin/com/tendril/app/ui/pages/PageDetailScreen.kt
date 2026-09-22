@@ -27,6 +27,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -1285,6 +1286,7 @@ private fun BlockRow(
                             aiVerb = null
                         },
                         onInsertBelow = { text -> viewModel.addBlock(BlockType.PARAGRAPH, block.order, text); aiVerb = null },
+                        onInsertOutline = { rows, asMindMap -> viewModel.insertOutline(block, rows, asMindMap); aiVerb = null },
                         onRetry = { aiResult = null; viewModel.runVerb(verb, fieldValue.text.substring(aiRange.min, aiRange.max)) { aiResult = it } },
                         onDismiss = { aiVerb = null },
                     )
@@ -1459,11 +1461,13 @@ private fun FormattingToolbar(
         }
     }
     if (verbs != null) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Four verbs since 2026-09-22: a FlowRow, because the phone's inline toolbar has no room
+        // for the fourth on one line (the walk found *Mind map* wrapped letter by letter).
+        FlowRow(verticalArrangement = Arrangement.Center, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             AiVerb.entries.forEach { verb ->
-                TextButton(onClick = { verbs(verb) }, enabled = !busy) { Text(verb.label) }
+                TextButton(onClick = { verbs(verb) }, enabled = !busy) { Text(verb.label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
             }
-            if (busy) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            if (busy) CircularProgressIndicator(modifier = Modifier.size(16.dp).align(Alignment.CenterVertically), strokeWidth = 2.dp)
         }
     }
     }

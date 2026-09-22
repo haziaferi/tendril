@@ -5,7 +5,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * §0.6.15 / B§6 #18 — the three verbs and the shape of what they send. Pure: the request is a
+ * §0.6.15 / B§6 #18 — the verbs (three, and since 2026-09-22 the fourth, *Mind map* — §10's
+ * Claude-generated map, whose reply is a nested list parsed by [parseOutline]) and the shape of
+ * what they send. Pure: the request is a
  * value, the response a parse; the one network call lives in [ClaudeClient]. Only the selected
  * text and the verb's instruction go out — never the page title, other blocks, or anything
  * about the person.
@@ -26,7 +28,17 @@ enum class AiVerb(val label: String, val instruction: String) {
         "Summarise the text in a few short sentences, in its own language. " +
             "Return only the summary, with no preamble.",
     ),
+    MIND_MAP(
+        "Mind map",
+        "Turn the text into a mind map written as a nested Markdown list, in the text's own language: " +
+            "exactly one root line naming the subject, then its branches and their points as lines " +
+            "beginning with \"- \", indented two spaces per level, each line a few words. " +
+            "Return only the list, with no preamble and no headings.",
+    ),
 }
+
+/** The verbs whose answer replaces or follows the selection as text; [AiVerb.MIND_MAP]'s is rows. */
+val AiVerb.isText: Boolean get() = this != AiVerb.MIND_MAP
 
 /** The models the picker offers; the first is the default. Ids as the Messages API names them. */
 val AiModels: List<String> = listOf("claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5-20251001")
