@@ -117,6 +117,8 @@ class MarkdownExporter(
                     }
                 }
             }
+            // The zip explains itself to an agent at its root (`docs/agent-over-export.md`).
+            zip.writeEntry("CLAUDE.md", agentReadme(pages = pages.size - canvases, canvases = canvases, images = images))
         }
         MarkdownExportResult(pages = pages.size - canvases, images = images, canvases = canvases)
     }

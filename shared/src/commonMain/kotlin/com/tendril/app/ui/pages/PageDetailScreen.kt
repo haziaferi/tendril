@@ -1198,6 +1198,7 @@ private fun BlockRow(
                             block.formattingSpans, findMarks,
                             link = MaterialTheme.colorScheme.primary, mention = MaterialTheme.colorScheme.primary,
                             mentionBackground = MaterialTheme.colorScheme.primaryContainer,
+                            code = if (block.type == BlockType.CODE) LocalTendrilPalette.current.let { p -> CodeColours(block.codeLanguage, keyword = p.third, string = p.event, number = p.habit, comment = p.textDim) } else null,
                         ),
                         readOnly = locked,
                         onTextLayout = { textLayout = it },
