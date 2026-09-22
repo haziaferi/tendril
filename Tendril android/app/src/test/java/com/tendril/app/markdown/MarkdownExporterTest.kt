@@ -101,6 +101,9 @@ class MarkdownExporterTest {
         return entriesOf(out.toByteArray())
     }
 
+    /** The page files alone — the root's `CLAUDE.md` (2026-09-22) is the zip's, not a page's. */
+    private val Map<String, ByteArray>.pageNames: Set<String> get() = keys.filterNot { it == "CLAUDE.md" }.toSet()
+
     private fun text(entries: Map<String, ByteArray>, name: String) =
         entries[name]?.toString(Charsets.UTF_8) ?: error("no entry '$name' in ${entries.keys}")
 
@@ -118,6 +121,20 @@ class MarkdownExporterTest {
         assertEquals("# 🧭 Trip\n\nwe left early\n", text(out, "Trip.md"))
     }
 
+    /** `docs/agent-over-export.md` — the zip explains itself at its root (2026-09-22). */
+    @Test
+    fun `the zip carries a CLAUDE md at its root with the counts and the three rules`() {
+        val id = page("Trip")
+        addBlock(id, BlockType.PARAGRAPH, "we left early")
+
+        val out = exported()
+
+        val readme = text(out, "CLAUDE.md")
+        assertTrue(readme.startsWith("# These notes"))
+        assertTrue(readme.contains("1 page, 0 canvases and 0 images"))
+        assertTrue(readme.contains("Read-only towards the app") && readme.contains("A snapshot") && readme.contains("Where you run is where the notes go"))
+    }
+
     @Test
     fun `the page tree becomes directories`() {
         val trip = page("Trip")
@@ -132,7 +149,7 @@ class MarkdownExporterTest {
         page("Notes")
         page("notes")
 
-        val names = exported().keys
+        val names = exported().pageNames
         // Compared case-insensitively on purpose: a zip extracted onto Windows or macOS lands on a
         // filesystem where these are the same file, and one silently replacing the other is the
         // worst outcome available here.
@@ -146,7 +163,7 @@ class MarkdownExporterTest {
         page("Notes", parentId = a)
         page("Notes", parentId = b)
 
-        assertEquals(setOf("A.md", "B.md", "A/Notes.md", "B/Notes.md"), exported().keys)
+        assertEquals(setOf("A.md", "B.md", "A/Notes.md", "B/Notes.md"), exported().pageNames)
     }
 
     @Test
@@ -154,7 +171,7 @@ class MarkdownExporterTest {
         page("a/b:c*d?e")
         val blank = page("   ")
 
-        val names = exported().keys
+        val names = exported().pageNames
         assertTrue("illegal characters must not survive", names.any { it == "a b c d e.md" })
         // An oddly named file is recoverable; a file that could not be created is not.
         assertTrue(names.any { it == store.pages.getValue(blank).uid + ".md" })
@@ -164,7 +181,7 @@ class MarkdownExporterTest {
     fun `a Windows device name is not used as a file name`() {
         page("CON")
         // `CON.md` is still CON to Windows, so the guard is on the stem, not the extension.
-        assertEquals(setOf("CON-page.md"), exported().keys)
+        assertEquals(setOf("CON-page.md"), exported().pageNames)
     }
 
     @Test
@@ -173,7 +190,7 @@ class MarkdownExporterTest {
         page("Deleted", deleted = true)
         page("Template", isTemplate = true)
 
-        assertEquals(setOf("Live.md"), exported().keys)
+        assertEquals(setOf("Live.md"), exported().pageNames)
     }
 
     // ------------------------------------------------------------------ links that must resolve

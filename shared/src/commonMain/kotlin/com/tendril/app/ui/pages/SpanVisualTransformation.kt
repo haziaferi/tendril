@@ -11,6 +11,8 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import com.tendril.app.data.page.FormattingSpan
+import com.tendril.app.domain.code.TokenKind
+import com.tendril.app.domain.code.highlight
 import com.tendril.app.data.page.SpanStyle
 
 /** §0.10 item 19 — find in page's marks, drawn through the same transformation as the spans so a
@@ -18,6 +20,12 @@ import com.tendril.app.data.page.SpanStyle
  * is theme-blind): the marks on `accentSoft`, the current one on `accent` — one tint find
  * shares with selection until 14g's registers give it its own (`docs/critiques/find-in-page-mock.md` #1). */
 class FindMarks(val ranges: List<IntRange>, val current: IntRange?, val mark: Color, val onMark: Color, val currentMark: Color, val onCurrentMark: Color)
+
+/** §3.1.1's code block highlighted (2026-09-22): the block's language tag and the four token
+ * colours from the token map — keyword `third`, string `event`, number `habit`, comment `textDim`
+ * — each a data hue already solved to ≥ 4.6 : 1 on its ground, none the accent. The tokenizer is
+ * `domain/code/Highlight.kt`; the transformation only paints its ranges, before the find marks. */
+class CodeColours(val language: String?, val keyword: Color, val string: Color, val number: Color, val comment: Color)
 
 /** Renders a block's plain-text content with its [FormattingSpan]s applied — the visual half
  * of §3.1.1's "spans over plain-text content rather than embedded markup" model. Theme-blind:
@@ -30,8 +38,20 @@ fun spansVisualTransformation(
     mention: Color = Color.Unspecified,
     /** 14h·2 — the tint behind a mention (`accentSoft`); unspecified draws none. */
     mentionBackground: Color = Color.Unspecified,
+    code: CodeColours? = null,
 ): VisualTransformation = VisualTransformation { text ->
     val builder = AnnotatedString.Builder(text.text)
+    code?.let { c ->
+        highlight(text.text, c.language).forEach { t ->
+            val colour = when (t.kind) {
+                TokenKind.KEYWORD -> c.keyword
+                TokenKind.STRING -> c.string
+                TokenKind.NUMBER -> c.number
+                TokenKind.COMMENT -> c.comment
+            }
+            if (t.end > t.start) builder.addStyle(ComposeSpanStyle(color = colour), t.start, t.end)
+        }
+    }
     spans.forEach { span ->
         val start = span.start.coerceIn(0, text.text.length)
         val end = span.end.coerceIn(start, text.text.length)
