@@ -173,4 +173,34 @@ class CanvasStaleEdgeTest {
         testScheduler.advanceUntilIdle()
         assertEquals(null, edgeNow(captured.canvasId).label)
     }
+
+    @Test
+    fun `a card cannot be connected to itself`() = runTest(mainDispatcher) {
+        // §3.7: "a drag that ends on no card creates nothing, and a self-connection is refused
+        // where the edge is made rather than by the drag."
+        //
+        // Found by `tools/mutate.py`, not by reading: deleting `addEdge`'s
+        // `if (fromNodeId == toNodeId) return` left all 948 tests green. The suite called
+        // `addEdge` exactly once, with two different node ids, so the guard could be removed
+        // and nothing would say so — the claim was stated in the spec and protected by nothing.
+        // A self-edge is drawn from a card to itself and has no sensible direction; it also
+        // rides into every other device inside the page's snapshot.
+        val board = seedBoardWithOneEdge()
+        val viewModel = canvasViewModel(board.pageId)
+        assertNotNull("harness: the canvas must be observed or the add path early-returns", viewModel.canvas.value)
+        val node = nodeDao.getForCanvas(board.canvasId).first()
+        val before = edgeDao.getForCanvas(board.canvasId).size
+
+        viewModel.addEdge(fromNodeId = node.id, toNodeId = node.id)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("a card connected to itself", before, edgeDao.getForCanvas(board.canvasId).size)
+
+        // The mirror, so the test cannot pass by `addEdge` being broken outright — which is how
+        // a guard test quietly stops testing the guard.
+        val other = nodeDao.getForCanvas(board.canvasId).last()
+        viewModel.addEdge(fromNodeId = node.id, toNodeId = other.id)
+        testScheduler.advanceUntilIdle()
+        assertEquals("two different cards still connect", before + 1, edgeDao.getForCanvas(board.canvasId).size)
+    }
 }

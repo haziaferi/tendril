@@ -24,10 +24,14 @@ while nine cases in `ViewOnlySurfacesGuardTest` held its View-Only half, none of
 "§3.7". The number sent a reading to the right section for the wrong reason.
 
 **Naming is still not asserting.** A test that mentions `launchAndTouch` and asserts nothing
-counts here exactly like one that pins it. Only changing the code and watching a test go red
-settles that — this repository does it by hand on every fix and records the red message in the
-commit, which no command can check. So: an unnamed declaration is genuinely unexamined; a named
-one is merely *not obviously* unexamined. Read it before believing it.
+counts here exactly like one that pins it. So: an unnamed declaration is genuinely unexamined; a
+named one is merely *not obviously* unexamined.
+
+`tools/mutate.py` settles the difference for one guard at a time — delete it, run only the tests
+naming that symbol, expect red. Use this to find where to look and that to find out whether
+anything is looking:
+
+    python3 tools/mutate.py --symbol addEdge --list
 
 Why it is not part of `audit.py`'s PASS/FAIL gate: an unpinned claim is a question, not a
 regression. A check that fails on every honest tree gets suppressed within a week, and then

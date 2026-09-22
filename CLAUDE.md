@@ -45,6 +45,28 @@ print(files, "files,", tot, "tests,", fail, "failures")
 PY
 ```
 
+## Two questions the gate does not ask
+
+The gate asks whether the code compiles and the tests pass. Neither says whether the app does what
+it promised, or whether a test would notice if a guard disappeared.
+
+```bash
+python tools/spec_trace.py                        # which declarations no test even names
+python tools/mutate.py --symbol addEdge --list    # which guards there are, and what would run
+python tools/mutate.py --symbol addEdge           # delete one, run its tests, expect red
+```
+
+`spec_trace.py` resolves each spec section to the production declarations that cite it — a `§` in
+KDoc sits directly above what it describes — and reports the ones nothing names. `mutate.py` takes
+one single-line guard, comments it out inside a throwaway `git worktree` that carries your
+uncommitted work, and runs only the tests naming that symbol: **KILLED** means pinned, **SURVIVED**
+means the guard can be deleted and the suite stays green. One mutation is one Gradle run, roughly
+four minutes for `shared/`, so `--list` first.
+
+Neither belongs in `audit.py`'s PASS/FAIL. An unpinned claim is a question, not a regression, and a
+check that fails on every honest tree gets suppressed within a week — taking the real findings with
+it.
+
 ## A finding is a hypothesis until a command proves it
 
 This is the house rule, and it was learned the expensive way: the 2026-09-04 audit shipped a
