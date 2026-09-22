@@ -29,6 +29,12 @@ cd "Tendril windows" && ./gradlew --offline build
 python tools/audit.py && python -m pytest -q tools/tests
 ```
 
+`Tendril windows` gained a test source set on 2026-09-23 (`src/test/kotlin`), so its `build`
+now *runs* tests where before it compiled and stopped — a green desktop build means more than it
+used to. Count those from `Tendril windows/build/test-results/test/*.xml`. What it does not reach
+is Compose UI: the desktop `ui-test-junit4` artifact is not in the offline cache, so anything that
+draws is still pinned by a walk.
+
 **Count tests from the XML, not from Gradle's summary.** A cached `testDebugUnitTest` reports a
 pass without executing anything — the first gate run on a clean tree is usually `FROM-CACHE`. Only
 a run after an edit executes. Count with:

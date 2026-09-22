@@ -7,6 +7,10 @@ kotlinxCoroutines = "1.11.0"
 # Milestone 3 — the ported ViewModels' `viewModelScope` needs `Dispatchers.Main.immediate`,
 # which isn't available on desktop without this (see Main.kt's App() doc comment).
 kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }
+# The test source set, added 2026-09-23. Same `version.ref` as the swing module above so the
+# coroutines artifacts cannot drift apart — a `-test` built against a different core is the kind
+# of mismatch that surfaces as an unexplained `IllegalStateException` inside `runTest`.
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

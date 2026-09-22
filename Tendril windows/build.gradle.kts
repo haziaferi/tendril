@@ -37,6 +37,26 @@ dependencies {
     // on a message-loop thread (`GlobalHotkey.kt`). 5.6.0 is what the Gradle cache holds, so the
     // offline build resolves it; nothing else here is Windows-only by dependency.
     implementation("net.java.dev.jna:jna-platform:5.6.0")
+
+    // The test source set (`src/test/kotlin`), added 2026-09-23. This module had none, and the
+    // cost of that is written down: audit rows 1.5, 1.6 and 1.8 are all desktop-only defects that
+    // sat as hypotheses through five audits because nothing here could execute a check. 1.5 and
+    // 1.8 were eventually settled by walking the dev build by hand, and their fixes are pinned by
+    // that walk rather than by anything a gate runs; 1.6 was walked once and would not reproduce.
+    //
+    // What a JVM test can reach here is the logic that does not draw: `DesktopReminderScheduler`,
+    // the firing arithmetic, the toast strings. Compose UI tests are a separate question — the
+    // `ui-test-junit4` artifact for desktop is not in the offline cache — so the Compose halves of
+    // 1.5 and 1.8 stay walk-pinned either way. That is the line this source set does not cross,
+    // and saying so is the point: it makes the *scheduler* gated, not the window.
+    //
+    // Every version here is one the Gradle cache already holds, since `dl.google.com` is blocked
+    // and an offline build is the only kind that runs.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.kotlinx.coroutines.test)
+    // `TendrilDatabase` is a Room class with no desktop-constructible form; the DAOs the scheduler
+    // reads are stubbed rather than a database being stood up.
+    testImplementation("io.mockk:mockk:1.13.13")
 }
 
 compose.desktop {
