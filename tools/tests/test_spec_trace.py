@@ -4,7 +4,7 @@ The hard parts are not the counting. They are (1) a stripper that has to keep co
 blanking strings, in a codebase where a KDoc line carrying one unbalanced quote is ordinary,
 and (2) an exclusion list that must drop history without dropping promises.
 """
-import os, sys
+import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import spec_trace as st
 
@@ -120,3 +120,82 @@ def test_a_child_citation_counts_for_its_parent():
     c = st.Counter({"9.4.1": 3, "9.4": 1, "9.41": 99})
     assert st.roll(c, "9.4") == 4, "9.41 is a different section, not a child of 9.4"
     assert st.roll(c, "9.4.1") == 3
+
+
+# --- attribution: which declaration carries a section ---------------------------
+
+def kt(*lines):
+    return list(lines)
+
+
+def test_a_kdoc_citation_attributes_to_the_declaration_it_heads():
+    lines = kt(
+        "/** %s9.7 - every write that moves the next due time re-arms. */" % SECTION,
+        "fun rescheduleFor(entry: Entry) {",
+        "}",
+    )
+    assert st.attribute(lines, "9.7") == [("rescheduleFor", 1)]
+
+
+def test_annotations_and_blank_lines_do_not_break_the_bridge():
+    lines = kt(
+        "/** %s9.10 - the migration policy. */" % SECTION,
+        "",
+        "@VisibleForTesting",
+        "internal val MIGRATION_10_11 = object : Migration(10, 11) {",
+    )
+    assert st.attribute(lines, "9.10") == [("MIGRATION_10_11", 1)]
+
+
+def test_a_comment_followed_by_unrelated_code_attributes_backward_instead():
+    # The bridge is broken by a statement, so the comment is not that declaration's header.
+    lines = kt(
+        "fun enclosing() {",
+        "    // %s3.2 - the Provider half" % SECTION,
+        "    doSomething()",
+        "}",
+        "fun somethingElse() {}",
+    )
+    assert st.attribute(lines, "3.2") == [("enclosing", 2)], st.attribute(lines, "3.2")
+
+
+def test_a_citation_inside_a_body_attributes_to_the_function_it_sits_in():
+    lines = kt(
+        "fun reconcileAlarms(context: Context) {",
+        "    val x = 1",
+        "    container.calendarProviderSync.ensureCalendarAndBackfill()  // %s3.2" % SECTION,
+        "}",
+    )
+    assert st.attribute(lines, "3.2") == [("reconcileAlarms", 3)]
+
+
+def test_attribution_is_exact_and_does_not_roll_a_child_into_its_parent():
+    # roll() folds children into a parent deliberately; attribution must not, or "0" collects
+    # every file in the repo and every leaf section disappears under its umbrella.
+    lines = kt("/** %s9.4.1 - the portable archive. */" % SECTION, "fun exportArchive() {}")
+    assert st.attribute(lines, "9.4.1") == [("exportArchive", 1)]
+    assert st.attribute(lines, "9.4") == []
+
+
+def test_the_umbrella_sections_are_excluded_but_their_kept_child_is_not():
+    secs = {s.num: s for s in st.read_sections() if s.spec == "tendril-spec.md"}
+    assert secs["0"].meta, "every file cites 0 as the anti-drift marker"
+    assert secs["0.8"].meta, "order of work promises no behaviour"
+    assert not secs["0.6"].meta, "0.6 carries Acceptance: rows and is the carve-out"
+
+
+def test_the_desktop_spec_is_not_fed_the_android_spec_s_citations():
+    # Both files have a section 3, and the § convention in Kotlin means tendril-spec.md.
+    secs = st.read_sections()
+    threes = [s for s in secs if s.num == "3"]
+    assert len(threes) == 2, "the collision this guards against has gone away"
+    assert sum(1 for s in threes if s.primary) == 1
+
+
+def test_a_section_the_tests_name_reports_fewer_unnamed_than_it_has():
+    # ViewOnlySurfacesGuardTest names CanvasViewModel and its writes, so §3.7 cannot be blind.
+    decls = st.declarations_citing("3.7")
+    blob = st.test_corpus()
+    named = [d for d in decls if re.search(r"\b%s\b" % re.escape(d), blob)]
+    assert decls, "§3.7 is cited in production"
+    assert named, "§3.7's declarations are named by the suite; a zero here means the corpus broke"
