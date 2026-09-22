@@ -28,9 +28,16 @@ import com.tendril.app.domain.ViewLockState
  * desktop equivalent and back screens this pass doesn't port. This is plain grouping of pieces
  * already living in `shared` since Milestone 1 — not a DI framework, matching `AppContainer`'s
  * own "doesn't earn a DI framework's cost" reasoning. Android's `AppContainer` and
- * `Tendril windows`'s `DesktopAppContainer` each construct one from their own database;
- * desktop's `entryScheduleCoordinator` is a no-op (see `NoOpEntryScheduleCoordinator` there) —
- * alarms/Calendar Provider sync have no desktop analog (tendril-windows-spec.md §1).
+ * `Tendril windows`'s `DesktopAppContainer` each construct one from their own database, and each
+ * supplies a real [entryScheduleCoordinator]: Android's arms `AlarmManager`, and desktop's has
+ * been `DesktopReminderScheduler` (notification-area toasts) since B§13.6 #7. Only Calendar
+ * Provider sync stays Android's, having no desktop analog (tendril-windows-spec.md §1).
+ *
+ * This paragraph used to say desktop's coordinator was "a no-op (see `NoOpEntryScheduleCoordinator`
+ * there)". That class no longer exists anywhere in the tree, and the claim had become actively
+ * misleading about a scheduling path: read literally it says the desktop never arms anything, which
+ * is the same wrong conclusion that let the merge go unplanned there (audit 2026-09-22, row 1.17).
+ * A comment about what a dependency does is load-bearing when the next person's fix depends on it.
  */
 class WorkbenchCore(
     val database: TendrilDatabase,
