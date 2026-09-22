@@ -56,6 +56,14 @@ class PopulatedMigrationTest {
             db.execSQL("INSERT INTO habits (id, uid, title, frequency, streak, lastCompletedDate, previousStreak, previousCompletedDate, createdAt, updatedAt) VALUES (1, 'h-1', 'Stretch', '1:DAY', 2, 20001, 1, 20000, 1000, 2000)")
             db.execSQL("INSERT INTO pages (id, uid, title, kind, isTemplate, createdAt, updatedAt) VALUES (1, 'p-1', 'Notes', 'PAGE', 0, 1000, 1000)")
             db.execSQL("INSERT INTO blocks (id, uid, pageId, type, `order`, content, formattingSpans, toggleExpanded, createdAt, updatedAt) VALUES (1, 'b-1', 1, 'PARAGRAPH', 0, 'hello', '[]', 1, 1000, 1000)")
+            // A search-index row for that page, so the `page_fts` assertion below has something to
+            // be about: [MIGRATION_15_16] is `DELETE FROM page_fts`, and without a row seeded here
+            // the table is empty at the end whether that migration ran or not.
+            db.execSQL("INSERT INTO page_fts (docid, pageId, plainText) VALUES (1, 1, 'Notes hello')")
+            db.rawQuery("SELECT COUNT(*) FROM page_fts", null).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("the page_fts seed did not land — the assertion below would be vacuous", 1, cursor.getInt(0))
+            }
         }
 
         val open = openTendrilDatabase(context)
@@ -74,8 +82,15 @@ class PopulatedMigrationTest {
                 assertEquals("both remembered dates became completion rows", listOf(20000L, 20001L), habitLog.map { it.date.toEpochDay() }.sorted())
                 assertEquals(listOf("Notes"), db.pageDao().getAll().map { it.title })
                 assertEquals(listOf("hello"), db.blockDao().getForPage(1).map { it.content })
-                // v25 created the table empty; the first launch's healIndex fills it, not the migration.
+                // Neither FTS table is a migration's job to fill: v25 creates `block_fts` empty, and
+                // [MIGRATION_15_16] *empties* `page_fts` — the only row-moving migration in the chain
+                // whose result nothing else here observes. Both are rebuilt by the first launch's
+                // `healIndex`, which is exactly why a page surviving the chain with no index row is
+                // the correct end state rather than a lost one.
                 assertTrue("block_fts exists after v25, and is empty", db.blockFtsDao().indexedPageIds().isEmpty())
+                // The seeded row is gone, which is what proves MIGRATION_15_16 ran: the page itself
+                // survived the chain (asserted above) while its index row did not.
+                assertTrue("page_fts was emptied by the chain, and not repopulated", db.pageFtsDao().indexedPageIds().isEmpty())
             }
         } finally {
             open.database.close()
