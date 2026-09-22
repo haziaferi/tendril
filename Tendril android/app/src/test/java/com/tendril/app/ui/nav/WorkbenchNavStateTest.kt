@@ -96,4 +96,15 @@ class WorkbenchNavStateTest {
         nav.back()
         assertEquals(2, nav.depth)
     }
+
+    /** v25 — a block hit opens the page with the jump set for it; the page clears it. */
+    @Test
+    fun `openBlock pushes the page and leaves the jump for it`() {
+        val nav = WorkbenchNavState()
+        nav.openBlock(pageId = 7, blockId = 70, query = "socks")
+        assertEquals(BlockJump(7, 70, "socks"), nav.blockJump)
+        assertTrue(nav.current is WorkbenchRoute.PageDetail && (nav.current as WorkbenchRoute.PageDetail).pageId == 7L)
+        nav.blockJump = null
+        assertEquals(null, nav.blockJump)
+    }
 }

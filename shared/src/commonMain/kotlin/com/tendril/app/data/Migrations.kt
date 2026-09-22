@@ -298,3 +298,11 @@ val MIGRATION_23_24 = object : Migration(23, 24) {
         connection.execSQL("ALTER TABLE `canvas_nodes` ADD COLUMN `hue` INTEGER")
     }
 }
+
+/** v25 (2026-09-22) — `block_fts`, §10's block-level search: the virtual table alone; the first
+ * launch's `healIndex` fills it (every live page with a text block and no block row). */
+val MIGRATION_24_25 = object : Migration(24, 25) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS `block_fts` USING FTS4(`pageId` INTEGER NOT NULL, `blockId` INTEGER NOT NULL, `plainText` TEXT NOT NULL)")
+    }
+}

@@ -215,6 +215,7 @@ import com.tendril.app.ui.theme.pageTitle
 import com.tendril.app.ui.components.TendrilMenu
 import com.tendril.app.ui.components.TendrilMenuItem
 import com.tendril.app.domain.word
+import com.tendril.app.ui.nav.BlockJump
 import com.tendril.app.ui.nav.FindRequestGate
 
 @Composable
@@ -231,6 +232,9 @@ fun PageDetailScreen(
     paneChrome: PaneChrome? = null,
     /** §0.10 item 19 — `WorkbenchNavState.findRequested`: each bump opens the find bar (Ctrl+F). */
     findRequest: Int = 0,
+    /** v25 — a search hit's block: the find bar opens on its query with the cursor on that block. */
+    blockJump: BlockJump? = null,
+    onJumpConsumed: () -> Unit = {},
 ) {
     val viewModel: PageDetailViewModel = viewModel(
         key = "page_$pageId",
@@ -313,6 +317,15 @@ fun PageDetailScreen(
     }
     // F1 (the audit's fixes): the request is an event only when the count moves after this
     // screen first saw it — a page opened after Ctrl+F does not inherit the bar.
+    // v25 — a switcher hit on a block: the target is set before the query so the matches'
+    // effect lands the cursor on it (the same landing an unfolded map's match uses).
+    LaunchedEffect(blockJump) {
+        val jump = blockJump ?: return@LaunchedEffect
+        findTarget = jump.blockId
+        findQuery = jump.query
+        findOpen = true
+        onJumpConsumed()
+    }
     val findGate = remember { FindRequestGate(findRequest) }
     LaunchedEffect(findRequest) {
         if (findGate.accept(findRequest)) {

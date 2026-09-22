@@ -122,7 +122,7 @@ class WritePathSyncTest {
         val habitDao = FakeHabitDao()
         val habitCompletionDao = FakeHabitCompletionDao()
 
-        val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
+        val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao, FakeBlockFtsDao(store))
         val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
         val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
         val databaseSyncManager =

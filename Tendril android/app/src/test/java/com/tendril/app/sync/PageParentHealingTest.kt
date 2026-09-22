@@ -48,7 +48,7 @@ class PageParentHealingTest {
             FakePurgedRecordDao(), pageDao, FakeEntryDao(), FakeHabitDao(),
             FakePropertyDao(store), RecordingEntryScheduleCoordinator(),
         ),
-        pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao),
+        pageContentRepository = PageContentRepository(pageDao, blockDao, ftsDao, FakeBlockFtsDao(store)),
             pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
     )
 

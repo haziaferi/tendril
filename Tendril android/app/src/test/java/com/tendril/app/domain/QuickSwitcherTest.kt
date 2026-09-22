@@ -4,10 +4,12 @@ import com.tendril.app.data.page.Block
 import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.Page
 import com.tendril.app.data.page.PageKind
+import com.tendril.app.data.page.BlockSearchHit
 import com.tendril.app.data.page.PageSearchHit
 import com.tendril.app.data.page.searchPrefix
 import com.tendril.app.sync.FakeBlockDao
 import com.tendril.app.sync.FakePageDao
+import com.tendril.app.sync.FakeBlockFtsDao
 import com.tendril.app.sync.FakePageFtsDao
 import com.tendril.app.sync.FakePageStore
 import kotlinx.coroutines.runBlocking
@@ -39,12 +41,21 @@ class QuickSwitcherTest {
     }
 
     @Test
-    fun `title-prefix hits come first, then the index, each page once, nothing for a blank query`() {
+    fun `title-prefix hits come first, then the blocks - three a page at most, none for a page already titled - nothing for a blank query`() {
         val books = page("Books"); val bookmarks = page("Bookmarks"); val notes = page("Notes")
-        val fts = listOf(PageSearchHit(notes.id, "Notes", null, "…about books…"), PageSearchHit(books.id, "Books", null, "…"))
-        val ranked = rankPageHits("boo", listOf(notes, bookmarks, books), fts)
-        assertEquals(listOf("Bookmarks", "Books", "Notes"), ranked.map { it.title })
-        assertTrue(rankPageHits("", listOf(books), fts).isEmpty())
+        val hits = listOf(
+            BlockSearchHit(notes.id, 11, "Notes", null, "\u2026about books\u2026"), BlockSearchHit(books.id, 21, "Books", null, "\u2026"),
+            BlockSearchHit(notes.id, 12, "Notes", null, "\u2026more books\u2026"), BlockSearchHit(notes.id, 13, "Notes", null, "\u2026books three\u2026"),
+            BlockSearchHit(notes.id, 14, "Notes", null, "\u2026books four\u2026"),
+            BlockSearchHit(bookmarks.id, 31, "Bookmarks", null, "a block on a titled page"),
+        )
+        val ranked = rankPageHits("boo", listOf(notes, bookmarks, books), hits)
+        assertEquals(listOf("Bookmarks", "Books", "Notes", "Notes", "Notes"), ranked.map { it.title })
+        assertEquals(listOf(null, null, 11L, 12L, 13L), ranked.map { it.blockId })   // the title rows carry no block; the fourth block is one Ctrl+F away; Bookmarks is titled
+        assertTrue(rankPageHits("", listOf(books), hits).isEmpty())
+        // a multi-line block's snippet lands on the row's one line, the match in view
+        val multi = rankPageHits("boo", listOf(notes), listOf(BlockSearchHit(bookmarks.id, 31, "Bookmarks", null, "line one\n  \u0002books\u0003 on line two")))
+        assertEquals("line one \u0002books\u0003 on line two", multi.single().snippet)
     }
 
     // ---- L6: the card's sections
@@ -94,13 +105,15 @@ class QuickSwitcherTest {
     @Test
     fun `a page is found by its title, and by its new title after a rename`() = runBlocking {
         val store = FakePageStore()
-        val pageDao = FakePageDao(store); val blockDao = FakeBlockDao(store); val ftsDao = FakePageFtsDao(store)
-        val repo = PageContentRepository(pageDao, blockDao, ftsDao)
+        val pageDao = FakePageDao(store); val blockDao = FakeBlockDao(store); val ftsDao = FakePageFtsDao(store); val blockFts = FakeBlockFtsDao(store)
+        val repo = PageContentRepository(pageDao, blockDao, ftsDao, blockFts)
         val id = store.seedPage(Page(title = "Trip", kind = PageKind.PAGE, createdAt = at, updatedAt = at))
         blockDao.insert(Block(pageId = id, type = BlockType.PARAGRAPH, order = 0, content = "pack socks", createdAt = at, updatedAt = at))
         repo.rebuildFtsForPage(id)
         assertEquals(listOf(id), ftsDao.searchPrefix("Trip").map { it.pageId })
         assertEquals(listOf(id), ftsDao.searchPrefix("socks").map { it.pageId })
+        assertEquals(listOf(id), blockFts.searchPrefix("socks").map { it.pageId })                 // v25 — the block's own row
+        assertTrue("the title is the page row's, not a block's", blockFts.searchPrefix("Trip").isEmpty())
 
         pageDao.update(pageDao.getById(id)!!.copy(title = "Holiday"))
         repo.rebuildFtsForPage(id)
@@ -111,12 +124,16 @@ class QuickSwitcherTest {
     @Test
     fun `the heal indexes only the pages without a row, and reports how many`() = runBlocking {
         val store = FakePageStore()
-        val pageDao = FakePageDao(store); val blockDao = FakeBlockDao(store); val ftsDao = FakePageFtsDao(store)
-        val repo = PageContentRepository(pageDao, blockDao, ftsDao)
+        val pageDao = FakePageDao(store); val blockDao = FakeBlockDao(store); val ftsDao = FakePageFtsDao(store); val blockFts = FakeBlockFtsDao(store)
+        val repo = PageContentRepository(pageDao, blockDao, ftsDao, blockFts)
         val a = store.seedPage(Page(title = "Alpha", kind = PageKind.PAGE, createdAt = at, updatedAt = at))
         val b = store.seedPage(Page(title = "Beta", kind = PageKind.PAGE, createdAt = at, updatedAt = at))
         store.seedPage(Page(title = "Gone", kind = PageKind.PAGE, deletedAt = at, createdAt = at, updatedAt = at))
+        blockDao.insert(Block(pageId = a, type = BlockType.PARAGRAPH, order = 0, content = "alpha text", createdAt = at, updatedAt = at))
         repo.rebuildFtsForPage(a)
+        assertEquals(1, repo.healIndex())
+        // v25 — a page whose block rows are missing (the first launch after MIGRATION_24_25) is healed too
+        blockFts.rows.clear()
         assertEquals(1, repo.healIndex())
         assertEquals(listOf(b), ftsDao.searchPrefix("Beta").map { it.pageId })
         assertEquals("a second run finds nothing to do", 0, repo.healIndex())

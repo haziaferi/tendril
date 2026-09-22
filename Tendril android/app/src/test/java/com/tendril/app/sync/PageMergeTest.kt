@@ -78,7 +78,7 @@ class PageMergeTest {
     private val coordinator = RecordingEntryScheduleCoordinator()
 
     private val purgeRegistry = PurgeRegistry(purgedDao, pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
-    private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao)
+    private val contentRepository = PageContentRepository(pageDao, blockDao, ftsDao, FakeBlockFtsDao(store))
     private val revisionDao = FakePageRevisionDao()
 
     private val engine = PagesSyncEngine(

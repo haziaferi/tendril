@@ -109,4 +109,16 @@ class WorkbenchNavState(startTab: WorkbenchDestination = WorkbenchDestination.PA
     var findRequested: Int by mutableStateOf(0)
 
     fun requestFind() { findRequested++ }
+
+    /** v25 — a search hit that names a block: the page opens with its find bar on [BlockJump.query]
+     * and the cursor on that block (the block's own marks, the scroll the bar already does). Set
+     * here, read and cleared by the page it names — the fourth cross-tab intent. */
+    var blockJump: BlockJump? by mutableStateOf(null)
+
+    fun openBlock(pageId: Long, blockId: Long, query: String) {
+        blockJump = BlockJump(pageId, blockId, query)
+        openPage(pageId)
+    }
 }
+
+data class BlockJump(val pageId: Long, val blockId: Long, val query: String)
