@@ -178,6 +178,26 @@ private const val ENCRYPTED_IMAGE_EXTENSION = "tdrlimg"
 data class SnapshotMergeResult(
     val undecryptableFiles: Int,
     val quarantinedRecords: List<QuarantinedRecord> = emptyList(),
+    /**
+     * §9.7 — the local ids of every Entry this pass wrote, or whose reminders it wrote.
+     *
+     * A merge reaches Room without passing the [EntryScheduleCoordinator]
+     * [com.tendril.app.domain.EntryScheduleCoordinator], so nothing downstream knew a reminder
+     * had moved or that a new dated entry existed. The platform caller feeds these ids back
+     * through the coordinator, which is the one place that both arms the alarm and publishes the
+     * entry to the platform's calendar — so the work is proportional to what the pass changed
+     * rather than to the size of the database, which a whole-table sweep on every `onStart` and
+     * `onStop` was not (2026-09-22).
+     *
+     * Ids, not entities: by the time a caller acts, the row it wants is whatever Room holds now,
+     * and re-reading is both cheaper than carrying entities through the result and correct if a
+     * later pass of the same merge touched the row again. An id whose row has since been deleted
+     * simply resolves to null.
+     *
+     * Empty is the ordinary case — most passes change nothing — and means exactly that: no work
+     * to do, not "unknown". A caller must not read it as a reason to fall back to a full sweep.
+     */
+    val touchedEntryIds: List<Long> = emptyList(),
 ) {
     /**
      * True when the folder holds encrypted snapshots this device cannot read. Callers **must
@@ -321,6 +341,10 @@ private class HeldBuilder(
 /** Mutable counter threaded through one [SnapshotSyncOrchestrator.readAndMerge] pass. */
 private class ReadTally {
     var undecryptable = 0
+
+    /** §9.7 — see [SnapshotMergeResult.touchedEntryIds]. A set: the entry pass and the reminder
+     * pass can both reach the same row, and the caller wants one coordinator call for it. */
+    val touchedEntryIds = mutableSetOf<Long>()
 
     /** Records this pass refused to apply because it could not read them — see
      * [SnapshotMergeResult.quarantinedRecords]. */
@@ -1123,6 +1147,7 @@ class SnapshotSyncOrchestrator(
             result = SnapshotMergeResult(
                 undecryptableFiles = read.tally.undecryptable,
                 quarantinedRecords = read.tally.quarantined.toList(),
+                touchedEntryIds = read.tally.touchedEntryIds.toList(),
             ),
             held = held,
         )
@@ -1529,11 +1554,15 @@ class SnapshotSyncOrchestrator(
                 continue
             }
             if (local == null) {
-                uidToId[record.uid] = entryDao.insert(entity)
+                val newId = entryDao.insert(entity)
+                uidToId[record.uid] = newId
+                // §9.7 — see [SnapshotMergeResult.touchedEntryIds].
+                tally.touchedEntryIds += newId
             } else {
                 // providerEventId is per-device only (§3.2) — never adopted from a remote
                 // record, always preserved from whatever this device already had.
                 entryDao.update(entity.copy(id = local.id, providerEventId = local.providerEventId))
+                tally.touchedEntryIds += local.id
             }
         }
         return allRead
@@ -1680,9 +1709,16 @@ class SnapshotSyncOrchestrator(
                 // Includes an arriving tombstone for a reminder this device never had: storing it
                 // is what makes this device republish the delete instead of staying silent about
                 // it, which is the same reason §5.5.1.1's tombstones travel.
-                local == null -> reminderDao.insert(entity)
-                local.deletedAt == null && remoteDeletedAt != null ->
+                local == null -> {
+                    reminderDao.insert(entity)
+                    // §9.7 — a reminder arriving or leaving moves when its *entry* is next due,
+                    // so the id the coordinator needs is the entry's, not the reminder's.
+                    tally.touchedEntryIds += entity.entryId
+                }
+                local.deletedAt == null && remoteDeletedAt != null -> {
                     reminderDao.softDelete(local.id, remoteDeletedAt)
+                    tally.touchedEntryIds += local.entryId
+                }
                 // Live-over-deleted is deliberately not applied: the delete wins. Nothing else can
                 // differ — offset and anchorTime are immutable once written.
                 else -> Unit

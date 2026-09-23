@@ -21,6 +21,7 @@ import com.tendril.app.domain.ViewLockState
 import com.tendril.app.googlecalendar.GoogleCalendarAuthManager
 import com.tendril.app.googlecalendar.GoogleCalendarSyncEngine
 import com.tendril.app.notifications.AlarmScheduler
+import com.tendril.app.notifications.reconcileAlarms
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.CalendarProviderPreferences
@@ -108,6 +109,10 @@ class AppContainer(context: Context) {
         // §9.4.2 — one passphrase covers both surfaces: the continuous sync folder and a
         // `.tendril` package. "Off" is simply no passphrase set.
         passphrase = { secretStore.syncPassphrase.value },
+        // §9.7 — an Import or a Restore rewrites entries, habits and reminders without going
+        // near a ViewModel, so nothing else in those paths arms an alarm. The same sweep the
+        // app open and the boot receiver run; idempotent, so running it once more here is free.
+        rearmAlarms = { reconcileAlarms(context) },
         viewLockState = viewLockState,
     )
     /** §9.4's sync triggers — lifecycle and the Settings button both run through this one

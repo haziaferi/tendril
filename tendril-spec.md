@@ -150,6 +150,11 @@ second copy of the reasoning.
 | 2026-09-22 (syntax highlighting; the export's CLAUDE.md) | §10's code-block deferral built: `domain/code/Highlight.kt` — a hand-rolled tokenizer (keyword · string · comment · number; grammars for the named set, a family's comments for the rest, strings and numbers for any tag; pure, 5 cases), painted by `spansVisualTransformation` (`CodeColours`) from the token map — keyword `third`, string `event`, number `habit`, comment `textDim`; measured on Ink dark 9.1 / 9.8 / 6.7 / 7.2 : 1, the three hues 60°+ apart, none the accent. Walked on both devices (Kotlin on the desktop, Python on the phone, the generic pass on *Plain text*); Kotlin's soft keywords (`open`, `set`, `get`, `it`…) taken out of the set on the walk. **Item 17's remainder**: the Markdown zip carries `CLAUDE.md` at its root (`markdown/AgentReadme.kt` — the folder's shape, the three rules; tested through the real zip). `docs/critiques/syntax-highlighting-function.md`. Tests 924 → 930. | §3.1.1, §10, §0.10 |
 | 2026-09-22 (the widget readout on the real wallpaper) | §8.6 resolved and §10's two widget bullets closed: the configure screen reads `WallpaperColors` (`widget/WallpaperRead.kt`), audits the five roles on that colour beside the bracket (`auditOnWallpaper`) and offers the smallest passing opacity as a tap (`suggestedOpacity`); the mode stays the app's (§8.7). One robustness defect fixed on the walk (the saved-state read threw for a foreign widget id). Walked on the phone: #AC0B23, 88 % → 35 % offered; at 35 % the bracket fails all five, the wallpaper passes all five. `docs/critiques/widget-wallpaper-function.md`. Tests 930 → 934 (`WallpaperAuditTest`, the widget module's first). | §8.6, §10 |
 | 2026-09-22 (block-level search — v25) | §10's last search deferral built: `block_fts` (`data/page/BlockFts.kt`, one FTS4 row per block with text) beside `page_fts`, rebuilt by `PageContentRepository.rebuildFtsForPage` and healed on open (`healIndex`'s block half); `MIGRATION_24_25` creates the table, the first launch fills it; the switcher searches blocks (`rankPageHits` over `BlockSearchHit`: title-prefix pages first, then at most three block rows a page, a multi-line block's snippet on one line) and a block hit opens the page at the block with the find bar on the query (`WorkbenchNavState.openBlock` → `BlockJump` → `PageDetailScreen`'s `findTarget`). `PageContentRepository` takes the DAO as a required parameter (both containers; thirteen test sites on `FakeBlockFtsDao`). Walked on both devices: v24 → v25 in place, the heal's rows counted, a hit landing on its block with the marks; one defect fixed on the walk (a three-line block's match past the row's line). `docs/critiques/block-fts-function.md`; §3.1.1 amended, §4's register row. Tests 934 → 935; `25.json`. | §3.1.1, §3.1.7, §4, §10 |
+| 2026-09-22 (audit: a merge re-arms and publishes what it changed) | §9.7's seam, third and final shape. A merge writes entries and reminders straight to Room without passing the `EntryScheduleCoordinator`, so nothing armed an alarm or published to the Calendar Provider (§3.2) for what arrived. The first fix called `reconcileAlarms` after every pass — but that is two sweeps, the alarm one *and* the Provider backfill, which upserts every dated non-Google entry cross-process; a pass runs on `onStart` **and** `onStop`, so opening and closing the app rewrote the whole calendar twice, on an application scope under `NonCancellable`. The second fix split the alarm half out, which took the cost away and left the system calendar a launch behind. Neither was necessary: `SnapshotMergeResult` now reports `touchedEntryIds` — the local ids the pass actually wrote, entries and the entries owning written reminders — and `SyncCoordinator` puts each through `onEntryChanged`, which is the one place that arms the alarm and publishes the row. Work proportional to what changed; usually nothing, because the last-write-wins guard skips an unchanged record before any write. `MergeTouchedEntriesTest` (4 cases) pins the ids, that a row both passes touch is reported once, and that a second merge of the same folder reports nothing — the last is what makes "proportional" a claim rather than a hope. The Android call site has no JVM proof (`SyncCoordinator` resolves through `AppContainer.from`); it is pinned by the compiler and the walk. Found by `/code-review` on the branch. 941 → 945 tests. | §3.2, §9.7, §9.9 |
+| 2026-09-22 (audit: every bulk write re-arms what it moved) | §9.7's invariant — every write that moves when something is next due re-arms it — held in the ViewModels and nowhere else. Four write paths reached Room around them and armed nothing: an Import and a Restore (`PortableArchive`, which now takes a required `rearmAlarms` supplier wired to `reconcileAlarms`), the folder merge (`SyncCoordinator`, unconditionally after a successful pass — `SnapshotMergeResult` does not report whether entries changed, and a flag for it would put the invariant behind a boolean a later path could forget to set), and the Habits widget's check-in callback (the one of five check-in paths that did not re-arm; its undo direction does not self-heal). A Restore was the worst of them: `reconcileAlarms` runs only in `MainActivity.onCreate` and the boot receiver, and `configChanges` swallows a rotation, so every restored reminder sat unarmed until the next cold start. Proved red-to-green on the two archive paths; the widget's is pinned by the compiler and a walk, a Glance `ActionCallback` being unreachable from the JVM suite. 941 tests. | §9.7 |
+| 2026-09-22 (audit: an ordinal `BYDAY` that can only limit) | §4.1.1 amended. `RecurrenceSpec.parse` returns null for an ordinal `BYDAY` beside `BYMONTHDAY`, and for one under DAILY or WEEKLY (RFC 5545 forbids a numeric `BYDAY` there) — the expander could only *expand*, so it dropped the term and emitted every `BYMONTHDAY` date: `FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR` produced all twelve 13ths of 2026, eleven phantom, against §4.1.1's own doctrine that a missing occurrence beats a phantom one. Such a rule now falls to its first occurrence alone. A plain `BYDAY` still limits (`BYMONTHDAY=13;BYDAY=FR` — Friday the 13th) and an ordinal alone still expands. Reachable from any imported `.ics` (`IcsImporter` passes an RRULE through verbatim), not only from the Google pull. Found by `/tendril-audit`; `RecurrenceExpansionTest` gains 2 cases. 947 tests. | §3.2, §4.1.1 |
+| 2026-09-22 (audit: a stale comment about the desktop's scheduler) | Comment only, no behaviour change. `WorkbenchCore`'s KDoc said desktop's `entryScheduleCoordinator` is "a no-op (see `NoOpEntryScheduleCoordinator` there)" — that class no longer exists anywhere in the tree, and desktop has wired the real `DesktopReminderScheduler` since B§13.6 #7 (which `DesktopAppContainer`'s own KDoc records). Read literally the old text says the desktop never arms anything, which is the wrong conclusion that let the merge go unplanned there (audit row 1.17). Logged because it is a `shared/` edit, not because a decision changed. | §9.7 |
+| 2026-09-22 (audit: the arrow editor wrote from a stale snapshot) | §3.7 traced against the tree, claim by claim — the first spec-trace pass this repository has run (both recorded `--full` audits skipped it for want of an `--against`). Four claims checked, three stale, one accurate and understated. **Stale:** "not available on desktop" (it has been since 2026-09-11, which the *companion spec already recorded* — the two documents disagreed for eleven days); "the screen and ViewModel live in `Tendril android`" (both in `shared/commonMain/ui/canvas/`, routed by `PageRoute`); "`updateTitle` is the one mutation outside the funnel" (three are — `trashPage` and `saveAsTemplate` joined it, all three gated, so the count was stale and not the guarantee). **Accurate:** the arrow editor writes from the snapshot it was opened with. Its recorded consequence, a direction stuck one step past the start, is the mild half: the label field fires per keystroke and wrote `edge.copy(label = …)` on that same snapshot, so typing a label put the *opening* direction back — a change that had landed, silently undone, in a section that claimed neither defect was data-loss. `CanvasEdgeDao.getById` added (a `@Query`, so no schema version and no migration); `cycleEdgeDirection` and `setEdgeLabel` re-read through it and take only `id` from their argument, following §9.7's precedent that correctness belongs to the write rather than to each caller's freshness; `CanvasScreen` resolves `editingEdge` against the live `edges` list so the sheet shows the new value. `CanvasStaleEdgeTest` (3 cases), both defect cases red before green. The display half is pinned by the walk, not by a test. 945 → 948 tests. | §3.7, §9.4 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -2378,6 +2383,33 @@ medical-appointment (§5.1) and financial (§5.2.2) data on a personal, unrooted
     stop, reached by a route the bullet above never considered. The Habits widget was reconciled with
     App Lock on 2026-09-04 and its code comment states the reasoning; the notification path was
     never reconciled with anything.
+    *(**Closed 2026-09-22.** Both halves of the widget's pattern, and a third surface this bullet
+    did not know about.*
+    - *UI gate: `EntryActionReceiver.pendingIntent` returns an **Activity** PendingIntent while App
+      Lock is on, so the action opens the app through the lock instead of broadcasting. Decided in
+      that one factory rather than at each call site, so a future notification that adds a Done
+      button cannot forget it; targeting the Activity also sidesteps the background-activity-start
+      restriction a receiver launching one would hit.*
+    - *Guard: `resolveFromNotification` refuses while the lock is on, for a notification posted
+      before it was turned on or a PendingIntent that outlived the setting. A refusal deliberately
+      **leaves the notification standing** — cancelling it would make "nothing happened" look
+      exactly like "done", which is worse than the original defect, since the original at least did
+      what it appeared to do.*
+    - ***The third surface: the habit reminder's check-off action.*** *`HabitReminderAlarmReceiver`
+      handles `ACTION_CHECK_OFF` by calling `CheckInHabitUseCase.checkIn` — the same write the
+      widget bullet gates, by a route neither bullet considered. This section reconciled the widget
+      and then recorded the entry notification, and still missed it; it is gated now on both halves.
+      Posting the reminder stays ungated on purpose: reading a habit title on the lock screen is the
+      exposure this section already accepts for widgets, and suppressing the reminder would break
+      the feature to protect nothing new.*
+    - *Pinned by `NotificationActionAppLockTest` (5 cases). The rule is lifted out of
+      `onReceive` into `resolveFromNotification` precisely so it could be pinned: a
+      `BroadcastReceiver` body only runs inside a broadcast dispatch, since `goAsync()` requires
+      one, so the JVM suite could not reach it — and an instrumented test would run against the
+      real database on the device. That unreachability is why the hole survived sixteen days.
+      `tools/mutate.py` confirms the test bites: deleting the guard is **KILLED**.*
+    - *No desktop twin: `Tendril windows` has no App Lock at all (§1), and its reminder surface is
+      a tray toast with no action on it, so there is nothing to gate.)*
 - **Interaction with checkbox-only mode (§3.1.2): App Lock wins (corrected 2026-09-06).**
   ~~Independent, no precedence rule needed — App Lock gates entering the app at all; checkbox-only
   governs one already-open page's behavior over the lockscreen. A person can reasonably want the app
@@ -2482,9 +2514,14 @@ nobody chose from one they did. What shipped:
 - One gate, in `launchAndTouch`. Every node and edge mutation already funnelled through that helper
   (see the sync note below), so the gate is a property of *making a canvas write* rather than a line
   each future mutation has to remember to add.
-- `updateTitle` carries its own gate, because it is the one mutation outside the funnel: it writes
-  the `pages` row directly, and a guard placed only in the funnel would have left the rename — and
-  the `updatedAt` bump it carries — completely ungated.
+- `updateTitle` carries its own gate, because it writes the `pages` row directly and a guard
+  placed only in the funnel would have left the rename — and the `updatedAt` bump it carries —
+  completely ungated. *(**Corrected 2026-09-22, spec trace.** This read "the one mutation outside
+  the funnel". Two more have joined it since: `trashPage` (the phone's fix PR, P5 2026-09-18) and
+  `saveAsTemplate` (§0.10 item 15). Both carry the same `if (locked()) return`, so the lock holds
+  on all three — the count was stale, not the guarantee. Pinned by `ViewOnlySurfacesGuardTest`,
+  which has a case for the rename and one for the trash; `saveAsTemplate` under the lock is
+  gated and untested.)*
 - Refusing before the write also refuses the bump. A bump under the lock would be a claim of
   authorship for an edit nobody made, which is enough on its own to outrank a real edit waiting on
   another device (§9.4).
@@ -2534,6 +2571,26 @@ desktop sync reads, merges and re-exports canvas nodes and edges it has no way t
 correct behaviour — a client must not drop what it cannot render — but it means the desktop is a
 full participant in canvas sync while showing a placeholder.
 
+*(**Superseded 2026-09-22, spec trace — the paragraph above describes a state that no longer
+exists, and is kept only so the drift is legible.** Canvas is on the desktop and has been since
+the screen moved: `CanvasScreen` and `CanvasViewModel` are in
+`shared/src/commonMain/kotlin/com/tendril/app/ui/canvas/`, not in `Tendril android`, and
+`ui/nav/PageRoute.kt` routes `PageKind.CANVAS` straight to `CanvasScreen` for both callers. The
+desktop reaches that route through `WorkbenchScaffold` (`Main.kt:326`) and through its pop-out
+windows (`PopOutWindows.kt:224`). No `NotAvailableOnDesktop("Canvas")` stand-in remains anywhere
+in `Tendril windows/src` — `WorkbenchScaffold`'s own comment records that the placeholders the
+slot pattern was built for are gone. So the sync asymmetry this paragraph explains is not a
+live consideration: the desktop draws what it merges.
+
+The part worth keeping: **the companion spec was right and this one was not.** `Tendril
+windows/tendril-windows-spec.md` has carried a Revision Log row reading "2026-09-11 (Canvas on
+desktop) — `shared/` gains `ui/canvas/` … moved from the Android app" since the day it happened,
+and records the stand-in being replaced. So the two documents contradicted each other for eleven
+days and nothing noticed, because nothing reads them together. That is the same failure the
+both-platforms rule was written for after row 1.17, one level up: the rule says to check the other
+platform's *code* before writing a finding, and this says to check the other platform's *record*
+before trusting this one. Found by tracing §3.7's claims against the tree; no code changed.)*
+
 **Known open defects, recorded here rather than only in `docs/audit-2026-09-04.md`** (§1.1 and §1.2
 there; both re-read against the tree on 2026-09-07 and both still present): the arrow hit-test is
 implemented inside a drag detector, whose callback only fires after touch slop, so a *tap* on an
@@ -2542,6 +2599,31 @@ which also makes the View-Only note above ("tapping an arrow to read its label s
 describe an affordance that does not currently work. And the arrow editor operates on the captured
 snapshot of the edge it was opened with, so direction never cycles past one step and the displayed
 direction goes stale. Neither is a data-loss bug; both make a shipped feature partly unreachable.
+
+**Both closed 2026-09-22 (spec trace), and the second was worse than this recorded.**
+
+*The hit-test* had already been fixed before this trace, on Item 15's walk, and the paragraph above
+simply never caught up: the tap is now an `awaitEachGesture` loop that takes the first down without
+consuming it and acts on `waitForUpOrCancellation`, so a drag pans and a tap picks. The comment at
+the call site records why the old `detectDragGestures` form had to go — it consumed every drag past
+touch slop and cancelled the board's pan on both platforms, moving a 380 px swipe by 40.
+
+*The stale editor* was still live, and the consequence recorded here — a direction that will not
+cycle past one step — is the mild half. The sheet's label field calls `onSetLabel` on **every
+keystroke**, and `setEdgeLabel` wrote `edge.copy(label = …)` on the snapshot the sheet was opened
+with. So changing an arrow's direction and then typing in its label put the *opening* direction
+back: a change that had landed was silently undone by typing, which is a data-loss bug, and this
+section said there was none. Proved red before green by `CanvasStaleEdgeTest` (3 cases), which
+drives the ViewModel the way the sheet does — one captured `CanvasEdge`, used more than once.
+
+The fix follows §9.7's precedent rather than patching the two symptoms. Leaving correctness to
+each call site holding fresh state is what produced four separate re-arm defects, so both edge
+writes now re-read the row through the new `CanvasEdgeDao.getById` and take only `id` from their
+argument; a stale snapshot is merely stale. `?: return` covers an edge deleted under an open sheet,
+or replaced wholesale by a merge — §9.4's Pass 4 re-inserts, so the id genuinely goes. Separately
+`CanvasScreen` resolves `editingEdge` against the live `edges` list, which is what makes the
+sheet's "Direction: …" line *show* the new value; that half is pinned by the walk, not by a test.
+A `@Query` adds no schema version, so the migration chain is untouched.
 
 ---
 
@@ -2718,6 +2800,20 @@ in Tendril than in the system calendar Tendril published it to. That divergence 
 data-integrity problem — the Provider write is still one-directional and Room is still the single
 source of truth (§9.8 R3) — but it is a real, visible gap, and the honest fix if it ever bites is to
 widen the subset, not to start reading `Instances` back.
+
+**Amended 2026-09-22 (audit): an ordinal `BYDAY` that can only limit joins the unexpandable set.**
+`BYDAY` is listed above as supported "plain and ordinal", and it is — but only where the ordinal
+*expands*. Beside `BYMONTHDAY` the two parts intersect: `FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR` asks
+for a 13th that is also a first Friday, which no month has. The expander has no limiting path, so it
+dropped the ordinal term and emitted **every** `BYMONTHDAY` date — all twelve 13ths of 2026, eleven
+of them phantom. The same ignoring turned `FREQ=DAILY;BYDAY=1MO`, which RFC 5545 forbids outright (a
+numeric `BYDAY` is meaningful only under MONTHLY or YEARLY), into every Monday. Both now fail
+`parse()` and fall to the first occurrence alone, which is this section's own doctrine — a missing
+occurrence is visibly missing, a phantom one is not. A plain `BYDAY` still limits `BYMONTHDAY`
+(`BYMONTHDAY=13;BYDAY=FR` is Friday the 13th and expands correctly), and an ordinal alone still
+expands. Reachable from any imported `.ics`, not only from the Google pull: `IcsImporter` (§3.2)
+passes a component's RRULE through verbatim, which widens the producer set §4.1.1's "one producer"
+argument above was written against.
 
 **Alarm rescheduling must be event-driven, not schedule-ahead (Decided 2026-07-14; premise struck
 2026-09-06).** ~~`AlarmManager` cannot know a TASK's next occurrence before it exists — elastic

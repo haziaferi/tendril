@@ -83,6 +83,10 @@ internal fun QuickAddWindow(core: WorkbenchCore, state: QuickAddState, main: Mai
     )
     var text by remember { mutableStateOf("") }
     var added by remember { mutableStateOf<Entry?>(null) }
+    /** Audit 1.8 — "a write has started", which is what the one-write guard needs and what
+     *  [added] cannot say until the database has answered. Composed only while the popup is
+     *  open, so every open starts false without anything having to reset it. */
+    var writing by remember { mutableStateOf(false) }
     Window(
         onCloseRequest = { state.open = false },
         state = windowState,
@@ -122,12 +126,29 @@ internal fun QuickAddWindow(core: WorkbenchCore, state: QuickAddState, main: Mai
                             QuickAddField(
                                 today = LocalDate.now(),
                                 onQuickAdd = { parsed ->
-                                    // One write per open: a second Enter during the *Added* flash is ignored.
-                                    if (added == null) scope.launch {
-                                        val entry = quickAddEntry(core.database.entryDao(), core.entryScheduleCoordinator, parsed, LocalDate.now())
-                                        added = entry
-                                        delay(700)
-                                        state.open = false
+                                    // One write per open, guarded by a flag set *here* — on the UI
+                                    // thread, before the coroutine starts — rather than by `added`.
+                                    //
+                                    // Audit 1.8: `added` is only assigned after `quickAddEntry`
+                                    // returns from the database, and both Enters of a double tap
+                                    // are delivered to this lambda inside that round trip, so both
+                                    // saw it null and both launched. Walked 2026-09-22: five
+                                    // attempts, five pairs of duplicate entries, 0–3 ms apart. The
+                                    // same test through `SendKeys.SendWait`, which waits for each
+                                    // keystroke, wrote one — the guard only ever held when the
+                                    // second Enter happened to land after the write finished.
+                                    //
+                                    // `added` stays as it was: it is the *Added* flash's state,
+                                    // and what it means (a write completed) is not what a guard
+                                    // needs to know (a write started).
+                                    if (!writing) {
+                                        writing = true
+                                        scope.launch {
+                                            val entry = quickAddEntry(core.database.entryDao(), core.entryScheduleCoordinator, parsed, LocalDate.now())
+                                            added = entry
+                                            delay(700)
+                                            state.open = false
+                                        }
                                     }
                                 },
                                 placeholder = "Dentist fri 14:30 !",

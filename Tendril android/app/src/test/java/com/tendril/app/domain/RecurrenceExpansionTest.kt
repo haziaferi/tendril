@@ -164,6 +164,42 @@ class RecurrenceExpansionTest {
         assertNotNull(RecurrenceSpec.parse("RRULE:FREQ=DAILY"))
     }
 
+    @Test fun `an ordinal BYDAY that cannot limit makes the rule unparseable`() {
+        // The same doctrine, one combination further. An ordinal BYDAY term beside BYMONTHDAY has
+        // nothing to expand -- BYMONTHDAY already chose the days -- and this expander has no way to
+        // apply "the first Friday" as a *limiter*, so it dropped the term and emitted every
+        // BYMONTHDAY date. `FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR` describes a 13th that is also a
+        // first Friday, which no month has; it produced all twelve 13ths of 2026 -- eleven phantom
+        // occurrences, the exact failure the test above refuses. Reachable from any imported .ics
+        // (`IcsImporter` passes a component's RRULE through verbatim), not only from Google.
+        assertNull(RecurrenceSpec.parse("FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR"))
+        assertNull(RecurrenceSpec.parse("FREQ=YEARLY;BYMONTH=11;BYMONTHDAY=13;BYDAY=1FR"))
+        // RFC5545: a numeric BYDAY is only meaningful under MONTHLY or YEARLY. Under DAILY or
+        // WEEKLY the ordinal was ignored, turning an invalid rule into every Monday.
+        assertNull(RecurrenceSpec.parse("FREQ=DAILY;BYDAY=1MO"))
+        assertNull(RecurrenceSpec.parse("FREQ=WEEKLY;BYDAY=2TU"))
+        // Unchanged: a plain BYDAY still limits BYMONTHDAY, and an ordinal alone still expands.
+        assertNotNull(RecurrenceSpec.parse("FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=FR"))
+        assertNotNull(RecurrenceSpec.parse("FREQ=MONTHLY;BYDAY=1FR"))
+        assertNotNull(RecurrenceSpec.parse("FREQ=WEEKLY;BYDAY=TU"))
+    }
+
+    @Test fun `a Friday-the-13th rule puts nothing on a 13th that is not a Friday`() {
+        // 2026's Friday the 13ths: February, March, November.
+        val friday13 = RecurrenceSpec.parse("FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=FR")!!
+        assertEquals(
+            listOf(LocalDate.of(2026, 2, 13), LocalDate.of(2026, 3, 13), LocalDate.of(2026, 11, 13)),
+            friday13.occurrenceDates(LocalDate.of(2026, 2, 13), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)),
+        )
+        // The ordinal spelling is unparseable, so the EVENT falls back to its own first day --
+        // missing, never phantom.
+        val base = event(1, LocalDate.of(2026, 2, 13), rrule = "FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR")
+        assertEquals(
+            listOf(LocalDate.of(2026, 2, 13)),
+            datesOf(listOf(base), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)),
+        )
+    }
+
     // ------------------------------------------------------- expansion over real Entries
 
     @Test fun `a weekly EVENT appears on every occurrence in the window`() {

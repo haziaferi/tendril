@@ -2,6 +2,7 @@ package com.tendril.app.sync
 
 import android.content.Context
 import android.net.Uri
+import com.tendril.app.AppContainer
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
 import com.tendril.app.storage.SyncStatusPreferences
@@ -172,6 +173,34 @@ class SyncCoordinator(
             } else {
                 orchestrator.writeSnapshots(store, passphrase)
                 statusPreferences.markSyncedNow()
+                // §9.7, the merge's half of the invariant (audit 2026-09-22, row 1.3). A merge
+                // writes entries, habits and reminders straight to Room without passing a
+                // ViewModel or the EntryScheduleCoordinator, so a reminder set on the desktop
+                // arrived here unarmed: `reconcileAlarms` runs in MainActivity.onCreate, which
+                // is *before* the onStart sync that merges, so it was armed only at the next
+                // Activity creation.
+                //
+                // Through the coordinator, per entry the pass actually wrote — not a sweep.
+                //
+                // `EntryScheduleCoordinator.onEntryChanged` is the one place that does both
+                // halves of this for a row: arms its alarm *and* publishes it to the Calendar
+                // Provider (§3.2). Feeding it the ids the merge reports makes the work
+                // proportional to what changed, where both earlier shapes were not — the full
+                // `reconcileAlarms` sweep wrote every dated entry to the Provider cross-process
+                // on every `onStart` and `onStop`, and the alarms-only sweep that replaced it
+                // re-armed the whole table while leaving the system calendar a launch behind.
+                //
+                // No fallback when the list is empty: empty means the pass changed no entry, not
+                // that it failed to say. A sweep "just in case" would put the cost back.
+                //
+                // A row deleted between the merge and here resolves to null and is skipped. Its
+                // alarm may stay armed, which is harmless — both receivers re-read the entry at
+                // fire time and return on a missing or trashed row.
+                val container = AppContainer.from(context)
+                val entryDao = container.database.entryDao()
+                merge.touchedEntryIds.forEach { id ->
+                    entryDao.getById(id)?.let { container.entryScheduleCoordinator.onEntryChanged(it) }
+                }
                 // A quarantined record is a successful pass, not a failed one — the merge did
                 // everything it safely could — but it must not be silent. A device that quietly
                 // drops a peer's page on every pass looks exactly like a device in sync, and the

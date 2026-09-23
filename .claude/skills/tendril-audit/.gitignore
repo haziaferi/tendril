@@ -1,0 +1,12 @@
+# The skill and its cases are the shared artefact; what runs them is not.
+#
+# promptlab.py is a local copy of the `optimization-engines` plugin's runner
+# (skills/prompt-engineer/scripts/promptlab.py) with three fixes applied on 2026-09-22: a
+# `--timeout` flag, UTF-8 on the subprocess stdin (this skill's `>=` and arrows crashed it under
+# cp1252) and a checkpoint write after each case. It belongs to that plugin, not to Tendril, and
+# re-copying it is one command — so it is not vendored here.
+#
+# prompts.json is generated from SKILL.md, and results.json is one run's output.
+promptlab.py
+prompts.json
+results.json

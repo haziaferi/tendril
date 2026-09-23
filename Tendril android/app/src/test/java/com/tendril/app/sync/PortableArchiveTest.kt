@@ -46,6 +46,7 @@ class PortableArchiveTest {
         habitCompletionDao: FakeHabitCompletionDao = FakeHabitCompletionDao(),
         checkInDao: FakeCheckInDao = FakeCheckInDao(),
         timeLogDao: FakeTimeLogDao = FakeTimeLogDao(),
+        rearms: RearmCounter = RearmCounter(),
     ) = PortableArchive(
         context = fakeContext(backing, temp.newFolder(), temp.newFolder()),
         entryDao = entryDao,
@@ -60,6 +61,7 @@ class PortableArchiveTest {
         pagesSyncEngine = mockk(relaxed = true),
         localImages = InMemoryLocalImageStore(),
         passphrase = { passphrase },
+        rearmAlarms = { rearms.count++ },
     )
 
     private fun localEntry(uid: String, title: String) = Entry(
@@ -475,5 +477,41 @@ class PortableArchiveTest {
 
     private companion object {
         const val PASSPHRASE = "a shared passphrase"
+    }
+
+    /**
+     * §9.7's invariant over the two archive paths (audit 2026-09-22, rows 1.3 / 1.13).
+     *
+     * Counting calls rather than asserting on a scheduler: what went wrong was that *nothing*
+     * happened, and the production re-arm is `reconcileAlarms`, which reaches for AppContainer
+     * and the Provider sweep. A JVM test can have neither, and neither is what these tests are
+     * about — the claim is that the path calls its re-arm at all.
+     */
+    class RearmCounter { var count = 0 }
+
+    @Test
+    fun `a restore re-arms alarms for what it restored`() = runBlocking {
+        val backing = FakeContentResolverBacking()
+        val rearms = RearmCounter()
+        val uri = backing.givenFile(validArchiveBytes(entryRecord("restored-1", "Take the pills")))
+
+        archive(FakeEntryDao(), FakeHabitDao(), backing, rearms = rearms).restoreFromBackup(uri)
+
+        // Restore is the worst moment for this to be missing: the person has just lost their
+        // data, every reminder in the archive is new to this device, and `reconcileAlarms` runs
+        // only in MainActivity.onCreate and the boot receiver — a rotation will not re-run it,
+        // because MainActivity declares configChanges for orientation.
+        assertEquals("restore armed nothing", 1, rearms.count)
+    }
+
+    @Test
+    fun `an additive import re-arms alarms for what it imported`() = runBlocking {
+        val backing = FakeContentResolverBacking()
+        val rearms = RearmCounter()
+        val uri = backing.givenFile(validArchiveBytes(entryRecord("imported-1", "Ring the vet")))
+
+        archive(FakeEntryDao(), FakeHabitDao(), backing, rearms = rearms).importAdditive(uri)
+
+        assertEquals("import armed nothing", 1, rearms.count)
     }
 }

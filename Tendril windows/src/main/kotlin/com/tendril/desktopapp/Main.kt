@@ -254,7 +254,10 @@ fun main() {
             CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
                 CompositionLocalProvider(LocalSystemTextScale provides mainWindow.systemTextScale) {
-                    App(core, orchestrator, folderManager, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey)
+                    App(core, orchestrator, folderManager, switcher, treeState, shortcuts, shortcutActions, navState, popOuts, mainWindow, hotkey,
+                        // §9.7 — the folder merge is the one write path here that does not
+                        // pass the EntryScheduleCoordinator, so it re-plans explicitly.
+                        rearmReminders = { scheduler.replan() })
                 }
             }
             }
@@ -303,7 +306,9 @@ private fun logCrash(file: File, thread: Thread, e: Throwable) {
 }
 
 @Composable
-private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions, hotkey: GlobalHotkey) {
+private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager, switcher: SwitcherState, treeState: PagesTreeState, shortcuts: ShortcutsState, shortcutActions: ShortcutActions, navState: WorkbenchNavState, popOuts: PopOuts, mainWindow: MainWindowActions, hotkey: GlobalHotkey,
+    /** §9.7 — passed down to [SyncBar]; see the parameter there for why it is required. */
+    rearmReminders: () -> Unit) {
     // B§13.6 #6 — the pop-outs draw at this window's scale: its shorter side, in the platform's dp.
     val mainDensity = androidx.compose.ui.platform.LocalDensity.current
     val mainSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
@@ -356,7 +361,7 @@ private fun App(core: WorkbenchCore, orchestrator: SnapshotSyncOrchestrator, fol
                 },
                 // §0.6.15 — the last stand-in gone: Settings holds the Claude section; 14a moved
                 // the sync folder controls here too, off the top of every screen.
-                settingsContent = { DesktopSettingsScreen(core, syncSection = { SyncBar(orchestrator, folderManager) }, onShowShortcuts = { shortcuts.open = true }, hotkeyError = hotkey.error) },
+                settingsContent = { DesktopSettingsScreen(core, syncSection = { SyncBar(orchestrator, folderManager, rearmReminders = rearmReminders) }, onShowShortcuts = { shortcuts.open = true }, hotkeyError = hotkey.error) },
             )
         }
     }
@@ -429,7 +434,18 @@ private val PASSPHRASE_MASK = PasswordVisualTransformation()
  * Android keeps the same controls and the only place B§13.4's mock had room for them.
  */
 @Composable
-internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: DesktopSyncFolderManager) {
+internal fun SyncBar(
+    orchestrator: SnapshotSyncOrchestrator,
+    folderManager: DesktopSyncFolderManager,
+    /**
+     * §9.7's re-plan, for the one write path on this side that does not pass the
+     * [EntryScheduleCoordinator]: the folder merge. Required rather than defaulted — a no-op
+     * default would compile here and at the next call site someone adds, and the bug it hides is
+     * silent (a reminder that simply never fires). The same argument Android's `PortableArchive`
+     * makes for its own `rearmAlarms`.
+     */
+    rearmReminders: () -> Unit,
+) {
     val folderPath by folderManager.folderPath.collectAsState()
     var passphrase by remember { mutableStateOf("") } // session-only, never persisted (§12.5/Milestone 2)
     var syncing by remember { mutableStateOf(false) }
@@ -490,6 +506,15 @@ internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Desk
                             // reasoning and same channel as Android's SyncCoordinator. Null on a
                             // clean pass, so the notice clears itself.
                             syncError = merge.quarantineMessage()
+                            // §9.7 on this side, the same seam Android's SyncCoordinator closes
+                            // (audit 2026-09-22 row 1.3, which recorded only the phone's half).
+                            // `replan` is reached from the EntryScheduleCoordinator callbacks
+                            // and once at startup, and a merge passes neither — so a reminder
+                            // set on the phone arrived here unplanned until the next launch.
+                            // Note against row 1.6: this is a third caller of an unsynchronised
+                            // `replan`, though not a new race — the `syncing` flag keeps two
+                            // passes from overlapping, and 1.6's fix belongs with 1.6.
+                            rearmReminders()
                         }
                     } catch (e: Exception) {
                         syncError = e.message ?: "Sync failed."
@@ -500,22 +525,21 @@ internal fun SyncBar(orchestrator: SnapshotSyncOrchestrator, folderManager: Desk
             },
         ) { Text(if (syncing) "Syncing…" else "Sync now") }
         }
+        // Audit 1.5 — one line, not two. This block was emitted twice: once here inside the
+        // Column and once again as a sibling after it closed, so every sync error was drawn
+        // twice, one under the other. Walked 2026-09-22 with a changed passphrase: "24 file(s)
+        // couldn't be decrypted — check the passphrase. Nothing was written." appeared on two
+        // consecutive lines, identical. The copy inside the Column is the one kept — a `SyncBar`
+        // that emits a Column *and* a loose Text as siblings is the accident — and it takes the
+        // stray's padding with it so the spacing below the message is unchanged.
         syncError?.let {
             Text(
                 it,
                 style = MaterialTheme.typography.description,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
             )
         }
-    }
-    syncError?.let {
-        Text(
-            it,
-            style = MaterialTheme.typography.description,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        )
     }
 }
 

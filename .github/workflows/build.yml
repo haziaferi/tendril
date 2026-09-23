@@ -6,8 +6,12 @@
 # a single clone reproduces (tendril-spec.md §11). So this workflow runs three wrappers rather than
 # one, mirroring exactly what the README tells a person to run by hand.
 #
-# All three need the Android SDK, including the desktop build: `shared` has an `android` target as
-# well as a `desktop` one, and `Tendril windows` composite-builds it.
+# The Android SDK is needed by the Android build and by `shared`, which has an `android` target as
+# well as a `desktop` one. It is supplied by the runner image rather than by a setup step (see
+# below). This comment used to claim the desktop build needed it too, via the composite build of
+# `shared`; the run of 2026-09-23 disproved that — `shared build` passed on a runner whose Android
+# setup step had failed, and the desktop build failed for an unrelated toolchain reason. A comment
+# is not evidence, which is the general lesson and the reason this one now cites a run.
 name: Build
 
 on:
@@ -39,10 +43,19 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # Installs cmdline-tools and accepts the SDK licences. The platform itself (compileSdk 37)
-      # is left to AGP's own auto-download, which only needs those licences accepted — if a future
-      # runner image ever stops allowing that, add `with: packages: 'platforms;android-37'` here.
-      - uses: android-actions/setup-android@v3
+      # `android-actions/setup-android@v3` used to sit here, to install cmdline-tools and accept
+      # the SDK licences. Removed 2026-09-23: on the current runner image it fails outright —
+      # "Failed to find package 'tools'", then sdkmanager exits 1 — because it still asks for the
+      # retired `tools` package. Being the fourth step, its failure skipped `setup-gradle` and the
+      # Android build behind it, so this workflow could not have gone green whatever the code did.
+      #
+      # It is not replaced, because it turns out not to be needed: `audit.yml`'s `unit-tests` job
+      # builds and tests the same app with no Android setup step at all and passes, the runner
+      # image shipping an SDK whose licences are already accepted. That is the evidence for
+      # deleting rather than pinning a version — a green run of the same compile, not a guess.
+      # If a future image does drop the SDK, the symptom is a licence or missing-platform error in
+      # the Android step below, and the fix is `setup-android` back with an explicit
+      # `with: packages: 'platforms;android-37'`.
 
       # Caches ~/.gradle across runs and writes a build summary on the job page. Deliberately no
       # --no-daemon on the wrapper calls below: this action manages the daemon, and killing it

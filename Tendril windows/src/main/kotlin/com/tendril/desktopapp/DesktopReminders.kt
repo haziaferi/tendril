@@ -47,6 +47,18 @@ class DesktopReminderScheduler(
     override suspend fun onReminderRemoved(entryId: Long, reminderId: Long) = replan()
 
     /** Drop the sleeping job and plan again from the database; called at start and on every change. */
+    /**
+     * Audit 1.6 — `@Synchronized` because this is called from every coordinator callback and two
+     * of them can be in flight together. Unsynchronised, both read the same [job], both cancel it,
+     * and both assign: one loop is left running that nothing references, and two loops resolve the
+     * same firing. `DesktopReminderSchedulerTest` reproduced it in **9 of 25** runs; the hand walk
+     * of 2026-09-22 could not, which is the argument for this module having tests at all.
+     *
+     * The lock alone is not enough, and [fire] is the other half: cancellation is cooperative, so a
+     * loop that has already come back from its `delay` has no suspension point left before it
+     * notifies and will show its firing whatever `cancel()` says.
+     */
+    @Synchronized
     fun replan() {
         job?.cancel()
         job = scope.launch { loop() }
@@ -55,15 +67,39 @@ class DesktopReminderScheduler(
     private suspend fun loop() {
         while (true) {
             val now = Instant.now()
-            val next = pending(now).firstOrNull()
+            // The whole batch, not just the earliest. `entryFirings` only ever emits a firing
+            // still ahead of `now`, so anything whose moment passes while another toast is being
+            // shown disappears from the next `pending()` **permanently** — two tasks due in the
+            // same minute produced one toast and silently dropped the other. Holding the batch
+            // across the delay is what keeps the second one.
+            val due = pending(now)
+            val next = due.firstOrNull()
             val wait = next?.let { Duration.between(now, it.at) } ?: CEILING
             delay(minOf(wait, CEILING).toMillis().coerceAtLeast(0))
-            if (next != null && !Instant.now().isBefore(next.at)) {
-                synchronized(fired) { fired += key(next); if (fired.size > 500) fired.remove(fired.first()) }
-                lastFired = next
-                notify(next)
+            val woke = Instant.now()
+            due.filter { !woke.isBefore(it.at) }.forEach { fire(it) }
+        }
+    }
+
+    /**
+     * Show a firing, unless it has already been shown.
+     *
+     * The check and the record are one atomic step. `pending()` also filters on [fired], but it
+     * does so *before* the delay, which is too early to help: two loops racing past that filter
+     * both hold the same firing and both arrive here. Deciding it at the moment of notifying is
+     * what makes "a firing shows once" true rather than likely.
+     */
+    private fun fire(f: Firing) {
+        val fresh = synchronized(fired) {
+            if (!fired.add(key(f))) false
+            else {
+                if (fired.size > 500) fired.remove(fired.first())
+                true
             }
         }
+        if (!fresh) return
+        lastFired = f
+        notify(f)
     }
 
     /** Every firing owed after [now], soonest first, minus the ones already shown. */

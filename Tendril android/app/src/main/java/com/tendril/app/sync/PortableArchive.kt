@@ -104,6 +104,28 @@ class PortableArchive(
      */
     private val passphrase: () -> String?,
     /**
+     * §9.7's invariant, for the two write paths that reach Room without a ViewModel: **every
+     * write that moves when something is next due re-arms it.** Both entry points below rewrite
+     * entries, habits and reminders wholesale and neither armed anything, so a Restore left every
+     * restored reminder unarmed until the next `MainActivity.onCreate` — and `configChanges` on
+     * that Activity swallows a rotation, so the app could sit open on the restored screen for
+     * hours with nothing scheduled. The person had just lost their data; that is the worst
+     * available moment for a reminder to silently not fire.
+     *
+     * Required rather than defaulted, for [passphrase]'s reason one floor down: that gap existed
+     * because encryption was something a call site had to remember and no call site did. A
+     * defaulted no-op here would be the same bug wearing the same disguise — a construction site
+     * that forgot it would restore perfectly and arm nothing, and no test asserting on rows would
+     * notice. Making the compiler name every call site is the cheaper way to be sure.
+     *
+     * A supplier rather than the scheduler itself because the production implementation is
+     * `reconcileAlarms`, which reaches for [AppContainer] and the Provider sweep — neither of
+     * which a JVM test can have. It is idempotent by construction (it already runs on every app
+     * open as well as on boot), so calling it once more at the end of an import costs a sweep and
+     * risks nothing.
+     */
+    private val rearmAlarms: suspend () -> Unit,
+    /**
      * §3.1.2's View-Only toggle, as the user decided it: the lock is absolute and it covers
      * Settings. [importAdditive] and [restoreFromBackup] are the largest create and destroy
      * operations in the app, so the refusal lives down here beside the work rather than only on
@@ -287,6 +309,9 @@ class PortableArchive(
         quarantined += applyHabitCompletions(decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS]))
         quarantined += applyCheckIns(decodeCheckIns(contents[FILE_CHECK_INS]))
         quarantined += applyTimeLogs(decodeTimeLogs(contents[FILE_TIME_LOGS]))
+        // §9.7 — see [rearmAlarms]. Last, after every apply* above: the sweep arms from the rows
+        // as they now stand, so anything earlier would arm the state this import is replacing.
+        rearmAlarms()
         ImportResult(
             hadManifest = contents.containsKey(MANIFEST_NAME),
             imagesRestored = imagesRestored,
@@ -383,6 +408,10 @@ class PortableArchive(
         applyHabitCompletions(habitCompletions)
         applyCheckIns(checkIns)
         applyTimeLogs(timeLogs)
+        // §9.7 — see [rearmAlarms]. The wipe above cancelled nothing and the applies armed
+        // nothing, so without this the device holds a full set of restored reminders and no
+        // alarm for any of them until the next cold start.
+        rearmAlarms()
     }
 
     // Decode and apply are split so [restoreFromBackup] can prove an archive is readable

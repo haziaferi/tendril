@@ -389,17 +389,36 @@ class CanvasViewModel(
         }
     }
 
+    /**
+     * §3.7 — both edge writes re-read the row instead of trusting [edge].
+     *
+     * The arrow sheet captures the tapped edge once and never re-resolves it, so it hands the
+     * same value to every press and every keystroke. Computing the next direction from that
+     * value left the cycle stuck one step past the start; worse, [setEdgeLabel]'s whole-row
+     * `copy()` carried the snapshot's *direction* back over one the person had just changed, so
+     * typing a label silently undid a change that had landed. Both are a caller-freshness
+     * problem, and the same move that closed §9.7's re-arm seam closes this one: make it a
+     * property of the write. A stale argument is then merely stale — [CanvasEdge.id] is all
+     * either method takes from it. `?: return` on the read covers the edge deleted from under an
+     * open sheet, or replaced wholesale by a merge (§9.4's Pass 4 re-inserts, so the id is gone).
+     */
     fun cycleEdgeDirection(edge: CanvasEdge) {
-        val next = when (edge.direction) {
-            CanvasArrowDirection.ONE_WAY -> CanvasArrowDirection.TWO_WAY
-            CanvasArrowDirection.TWO_WAY -> CanvasArrowDirection.NONE
-            CanvasArrowDirection.NONE -> CanvasArrowDirection.ONE_WAY
+        launchAndTouch {
+            val live = canvasEdgeDao.getById(edge.id) ?: return@launchAndTouch
+            val next = when (live.direction) {
+                CanvasArrowDirection.ONE_WAY -> CanvasArrowDirection.TWO_WAY
+                CanvasArrowDirection.TWO_WAY -> CanvasArrowDirection.NONE
+                CanvasArrowDirection.NONE -> CanvasArrowDirection.ONE_WAY
+            }
+            canvasEdgeDao.update(live.copy(direction = next))
         }
-        launchAndTouch { canvasEdgeDao.update(edge.copy(direction = next)) }
     }
 
     fun setEdgeLabel(edge: CanvasEdge, label: String) {
-        launchAndTouch { canvasEdgeDao.update(edge.copy(label = label.ifBlank { null })) }
+        launchAndTouch {
+            val live = canvasEdgeDao.getById(edge.id) ?: return@launchAndTouch
+            canvasEdgeDao.update(live.copy(label = label.ifBlank { null }))
+        }
     }
 
     fun deleteEdge(edge: CanvasEdge) {
