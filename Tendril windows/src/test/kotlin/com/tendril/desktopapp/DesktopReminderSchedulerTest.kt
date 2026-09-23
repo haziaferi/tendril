@@ -42,10 +42,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * **Real waits, not virtual time.** `loop()` sleeps with `delay` but then re-reads `Instant.now()`
  * before notifying, so a `TestDispatcher` can satisfy the delay without the wall clock having
  * moved and the firing never passes its own `!Instant.now().isBefore(next.at)` check. Virtual time
- * cannot drive this class at all. The waits below are therefore real, and short — a few hundred
- * milliseconds — which is also why each fixture asserts that something fired *at all*: a fixture
- * that quietly stops producing firings would otherwise turn every one of these into a green test
- * of nothing. The first draft did exactly that, and only that guard showed it.
+ * cannot drive this class at all. The waits below are therefore real — and, since 2026-09-23, they
+ * wait *until* the expected firing arrives rather than for a fixed span (see [shownDuring]), because
+ * the fixed version flaked once under load. Each fixture also asserts that something fired *at all*:
+ * a fixture that quietly stops producing firings would otherwise turn every one of these into a
+ * green test of nothing. The first draft did exactly that, and only that guard showed it.
  *
  * `TendrilDatabase` is a Room class with no desktop-constructible form, so the three DAOs the
  * scheduler reads are stubbed rather than a database being stood up.
@@ -92,10 +93,26 @@ class DesktopReminderSchedulerTest {
         return db
     }
 
-    /** Runs a scheduler over [entries] for [waitMs], driving it with [drive], and returns what it showed. */
+    /**
+     * Runs a scheduler over [entries], driving it with [drive], and returns what it showed.
+     *
+     * [awaitCount] is the fix for a flake this file shipped with on 2026-09-23: the first version
+     * slept a fixed 900 ms for a firing 200 ms out, which is ample on an idle JVM and not ample on
+     * one that has just class-loaded mockk and is running a Gradle daemon beside it. It failed
+     * exactly once, in the run that compiled a new test class first, and passed on three
+     * consecutive re-runs — which is the worst failure rate a test can have, since it is high
+     * enough to be noticed and rare enough to be dismissed.
+     *
+     * So: wait *until* the expected number has been shown, up to [waitMs], instead of sleeping the
+     * whole budget. Fast when the machine is idle, patient when it is not. A test asserting that
+     * nothing is shown passes `awaitCount = 0` and still sleeps the full time, because absence
+     * cannot be waited for — there is nothing to wait until.
+     */
     private fun shownDuring(
         entries: List<Entry>,
         waitMs: Long,
+        awaitCount: Int = 0,
+        settleMs: Long = 0,
         drive: (DesktopReminderScheduler) -> Unit = { it.replan() },
     ): List<Firing> {
         val shown = Collections.synchronizedList(mutableListOf<Firing>())
@@ -103,7 +120,15 @@ class DesktopReminderSchedulerTest {
         try {
             val scheduler = DesktopReminderScheduler(databaseOf(entries), scope) { shown += it }
             drive(scheduler)
-            Thread.sleep(waitMs)
+            val deadline = System.nanoTime() + waitMs * 1_000_000
+            if (awaitCount <= 0) {
+                Thread.sleep(waitMs)
+            } else {
+                while (shown.size < awaitCount && System.nanoTime() < deadline) Thread.sleep(20)
+                // Then keep watching a little longer, so "exactly one" is a real assertion rather
+                // than a race the poll happened to win on its first look.
+                if (settleMs > 0) Thread.sleep(settleMs)
+            }
         } finally {
             scope.cancel()
         }
@@ -112,7 +137,10 @@ class DesktopReminderSchedulerTest {
 
     @Test
     fun `a task reaching its moment is shown once`() {
-        val shown = shownDuring(listOf(taskDueIn(1, "Call the plumber", 200)), waitMs = 900)
+        val shown = shownDuring(
+            listOf(taskDueIn(1, "Call the plumber", 400)),
+            waitMs = 5_000, awaitCount = 1, settleMs = 400,
+        )
 
         assertEquals("one due task, one toast: $shown", 1, shown.size)
         assertEquals(FiringKind.OVERDUE, shown.single().kind)
@@ -125,7 +153,10 @@ class DesktopReminderSchedulerTest {
         // the app calls a coordinator callback and every callback is `replan()`, so re-planning
         // after something has fired is the ordinary case rather than an edge one — a second toast
         // for the same reminder is exactly what the `fired` keys exist to prevent.
-        val shown = shownDuring(listOf(taskDueIn(1, "Call the plumber", 200)), waitMs = 1_200) { scheduler ->
+        val shown = shownDuring(
+            listOf(taskDueIn(1, "Call the plumber", 400)),
+            waitMs = 5_000, awaitCount = 1, settleMs = 600,
+        ) { scheduler ->
             scheduler.replan()
             Thread.sleep(500)          // let it fire
             repeat(5) { scheduler.replan(); Thread.sleep(60) }
@@ -136,7 +167,7 @@ class DesktopReminderSchedulerTest {
 
     @Test
     fun `nothing is shown before its moment`() {
-        val shown = shownDuring(listOf(taskDueIn(1, "Later", 60_000)), waitMs = 700)
+        val shown = shownDuring(listOf(taskDueIn(1, "Later", 60_000)), waitMs = 700)  // absence: no awaitCount
 
         assertEquals("a firing a minute away was shown early", emptyList<Firing>(), shown)
     }
@@ -146,8 +177,8 @@ class DesktopReminderSchedulerTest {
         // The contrast that makes the two tests above mean anything: the scheduler is not simply
         // notifying once and stopping. Two entries owe two toasts.
         val shown = shownDuring(
-            listOf(taskDueIn(1, "First", 200), taskDueIn(2, "Second", 200)),
-            waitMs = 1_200,
+            listOf(taskDueIn(1, "First", 400), taskDueIn(2, "Second", 400)),
+            waitMs = 5_000, awaitCount = 2, settleMs = 400,
         )
 
         assertEquals("expected two toasts, got $shown", 2, shown.size)

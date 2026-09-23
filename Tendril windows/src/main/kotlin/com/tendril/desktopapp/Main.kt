@@ -80,7 +80,6 @@ import com.tendril.app.data.buildTendrilDatabase
 import com.tendril.app.sync.DesktopFileSyncFileStore
 import com.tendril.app.sync.PagesSyncEngine
 import com.tendril.app.sync.SnapshotSyncOrchestrator
-import com.tendril.app.sync.quarantineMessage
 import com.tendril.app.ui.WorkbenchCore
 import com.tendril.app.ui.calendar.CalendarScreen
 import com.tendril.app.ui.taskshabits.TasksHabitsScreen
@@ -491,33 +490,19 @@ internal fun SyncBar(
                     // and callers handle it. Without the finally, one throw left `syncing`
                     // stuck true and the button disabled for the rest of the session, with
                     // nothing on screen saying why. Android's caller already did this.
+                    // Everything a pass decides now lives in `runSyncPass` (audit 1.17), which
+                    // is what makes the re-plan reachable by a test: this lambda holds no branch
+                    // of its own, only the two pieces of state the bar draws from. The `finally`
+                    // stays here because `syncing` is this composable's, and without it one
+                    // throw left the button disabled for the rest of the session with nothing on
+                    // screen saying why.
                     try {
-                        val key = passphrase.ifBlank { null }
-                        val store = DesktopFileSyncFileStore(path)
-                        val merge = orchestrator.readAndMerge(store, key)
-                        if (merge.passphraseMismatch) {
-                            // Writing here would overwrite the folder's only copy with this
-                            // device's state under the wrong key (§9.4.2).
-                            syncError = "${merge.undecryptableFiles} file(s) couldn't be decrypted — " +
-                                "check the passphrase. Nothing was written."
-                        } else {
-                            orchestrator.writeSnapshots(store, key)
-                            // Quarantine is a survivable pass, but never a silent one — same
-                            // reasoning and same channel as Android's SyncCoordinator. Null on a
-                            // clean pass, so the notice clears itself.
-                            syncError = merge.quarantineMessage()
-                            // §9.7 on this side, the same seam Android's SyncCoordinator closes
-                            // (audit 2026-09-22 row 1.3, which recorded only the phone's half).
-                            // `replan` is reached from the EntryScheduleCoordinator callbacks
-                            // and once at startup, and a merge passes neither — so a reminder
-                            // set on the phone arrived here unplanned until the next launch.
-                            // Note against row 1.6: this is a third caller of an unsynchronised
-                            // `replan`, though not a new race — the `syncing` flag keeps two
-                            // passes from overlapping, and 1.6's fix belongs with 1.6.
-                            rearmReminders()
-                        }
-                    } catch (e: Exception) {
-                        syncError = e.message ?: "Sync failed."
+                        syncError = runSyncPass(
+                            orchestrator = orchestrator,
+                            store = DesktopFileSyncFileStore(path),
+                            passphrase = passphrase.ifBlank { null },
+                            rearmReminders = rearmReminders,
+                        )
                     } finally {
                         syncing = false
                     }

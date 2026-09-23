@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.getSystemService
 import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.reminder.ReminderDao
@@ -145,9 +146,20 @@ class AlarmScheduler(
         }
     }
 
-    /** True below API 31 (exact alarms were unrestricted there), otherwise whatever
-     * AlarmManager currently reports for this app. */
-    private fun canScheduleExact(manager: AlarmManager): Boolean =
+    /**
+     * True below API 31 (exact alarms were unrestricted there), otherwise whatever
+     * AlarmManager currently reports for this app.
+     *
+     * Audit 2.12 — `internal` so `ExactAlarmInstrumentedTest` can assert the decision this app
+     * actually makes, rather than re-deriving the same expression and asserting its own copy. The
+     * distinction matters because what this returns is the *only* half of alarm exactness Tendril
+     * controls: on a OnePlus LE2123 (API 34, `USE_EXACT_ALARM` granted) this returns true, the
+     * exact call below is made, and the system hands back a windowed alarm regardless — measured
+     * at 3600000 ms for a task two days out. That is a property of the phone, recorded in the
+     * audit, and no assertion here can move it.
+     */
+    @VisibleForTesting
+    internal fun canScheduleExact(manager: AlarmManager): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
 
     private fun cancel(
