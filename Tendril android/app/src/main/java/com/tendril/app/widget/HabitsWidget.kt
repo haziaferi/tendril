@@ -72,7 +72,12 @@ class HabitsWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = HabitsWidget()
 }
 
-private val HABIT_ID_KEY = ActionParameters.Key<Long>("habit_id")
+/**
+ * Audit 1.12 — `internal` rather than private so `HabitWidgetCheckInInstrumentedTest` can drive
+ * [CheckInHabitAction] with the key the widget itself uses. A test that rebuilt the key from the
+ * same `"habit_id"` literal would keep passing if this were renamed on one side only.
+ */
+internal val HABIT_ID_KEY = ActionParameters.Key<Long>("habit_id")
 
 /**
  * Runs without opening the app — the whole point of a quick-check widget. Toggles: tapping an
