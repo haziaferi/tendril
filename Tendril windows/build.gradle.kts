@@ -6,6 +6,28 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Audit 2026-09-23 — the JetBrains Runtime is *preferred*, not required, and this is the line that
+// says so. L5 pinned `vendor = JETBRAINS` unconditionally in both places below, which is true of
+// the developer's machine and of nowhere else: a Linux runner has Temurin, so configuration failed
+// outright — "Cannot find a Java installation … matching {languageVersion=21, vendor=JetBrains}" —
+// and this module did not build on CI once between 2026-09-17 and the day this was written.
+//
+// Nobody saw it. `build.yml` had been failing to *start* since 2026-09-12 for an unrelated billing
+// reason, so a hundred consecutive red runs all said "job was not started" and the live fault
+// arrived five days into that blackout with nothing left to report it. A dead signal is worse than
+// no signal: it is indistinguishable from the real one.
+//
+// The fallback was always the intent — "on a plain JDK everything still runs" is L5's own comment,
+// two lines down. Resolving the launcher once, here, is what turns that sentence into behaviour.
+// `runCatching` rather than `.orNull`, because a toolchain provider with no match throws when it
+// is queried rather than yielding null.
+val jetbrainsRuntime: JavaLauncher? = runCatching {
+    javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(JvmVendorSpec.JETBRAINS)
+    }.get()
+}.getOrNull()
+
 kotlin {
     // L5 (2026-09-17) — a JetBrains Runtime, not any JDK 21: the borderless window's custom title
     // bar is a JBR service (`TitleBar.kt`). Android Studio's JBR is registered in
@@ -14,7 +36,7 @@ kotlin {
     // the window keeps the OS title bar.
     jvmToolchain {
         languageVersion.set(JavaLanguageVersion.of(21))
-        vendor.set(JvmVendorSpec.JETBRAINS)
+        if (jetbrainsRuntime != null) vendor.set(JvmVendorSpec.JETBRAINS)
     }
 }
 
@@ -63,11 +85,15 @@ compose.desktop {
     application {
         mainClass = "com.tendril.desktopapp.MainKt"
         // L5 — `run` and jpackage use the toolchain's JBR, not the JVM running Gradle (Temurin):
-        // the custom title bar is that runtime's service (`TitleBar.kt`).
-        javaHome = javaToolchains.launcherFor {
+        // the custom title bar is that runtime's service (`TitleBar.kt`). Audit 2026-09-23 — this
+        // is the line the CI build actually died on, because it is `.get()` at *configuration*
+        // time: not a task anyone asked for, but a value computed on every invocation of every
+        // task in this project, `test` included. Falling back to any JDK 21 costs the title bar on
+        // a machine with no JBR, which is precisely what L5 said was acceptable, and buys the
+        // module the ability to be built anywhere.
+        javaHome = (jetbrainsRuntime ?: javaToolchains.launcherFor {
             languageVersion.set(JavaLanguageVersion.of(21))
-            vendor.set(JvmVendorSpec.JETBRAINS)
-        }.get().metadata.installationPath.asFile.absolutePath
+        }.get()).metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
             // Without a target format there is no installer task output at all: the block
