@@ -9,12 +9,18 @@ the things that are true about *working here* and that cost something to redisco
 
 - **`tendril-spec.md` §0 Objectives** before any design decision. Every later section is filtered
   through it.
-- **`docs/audit-2026-09-22.md`** for the current known-defect list: seventeen findings — seven
-  fixed, five read and reported without a change, five still open hypotheses (1.5, 1.6, 1.7,
-  1.8, 1.11), each with the command or walk that would settle it. Three of the fixed rows are
-  pinned only by the compiler and a walk, not by a test; the rows say which.
+- **`docs/audit-2026-09-22.md`** for the current known-defect list: **thirty-one rows over five
+  sessions, of which two are still open** — 1.7 (a seeded 200-block page under a Perfetto trace)
+  and 1.11 (low) — each with the command or walk that would settle it. Everything else is
+  executed: fixed, or read and reported with the measurement that settles it. Two fixed rows are
+  pinned by a walk rather than by a test, 1.5 and 1.8, and both say so — that is the desktop
+  Compose gap below, not a missing test source set. **This bullet said "seventeen findings … five
+  still open (1.5, 1.6, 1.7, 1.8, 1.11)" until 2026-09-23, by which point 1.5, 1.6 and 1.8 had been
+  fixed and walked.** Re-derive a count here before trusting it; the sweep that caught this one is
+  the last section of the audit.
 - **`/tendril-audit`** (`.claude/skills/tendril-audit/`) is the audit-and-perfect procedure — two
-  modes, five passes, four gate commands.
+  modes, five passes, and **five gate commands**: the four below, plus `assembleDebugAndroidTest`
+  driven by `adb shell am instrument` when the phone is attached.
 
 ## The gate
 
