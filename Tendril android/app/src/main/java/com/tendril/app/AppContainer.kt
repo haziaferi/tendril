@@ -122,7 +122,7 @@ class AppContainer(context: Context) {
     )
     val databaseSyncManager = DatabaseSyncManager(
         database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
-        database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,
+        database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase, entryScheduleCoordinator,
     )
     val templateManager = TemplateManager(database.pageDao(), database.blockDao(), database.pageDatabaseDao(), database.propertyDao(), database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao())
     val notionImporter = NotionImporter(

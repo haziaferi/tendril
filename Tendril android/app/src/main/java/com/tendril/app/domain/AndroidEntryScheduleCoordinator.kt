@@ -25,6 +25,13 @@ class AndroidEntryScheduleCoordinator(
             if (entry.originalEntryId == null) entryDao.getExceptionsOf(entry.id) else emptyList()
         alarmScheduler.rescheduleFor(entry, exceptions)
         calendarProviderSync.upsertEntry(entry)
+        // An exception changes which occurrence the *series* fires for next, so the series is
+        // re-armed with it (audit 2026-09-24 — every caller that writes one alone: moving "this
+        // one", an ICS EXDATE/RECURRENCE-ID, a merged exception). No second mirror write: the
+        // series is mirrored as its RRULE alone (no EXDATE), so re-upserting it changes nothing.
+        val seriesId = entry.originalEntryId ?: return
+        val series = entryDao.getById(seriesId) ?: return
+        alarmScheduler.rescheduleFor(series, entryDao.getExceptionsOf(seriesId))
     }
 
     override suspend fun onEntryRemoved(entry: Entry) {

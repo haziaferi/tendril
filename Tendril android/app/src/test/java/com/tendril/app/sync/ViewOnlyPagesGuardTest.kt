@@ -131,7 +131,7 @@ class ViewOnlyPagesGuardTest {
         val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
         val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
         val databaseSyncManager =
-            DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase)
+            DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase, coordinator)
 
         val viewLockState = ViewLockState()
 

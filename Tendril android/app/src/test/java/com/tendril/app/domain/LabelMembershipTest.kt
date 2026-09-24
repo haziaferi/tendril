@@ -48,7 +48,7 @@ class LabelMembershipTest {
         override suspend fun onEntryRemoved(entry: Entry) = Unit
     }
     private val resolve = ResolveEntryUseCase(entryDao, completionDao, coordinator)
-    private val syncManager = DatabaseSyncManager(pageDao, databaseDao, valueDao, entryDao, completionDao, resolve)
+    private val syncManager = DatabaseSyncManager(pageDao, databaseDao, valueDao, entryDao, completionDao, resolve, coordinator)
     private val membership = LabelMembership(pageDao, databaseDao, labelDao, entryDao, syncManager, resolve)
     private val at = Instant.ofEpochMilli(1_000L)
 

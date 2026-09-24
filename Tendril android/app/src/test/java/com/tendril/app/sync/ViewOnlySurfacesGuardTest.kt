@@ -122,7 +122,7 @@ class ViewOnlySurfacesGuardTest {
     private val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
     private val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
     private val databaseSyncManager =
-        DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase)
+        DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase, coordinator)
     private val purgeRegistry =
         PurgeRegistry(FakePurgedRecordDao(), pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator)
 
@@ -594,6 +594,35 @@ class ViewOnlySurfacesGuardTest {
      * and cannot outrank a real schema edit made on another device. Gating it would leave a
      * viewless database permanently unrepairable for as long as View-Only is on.
      */
+    /** Audit 2026-09-24: `setHue` (S13) wrote through `launchAndTouch`, which — unlike Canvas's
+     * funnel of the same name — does not check the lock; the only gate was the `···` button, so a
+     * hue sheet already open when View-Only went on still wrote on Done. */
+    @Test
+    fun `a database's hue cannot be changed while View-Only is on`() = runTest(mainDispatcher) {
+        val page = seedPage("Tasks", PageKind.DATABASE)
+        val databaseId = pageDatabaseDao.insert(PageDatabase(pageId = page.id, createdAt = t0, updatedAt = t0))
+        val viewModel = pageDatabaseViewModel(page.id)
+        lockEverything()
+
+        viewModel.setHue(200)
+        testScheduler.advanceUntilIdle()
+
+        assertNull(pageDatabaseDao.getById(databaseId)!!.hue)
+        assertPageUntouched(page)
+    }
+
+    @Test
+    fun `a database's hue still changes when View-Only is off`() = runTest(mainDispatcher) {
+        val page = seedPage("Tasks", PageKind.DATABASE)
+        val databaseId = pageDatabaseDao.insert(PageDatabase(pageId = page.id, createdAt = t0, updatedAt = t0))
+        val viewModel = pageDatabaseViewModel(page.id)
+
+        viewModel.setHue(200)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("the refusal above must not pass vacuously", 200, pageDatabaseDao.getById(databaseId)!!.hue)
+    }
+
     @Test
     fun `ensureDefaultView still repairs a viewless database while View-Only is on`() = runTest(mainDispatcher) {
         val page = seedPage("Tasks", PageKind.DATABASE)

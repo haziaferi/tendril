@@ -126,7 +126,7 @@ class WritePathSyncTest {
         val resolveEntryUseCase = ResolveEntryUseCase(entryDao, completionDao, coordinator)
         val templateManager = TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, canvasDao, nodeDao, edgeDao)
         val databaseSyncManager =
-            DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase)
+            DatabaseSyncManager(pageDao, pageDatabaseDao, propertyValueDao, entryDao, completionDao, resolveEntryUseCase, coordinator)
         val viewLockState = ViewLockState()
         val checkboxOnlyState = CheckboxOnlyState()
         val labelMembership = LabelMembership(pageDao, pageDatabaseDao, labelDao, entryDao, databaseSyncManager, resolveEntryUseCase)
@@ -287,6 +287,31 @@ class WritePathSyncTest {
 
         vm.undo()
         assertEquals(listOf("compost notes", "after"), a.blockDao.getForPage(page.id).sortedBy { it.order }.map { it.content })
+    }
+
+    /** Audit 2026-09-24: `undo()` moved the stack before `launchAndReindex` refused the write, so
+     * Ctrl+Z under View-Only spent the newest step without applying it — after unlocking, the next
+     * undo reverted the edit *before* it, and the newest could no longer be undone at all. */
+    @Test
+    fun `an undo refused under View-Only does not spend the step`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Notes")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 0, content = "one", createdAt = t0, updatedAt = t0))
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 1, content = "two", createdAt = t0, updatedAt = t0))
+        val vm = a.detail(page.id)
+        vm.deleteBlocks(setOf(a.blockDao.getForPage(page.id).first { it.content == "one" }.id))
+        vm.deleteBlocks(setOf(a.blockDao.getForPage(page.id).first { it.content == "two" }.id))
+
+        a.viewLockState.setViewOnly(true)
+        vm.undo()
+        assertEquals("refused under the lock", emptyList<String>(), a.blockDao.getForPage(page.id).map { it.content })
+        a.viewLockState.setViewOnly(false)
+        vm.undo()
+
+        assertEquals(
+            "the first undo after unlocking reverses the newest edit — the one pressed under the lock",
+            listOf("two"),
+            a.blockDao.getForPage(page.id).map { it.content },
+        )
     }
 
     /** `setChecked` is the one block mutation deliberately outside `launchAndReindex` — §3.1.2's

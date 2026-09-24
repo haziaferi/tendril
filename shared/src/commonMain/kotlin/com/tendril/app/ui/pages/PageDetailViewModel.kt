@@ -920,8 +920,10 @@ class PageDetailViewModel(
         pasteBlocks(runOf(blocks.value, ids).lastOrNull()?.id, onDone)
     }
 
-    fun undo() = applyEdit(undoStack.undo()?.inverse())
-    fun redo() = applyEdit(undoStack.redo())
+    // Checked before the stack moves: [launchAndReindex] would refuse the write under View-Only,
+    // but the entry would already be on the other branch — a step spent and never applied.
+    fun undo() { if (!contentLocked()) applyEdit(undoStack.undo()?.inverse()) }
+    fun redo() { if (!contentLocked()) applyEdit(undoStack.redo()) }
 
     /** Write [edit]'s `after` over the page — unrecorded; the stack already moved the entry. */
     private fun applyEdit(edit: BlockEdit?) {
