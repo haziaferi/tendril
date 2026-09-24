@@ -6,6 +6,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
+ * §2.2 (the notification area, the chord's popup) — “Enter writes once”, which is one of that
+ * section's twenty-three normative claims and, until 2026-09-24, one nothing tested.
+ *
  * Audit 1.8 — one write per open of the quick-add popup, lifted out of [QuickAddWindow]'s Enter
  * lambda so a test can reach it.
  *

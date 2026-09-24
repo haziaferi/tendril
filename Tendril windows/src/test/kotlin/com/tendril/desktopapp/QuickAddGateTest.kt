@@ -17,7 +17,14 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
+ * §2.2 — “Enter writes once”, the popup's half of the notification-area section.
+ *
  * Audit 1.8 — the quick-add popup writes once per open, however fast the second Enter arrives.
+ *
+ * `spec_trace.py --section 2.2` reported **23 claims, 11 source citations, 0 test citations** on
+ * 2026-09-24, which is what put this citation here: the section was already the top row of the
+ * unpinned worklist, and a test that pins one of its claims without naming it leaves the count
+ * reading zero and the next reader looking for a test that exists.
  *
  * **The row this closes said for five audits that it could not be tested.** The reason given was
  * "the desktop module has no test source set", which was true when written and stopped being true
