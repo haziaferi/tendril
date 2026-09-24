@@ -9,18 +9,19 @@ the things that are true about *working here* and that cost something to redisco
 
 - **`tendril-spec.md` §0 Objectives** before any design decision. Every later section is filtered
   through it.
-- **`docs/audit-2026-09-22.md`** for the current known-defect list: **thirty-one rows over five
-  sessions, of which two are still open** — 1.7 (a seeded 200-block page under a Perfetto trace)
-  and 1.11 (low) — each with the command or walk that would settle it. Everything else is
-  executed: fixed, or read and reported with the measurement that settles it. Two fixed rows are
-  pinned by a walk rather than by a test, 1.5 and 1.8, and both say so — that is the desktop
-  Compose gap below, not a missing test source set. **This bullet said "seventeen findings … five
-  still open (1.5, 1.6, 1.7, 1.8, 1.11)" until 2026-09-23, by which point 1.5, 1.6 and 1.8 had been
-  fixed and walked.** Re-derive a count here before trusting it; the sweep that caught this one is
-  the last section of the audit.
+- **`docs/audit-2026-09-22.md`** for the current known-defect list, each row with the command or
+  walk that would settle it; `python tools/facts.py` prints its rows by status. Two kinds are not
+  fixed, and "open" has been used for both: **unproven** (a hypothesis — 1.7, a seeded 200-block
+  page under a Perfetto trace, and 1.11) and **proved but deliberately not changed** ("reported,
+  not changed"). One fixed row, 1.5, is pinned by a walk rather than a test — the desktop Compose
+  gap below; 1.8 was converted to `QuickAddGateTest` on 2026-09-23. **This bullet said "seventeen
+  findings … five still open (1.5, 1.6, 1.7, 1.8, 1.11)" until 2026-09-23, by which point 1.5 and
+  1.8 had been fixed and walked, and 1.6 fixed — its walk did not reproduce it, and a test settled
+  it.** The sweep that caught this is the last section of the audit.
 - **`/tendril-audit`** (`.claude/skills/tendril-audit/`) is the audit-and-perfect procedure — two
   modes, five passes, and **five gate commands**: the four below, plus `assembleDebugAndroidTest`
-  driven by `adb shell am instrument` when the phone is attached.
+  installed with `adb install -r -t` and driven by `adb shell am instrument` when the phone is
+  attached.
 
 ## The gate
 
@@ -42,8 +43,9 @@ is Compose UI: the desktop `ui-test-junit4` artifact is not in the offline cache
 draws is still pinned by a walk.
 
 **Count tests from the XML, not from Gradle's summary.** A cached `testDebugUnitTest` reports a
-pass without executing anything — the first gate run on a clean tree is usually `FROM-CACHE`. Only
-a run after an edit executes. Count with:
+pass without executing anything — the first gate run on a clean tree is usually `UP-TO-DATE` or
+`FROM-CACHE` (2026-09-24's was `UP-TO-DATE`). Only a run after an edit executes, and the summary
+line cannot tell you which: `--console=plain` prints the task's own outcome. Count with:
 
 ```bash
 python - <<'PY'
@@ -56,6 +58,11 @@ for f in glob.glob("Tendril android/app/build/test-results/testDebugUnitTest/*.x
 print(files, "files,", tot, "tests,", fail, "failures")
 PY
 ```
+
+**Numbers in this file and in memory go stale; `python tools/facts.py` does not.** It prints the
+figures documents keep quoting — tracked and LF files, the schema version, audit rows by status,
+unit tests from the XML with its stamp, spec-trace totals. Cite the command, not the number: every
+count this file carried on 2026-09-24 (598 files, five sessions, 1.8 walk-pinned) was wrong.
 
 ## Two questions the gate does not ask
 
@@ -117,18 +124,20 @@ none of them looked at the desktop's identical merge, which had the same defect.
 
 ## Conventions that bite
 
-- **Line endings are LF in every source and doc file** — all 598 `.kt`, `.kts`, `.py`, `.md`,
-  `.json`, `.toml`, `.xml` and `.yml` files, checked. The exceptions are deliberate or vendored:
-  the three `gradlew.bat` (a batch file needs CRLF), `THIRD_PARTY_NOTICES/OFL-*.txt`, and eight
-  `docs/mockups/*.html`. So write with `newline=""` in Python — it preserves whatever the file
+- **Line endings are LF in every source and doc file** — every tracked `.kt`, `.kts`, `.py`,
+  `.md`, `.json`, `.jsonl`, `.toml`, `.xml` and `.yml` file; `python tools/facts.py` counts them
+  from the bytes (this line said 598 until 2026-09-24, when there were 616). The exceptions are
+  deliberate or vendored: the three `gradlew.bat` (a batch file needs CRLF),
+  `THIRD_PARTY_NOTICES/OFL-*.txt`, and eight `docs/mockups/*.html`. So write with `newline=""` in Python — it preserves whatever the file
   already has instead of imposing a guess. A `grep -c $''` matches every line and will tell you
   everything is CRLF; it is not evidence.
 - **A `shared/` change owes a Revision Log row in both spec files** — `tendril-spec.md` and
   `Tendril windows/tendril-windows-spec.md` — plus the amendment in the home section the row points
   at. Comment-only changes get a row too, saying plainly that no decision changed.
-- **`tools/audit.py` strips string literals**, so a declaration used only inside a Kotlin string
-  template reads as dead code (check 3). Concatenate instead of suppressing, or amend the check
-  with a test in `tools/tests`.
+- **`tools/audit.py` strips string literals** before checks 3, 4, 5 and 9. A braced `"${NAME}"` is
+  kept as code; a bare `"$NAME"`, anything in `"""…"""` and a template with its own braces are
+  not, so a declaration used only that way reads as dead. Write `"${NAME}"` or concatenate instead
+  of suppressing, or amend `strip_literals` with a test in `tools/tests`.
 - **`shared/schemas/` is Room's KSP output directory** (`shared/build.gradle.kts:95`). An Android
   build deletes files there it did not generate — never park a scratch file in it. The 18 tracked
   exports survive.
@@ -159,10 +168,15 @@ string, and md5-check every push and pull.
 ## Nested agents and harnesses
 
 **`claude -p --allowedTools …` does not restrict what the child session may do.** A nested session
-spawned from this repo inherits full permissions: on 2026-09-22 five of them ran Gradle builds,
-edited `shared/` domain code, removed a dependency, wrote documents and wrote to agent memory —
-while the parent session was telling the user the run was read-only. One survived the first kill
-and was still editing minutes later.
+spawned from this repo inherits full permissions. On 2026-09-22 a promptlab harness started
+**eighteen** of them between 08:39 and 12:13 (plus three probes): fifteen ran Gradle, seven wrote
+files through Edit/Write alone — tests, `docs/audit-2026-09-22.md`, three agent-memory files,
+`shared/` domain code — and another removed a dependency through Bash, while the parent session was
+telling the user the run was read-only. Two ran concurrently; the last survived the first kill and
+was still editing `RecurrenceSpec.kt` minutes later. This paragraph said "five" until 2026-09-24
+and memory said "four"; both were recollections. The count is from the transcripts — each child's
+first message is the skill body promptlab piped in — and their `entrypoint` reads `claude-desktop`,
+inherited from the parent, so filtering for headless sessions finds two.
 
 - Never describe a nested-session harness as sandboxed. It is not.
 - Sandbox it with a throwaway `git worktree`, or write cases that need no repository at all.

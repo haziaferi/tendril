@@ -92,6 +92,11 @@ It targets *every* connected device by default. To pick one:
 ANDROID_SERIAL=emulator-5554 ./gradlew :app:connectedDebugAndroidTest
 ```
 
+Offline, and on a phone whose data you want to keep, it cannot be used: it resolves its Unified
+Test Platform artifacts at run time (not in an offline cache), and it uninstalls the app. Build
+both APKs, `adb install -r -t` them, and drive one class with `adb shell am instrument` instead —
+the fifth gate command in `.claude/skills/tendril-audit/SKILL.md`.
+
 Some alarm behaviour is API-level specific — the exact-alarm permission path differs on API 31–32,
 where `USE_EXACT_ALARM` does not exist — so `AlarmSchedulerInstrumentedTest` is worth running against
 an API 32 image as well as a current one.
@@ -100,9 +105,9 @@ an API 32 image as well as a current one.
 
 ## Continuous integration
 
-`.github/workflows/build.yml` runs the three commands above on every pull request and on every
-push to `main` — `:app:assembleDebug` plus `:app:testDebugUnitTest`, then `shared`'s own `build`,
-then the desktop one. All three run even if an earlier one fails, so a single run reports all
+`.github/workflows/build.yml` runs three builds on every pull request and on every push to
+`main` — `:app:assembleDebug` plus `:app:testDebugUnitTest`, then `shared`'s own `build`, then
+the desktop one (the gate in `CLAUDE.md`, not the commands under Building). All three run even if an earlier one fails, so a single run reports all
 three results; a failed test run uploads its HTML report as a job artifact.
 
 Note the `gradlew` scripts are committed **executable** (mode `755`). They were `644` until the
@@ -119,10 +124,14 @@ Needs only Python 3 — no Gradle, no Android SDK, no network — so it runs any
 seconds, including on a machine that cannot build the app. It checks for commented-out code,
 leftover TODO/FIXME markers, unreferenced declarations and DAO methods, KDoc links naming
 symbols that don't exist, `StateFlow`s that leak their mutable backing, `Regex` allocated per
-call instead of once, and calls to the documented-throwing file APIs with no `try`/`catch`.
+call instead of once, calls to the documented-throwing file APIs with no `try`/`catch`, write-only
+entity fields and an imported function used as a value (checks 1–10); then the design system's
+rules — colour, type, radius, menus, fields, the month grid, clipping, sheet scrolling (11–19 and
+one unnumbered).
 
-Every check corresponds to a defect this repository has actually had, so a finding is a
-regression rather than a style opinion. `.github/workflows/audit.yml` runs it on every push.
+Checks 1–10 each correspond to a defect this repository has actually had, so a finding there is a
+regression rather than a style opinion; 11–19 hold a design decision in place, and a finding
+there is a drift from it. `.github/workflows/audit.yml` runs it on every push.
 The list and the reasoning behind each check live in the script's own module docstring.
 
 ---
@@ -133,6 +142,7 @@ The list and the reasoning behind each check live in the script's own module doc
 |---|---|
 | `tendril-spec.md` (root) | the design record — decisions, reasoning, open questions, and a Revision Log. Start here for *why*. |
 | `Tendril windows/tendril-windows-spec.md` | the same, for the desktop companion |
+| `docs/audit-2026-09-22.md` | the current known-defect list (read it before `docs/audit-2026-09-04.md`, whose open rows it re-checked); `CLAUDE.md` says how to work here |
 | `docs/audit-2026-09-04.md` | findings from the 2026-09-04 code audit that were *not* fixed — open bugs, sync gaps, security residue, and where Tendril sits against Notion and its open-source peers |
 | this README | how to get it building. Nothing else. |
 

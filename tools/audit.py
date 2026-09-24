@@ -3,8 +3,9 @@
 Static hygiene checks for the Tendril repo — the mechanical half of a code audit,
 so review attention goes to the parts that need judgement.
 
-Every check encodes a defect this repository actually had, so a finding here is a
-regression rather than a style opinion. All checks are plain-text analysis: no
+Checks 1-10 each encode a defect this repository actually had, so a finding there is a
+regression rather than a style opinion. Checks 11-19 and the sheet check hold a design
+decision in place (they cite the PR that made it); a finding there is drift from it. All checks are plain-text analysis: no
 Gradle, no Android SDK, no network — they run in seconds on any machine.
 
     python3 tools/audit.py            # report; exit 1 if anything is found
@@ -19,9 +20,9 @@ Checks
   6. leaked MutableStateFlow   `val x: StateFlow<T> = _x` without .asStateFlow()
   7. Regex built per call      allocated in a function body instead of a top-level val
   8. unguarded throwing I/O    a call to a documented-throwing file API with no try/catch
- 10. write-only entity field  stored and synced, never read outside the sync mappers
   9. imported-name shadowed    `viewModel.x` in a function where `viewModel` is only the
                                imported *function* of that name, never a parameter or local
+ 10. write-only entity field  stored and synced, never read outside the sync mappers
  11. hardcoded colour          `Color(0x…)` or `Color.Gray`/`Blue`/… in shared UI outside the
                                theme package — every colour is a solved token (B§13.8.3, 14g·2)
  12. literal type              a literal `fontSize = N.sp`, `N.sp` or `fontWeight = FontWeight.X`
@@ -45,6 +46,8 @@ Checks
                                field is a `TendrilField` (36 dp under a pointer, 48 under Touch)
  19. clip                     a `maxLines = 1` whose call has no `overflow` — a one-line title clips
                                without an ellipsis (`desktop-type-full.md` #4)
+  -  sheet scroll             a lazy list inside a scrolling `TendrilSheet` (pass `scrolls = false`),
+                               or `scrolls = false` on a sheet with no lazy list (P2, 2026-09-18)
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
