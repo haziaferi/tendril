@@ -37,7 +37,6 @@ class IcsImporter(
             val row = c.toEntry(existing, now)
             val id = if (existing == null) { created++; entryDao.insert(row) } else { updated++; entryDao.update(row); row.id }
             val stored = entryDao.getById(id) ?: continue
-            entryScheduleCoordinator.onEntryChanged(stored)
             baseByUid[c.uid] = stored
             // Skips — one tombstone per EXDATE that has none yet.
             val existingSkips = entryDao.getExceptionsOf(stored.id).filter { it.isExceptionSkip == true }.mapNotNull { it.originalOccurrenceDate }.toSet()
@@ -51,6 +50,10 @@ class IcsImporter(
                     )
                 )
             }
+            // Reported after its skips exist: the scheduler reads a series' exceptions when it
+            // arms it, and before this point it would arm the occurrences the file just skipped
+            // (§3.2, audit 2026-09-24).
+            entryScheduleCoordinator.onEntryChanged(stored)
         }
 
         // Pass 2 — moved occurrences.

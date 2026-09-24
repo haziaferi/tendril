@@ -178,7 +178,16 @@ and memory said "four"; both were recollections. The count is from the transcrip
 first message is the skill body promptlab piped in — and their `entrypoint` reads `claude-desktop`,
 inherited from the parent, so filtering for headless sessions finds two.
 
-- Never describe a nested-session harness as sandboxed. It is not.
+- Never describe a nested-session harness as sandboxed unless it runs the recipe below, and
+  validate it on known answers first.
+- **The recipe that held on 2026-09-24** (a prompt eval needs the model's answer, not its hands):
+  `claude -p --model <≥ sonnet> --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence`,
+  working directory a fresh empty folder, prompt on stdin, the process tree killed on timeout, and
+  a failure if the folder is not empty afterwards. Each flag is there because the first version
+  without it measured the wrong thing: without `--setting-sources ""` the child inherited this
+  machine's output style and hooks and answered in them; with `--permission-mode plan` it wrote a
+  plan of an answer instead of the answer. Known-answer probes (echo a word; refuse to run
+  `git status`) passed both broken versions — the contamination only showed on a real case.
 - Sandbox it with a throwaway `git worktree`, or write cases that need no repository at all.
 - `git status` before **and** after any such run.
 - Kill strays by matching the full command line (`Get-CimInstance Win32_Process | … Stop-Process`);
