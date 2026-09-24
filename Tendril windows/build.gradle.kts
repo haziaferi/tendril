@@ -67,10 +67,15 @@ dependencies {
     // that walk rather than by anything a gate runs; 1.6 was walked once and would not reproduce.
     //
     // What a JVM test can reach here is the logic that does not draw: `DesktopReminderScheduler`,
-    // the firing arithmetic, the toast strings. Compose UI tests are a separate question — the
-    // `ui-test-junit4` artifact for desktop is not in the offline cache — so the Compose halves of
-    // 1.5 and 1.8 stay walk-pinned either way. That is the line this source set does not cross,
-    // and saying so is the point: it makes the *scheduler* gated, not the window.
+    // the firing arithmetic, the toast strings — and anything a composable was merely *holding*
+    // rather than drawing, which is how 1.8's one-write guard came out into `QuickAddGate.kt` and
+    // got a test on 2026-09-23. Compose UI is the real limit: the `ui-test-junit4` artifact for
+    // desktop is not in the offline cache, so row 1.5 — a duplicated `Text` — stays walk-pinned,
+    // and that is the line this source set genuinely does not cross.
+    //
+    // This comment used to put 1.8 on the far side of that line too, which was never quite true:
+    // a flag is not a `Text`. It was corrected by the sweep that went looking for exactly this —
+    // reasons that were sound when written and had quietly stopped being so.
     //
     // Every version here is one the Gradle cache already holds, since `dl.google.com` is blocked
     // and an offline build is the only kind that runs.
