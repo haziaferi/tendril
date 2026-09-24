@@ -18,7 +18,11 @@ compile break through green CI because a finding was read, not run (`docs/audit-
 - `--full` — all three modules. Produces `docs/audit-<today>.md` in the shape of `docs/audit-2026-09-04.md`.
 - `--full <path>` — one module or folder (`shared/`, `Tendril android/app/src/main/kotlin/com/tendril/app/sync/`); the report names the scope in its title.
 - `--against <spec section or file>` — what Pass 1 traces against. Without it, `--full` traces
-  against `tendril-spec.md` and picks its sections with `python tools/spec_trace.py --unpinned`;
+  against `tendril-spec.md` and picks its sections from `python tools/spec_trace.py` — the bare
+  command *is* the ranked worklist, ordered by unnamed declarations weighted by the section's claim
+  count (`unnamed × (1 + claims/10)`, `spec_trace.py:376`), so a raw count can sit lower (there is no
+  `--unpinned` flag; this line named one until 2026-09-24, transcribed from the plan and never
+  run — the flags are `--section`, `--all`, `--meta`, `--json`);
   `--diff` traces against the commit message and any `§` it cites. **Pass 1 is not opt-out.** It
   used to be, and the cost was total: both recorded `--full` runs wrote "Spec trace — not run: no
   `--against` given" and every one of the seventeen findings those audits produced was code-internal
