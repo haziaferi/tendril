@@ -13,6 +13,7 @@ import com.tendril.app.sync.FakeEntryDao
 import com.tendril.app.sync.FakePageDao
 import com.tendril.app.sync.FakePageDatabaseDao
 import com.tendril.app.sync.FakePageStore
+import com.tendril.app.sync.RecordingEntryScheduleCoordinator
 import com.tendril.app.sync.FakePropertyDao
 import com.tendril.app.sync.FakePropertyValueDao
 import kotlinx.coroutines.runBlocking
@@ -37,13 +38,10 @@ class DueDateBindingTest {
     private val valueDao = FakePropertyValueDao(store)
     private val entryDao = FakeEntryDao()
     private val completionDao = FakeEntryCompletionDao()
-    private val coordinator = object : EntryScheduleCoordinator {
-        override suspend fun onEntryChanged(entry: Entry) = Unit
-        override suspend fun onEntryRemoved(entry: Entry) = Unit
-    }
+    private val coordinator = RecordingEntryScheduleCoordinator()
     private val manager = DatabaseSyncManager(
         pageDao, databaseDao, valueDao, entryDao, completionDao,
-        ResolveEntryUseCase(entryDao, completionDao, coordinator),
+        ResolveEntryUseCase(entryDao, completionDao, coordinator), coordinator,
     )
     private val at = Instant.ofEpochMilli(1_000L)
 
@@ -104,5 +102,30 @@ class DueDateBindingTest {
         assertNull(unbound.dueDatePropertyId)
         val frozen = store.propertyValues.values.single { it.propertyId == f.due && it.rowPageId == f.row }
         assertEquals("2026-09-30", frozen.value)
+    }
+
+    /** §9.7's invariant, audit 2026-09-24: `enableSync` inserted dated Entries and armed none —
+     * `DatabaseSyncManager` held no coordinator, and no caller re-armed after it. */
+    @Test
+    fun `enabling sync reports every Entry it creates to the scheduler`() = runBlocking {
+        val f = fixture(whenValue = "2026-09-12", dueValue = null)
+
+        manager.enableSync(f.database, f.done, f.date, null, listOf(f.row), at)
+
+        val entry = linked(f.row)
+        assertEquals(listOf(entry.id), coordinator.changed.map { it.id })
+        assertEquals("reported as written, not as it was before", LocalDate.of(2026, 9, 12), coordinator.changed.single().startDate)
+    }
+
+    @Test
+    fun `binding a date property later reports every Entry whose When it moved`() = runBlocking {
+        val f = fixture(whenValue = "2026-09-12", dueValue = null)
+        val enabled = manager.enableSync(f.database, f.done, null, null, listOf(f.row), at)
+        coordinator.changed.clear()
+
+        manager.bindProperty(enabled, BindingRole.DEADLINE, f.date, at)
+
+        assertEquals(listOf(linked(f.row).id), coordinator.changed.map { it.id })
+        assertEquals(LocalDate.of(2026, 9, 12), coordinator.changed.single().startDate)
     }
 }

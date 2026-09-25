@@ -184,6 +184,34 @@ class MarkdownExporterTest {
         assertEquals(setOf("CON-page.md"), exported().pageNames)
     }
 
+    /** `docs/critiques/syntax-highlighting-function.md` recorded this and left it: the root's
+     * `CLAUDE.md` is the zip's own, and a root page by that name wrote a second entry of it. */
+    @Test
+    fun `a root page called CLAUDE does not take the zip's own CLAUDE md`() {
+        val id = page("CLAUDE")
+        addBlock(id, BlockType.PARAGRAPH, "my notes about the model")
+
+        val out = exported()
+
+        assertTrue(text(out, "CLAUDE.md").startsWith("# These notes"))
+        assertEquals("# CLAUDE\n\nmy notes about the model\n", text(out, "CLAUDE (2).md"))
+    }
+
+    @Test
+    fun `nor does one whose name differs only in case, which extraction would merge`() {
+        page("Claude")
+        // Two entries in the zip, one file on Windows or macOS — the silent overwrite the
+        // per-directory collision rule exists to prevent, with the readme on the losing side.
+        assertEquals(setOf("Claude (2).md"), exported().pageNames)
+    }
+
+    @Test
+    fun `below the root a page may be called CLAUDE`() {
+        val trip = page("Trip")
+        page("CLAUDE", parentId = trip)
+        assertTrue("Trip/CLAUDE.md" in exported().keys)
+    }
+
     @Test
     fun `the trash and templates are not exported`() {
         page("Live")

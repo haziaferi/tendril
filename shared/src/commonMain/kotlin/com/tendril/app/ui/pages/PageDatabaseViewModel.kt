@@ -747,6 +747,9 @@ class PageDatabaseViewModel(
 
     /** S13 (B§13.8.2) — the database's hue on the wheel; null returns to the default hashed from the title. */
     fun setHue(hue: Int?) {
+        // §3.1.2 — [launchAndTouch] does not check the lock (Canvas's funnel of that name does),
+        // and a hue sheet open when View-Only went on still called this on Done.
+        if (locked()) return
         launchAndTouch(pageId) {
             val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouch
             pageDatabaseDao.update(db.copy(hue = hue))

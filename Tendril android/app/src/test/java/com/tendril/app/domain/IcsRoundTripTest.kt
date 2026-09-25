@@ -111,6 +111,31 @@ class IcsRoundTripTest {
         assertEquals(listOf(monday, monday.plusWeeks(1).plusDays(1), monday.plusWeeks(3)), dates)
     }
 
+    /** §3.2 "every row through the coordinator", audit 2026-09-24: the base was reported before its
+     * EXDATE skip rows existed, and the skips were never reported — so the series was armed for the
+     * occurrence the file had just skipped. */
+    @Test
+    fun `a series is reported after its skips exist, so the scheduler sees them`() {
+        val base = entry("Yoga", EntryKind.EVENT, monday, LocalTime.of(7, 0), LocalTime.of(8, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY"), id = 1)
+        val skip = entry("Yoga", EntryKind.EVENT, monday.plusWeeks(2), id = 3)
+            .copy(originalEntryId = 1, originalOccurrenceDate = monday.plusWeeks(2), isExceptionSkip = true)
+        val text = IcsWriter.write(listOf(base, skip), rome, at)
+
+        val dao = FakeEntryDao()
+        val skipsSeenAtLastBaseReport = mutableListOf<Int>()
+        runBlocking {
+            IcsImporter(dao, object : EntryScheduleCoordinator {
+                override suspend fun onEntryChanged(entry: Entry) {
+                    if (entry.originalEntryId == null && entry.recurrenceRule != null)
+                        skipsSeenAtLastBaseReport += dao.getExceptionsOf(entry.id).count { it.isExceptionSkip == true }
+                }
+                override suspend fun onEntryRemoved(entry: Entry) = Unit
+            }).import(text, rome, at)
+        }
+
+        assertEquals("the last report of the series must see its one skip", 1, skipsSeenAtLastBaseReport.last())
+    }
+
     @Test
     fun `a Google-style file reads with UTC, TZID and all-day dates converted to the device zone`() {
         val text = """

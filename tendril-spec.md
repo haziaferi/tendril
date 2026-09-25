@@ -155,7 +155,11 @@ second copy of the reasoning.
 | 2026-09-22 (audit: an ordinal `BYDAY` that can only limit) | §4.1.1 amended. `RecurrenceSpec.parse` returns null for an ordinal `BYDAY` beside `BYMONTHDAY`, and for one under DAILY or WEEKLY (RFC 5545 forbids a numeric `BYDAY` there) — the expander could only *expand*, so it dropped the term and emitted every `BYMONTHDAY` date: `FREQ=MONTHLY;BYMONTHDAY=13;BYDAY=1FR` produced all twelve 13ths of 2026, eleven phantom, against §4.1.1's own doctrine that a missing occurrence beats a phantom one. Such a rule now falls to its first occurrence alone. A plain `BYDAY` still limits (`BYMONTHDAY=13;BYDAY=FR` — Friday the 13th) and an ordinal alone still expands. Reachable from any imported `.ics` (`IcsImporter` passes an RRULE through verbatim), not only from the Google pull. Found by `/tendril-audit`; `RecurrenceExpansionTest` gains 2 cases. 947 tests. | §3.2, §4.1.1 |
 | 2026-09-22 (audit: a stale comment about the desktop's scheduler) | Comment only, no behaviour change. `WorkbenchCore`'s KDoc said desktop's `entryScheduleCoordinator` is "a no-op (see `NoOpEntryScheduleCoordinator` there)" — that class no longer exists anywhere in the tree, and desktop has wired the real `DesktopReminderScheduler` since B§13.6 #7 (which `DesktopAppContainer`'s own KDoc records). Read literally the old text says the desktop never arms anything, which is the wrong conclusion that let the merge go unplanned there (audit row 1.17). Logged because it is a `shared/` edit, not because a decision changed. | §9.7 |
 | 2026-09-22 (audit: the arrow editor wrote from a stale snapshot) | §3.7 traced against the tree, claim by claim — the first spec-trace pass this repository has run (both recorded `--full` audits skipped it for want of an `--against`). Four claims checked, three stale, one accurate and understated. **Stale:** "not available on desktop" (it has been since 2026-09-11, which the *companion spec already recorded* — the two documents disagreed for eleven days); "the screen and ViewModel live in `Tendril android`" (both in `shared/commonMain/ui/canvas/`, routed by `PageRoute`); "`updateTitle` is the one mutation outside the funnel" (three are — `trashPage` and `saveAsTemplate` joined it, all three gated, so the count was stale and not the guarantee). **Accurate:** the arrow editor writes from the snapshot it was opened with. Its recorded consequence, a direction stuck one step past the start, is the mild half: the label field fires per keystroke and wrote `edge.copy(label = …)` on that same snapshot, so typing a label put the *opening* direction back — a change that had landed, silently undone, in a section that claimed neither defect was data-loss. `CanvasEdgeDao.getById` added (a `@Query`, so no schema version and no migration); `cycleEdgeDirection` and `setEdgeLabel` re-read through it and take only `id` from their argument, following §9.7's precedent that correctness belongs to the write rather than to each caller's freshness; `CanvasScreen` resolves `editingEdge` against the live `edges` list so the sheet shows the new value. `CanvasStaleEdgeTest` (3 cases), both defect cases red before green. The display half is pinned by the walk, not by a test. 945 → 948 tests. | §3.7, §9.4 |
-| 2026-09-24 (audit 1.8: §2.2's “Enter writes once” becomes executable) | Desktop code only — `Tendril windows/tendril-windows-spec.md` carries the implementation row; this one exists because the claim being pinned is **written here**, in §2.2's description of the chord's popup, and because `spec_trace.py --section 2.2` reported **23 claims, 11 source citations, 0 test citations**. §2.2 was already the top row of that tool's unpinned worklist and the reason Pass 1 was made default-on; this is the first of its claims to acquire a test. The one-write guard moves from a flag inside `QuickAddWindow`'s Enter lambda to `QuickAddGate.kt` (`QuickAddWriteGate.start()`, true once per instance, claimed outside `launch`), and `QuickAddGateTest` pins it in four cases — the second Enter with the first write held in flight by a `CompletableDeferred`, a fresh open writing again so the first cannot pass vacuously, a blank line, and the claim being taken before the dispatcher runs at all. Mutant killed: dropping the early return gives `expected:<1> but was:<2>`, the duplicate pair the 2026-09-22 walk measured. **No behaviour changed** — same branch, same order, same 700 ms. §2.2 amended in place to name the guard's home. Desktop suite 8 → 12. | §2.2 |
+| 2026-09-23 (audit 1.8: §2.2's “Enter writes once” becomes executable) | Desktop code only — `Tendril windows/tendril-windows-spec.md` carries the implementation row; this one exists because the claim being pinned is **written here**, in §2.2's description of the chord's popup, and because `spec_trace.py --section 2.2` reported **23 claims, 11 source citations, 0 test citations**. §2.2 was already the top row of that tool's unpinned worklist and the reason Pass 1 was made default-on; this is the first of its claims to acquire a test. The one-write guard moves from a flag inside `QuickAddWindow`'s Enter lambda to `QuickAddGate.kt` (`QuickAddWriteGate.start()`, true once per instance, claimed outside `launch`), and `QuickAddGateTest` pins it in four cases — the second Enter with the first write held in flight by a `CompletableDeferred`, a fresh open writing again so the first cannot pass vacuously, a blank line, and the claim being taken before the dispatcher runs at all. Mutant killed: dropping the early return gives `expected:<1> but was:<2>`, the duplicate pair the 2026-09-22 walk measured. **No behaviour changed** — same branch, same order, same 700 ms. §2.2 amended in place to name the guard's home. Desktop suite 8 → 12. *(Dated 2026-09-24 until that day's audit: the commit date, where its Windows twin and the audit give the day the work was done.)* | §2.2 |
+| 2026-09-24 (audit 1.1: a root page called CLAUDE broke the Markdown export) | §0.10 item 17 amended. Since 2026-09-22 the zip's root carries its own `CLAUDE.md`, written last, but `MarkdownExporter.filePathsFor` resolved name collisions per directory without knowing that name was taken — so a root page titled `CLAUDE` wrote a second `CLAUDE.md`, and `ZipOutputStream` threw a `ZipException` that **failed the whole export**; one titled `Claude` wrote two entries that extraction onto Windows or macOS merges into one file, the readme or the page lost. `docs/critiques/syntax-highlighting-function.md` recorded the collision on the walk and left it "recorded, not fixed". The root's collision set now starts with the readme's name (`README_STEM`), so such a page becomes `CLAUDE (2).md`; below the root the name is free. `jvmCommon`, so both apps' exports (Android Settings, the desktop's `DesktopSettingsScreen`) take it. `MarkdownExporterTest` +3 — red first (the `ZipException`, then the merge), green after. | §0.10 |
+| 2026-09-24 (audit 1.2, 1.3: two writes outside View-Only) | §3.1.2 amended, from a sweep of all 164 mutating entry points. **1.2** — `PageDatabaseViewModel.setHue` checked no lock (its `launchAndTouch` does not, unlike Canvas's), so a hue sheet open when View-Only went on still wrote and bumped the page. **1.3** — `PageDetailViewModel.undo`/`redo` moved `BlockUndoStack` before `launchAndReindex` refused the write, spending the step: after unlocking, Ctrl+Z reversed the edit before the newest, and the newest could not be undone. Both check the lock first now. `onOpened`'s reference-cache refresh is named as a repair-on-open exemption; the Notion import's UI-only gate is recorded. Shared ViewModels, so both apps. `ViewOnlySurfacesGuardTest` +2 (the refusal and its unlocked control), `WritePathSyncTest` +1, each red first. | §3.1.2 |
+| 2026-09-24 (audit 1.4, 1.5: Sync-to-Tasks armed nothing; a moved occurrence left its series' alarm) | §9.7 amended. **1.4** — `DatabaseSyncManager.enableSync`/`bindProperty` (and `rebindProperty` through it) wrote dated Entries with no coordinator anywhere on the path; it is now a required constructor parameter (both containers, six test sites) and every insert or move is reported. On the desktop each report is a `replan()`, which cancels the previous loop, so a bulk sync-on collapses to one. **1.5** — Android only: `AndroidEntryScheduleCoordinator` handed an exception row re-armed that row alone; it now re-arms the series with its exceptions. The desktop's `replan()` reads every entry and was not affected. `DueDateBindingTest` +2, `AndroidEntryScheduleCoordinatorTest` (new: the series case as control, the exception case red first). The sweep's other misses are recorded in §9.7 as device-bound. | §9.7 |
+| 2026-09-24 (audit 1.6: an .ics import armed the occurrences it had just skipped; §3.2's stale sentences) | §3.2 amended. `IcsImporter` reported a recurring base to the coordinator before inserting its EXDATE skip rows, and never reported the skips — so the scheduler, which reads a series' exceptions when it arms it, armed the skipped occurrences on both platforms, against §3.2's "writes every row through the coordinator". The base is now reported after its skips. `IcsRoundTripTest` +1, red first. The same claim-by-claim trace of §3.2 (99 claims, 79 matching) found five sentences a later decision superseded that still read as current — the week grid's 56/44, "day N of M" being the Day view's alone, session-only layers and the unbuilt habit layer, "desktop has no Settings" — each now carries a dated note; the rest are listed in `docs/audit-2026-09-24.md`. | §3.2 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -708,7 +712,7 @@ of this file it touches is amended in the same pass (§0.11).
 | 8 | The rest of B§6 by value — **8·0** KeyValueStore, **8a** switcher, **8b** Journal shows today, **8c** Road Map shared + filters, **8d** block references, **8e** page history, **8f** Timeline + blocked by, **8g** Claude verbs: *all done 2026-09-12/13* (§0.6.12–§0.6.15, §3.1.4/§3.1.7/§3.4 amendments). Schema v19. **Step 8 complete; §0.8 complete.** | — |
 | ∥ | **This file's refresh**, section by section, against §0; desktop parity tracked per row | — |
 
-Desktop **[Assumed]** *(two of five since 2026-09-12: the Calendar moved to `shared/` at step 6a, Tasks & Habits at 7a)*: four of five destinations are stubs and neither export reaches it
+Desktop **[Assumed]** *(two of five since 2026-09-12: the Calendar moved to `shared/` at step 6a, Tasks & Habits at 7a)* *(**none since — re-read 2026-09-24:** every destination is shared code and the `NotAvailableOnDesktop` placeholders are gone (`WorkbenchScaffold.kt`, `DesktopSettingsScreen.kt` KDoc); the desktop has *Export as Markdown* (§0.10 item 6); only the `.tendril` backup is still Android's)*: four of five destinations are stubs and neither export reaches it
 (`tendril-windows-spec.md`); parity is tracked per row above rather than as one milestone, so it
 never becomes "later".
 
@@ -777,7 +781,11 @@ Genuinely undecided — distinct from §0.7.
     the desktop a global quick-add hotkey. *The hotkey half shipped 2026-09-16 (the tray PR, §2.2
     *The notification area*: `jna-platform` is a direct dependency now); the DPAPI wrap stays open.*
     ***Closed 2026-09-18 — the DPAPI wrap shipped with item 9's move (`SecretWrap`, `DpapiWrap`; §0.6.15 amended).***
-19. ~~**Cross-block selection and undo** (B§13.6 #10): the editor is one `BasicTextField` per block,~~
+19b. *(Numbered 19 when opened, which **Find in page** below already was — noted 2026-09-24 rather
+    than renumbered, because both are cited as "item 19": `BlockSelection.kt`, `BlockUndo.kt`,
+    `ShortcutsOverlay.kt` and `docs/critiques/block-selection-*.md` mean this one; `FindInPage.kt`
+    and `docs/critiques/find-in-page-*.md` mean that one.)*
+    ~~**Cross-block selection and undo** (B§13.6 #10): the editor is one `BasicTextField` per block,~~
     so a selection cannot span blocks and undo is the platform's per field. To scope in the per-block
     editor pass, not the desktop layout pass. Raised 2026-09-13. *Decided 2026-09-19 — build:
     a block selection (Esc from a field selects the block, Shift+↑↓ / Shift+click extend, Ctrl+A
@@ -794,7 +802,8 @@ Genuinely undecided — distinct from §0.7.
     Neither is precluded by the verbs; neither is planned.~~ *Closed 2026-09-19 —
     `docs/agent-over-export.md` (and, since 2026-09-22, the zip carries a `CLAUDE.md` at its root —
     `markdown/AgentReadme.kt` — with the folder's shape and the three rules, so the export explains
-    itself to the agent): which export carries what (the Markdown zip is the one to hand
+    itself to the agent; the name is reserved at the root since 2026-09-24, so a page called
+    `CLAUDE` there is written as `CLAUDE (2).md` rather than failing the export): which export carries what (the Markdown zip is the one to hand
     over; the sync folder is live and never an agent's to write), pointing Claude Code at the
     unzipped folder, the three rules (read-only towards the app, a snapshot, where the agent runs
     is where the notes go), and why neither a verb in the app nor a local model. Nothing built.*
@@ -1304,7 +1313,7 @@ saturation is never raised for a stored hue, so the grey pastel stays grey. What
 
 | Element | Token |
 |---|---|
-| Selection, today, the now-line, the timer, a link (underlined), an `@mention` (Medium, no fill) | accent |
+| Selection, today, the now-line, the timer, a link (underlined), an `@mention` (Medium, on an `accentSoft` fill since 2026-09-16 — §3.1.1; this cell said "no fill" until 2026-09-24) | accent |
 | Find marks · the current match | `findSoft` with the text · `third` with `onThird` |
 | Quick add's recognised tokens, in the line (L7b) | `findSoft` with the text — the same *read* tint as a find mark, never selection's |
 
@@ -1792,6 +1801,20 @@ entirely the instant they don't (covering "navigates away" without needing an un
 back off while still on the page reuses the existing `showAppUnlockPrompt` (§3.6's `BiometricPrompt`
 mechanism) rather than a second bespoke prompt.
 
+*(**Amended 2026-09-24 — an invariant sweep of every mutating entry point, 164 of them.** Two were
+outside the guard and are now inside it. `PageDatabaseViewModel.setHue` (S13) wrote through a
+private `launchAndTouch` that, unlike Canvas's funnel of the same name, never checks the lock; the
+`···` button hid the affordance, so the sheet had to be open already when View-Only went on — the
+"missed UI gate" this section exists to make harmless. And `PageDetailViewModel.undo`/`redo` moved
+the stack before `launchAndReindex` refused the write: the edit stayed, but its undo step was spent,
+so the first undo after unlocking reversed the edit *before* it. The lock is now checked before the
+stack moves. A third write is named here as an exemption rather than gated:
+`PageDetailViewModel.onOpened` refreshes reference blocks' cached `content` — derived from the
+referenced block, no `updatedAt` bump — the same idempotent repair-on-open as `ensureDefaultView`
+and Canvas's lazy `PageCanvas`. Still guarded in the UI only, and recorded as such: the Notion
+import (`NotionImporter` takes no `ViewLockState`; `SettingsScreen` swaps the section out under the
+lock), where `PortableArchive` refuses on its own.)*
+
 ### 3.1.3 Page templates (Decided 2026-08-08)
 
 Any Page or Database can be saved as a template from its "···" menu — "Save as template." *(Amended 2026-09-18 — §0.10 item 15: a **Canvas** too — its `···` has the verb on both platforms, and the template is the board: every card, frame and arrow cloned with the arrows rejoined, a page card still pointing at its page (a board of the same pages, again); the New sheet lists it with the canvas glyph. `TemplateManager` takes the three canvas DAOs; tested.)* A template
@@ -1993,7 +2016,7 @@ Nothing is placed for the person (§0.5.2): the tray offers, the drag decides.
 
 *(**Amended 2026-09-16 — B§13.4 14f·2, the tab on a wide window.** From 840 dp (`LocalShellLayout`)
 the **Week is a time grid** (`ui/calendar/WeekGridView.kt`): seven of the Day view's Plan lanes
-under one scroll and one header — the same 56 dp hour, 44 dp gutter, `timelineBlocks`, now-line
+under one scroll and one header — the same 56 dp hour, 44 dp gutter *(45 dp hour, 56 dp gutter since 2026-09-17 — `CalendarGeometry.kt`; noted 2026-09-24)*, `timelineBlocks`, now-line
 (today's lane only) and quarter-hour snap — so the week has the day's shape rather than the
 strip's seven bulleted cards (`docs/critiques/tasks-calendar-mock.md` #11). The header is the Day
 view's per column (day and date, today tinted, *Planned Nm* as a second line; a click opens the
@@ -2018,7 +2041,7 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
 
 - Day, Week, Month views *(**and Agenda, added 2026-09-12 (§0.8 step 6c):** the next 30 days as one list grouped by day, empty days skipped — the fourth view, off the same segmented row)*; **week starts Monday**; defaults to **Day** view on open. All three draw
   *occurrences*, not stored rows (§4.1.1) — a recurring EVENT appears on every occurrence in view
-  and a multi-day one on every day it covers. The "day N of M" label is the **Day view's alone**
+  and a multi-day one on every day it covers. The "day N of M" label is the **Day view's alone** *(and the Agenda's since 2026-09-12, which calls the same `occurrenceSubtitle`; noted 2026-09-24)*
   *(corrected 2026-09-06)*: Week lists bare titles and Month draws a presence dot, so neither has
   anywhere to put it. That is the right trade at those densities, but it means the disambiguation
   §4.1 asked for — three consecutive identical titles with nothing to tell them apart — is delivered
@@ -2100,7 +2123,7 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
   its day as the row's title and the column's name, and opening the page — Notion Calendar's layer,
   built from the rows the databases already hold. A bound date column is a live proxy of an Entry
   (§5.2.1) and that Entry is already a task on the Calendar, so nothing draws twice). Layer state is
-  the session's; persisting it is §0.10 item 12.)*. Still the intended design: a small
+  the session's; persisting it is §0.10 item 12.)* *(Superseded 2026-09-12: item 12 resolved, the layers persist as `calendar_layers`; and the habit layer below was built the same day — `CalendarViewModel` takes the `HabitDao`. The next two sentences are the record, not the state; noted 2026-09-24.)*. Still the intended design: a small
   toggle surfacing habit entries (with time+duration) inline in the calendar view. `CalendarViewModel`
   does not take a `HabitDao` at all, so habit rows never reach this screen — a genuinely unbuilt item
   rather than a rendering detail. Habits with a time are visible today only in Tasks & Habits' Merged
@@ -2121,9 +2144,9 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
   its own component with `RECURRENCE-ID` (and `RELATED-TO` its base), a skipped one an `EXDATE`;
   `UID` = the Entry's uid. Import reads `VEVENT` and `VTODO` (Google's and Apple's `Z`, `TZID` and
   all-day forms, folded lines), matches on `UID` so the same file twice — or Tendril's own export —
-  updates rather than duplicates, and writes every row through the coordinator. Reached from
+  updates rather than duplicates, and writes every row through the coordinator *(true since 2026-09-24: a series was reported before its EXDATE skips existed, so the scheduler armed the skipped occurrences — audit 1.6)*. Reached from
   Settings › Calendar (.ics) on Android (the document picker) and from the Calendar's `···` on
-  desktop (a file dialog), since desktop has no Settings yet. The file goes where the person puts
+  desktop (a file dialog), since desktop had no Settings then *(it has since — `DesktopSettingsScreen`; the placement stayed)*. The file goes where the person puts
   it, never into the sync folder — the same answer §0.10 item 6 wanted for JSON Canvas.
 
 ### 3.3 Tasks & Habits
@@ -4655,6 +4678,25 @@ creates Entries in bulk yet" — and then Notion import (§7) and retroactive Sy
 both shipped without revisiting it, `DatabaseSyncManager.enableSync` still inserting one Entry per
 row with nothing counting them. Open work, not behaviour to debug.
 
+*(**Amended 2026-09-24 — the paragraph above reasons about a flood from a path that scheduled
+nothing.** An invariant sweep of all 71 write calls that reach an Entry, reminder, completion or
+habit found that `enableSync` and `bindProperty` never reached a scheduler: `DatabaseSyncManager`
+held no coordinator and no caller re-armed after it. So retroactive Sync-to-Tasks could not flood
+past-due alarms — it armed no alarm at all, future ones included, until the next cold start or
+reboot on the phone and never on the desktop. `DatabaseSyncManager` now takes the
+`EntryScheduleCoordinator` as a required parameter and reports every Entry it inserts or moves;
+the never-schedule-in-the-past guard now does the job this paragraph credited it with. And an
+exception row (§4.1: one occurrence moved or skipped) re-armed only itself on Android: the series,
+whose next occurrence it changes, kept its alarm for the occurrence that no longer happens.
+`AndroidEntryScheduleCoordinator` re-arms the series with its exceptions when handed one — one
+place for the editor's "this one", ICS EXDATE/RECURRENCE-ID and a merged exception alike. The
+desktop's `replan()` re-reads everything and was never affected. Recorded, not fixed (each needs a
+device or an `androidTest`): a reminder deleted on the other device is never cancelled on the phone
+(`AlarmScheduler.cancelAllFor` finds reminders through `getForEntry`, which skips deleted rows —
+merge and archive import alike); an archive import that makes an entry DONE or dateless leaves its
+armed alarm; merged and imported habits are not re-armed (build-order B5); a restored habit is not
+re-armed (§5.5.1).)*
+
 ### 9.8 Architecture review (2026-07-14 — Review Mode, deep-review strategy)
 
 Requested as a final audit of the Entry/recurrence/notification cluster before Phase 1. Mode:
@@ -5000,7 +5042,12 @@ faster than it can be read — which is precisely what happened to the sentence 
 so §10 keeps its purpose of recording what was DECIDED and why, and stops pretending to be a
 worklist. Where the worklist itself lives is deliberately not named here: any answer would be either
 a path outside version control, which a reader of this repository cannot follow, or a second copy of
-the same list, which is the duplication §9.8 R1 exists to refuse.*
+the same list, which is the duplication §9.8 R1 exists to refuse.* *(**Amended 2026-09-24:** that
+dilemma had a third answer, and it was taken on 2026-09-08 — the worklist moved into version
+control as `docs/build-order.md` (the build order; its per-item status is asserted, not measured)
+and `docs/scope-decisions.md` (what is deliberately not built, which wins where the two disagree).
+Neither copies §10; both say in their first paragraph that they exist because this note refused to
+name them. The note is kept as the record of the reasoning; this amendment supersedes it.)*
 The five items below were the last consolidated open items and are now resolved — see §9.9's decision-gate annotations for exactly when each was
 scheduled relative to the build sequence.
 
@@ -5129,7 +5176,8 @@ section):
   generally are **not** out of scope anymore). **Both halves reopened 2026-09-06**: grouping by a
   computed value stops being a separate problem once §5.4's evaluator exists — it is the same code
   path as grouping by a Select — and Timeline/Gantt is reopened on its own merits rather than
-  because anything changed about its cost.
+  because anything changed about its cost. *(And built: Timeline on 2026-09-13, schema v19,
+  §0.6.14 — noted 2026-09-24, since this list is where a reader looks to learn it is not.)*
 
 ---
 

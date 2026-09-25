@@ -34,8 +34,9 @@ a finding, which is the failure this tool exists to prevent.
 So `SELF_CHECK` holds known answers, each recording the way the tool was wrong and demanding one
 verdict in each direction: an instrument that answered KILLED for everything would satisfy every
 KILLED anchor and mean nothing. The **static tier runs before every batch** because it costs
-milliseconds and two of the three real defects were visible in it — a guard the planner refused
-to see, and a scope collapsed to one class. A failure there aborts the run: no verdict from a
+milliseconds and two of the defects that produced wrong verdicts were visible in it — a guard the
+planner refused to see, and a scope collapsed to one class (row 2.8 of `docs/audit-2026-09-22.md`
+records six defects in all). A failure there aborts the run: no verdict from a
 wrong planner is worth the half-hour it takes to produce.
 
 A `KILLED` anchor that stops killing means the tool or its test broke. A `SURVIVED` anchor that
@@ -43,7 +44,8 @@ starts killing means somebody wrote the missing test, which is good news and a *
 rather than a fault; they are reported differently, because a check that cries wolf gets ignored.
 
 **It never touches your working tree.** Every mutation is applied inside a throwaway `git
-worktree`, and the run refuses to start unless that worktree is clean. `tools/hooks/` exists
+worktree`, which every run resets to `HEAD` and then re-applies your uncommitted work to
+(tracked changes, plus untracked `.kt`/`.kts` files — other untracked files are not carried). `tools/hooks/` exists
 because an unsupervised session once edited `shared/` while the parent reported the run as
 read-only; a tool whose whole job is to break the code on purpose does not get to do that in the
 tree you are working in.
@@ -536,7 +538,7 @@ def scope_for(symbol: str):
 def static_self_check(verbose=True):
     """The free tier: everything checkable without starting Gradle.
 
-    Run before every batch, because two of the three real defects were visible here — a guard the
+    Run before every batch, because two of the defects behind wrong verdicts were visible here — a guard the
     planner refused to see, and a scope collapsed to one class — and finding them costs
     milliseconds rather than the half-hour the batch would have wasted producing wrong verdicts.
     """
@@ -723,7 +725,7 @@ def main() -> int:
     if not runnable:
         print("\nnothing to run.")
         return 0
-    # The free tier, before anything expensive. Two of the three defects that produced wrong
+    # The free tier, before anything expensive. Two of the defects that produced wrong
     # verdicts were visible here, and finding them costs milliseconds against the half-hour a
     # batch takes to produce answers nobody can trust.
     broken = static_self_check(verbose=False)

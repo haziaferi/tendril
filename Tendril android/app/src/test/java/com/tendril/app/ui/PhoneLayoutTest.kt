@@ -69,7 +69,7 @@ class PhoneLayoutTest {
         val viewModel = PagesViewModel(
             pageDao, pageDatabaseDao, propertyDao, FakePageFtsDao(store), labelDao,
             PurgeRegistry(FakePurgedRecordDao(), pageDao, entryDao, FakeHabitDao(), propertyDao, coordinator),
-            DatabaseSyncManager(pageDao, pageDatabaseDao, FakePropertyValueDao(store), entryDao, FakeEntryCompletionDao(), resolve),
+            DatabaseSyncManager(pageDao, pageDatabaseDao, FakePropertyValueDao(store), entryDao, FakeEntryCompletionDao(), resolve, coordinator),
             TemplateManager(pageDao, blockDao, pageDatabaseDao, propertyDao, FakePageCanvasDao(store), FakeCanvasNodeDao(store), FakeCanvasEdgeDao(store)), ViewLockState(),
             PageContentRepository(pageDao, blockDao, FakePageFtsDao(store), FakeBlockFtsDao(store)), entryDao, resolve,
         )

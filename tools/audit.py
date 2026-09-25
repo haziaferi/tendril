@@ -3,9 +3,11 @@
 Static hygiene checks for the Tendril repo — the mechanical half of a code audit,
 so review attention goes to the parts that need judgement.
 
-Every check encodes a defect this repository actually had, so a finding here is a
-regression rather than a style opinion. All checks are plain-text analysis: no
-Gradle, no Android SDK, no network — they run in seconds on any machine.
+Checks 1-10 each encode a defect this repository actually had, so a finding there is a
+regression rather than a style opinion. Checks 11-19 and the sheet check hold a design
+decision in place (they cite the PR that made it); a finding there is drift from it. All
+checks are plain-text analysis: no Gradle, no Android SDK, no network — they run in seconds
+on any machine.
 
     python3 tools/audit.py            # report; exit 1 if anything is found
     python3 tools/audit.py -v         # also print what each check scanned
@@ -19,9 +21,11 @@ Checks
   6. leaked MutableStateFlow   `val x: StateFlow<T> = _x` without .asStateFlow()
   7. Regex built per call      allocated in a function body instead of a top-level val
   8. unguarded throwing I/O    a call to a documented-throwing file API with no try/catch
+  9. imported-name shadowed    `viewModel.x` in a function (top-level or member, block or
+                               expression body) where `viewModel` is only the imported
+                               *function* of that name - one the code calls bare - never a
+                               parameter, local, lambda parameter, property or constructor param
  10. write-only entity field  stored and synced, never read outside the sync mappers
-  9. imported-name shadowed    `viewModel.x` in a function where `viewModel` is only the
-                               imported *function* of that name, never a parameter or local
  11. hardcoded colour          `Color(0x…)` or `Color.Gray`/`Blue`/… in shared UI outside the
                                theme package — every colour is a solved token (B§13.8.3, 14g·2)
  12. literal type              a literal `fontSize = N.sp`, `N.sp` or `fontWeight = FontWeight.X`
@@ -45,6 +49,8 @@ Checks
                                field is a `TendrilField` (36 dp under a pointer, 48 under Touch)
  19. clip                     a `maxLines = 1` whose call has no `overflow` — a one-line title clips
                                without an ellipsis (`desktop-type-full.md` #4)
+  -  sheet scroll             a lazy list inside a scrolling `TendrilSheet` (pass `scrolls = false`),
+                               or `scrolls = false` on a sheet with no lazy list (P2, 2026-09-18)
 
 Things invoked by a framework rather than by name — JUnit tests, Room converters
 and DAOs, Compose @Composable, Android manifest components, `fun main` — are
@@ -68,7 +74,7 @@ MONTH_GRID = re.compile(r"\bGridCells\.Fixed\(\s*7\s*\)")
 RADIUS = re.compile(r"\bRoundedCornerShape\(\s*(\d+(?:\.\d+)?)\.dp\s*\)")
 RADIUS_FAMILY = {"2", "4", "6", "8", "10", "12"}
 MATERIAL_FIELD = re.compile(r"\b(?:Outlined)?TextField\s*\(")
-MAX_LINES_ONE = re.compile(r"\bmaxLines = 1\b")
+MAX_LINES_ONE = re.compile(r"\bmaxLines\s*=\s*1\b")   # any spacing, since 2026-09-24
 SHEET_CALL = re.compile(r"\bTendrilSheet\s*\(")
 LAZY_LIST = re.compile(r"\bLazy(?:Column|VerticalGrid|Row)\s*[({]")
 
@@ -227,7 +233,9 @@ TOP_VAL = re.compile(r"^(?:(?:private|internal|public|const|expect|actual)\s+)*v
 DAO_ANN = re.compile(r"^\s*@(?:Query|Insert|Update|Delete|Upsert)\b")
 DAO_FUN = re.compile(r"^\s*(?:suspend\s+)?fun\s+(\w+)")
 KDOC_LINK = re.compile(r"\[([A-Za-z][\w]*(?:\.[A-Za-z][\w]*)*)\]")
-LEAKED_FLOW = re.compile(r"^\s*val\s+\w+\s*:\s*StateFlow<.*>\s*=\s*_\w+\s*$")
+# Any modifier that exposes the flow counts (`private` does not leak it) - `override val` was
+# invisible until 2026-09-24.
+LEAKED_FLOW = re.compile(r"^\s*(?:(?:public|internal|override|open)\s+)*val\s+\w+\s*:\s*StateFlow<.*>\s*=\s*_\w+\s*$")
 # Indentation stands in for "inside a function body", but a `val` in a nested companion
 # object is indented identically and is allocated once. A per-call allocation is by
 # definition not a declaration, so exclude those outright.
@@ -260,10 +268,11 @@ FIELD_READ_OFF_LANGUAGE = {
 # goes on the line, so the entry is a promise with an address, not debt. A field not
 # listed here that stops being read is a finding, which is the point of baselining
 # rather than deleting the check. Baselined 2026-09-08, measured not assumed.
+# The shrink rule is enforced since 2026-09-24 (`write_only_fields`'s stale half): until then an
+# entry whose field gained a reader was never looked at again, and three of these four had -
+# `Entry.estimate` (Plan mode, ICS), `Block.imagePath` (`BlockImage`, the exporter) and
+# `Label.color` (five screens' label dots) - while their comments said nothing read them.
 FIELD_WRITE_ONLY_BASELINE = {
-    "Entry.estimate",                       # spec 0.6.4: stored now, read by 0.8 step 7 (Plan mode, tracking)
-    "Block.imagePath",                      # P2 - the importer writes it; nothing draws it
-    "Label.color",                            # a palette tuned for dichromacy that renders nowhere
     "EntryCompletion.occurrenceDate",       # written at both resolve sites, never read back
 }
 
@@ -287,6 +296,143 @@ class Report:
         print()
         print(f"FAIL  {total} finding(s)" if total else "PASS  no findings")
         return 1 if total else 0
+
+
+FUN_HEADER = re.compile(
+    r"^([ \t]*)(?:@\w+(?:\([^)\n]*\))?\s+)*"
+    r"(?:(?:private|internal|public|protected|suspend|inline|override|open|operator|infix|tailrec|actual|expect)\s+)*"
+    r"fun\s+", re.M)
+
+
+def function_spans(code: str):
+    """(fun keyword offset, indent, header, body) for every function in `code` - top-level or
+    member, block body or expression body. A function with no body (abstract, interface) is
+    skipped. Until 2026-09-24 check 9 saw only column-0 block bodies, about a fifth of them."""
+    for m in FUN_HEADER.finditer(code):
+        indent = len(m.group(1).expandtabs(4))
+        fun_at = m.end() - len("fun") - 1
+        while fun_at > 0 and code[fun_at:fun_at + 3] != "fun":
+            fun_at -= 1
+        i, depth, kind = m.end(), 0, None
+        while i < len(code):
+            c = code[i]
+            if c in "(<[": depth += 1
+            elif c in ")>]":
+                if c == ">" and code[i - 1] == "-":
+                    pass                                   # the arrow of a function type
+                else:
+                    depth -= 1
+            elif depth == 0 and c == "{":
+                kind = "block"; break
+            elif depth == 0 and c == "=" and code[i + 1:i + 2] != "=" and code[i - 1] not in "!<>=":
+                kind = "expr"; break
+            elif depth == 0 and c == "\n":
+                nxt = code[i + 1:].lstrip()
+                if not nxt[:1] or nxt[0] not in "=:{.":
+                    break                                  # no body: abstract or interface
+            i += 1
+        if kind is None:
+            continue
+        header = code[m.start():i]
+        if kind == "block":
+            d, j = 0, i
+            while j < len(code):
+                if code[j] == "{": d += 1
+                elif code[j] == "}":
+                    d -= 1
+                    if d == 0: break
+                j += 1
+            body = code[i:j]
+        else:
+            # An expression body runs until a non-blank line indented no deeper than `fun`.
+            end = code.find("\n", i)
+            while end != -1:
+                nl = code.find("\n", end + 1)
+                line = code[end + 1: nl if nl != -1 else len(code)]
+                if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                    break
+                end = nl
+            body = code[i: end if end != -1 else len(code)]
+        yield fun_at, indent, header, body
+
+
+def bare_calls(all_code: str) -> set[str]:
+    """Names the code itself calls bare, `name(` - proof, in a tree that compiles, that the name
+    is callable."""
+    return set(re.findall(r"(?<![\w.])([a-z]\w*)\s*\(", all_code))
+
+
+def imported_name_shadowed(src: str, code: str, called: set[str] | None = None) -> list[tuple[int, str]]:
+    """Check 9: (line of `fun`, name) where an identifier that is only an imported *function*
+    is used as a value (`name.`). `src` is the raw file (for imports), `code` its stripped form.
+
+    A lowercase import is not always a function: `viewModelScope`, `lifecycleScope` and `dp` are
+    extension *properties*, and `size.width` inside a `drawLine` lambda is the implicit
+    DrawScope's member, not the imported `Modifier.size`. Scanning member functions (2026-09-24)
+    surfaced 99 such reports and no real one. So when `called` is given, only names the codebase
+    calls bare somewhere - proof they are functions - are considered."""
+    fn_imports = {m.group(1) for m in re.finditer(r"^import\s+[\w.]*\.([a-z]\w*)$", src, re.M)}
+    if called is not None:
+        fn_imports &= called
+    out = []
+    for fun_at, indent, header, body in function_spans(code) if fn_imports else ():
+        for name in sorted(fn_imports):
+            n = re.escape(name)
+            if not re.search(rf"(?<![\w.]){n}\s*\.", body):
+                continue
+            # In scope if it is a parameter, a local, or a lambda parameter of this function...
+            if re.search(rf"(?<![\w.]){n}\s*:", header): continue
+            if re.search(rf"\b(?:val|var)\s+{n}\b", body): continue
+            if re.search(rf"(?<![\w.]){n}\s*(?:,[^{{}}\n]*?)?\)?\s*->", body): continue
+            # ...or bound where the function sees it: a property declared no deeper than the
+            # function (a sibling in the class body, or top-level), or a constructor parameter.
+            # A local of another function sits deeper and does not count.
+            if any(len(p.group(1).expandtabs(4)) <= indent
+                   for p in re.finditer(rf"^([ \t]*)(?:[\w@]+\s+)*(?:val|var)\s+{n}\b", code, re.M)):
+                continue
+            if indent and re.search(rf"\bclass\s+\w+\s*(?:<[^>]*>)?\s*\([^)]*?(?<![\w.]){n}\s*:", code):
+                continue
+            out.append((code[:fun_at].count("\n") + 1, name))
+    return out
+
+
+def write_only_fields(srcs: dict[str, str], baseline=None, off_language=None) -> tuple[list[str], list[str]]:
+    """Check 10 over `{repo-relative path: source}`: the unread entity fields that are not
+    baselined, and the baseline entries that no longer hold.
+
+    A baseline entry is stale when its field is read by this check's own measure, or names no
+    entity field at all. Without that half the "may only SHRINK" rule was unenforced: the
+    baseline was consulted only for a field with no reads, so an entry whose field had gained a
+    reader silenced nothing and was never seen - three of four were, by 2026-09-24.
+
+    The read test is by name (`.field` anywhere outside tests and the sync mappers), so two
+    entities sharing a field name share its reads. That is coarse, and known.
+    """
+    baseline = FIELD_WRITE_ONLY_BASELINE if baseline is None else baseline
+    off_language = FIELD_READ_OFF_LANGUAGE if off_language is None else off_language
+    sql_text = " ".join(m.group(2) for s in srcs.values() for m in SQL_ANN.finditer(s))
+    readable = [s for r, s in srcs.items()
+                if not TEST_PATH.search("/" + r) and not any(r.endswith(x) for x in MAPPER_FILES)]
+    found, unread, seen = [], set(), set()
+    for r, src in srcs.items():
+        if TEST_PATH.search("/" + r):
+            continue
+        for m in ENTITY_DECL.finditer(src):
+            entity = m.group(1)
+            for fm in ENTITY_FIELD.finditer(m.group(2)):
+                field = fm.group(1)
+                key = f"{entity}.{field}"
+                seen.add(key)
+                if key in off_language:
+                    continue
+                reads = sum(len(re.findall(rf"\.{re.escape(field)}\b", s)) for s in readable)
+                if reads or re.search(rf"\b{re.escape(field)}\b", sql_text):
+                    continue
+                unread.add(key)
+                if key not in baseline:
+                    found.append(f"{r}  {key}")
+    stale = sorted(k for k in baseline if k not in seen or k not in unread)
+    return found, stale
 
 
 def main() -> int:
@@ -385,26 +531,12 @@ def main() -> int:
                 rep.add("dead declaration", f"{rel(f)}:{i}  {name}")
 
     # entity fields that are stored and synced but never read
-    sql_text = " ".join(m.group(2) for s in srcs.values() for m in SQL_ANN.finditer(s))
-    readable = {f: s for f, s in srcs.items()
-                if not TEST_PATH.search("/" + rel(f))
-                and not any(rel(f).endswith(x) for x in MAPPER_FILES)}
-    for f, src in srcs.items():
-        if TEST_PATH.search("/" + rel(f)):
-            continue
-        for m in ENTITY_DECL.finditer(src):
-            entity = m.group(1)
-            for fm in ENTITY_FIELD.finditer(m.group(2)):
-                field = fm.group(1)
-                key = f"{entity}.{field}"
-                if key in FIELD_READ_OFF_LANGUAGE:
-                    continue
-                reads = sum(len(re.findall(rf"\.{re.escape(field)}\b", s)) for s in readable.values())
-                if reads or re.search(rf"\b{re.escape(field)}\b", sql_text):
-                    continue
-                if key in FIELD_WRITE_ONLY_BASELINE:
-                    continue
-                rep.add("write-only entity field", f"{rel(f)}  {key}")
+    found, stale = write_only_fields({rel(f): s for f, s in srcs.items()})
+    for item in found:
+        rep.add("write-only entity field", item)
+    for key in stale:
+        rep.add("stale write-only baseline", f"tools/audit.py FIELD_WRITE_ONLY_BASELINE  {key} "
+                "- its field is read now (or no longer exists); delete the entry")
 
 
     # A call on an identifier that is only ever an imported *function* of that name.
@@ -416,30 +548,10 @@ def main() -> int:
     # screen that owns the view model, and nothing but the compiler objected. Restricted to
     # names imported from a lowercase final segment (Kotlin's function-naming convention), so
     # a type used as a qualifier never trips it.
+    called = bare_calls(all_code)
     for f, src in srcs.items():
-        code = stripped[f]
-        fn_imports = {m.group(1) for m in re.finditer(r"^import\s+[\w.]*\.([a-z]\w*)$", src, re.M)}
-        if not fn_imports:
-            continue
-        for fm in re.finditer(r"^(?:@\w+\s*\n)*(?:(?:private|internal|public|suspend|inline)\s+)*fun\s+[^\n{]*\{", code, re.M):
-            start = fm.end() - 1
-            depth, i = 0, start
-            while i < len(code):
-                if code[i] == "{": depth += 1
-                elif code[i] == "}":
-                    depth -= 1
-                    if depth == 0: break
-                i += 1
-            header, body = fm.group(0), code[start:i]
-            for name in fn_imports:
-                if not re.search(rf"(?<![\w.]){re.escape(name)}\s*\.", body):
-                    continue
-                # In scope if it is a parameter of this function or bound inside its body.
-                if re.search(rf"(?<![\w.]){re.escape(name)}\s*:", header): continue
-                if re.search(rf"\b(?:val|var)\s+{re.escape(name)}\b", body): continue
-                if re.search(rf"(?<![\w.]){re.escape(name)}\s*(?:,|\))\s*->", body): continue
-                line = code[:start].count("\n") + 1
-                rep.add("imported-name shadowed", f"{rel(f)}:{line}  {name} is the imported function here, not a value")
+        for line, name in imported_name_shadowed(src, stripped[f], called):
+            rep.add("imported-name shadowed", f"{rel(f)}:{line}  {name} is the imported function here, not a value")
 
     # DAO methods with no production caller
     for f, src in srcs.items():

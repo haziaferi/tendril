@@ -43,6 +43,7 @@ class DatabaseSyncManager(
     private val entryDao: EntryDao,
     private val completionDao: EntryCompletionDao,
     private val resolveEntryUseCase: ResolveEntryUseCase,
+    private val entryScheduleCoordinator: EntryScheduleCoordinator,
 ) {
     /**
      * Turns Sync-to-Tasks on: records the three bindings and creates one linked Entry per
@@ -75,23 +76,22 @@ class DatabaseSyncManager(
                 ?.let(::parseIntervalValue)
                 ?.let { (count, unit) -> RecurrenceRule.Elastic(intervalToPeriod(count, unit)) }
 
-            val entryId = entryDao.insert(
-                Entry(
-                    title = row.title,
-                    kind = EntryKind.TASK,
-                    startDate = startDate,
-                    startTime = null,
-                    endDate = null,
-                    endTime = null,
-                    recurrenceRule = recurrenceRule,
-                    dueDate = dueDate,
-                    status = if (checked) EntryStatus.DONE else EntryStatus.PENDING,
-                    sourceRowId = rowId,
-                    source = EntrySource.DATABASE_SYNC,
-                    createdAt = now,
-                    updatedAt = now,
-                )
+            val entry = Entry(
+                title = row.title,
+                kind = EntryKind.TASK,
+                startDate = startDate,
+                startTime = null,
+                endDate = null,
+                endTime = null,
+                recurrenceRule = recurrenceRule,
+                dueDate = dueDate,
+                status = if (checked) EntryStatus.DONE else EntryStatus.PENDING,
+                sourceRowId = rowId,
+                source = EntrySource.DATABASE_SYNC,
+                createdAt = now,
+                updatedAt = now,
             )
+            val entryId = entryDao.insert(entry)
             // §5.2.1 — a seeded DONE also writes one EntryCompletion row, `resolvedAt`
             // approximate (the moment of binding, not the row's real historical completion
             // time, which isn't recoverable).
@@ -100,6 +100,9 @@ class DatabaseSyncManager(
                     EntryCompletion(entryId = entryId, occurrenceDate = startDate ?: LocalDate.now(), resolvedAt = now, status = EntryStatus.DONE)
                 )
             }
+            // §9.7 — every write that moves when something is next due re-arms it. A retroactive
+            // sync-on creates dated Entries in bulk, and until 2026-09-24 armed none of them.
+            entryScheduleCoordinator.onEntryChanged(entry.copy(id = entryId))
         }
         for (propertyId in listOfNotNull(donePropertyId, deadlinePropertyId, recurrencePropertyId, dueDatePropertyId)) {
             propertyValueDao.deleteAllForProperty(propertyId)
@@ -154,6 +157,7 @@ class DatabaseSyncManager(
                 )
             }
             entryDao.update(updatedEntry)
+            entryScheduleCoordinator.onEntryChanged(updatedEntry)   // §9.7, as in [enableSync]
         }
         propertyValueDao.deleteAllForProperty(propertyId)
 

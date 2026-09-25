@@ -47,6 +47,8 @@ a device — the exporter is JVM code the test exercises end to end through a re
   overlapping).
 - A page titled `CLAUDE` at the tree's root would share the zip's root name with the readme —
   the exporter's collision rule does not know the reserved name. Recorded, not fixed (a one-line
-  reservation in `filePathsFor` when it is ever met).
+  reservation in `filePathsFor` when it is ever met). **Fixed 2026-09-24** (audit 1.1) — and it
+  was worse than "share the name": the duplicate entry made `ZipOutputStream` throw, failing the
+  whole export; the fix is that one-line reservation, pinned by three `MarkdownExporterTest` cases.
 
 Tests 924 → 930 (`HighlightTest` 5, `MarkdownExporterTest` +1); audit PASS; both compiles.

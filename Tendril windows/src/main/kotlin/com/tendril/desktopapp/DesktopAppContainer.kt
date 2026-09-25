@@ -33,7 +33,7 @@ class DesktopAppContainer(database: TendrilDatabase, scheduler: EntryScheduleCoo
         val pageContentRepository = PageContentRepository(database.pageDao(), database.blockDao(), database.pageFtsDao(), database.blockFtsDao())
         val databaseSyncManager = DatabaseSyncManager(
             database.pageDao(), database.pageDatabaseDao(), database.propertyValueDao(),
-            database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase,
+            database.entryDao(), database.entryCompletionDao(), resolveEntryUseCase, scheduler,
         )
         val templateManager = TemplateManager(database.pageDao(), database.blockDao(), database.pageDatabaseDao(), database.propertyDao(), database.pageCanvasDao(), database.canvasNodeDao(), database.canvasEdgeDao())
         workbenchCore = WorkbenchCore(

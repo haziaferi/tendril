@@ -118,7 +118,7 @@ class MarkdownExporter(
                 }
             }
             // The zip explains itself to an agent at its root (`docs/agent-over-export.md`).
-            zip.writeEntry("CLAUDE.md", agentReadme(pages = pages.size - canvases, canvases = canvases, images = images))
+            zip.writeEntry("${README_STEM}.md", agentReadme(pages = pages.size - canvases, canvases = canvases, images = images))
         }
         MarkdownExportResult(pages = pages.size - canvases, images = images, canvases = canvases)
     }
@@ -139,7 +139,10 @@ class MarkdownExporter(
      */
     private fun filePathsFor(pages: List<Page>): Map<Long, String> {
         val byId = pages.associateBy { it.id }
-        val usedPerDirectory = mutableMapOf<String, MutableSet<String>>()
+        // The root's `CLAUDE.md` is the zip's own and is written last: a root page named
+        // `CLAUDE` in any case would duplicate the entry, which `ZipOutputStream` refuses —
+        // failing the whole export — or merge with it on extraction.
+        val usedPerDirectory = mutableMapOf<String, MutableSet<String>>("" to mutableSetOf(README_STEM.lowercase()))
         val paths = mutableMapOf<Long, String>()
         // Ordered by id so the same database always produces the same file names: whoever existed
         // first keeps the unsuffixed one, rather than it depending on row order.
@@ -230,6 +233,8 @@ class MarkdownExporter(
     }
 
     private companion object {
+        /** The zip's own readme at its root (`docs/agent-over-export.md`), reserved there. */
+        const val README_STEM = "CLAUDE"
         val ILLEGAL_NAME_CHARS = charArrayOf('\\', '/', ':', '*', '?', '"', '<', '>', '|').toSet()
         val RESERVED_NAMES = setOf(
             "CON", "PRN", "AUX", "NUL",

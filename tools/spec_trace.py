@@ -13,8 +13,8 @@ claims `tendril-spec.md` makes about how the app behaves, which ones does anythi
 **What the `unnamed` column is, and what it is not.** For each section it resolves the
 production declarations that cite it — a KDoc `§` sits directly above the thing it describes —
 and reports the ones no unit test mentions by name, with file and line. That is a list of
-places nothing is looking, and it is actionable: `§9.7` names `EntryActionReceiver`, whose
-missing App Lock check §3.6 records as an open hole, and `HabitsWidget.onAction`, the Glance
+places nothing is looking, and it is actionable: `§9.7` named `EntryActionReceiver`, whose
+missing App Lock check §3.6 recorded as an open hole (closed 2026-09-22, row 2.7), and `HabitsWidget.onAction`, the Glance
 callback of audit row 1.12.
 
 The first version of this file counted `§` citations in *test* KDoc instead, and that was the
