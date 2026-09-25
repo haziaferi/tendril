@@ -1,5 +1,6 @@
 package com.tendril.app.sync
 
+import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.data.canvas.PageCanvas
@@ -41,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -151,9 +153,23 @@ class WritePathSyncTest {
             pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
+        /** One store for the editor and the folder sync both, as on a device: the picture the
+         * editor writes is the picture the orchestrator publishes. */
+        val localImages = InMemoryLocalImageStore()
+
+        /** The whole-folder sync, for what [engine] alone does not carry: images (§9.4 / S4). */
+        val orchestrator by lazy {
+            SnapshotSyncOrchestrator(
+                entryDao = entryDao, habitDao = habitDao, pageDao = pageDao, pagesSyncEngine = engine,
+                purgeRegistry = purgeRegistry, reminderDao = FakeReminderDao(), entryCompletionDao = completionDao,
+                habitCompletionDao = habitCompletionDao, checkInDao = FakeCheckInDao(), timeLogDao = FakeTimeLogDao(),
+                localImages = localImages,
+            )
+        }
+
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
-            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership,
+            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, localImages, labelMembership,
             habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao), PageHistory(pageDao, blockDao, FakePageRevisionDao()),
             FakeAiKeyStore(), MapKeyValueStore(), FakeCheckInDao(),
         )
@@ -1078,6 +1094,162 @@ class WritePathSyncTest {
 
         assertEquals(listOf("from B, later"), a.blockDao.getForPage(page.id).map { it.content })
         assertTrue("and A's row moved with it", a.pageDao.getById(page.id)!!.updatedAt.isAfter(t0))
+    }
+
+    // ------------------------------------------------------------------ false authorship (audit 5a)
+
+    /**
+     * Audit 2026-09-24 5a.2. A row added to a Sync-to-Tasks database went through `enableSync`,
+     * whose commit touched the database page and **every** row — so each untouched row claimed
+     * an edit it never had, and under last-write-wins that claim beat a real, unsynced edit to
+     * the same row made on the other device.
+     */
+    @Test
+    fun `adding a row to a synced database does not overwrite another row's edit made elsewhere`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val db = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!
+        val doneId = a.propertyDao.insert(Property(databaseId = db.id, name = "Done", type = PropertyType.CHECKBOX, order = 1))
+        a.databaseSyncManager.enableSync(db, doneId, null, null, listOf(seeded.row.id), now = t0)
+        syncAtoB()
+
+        val remoteRowId = b.pageIdOf(seeded.row.uid)
+        val remoteDbPageId = b.pageIdOf(seeded.databasePage.uid)
+        b.database(remoteDbPageId).setCellValue(b.propertyDao.getByUid(seeded.property.uid)!!, b.pageDao.getById(remoteRowId)!!, "from B")
+
+        val onA = a.database(seeded.databasePage.id)
+        backgroundScope.launch { onA.database.collect { } }
+        onA.addRow("New") { }
+
+        assertEquals("the existing row was not edited on A, so its timestamp must not move", t0, a.pageDao.getById(seeded.row.id)!!.updatedAt)
+        syncAtoB()
+        assertEquals(
+            "B's cell edit is the only real edit to that row and must survive A's sync",
+            listOf("from B"),
+            b.propertyValueDao.getForRow(remoteRowId).map { it.value },
+        )
+        assertTrue("the new row still reaches B", b.pageDao.getAll().any { it.title == "New" })
+    }
+
+    /**
+     * Audit 2026-09-24 5a.3. Deleting a bound column unbound it first — crystallizing the Entry's
+     * dates into that column for every row, and touching every row — and then purged the column
+     * and the values it had just written. No row's synced content changed, yet every row claimed
+     * an edit, and beat a real one made on the other device.
+     */
+    @Test
+    fun `deleting a bound column does not overwrite another row's edit made elsewhere`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val db = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!
+        val doneId = a.propertyDao.insert(Property(databaseId = db.id, name = "Done", type = PropertyType.CHECKBOX, order = 1))
+        val dateId = a.propertyDao.insert(Property(databaseId = db.id, name = "Date", type = PropertyType.DATE, order = 2))
+        a.propertyValueDao.setValue(dateId, seeded.row.id, "2026-09-30")
+        a.databaseSyncManager.enableSync(db, doneId, dateId, null, listOf(seeded.row.id), now = t0)
+        syncAtoB()
+
+        val remoteRowId = b.pageIdOf(seeded.row.uid)
+        b.database(b.pageIdOf(seeded.databasePage.uid))
+            .setCellValue(b.propertyDao.getByUid(seeded.property.uid)!!, b.pageDao.getById(remoteRowId)!!, "from B")
+
+        val onA = a.database(seeded.databasePage.id)
+        backgroundScope.launch { onA.database.collect { } }
+        onA.requestDeleteProperty(a.propertyDao.getById(dateId)!!)
+        onA.confirmDeleteProperty()
+
+        assertNull("the column is gone", a.propertyDao.getById(dateId))
+        assertEquals("no stored cell of the row changed, so its timestamp must not move", t0, a.pageDao.getById(seeded.row.id)!!.updatedAt)
+        syncAtoB()
+        assertEquals("B's cell edit survives", listOf("from B"), b.propertyValueDao.getForRow(remoteRowId).map { it.value })
+        assertTrue("and the deletion still reaches B", b.propertyDao.getAll().none { it.name == "Date" })
+    }
+
+    /**
+     * Audit 2026-09-24 5a.5. A block verb that changed nothing — the first block moved up, a
+     * block turned into the type it already is — still touched the page, though `launchRecorded`
+     * had already found its change set empty. The claim beat a real edit made on the other device.
+     */
+    @Test
+    fun `a block verb that changes nothing does not overwrite an edit made elsewhere`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Notes")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 0, content = "first", createdAt = t0, updatedAt = t0))
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 1, content = "second", createdAt = t0, updatedAt = t0))
+        syncAtoB()
+
+        val remoteId = b.pageIdOf(page.uid)
+        b.detail(remoteId).updateBlockContent(b.blockDao.getForPage(remoteId).single { it.content == "second" }, "second, from B")
+
+        val onA = a.detail(page.id)
+        val first = a.blockDao.getForPage(page.id).single { it.content == "first" }
+        onA.moveBlocks(setOf(first.id), -1)
+        onA.changeTypes(setOf(first.id), BlockType.PARAGRAPH)
+
+        assertEquals("nothing on the page changed, so its timestamp must not move", t0, a.pageDao.getById(page.id)!!.updatedAt)
+        syncAtoB()
+        assertEquals(listOf("first", "second, from B"), b.blockDao.getForPage(remoteId).sortedBy { it.order }.map { it.content })
+    }
+
+    /** Audit 2026-09-24 5a.6 — the canvas's arrow writes: a label set to the one it has, and a
+     * write whose edge had already gone, each still touched the page. */
+    @Test
+    fun `canvas arrow writes that change nothing move no timestamp`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Board", PageKind.CANVAS)
+        val canvasId = a.canvasDao.insert(PageCanvas(pageId = page.id, createdAt = t0, updatedAt = t0))
+        val from = a.nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = 0f, y = 0f, text = "a", createdAt = t0, updatedAt = t0))
+        val to = a.nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = 9f, y = 0f, text = "b", createdAt = t0, updatedAt = t0))
+        val edgeId = a.edgeDao.insert(CanvasEdge(canvasId = canvasId, fromNodeId = from, toNodeId = to, label = "then"))
+        val edge = a.edgeDao.getById(edgeId)!!
+        val onA = a.canvas(page.id)
+
+        onA.setEdgeLabel(edge, "then")
+        a.edgeDao.delete(edgeId)
+        onA.cycleEdgeDirection(edge)
+        onA.setEdgeLabel(edge, "gone")
+
+        assertEquals(t0, a.pageDao.getById(page.id)!!.updatedAt)
+    }
+
+    /**
+     * Audit 2026-09-24 5a.7. An image's folder name is its block's uid, the folder copy is written
+     * only when that name is absent, and a device fetches only for a block with no local picture —
+     * so a replaced picture never left the device that replaced it. Replacing now swaps in a new
+     * block (a new uid, so a new name), which every one of those rules already handles.
+     */
+    @Test
+    fun `a replaced picture reaches the other device`() = runTest(mainDispatcher) {
+        val folder = InMemorySyncFileStore()
+        val png1 = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1)
+        val png2 = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 2)
+        val page = seedPageOnA("Trip")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.IMAGE, order = 0, content = "the view", createdAt = t0, updatedAt = t0))
+        val caption = a.blockDao.getForPage(page.id).single()
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 1, content = "under it", parentBlockId = caption.id, createdAt = t0, updatedAt = t0))
+        val onA = a.detail(page.id)
+        onA.setBlockImage(caption, "first.png", png1)
+        a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
+        // Snapshots carry `updatedAt` in milliseconds, and on a fast runner the replacement below
+        // can stamp the same millisecond as the first picture did — an equal timestamp is the same
+        // version, so B would rightly keep what it has (CI on 2026-09-25 failed this way once in
+        // two runs of one commit). B's copy is set back so the replacement is unambiguously newer.
+        b.pageDao.touch(b.pageIdOf(page.uid), t0)
+
+        onA.setBlockImage(a.blockDao.getForPage(page.id).single { it.type == BlockType.IMAGE }, "second.png", png2)
+        a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
+
+        val onB = b.blockDao.getForPage(b.pageIdOf(page.uid))
+        val image = onB.single { it.type == BlockType.IMAGE }
+        assertTrue("B shows the new picture", b.localImages.read(requireNotNull(image.imagePath) { "B fetched nothing" })!!.contentEquals(png2))
+        assertEquals("the caption travels with it", "the view", image.content)
+        assertEquals("and the block nested under it is still under it", image.id, onB.single { it.content == "under it" }.parentBlockId)
+    }
+
+    /** Audit 2026-09-24 5a.6 — the database's hue set to the one it has. */
+    @Test
+    fun `a database hue set to its own value moves no timestamp`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        a.pageDatabaseDao.update(a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.copy(hue = 200))
+
+        a.database(seeded.databasePage.id).setHue(200)
+
+        assertEquals(t0, a.pageDao.getById(seeded.databasePage.id)!!.updatedAt)
     }
 }
 

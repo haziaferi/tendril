@@ -167,6 +167,18 @@ class CanvasViewModel(
         }
     }
 
+    /** [launchAndTouch] for a write that can find nothing to do — its target gone, or already the
+     * value asked for. It touches only when [block] says it wrote: under §9.4 a bump is a claim of
+     * authorship, and one with no edit behind it beats a real edit on the other device (audit 5a.6).
+     * Its own body rather than a delegate from [launchAndTouch]: `tools/mutate.py`'s self-check
+     * mutates the lock guard *there* as its known-answer case, and the guard must stay in it. */
+    private fun launchAndTouchIfChanged(block: suspend () -> Boolean) {
+        if (locked()) return
+        viewModelScope.launch {
+            if (block()) pageDao.touch(pageId, Instant.now())
+        }
+    }
+
     /** [onInserted] receives the new card's id — L10's double-click opens its editor at once. */
     fun addTextNode(x: Float, y: Float, onInserted: (Long) -> Unit = {}) {
         val canvasId = canvas.value?.id ?: return
@@ -403,21 +415,27 @@ class CanvasViewModel(
      * open sheet, or replaced wholesale by a merge (§9.4's Pass 4 re-inserts, so the id is gone).
      */
     fun cycleEdgeDirection(edge: CanvasEdge) {
-        launchAndTouch {
-            val live = canvasEdgeDao.getById(edge.id) ?: return@launchAndTouch
+        launchAndTouchIfChanged {
+            val live = canvasEdgeDao.getById(edge.id) ?: return@launchAndTouchIfChanged false
             val next = when (live.direction) {
                 CanvasArrowDirection.ONE_WAY -> CanvasArrowDirection.TWO_WAY
                 CanvasArrowDirection.TWO_WAY -> CanvasArrowDirection.NONE
                 CanvasArrowDirection.NONE -> CanvasArrowDirection.ONE_WAY
             }
             canvasEdgeDao.update(live.copy(direction = next))
+            true
         }
     }
 
+    /** Called per keystroke by the arrow sheet, so re-sending the label it already has is the
+     * common case, not an edge case. */
     fun setEdgeLabel(edge: CanvasEdge, label: String) {
-        launchAndTouch {
-            val live = canvasEdgeDao.getById(edge.id) ?: return@launchAndTouch
-            canvasEdgeDao.update(live.copy(label = label.ifBlank { null }))
+        launchAndTouchIfChanged {
+            val live = canvasEdgeDao.getById(edge.id) ?: return@launchAndTouchIfChanged false
+            val next = label.ifBlank { null }
+            if (live.label == next) return@launchAndTouchIfChanged false
+            canvasEdgeDao.update(live.copy(label = next))
+            true
         }
     }
 

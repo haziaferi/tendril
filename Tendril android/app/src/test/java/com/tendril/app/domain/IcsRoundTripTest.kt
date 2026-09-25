@@ -37,11 +37,70 @@ class IcsRoundTripTest {
         recurrenceRule = rule, status = status, dueDate = due, importance = importance, estimate = estimate, createdAt = at, updatedAt = at,
     )
 
-    private fun importInto(dao: FakeEntryDao, text: String) = runBlocking {
+    private fun importInto(dao: FakeEntryDao, text: String, now: Instant = at) = runBlocking {
         IcsImporter(dao, object : EntryScheduleCoordinator {
             override suspend fun onEntryChanged(entry: Entry) = Unit
             override suspend fun onEntryRemoved(entry: Entry) = Unit
-        }).import(text, rome, at)
+        }).import(text, rome, now)
+    }
+
+    /** A one-event file with an explicit LAST-MODIFIED (or none), for the version tests below. */
+    private fun oneEvent(uid: String, title: String, lastModified: String?) = listOfNotNull(
+        "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:$uid", "SUMMARY:$title",
+        "DTSTART;TZID=Europe/Rome:20260914T150000", "DTEND;TZID=Europe/Rome:20260914T154500",
+        lastModified?.let { "LAST-MODIFIED:$it" }, "END:VEVENT", "END:VCALENDAR",
+    ).joinToString("\r\n")
+
+    // ---- audit 5a.4: an import is a write under §9.4's last-write-wins, and a claim of authorship
+
+    @Test
+    fun `re-importing an identical file moves no timestamp`() {
+        val dao = FakeEntryDao()
+        val text = IcsWriter.write(listOf(entry("Dentist", EntryKind.EVENT, monday, LocalTime.of(15, 0), LocalTime.of(15, 45))), rome, at)
+        importInto(dao, text)
+
+        val result = importInto(dao, text, now = at.plusSeconds(3600))
+
+        assertEquals("nothing changed, so nothing claims an edit", at, runBlocking { dao.getAll() }.single().updatedAt)
+        assertEquals(0, result.updated); assertEquals(1, result.kept)
+    }
+
+    @Test
+    fun `a file older than this device's edit does not overwrite it`() {
+        val dao = FakeEntryDao()
+        val old = IcsWriter.write(listOf(entry("Dentist", EntryKind.EVENT, monday, LocalTime.of(15, 0), LocalTime.of(15, 45), uid = "d")), rome, at)
+        importInto(dao, old)
+        runBlocking { dao.update(dao.getAll().single().copy(title = "Dentist, rebooked", updatedAt = at.plusSeconds(600))) }
+
+        val result = importInto(dao, old, now = at.plusSeconds(3600))
+
+        assertEquals("Dentist, rebooked", runBlocking { dao.getAll() }.single().title)
+        assertEquals(0, result.updated); assertEquals(1, result.kept)
+    }
+
+    /** Control for the one above: the same comparison lets a newer file through. */
+    @Test
+    fun `a file newer than this device's copy updates it`() {
+        val dao = FakeEntryDao()
+        importInto(dao, oneEvent("d", "Dentist", lastModified = "20260912T100000Z"))
+
+        val result = importInto(dao, oneEvent("d", "Dentist, rebooked", lastModified = "20260912T101000Z"), now = at.plusSeconds(3600))
+
+        assertEquals("Dentist, rebooked", runBlocking { dao.getAll() }.single().title)
+        assertEquals(1, result.updated)
+    }
+
+    /** A file that says nothing about when it was written cannot lose on time: the person chose to
+     * import it, so its differing content applies, as it did before. */
+    @Test
+    fun `an undated file with different content still updates`() {
+        val dao = FakeEntryDao()
+        importInto(dao, oneEvent("d", "Dentist", lastModified = null))
+
+        val result = importInto(dao, oneEvent("d", "Dentist, rebooked", lastModified = null), now = at.plusSeconds(3600))
+
+        assertEquals("Dentist, rebooked", runBlocking { dao.getAll() }.single().title)
+        assertEquals(1, result.updated)
     }
 
     @Test

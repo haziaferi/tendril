@@ -1519,8 +1519,13 @@ class SnapshotSyncOrchestrator(
             // newer of the two, in which case the tombstone is superseded and dropped.
             if (purgeRegistry.isPurged(PurgedKind.ENTRY, record.uid, remoteUpdatedAt, tombstones)) continue
             val local = entryDao.getByUid(record.uid)
-            // Local is newer or equal — keep local, it'll win on the next write pass.
-            if (local != null && !remoteUpdatedAt.isAfter(local.updatedAt)) continue
+            // Local is newer or equal — keep local, it'll win on the next write pass. Except its
+            // Google id, when it has none and the peer's copy does: see [adoptedGoogleEventId].
+            if (local != null && !remoteUpdatedAt.isAfter(local.updatedAt)) {
+                val adopted = adoptedGoogleEventId(winner = local, loserId = record.googleEventId)
+                if (adopted != local.googleEventId) entryDao.setGoogleEventId(local.id, adopted)
+                continue
+            }
             // The row this Entry was made from was withheld by the page pass and there is no
             // local page to resolve it against, so adopting the Entry means writing
             // `sourceRowId = null` and republishing it with the link gone. Held instead — the
@@ -1561,12 +1566,34 @@ class SnapshotSyncOrchestrator(
             } else {
                 // providerEventId is per-device only (§3.2) — never adopted from a remote
                 // record, always preserved from whatever this device already had.
-                entryDao.update(entity.copy(id = local.id, providerEventId = local.providerEventId))
+                entryDao.update(
+                    entity.copy(
+                        id = local.id,
+                        providerEventId = local.providerEventId,
+                        googleEventId = adoptedGoogleEventId(winner = entity, loserId = local.googleEventId),
+                    ),
+                )
                 tally.touchedEntryIds += local.id
             }
         }
         return allRead
     }
+
+    /**
+     * §9.5.1 — the one entry field merged field-wise rather than with the record (audit 5a.1).
+     *
+     * `googleEventId` is exported so that a peer does not push the same event to Google twice, but
+     * the phone sets it after a push without moving `updatedAt` — a bump there would claim an edit
+     * nobody made, and under last-write-wins beat a real one on the other device. So the record
+     * gate never carried it: a peer at the same timestamp never learned it, and a peer's later edit,
+     * made without it, won and wiped it, and the next push inserted a duplicate event.
+     *
+     * The id only ever goes from absent to known while an entry lives, so absent never beats known,
+     * whichever record is newer; between two known ids the winner's stands. A trashed winner keeps
+     * its own — the push that trashes an event clears the id on purpose.
+     */
+    private fun adoptedGoogleEventId(winner: Entry, loserId: String?): String? =
+        if (winner.googleEventId == null && winner.deletedAt == null) loserId else winner.googleEventId
 
     /**
      * The record as an [Entry], or null with the reason recorded — quarantine, in one line.

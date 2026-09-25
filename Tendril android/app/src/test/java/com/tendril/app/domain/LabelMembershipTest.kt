@@ -69,6 +69,16 @@ class LabelMembershipTest {
     private fun live(pageId: Long): Entry? = runBlocking { entryDao.getBySourceRowId(pageId) }
     private fun members(db: PageDatabase): List<String> = runBlocking { pageDao.getMembersOf(db.id, db.labelId).map { it.title } }
 
+    /** Audit 2026-09-24 5a.6 — re-binding the label a database already has changed nothing, and
+     * still claimed an edit to the database page (§9.4). */
+    @Test
+    fun `binding the label a database already has moves no timestamp`() = runBlocking {
+        val books = database("Books", "book", syncing = false)
+        membership.bindLabel(books, books.labelId!!, at.plusSeconds(60))
+        assertEquals(at, pageDao.getById(books.pageId)!!.updatedAt)
+        assertEquals(at, databaseDao.getById(books.id)!!.updatedAt)
+    }
+
     @Test
     fun `a labelled page is a member beside the native rows, and stays where it lives`() = runBlocking {
         val books = database("Books", "book", syncing = false)

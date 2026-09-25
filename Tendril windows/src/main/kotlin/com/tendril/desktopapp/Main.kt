@@ -403,7 +403,7 @@ private fun DesktopCalendarSettingsSheet(core: WorkbenchCore, onDismiss: () -> U
                         status = runCatching {
                             val file = withContext(Dispatchers.IO) { pickFile(save = false) } ?: return@launch
                             val result = core.icsImporter.import(withContext(Dispatchers.IO) { file.readText(Charsets.UTF_8) })
-                            "Imported ${result.created} new, ${result.updated} updated" + if (result.skipped > 0) ", ${result.skipped} skipped" else ""
+                            "Imported ${result.created} new, ${result.updated} updated" + if (result.skipped > 0) ", ${result.skipped} skipped" else "" + if (result.kept > 0) ", ${result.kept} unchanged" else ""
                         }.getOrElse { it.message ?: "Import failed." }
                     }
                 }) { Text("Import .ics") }

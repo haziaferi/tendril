@@ -135,10 +135,15 @@ class PageDatabaseViewModel(
      * schema a moment earlier and not yet synced. The lazily-created view costs nothing by
      * staying local — every device performs the same repair for itself.
      */
-    private fun launchAndTouch(pageIdToBump: Long, block: suspend () -> Unit) {
+    private fun launchAndTouch(pageIdToBump: Long, block: suspend () -> Unit) =
+        launchAndTouchIfChanged(pageIdToBump) { block(); true }
+
+    /** [launchAndTouch] for a write that can find nothing to do — the database not loaded, or the
+     * value already the one asked for. Touches only when [block] says it wrote (audit 5a.6): under
+     * §9.4 a bump with no edit behind it beats a real edit on the other device. */
+    private fun launchAndTouchIfChanged(pageIdToBump: Long, block: suspend () -> Boolean) {
         viewModelScope.launch {
-            block()
-            pageDao.touch(pageIdToBump, Instant.now())
+            if (block()) pageDao.touch(pageIdToBump, Instant.now())
         }
     }
 
@@ -661,9 +666,11 @@ class PageDatabaseViewModel(
             if (db != null) {
                 when (property.id) {
                     db.donePropertyId -> databaseSyncManager.disableSync(db)
-                    db.deadlinePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DEADLINE)
-                    db.dueDatePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DUE_DATE)
-                    db.recurrencePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.RECURRENCE)
+                    // Dropped, not unbound: crystallizing into a column purged two lines down
+                    // wrote nothing that survives and touched every row (audit 5a.3).
+                    db.deadlinePropertyId -> databaseSyncManager.dropBinding(db, BindingRole.DEADLINE)
+                    db.dueDatePropertyId -> databaseSyncManager.dropBinding(db, BindingRole.DUE_DATE)
+                    db.recurrencePropertyId -> databaseSyncManager.dropBinding(db, BindingRole.RECURRENCE)
                     // §0.6.14 — a pointer, not a binding: nothing to crystallise, just cleared.
                     db.blockedByPropertyId -> pageDatabaseDao.update(db.copy(blockedByPropertyId = null, updatedAt = Instant.now()))
                 }
@@ -750,9 +757,11 @@ class PageDatabaseViewModel(
         // §3.1.2 — [launchAndTouch] does not check the lock (Canvas's funnel of that name does),
         // and a hue sheet open when View-Only went on still called this on Done.
         if (locked()) return
-        launchAndTouch(pageId) {
-            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouch
+        launchAndTouchIfChanged(pageId) {
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouchIfChanged false
+            if (db.hue == hue) return@launchAndTouchIfChanged false
             pageDatabaseDao.update(db.copy(hue = hue))
+            true
         }
     }
 
@@ -769,19 +778,14 @@ class PageDatabaseViewModel(
     /** §5.2 — "every row in a sync-enabled database becomes its own linked Task", not just
      * the rows present at the moment sync was turned on: a row created afterward gets seeded
      * into the sync relationship immediately, via the same (idempotent) per-row step
-     * `enableSync` itself uses. */
+     * `enableSync` itself uses — and only that step, so no other row claims an edit (audit 5a.2). */
     fun addRow(title: String, onCreated: (Long) -> Unit) {
         if (locked()) return
         val db = database.value ?: return
         viewModelScope.launch {
             val now = Instant.now()
             val id = pageDao.insert(Page(title = title.ifBlank { "Untitled" }, databaseId = db.id, createdAt = now, updatedAt = now))
-            // Local val, not `db.donePropertyId` directly: a nullable property declared in a
-            // different module (`:shared`, §12.5) can't be smart-cast across the module boundary.
-            val donePropertyId = db.donePropertyId
-            if (db.syncToTasks && donePropertyId != null) {
-                databaseSyncManager.enableSync(db, donePropertyId, db.deadlinePropertyId, db.recurrencePropertyId, listOf(id), dueDatePropertyId = db.dueDatePropertyId)
-            }
+            if (db.syncToTasks) databaseSyncManager.addRowToSync(db, id, now)
             onCreated(id)
         }
     }

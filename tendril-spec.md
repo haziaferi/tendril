@@ -160,6 +160,14 @@ second copy of the reasoning.
 | 2026-09-24 (audit 1.2, 1.3: two writes outside View-Only) | §3.1.2 amended, from a sweep of all 164 mutating entry points. **1.2** — `PageDatabaseViewModel.setHue` checked no lock (its `launchAndTouch` does not, unlike Canvas's), so a hue sheet open when View-Only went on still wrote and bumped the page. **1.3** — `PageDetailViewModel.undo`/`redo` moved `BlockUndoStack` before `launchAndReindex` refused the write, spending the step: after unlocking, Ctrl+Z reversed the edit before the newest, and the newest could not be undone. Both check the lock first now. `onOpened`'s reference-cache refresh is named as a repair-on-open exemption; the Notion import's UI-only gate is recorded. Shared ViewModels, so both apps. `ViewOnlySurfacesGuardTest` +2 (the refusal and its unlocked control), `WritePathSyncTest` +1, each red first. | §3.1.2 |
 | 2026-09-24 (audit 1.4, 1.5: Sync-to-Tasks armed nothing; a moved occurrence left its series' alarm) | §9.7 amended. **1.4** — `DatabaseSyncManager.enableSync`/`bindProperty` (and `rebindProperty` through it) wrote dated Entries with no coordinator anywhere on the path; it is now a required constructor parameter (both containers, six test sites) and every insert or move is reported. On the desktop each report is a `replan()`, which cancels the previous loop, so a bulk sync-on collapses to one. **1.5** — Android only: `AndroidEntryScheduleCoordinator` handed an exception row re-armed that row alone; it now re-arms the series with its exceptions. The desktop's `replan()` reads every entry and was not affected. `DueDateBindingTest` +2, `AndroidEntryScheduleCoordinatorTest` (new: the series case as control, the exception case red first). The sweep's other misses are recorded in §9.7 as device-bound. | §9.7 |
 | 2026-09-24 (audit 1.6: an .ics import armed the occurrences it had just skipped; §3.2's stale sentences) | §3.2 amended. `IcsImporter` reported a recurring base to the coordinator before inserting its EXDATE skip rows, and never reported the skips — so the scheduler, which reads a series' exceptions when it arms it, armed the skipped occurrences on both platforms, against §3.2's "writes every row through the coordinator". The base is now reported after its skips. `IcsRoundTripTest` +1, red first. The same claim-by-claim trace of §3.2 (99 claims, 79 matching) found five sentences a later decision superseded that still read as current — the week grid's 56/44, "day N of M" being the Day view's alone, session-only layers and the unbuilt habit layer, "desktop has no Settings" — each now carries a dated note; the rest are listed in `docs/audit-2026-09-24.md`. | §3.2 |
+| 2026-09-25 (audit 5a.2: one added row claimed an edit to every row) | §9.4 amended. On a Sync-to-Tasks database, `addRow` and `LabelMembership.ensureTask` seeded a row's task by calling `enableSync` with that one id, and `enableSync`'s `commit(touchRows = true)` bumped the database page and every row. Under last-write-wins each untouched row's new timestamp beat any real edit to it still unsynced on the other device, so adding a row on the phone could silently undo a cell edited on the desktop. `DatabaseSyncManager.addRowToSync` seeds the one row's Entry and writes nothing else; `enableSync` keeps its commit for the real sync-on, which does clear every row's bound columns. Shared, so both apps. `WritePathSyncTest` +1, red first (the untouched row's timestamp moved). Chosen over per-block merge: whole-page LWW stands, and only the false claim goes. | §9.4 |
+| 2026-09-25 (audit 5a.1: a Google event id the merge could not carry) | §9.5.1 amended. The phone sets `Entry.googleEventId` after a push without moving `updatedAt`, so the snapshot merge's record-wise last-write-wins never carried it. A peer at the same timestamp never learned the id. A peer's later edit, made without it, won and wiped it on the phone, whose next push inserted the event into Google a second time. This happens with one phone and the desktop: the desktop never pushes to Google itself, but its edits carried a null id. Bumping on the push was rejected, because it claims an edit nobody made (5a's class). `SnapshotSyncOrchestrator.adoptedGoogleEventId` merges the one field field-wise: a known id beats an absent one whichever record is newer; between two known ids the newer record's stands; a trashed winner keeps its own. `jvmCommon`, so both apps merge this way. `GoogleEventIdSyncTest` (new): two tests red first, one control. | §9.5.1, §9.4 |
+| 2026-09-25 (audit 5a.4: an .ics re-import claimed every row and let older files win) | §3.2 (iCalendar) amended. `IcsImporter` stamped every matched row `updatedAt = now`, identical or not, and never compared versions. So re-importing a file claimed an edit to every row it named. Under §9.4's last-write-wins that beat real unsynced edits on the other device, and an older file overwrote newer edits here, which the stamp then carried everywhere. Now an identical component writes nothing. A component whose `LAST-MODIFIED` (else `DTSTAMP`) is before the row's `updatedAt`, to the second, is kept out. An undated file applies as before. `IcsWriter` writes `LAST-MODIFIED` from `updatedAt`. `IcsImportResult.kept` is new and both apps' messages show it. Shared, so both apps. `IcsRoundTripTest` +4: two failed first, and two are controls. | §3.2, §9.4 |
+| 2026-09-25 (audit 5a.3: deleting a bound column claimed an edit to every row) | §9.4 amended. `PageDatabaseViewModel.deleteProperty` on a bound Date, Deadline or Recurrence column called `unbindProperty`. That crystallized each row's Entry value into the column and touched every row, and the purge that followed then deleted the column and those values. No row's stored cells changed, yet every row's new timestamp beat any real unsynced edit to it on the other device. `DatabaseSyncManager.dropBinding` clears the role without crystallizing and moves only the database page. Deleting the Done column already went through `disableSync`, which touches no row. A plain unbind is unchanged. Shared, so both apps. `WritePathSyncTest` +1, red first. | §9.4 |
+| 2026-09-25 (audit 5a.5: a block verb that changed nothing still claimed an edit) | §9.4 amended. `PageDetailViewModel.launchRecorded` diffs the page's blocks around each verb and already skipped the undo entry for an empty diff, but it ran inside `launchAndReindex`, which touched the page regardless. Moving the first block up, turning a block into its own type, or dropping a group where it was therefore claimed an edit and beat a real one on the other device. `launchAndReindexIfChanged` rebuilds the index and touches only when the diff is non-empty. Every recorded op writes blocks alone, which was checked, so the diff is complete. Shared, so both apps. `WritePathSyncTest` +1, red first. | §9.4 |
+| 2026-09-25 (audit 5a.6: five more writes claimed edits; a habit sheet undid check-ins) | §9.4 amended. Each of these touched a page or stamped a record with nothing changed: Canvas `setEdgeLabel` (re-sent per keystroke) and `cycleEdgeDirection` or `setEdgeLabel` on an edge already gone; `PageDatabaseViewModel.setHue` with the current hue; `LabelMembership.bindLabel` with the current label; `EntryEditor.save` unchanged; and `TasksHabitsViewModel.updateHabit` untouched. Each now writes only when something differs. The Canvas and database screens gained a `launchAndTouchIfChanged` beside `launchAndTouch`. `updateHabit` also laid the sheet's fields over the habit as it was when the sheet opened, so a check-in made meanwhile lost its streak; it now edits the live row. `addView`'s early return was reviewed and left: it needs a database page with no database row. Shared, so both apps. `WritePathSyncTest` +2, `LabelMembershipTest` +1, `EntryEditorTest` +1, `TasksHabitsUpdateHabitTest` (new) +2, all red first. | §9.4 |
+| 2026-09-25 (audit 5a.7: a replaced picture never left the device) | §9.4 amended. A picture's folder name is `<block uid>.<extension>`, the folder copy is written only when absent, and a device fetches only for a block with no local picture. So replacing a picture in place was never published and never fetched, whatever its type; the audit row said same extension only, and the test used that case. `setBlockImage` now puts a replacement into a new block in the same place (new uid; same caption, order and parent; children re-pointed) and deletes the old one, which the existing rules and older builds already handle. Chosen over versioned file names, which older builds would not have fetched, and over a content hash in the record, which needs publish-state tracking. The costs are recorded: undo before the swap no longer reaches the old block, and the old block's folder file stays as any deleted image block's does; block references can't name image blocks. Shared, so both apps. `WritePathSyncTest` +1, red first; its devices gained the folder orchestrator and a shared image store. | §9.4 |
+| 2026-09-25 (audit 5a.8: saving the entry sheet undid what landed while it was open) | §3.2 amended (the edit path). `EntryEditor.save` wrote the sheet's whole copy of the entry, taken when the sheet opened. A tick, a trash or a Google push that landed meanwhile was undone, and a trashed entry was restored. Found while fixing 5a.6's `updateHabit`, which had the same shape, and recorded as a hypothesis first. `save` now lays the sheet's ten editable fields over the live row; status, trash, the Google id and the links are read from the row. The other caller, `Review.someday`, edits dates only, so it is unaffected. Shared, so both apps. `EntryEditorTest` +2, both red first (DONE read PENDING; the trashed entry's `deletedAt` read null). | §3.2 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -2058,7 +2066,12 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
   a series asks *this one / all*, "this one" through §4.1's override row. Every write goes through
   one use case, `EntryEditor` (`save`, `move`), which enforces the §4 kind invariants and calls
   `EntryScheduleCoordinator.onEntryChanged` — §4.1's "every write path" is now literally one path.
-  The Day view is a list, not an hour grid, so dragging to another *hour* waits for the timeline
+  *(Amended 2026-09-25, audit 5a.8 — `save` now takes only the sheet's editable fields and lays
+  them over the row as it is now. Those fields are the title, kind, the four date and time fields,
+  repeat, deadline, estimate and flag. It used to write back the sheet's whole copy from when it
+  opened, so a tick, a trash or a Google push that landed while the sheet was open was undone, and
+  a trashed entry came back. Status, trash, the Google id, and the parent and source links belong
+  to their own paths and are read from the row. `EntryEditorTest` +2, red first.)* The Day view is a list, not an hour grid, so dragging to another *hour* waits for the timeline
   step 7's Plan mode builds; the sheet changes the time meanwhile.)* *(**2026-09-12, step 7b:** it
   no longer waits — Plan mode's grid is that timeline, and a block dragged on it moves to the hour
   it is dropped on. See §0.6.5.)* Neither half held on this screen. Quick Add is Calendar's only write
@@ -2148,6 +2161,24 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
   Settings › Calendar (.ics) on Android (the document picker) and from the Calendar's `···` on
   desktop (a file dialog), since desktop had no Settings then *(it has since — `DesktopSettingsScreen`; the placement stayed)*. The file goes where the person puts
   it, never into the sync folder — the same answer §0.10 item 6 wanted for JSON Canvas.
+
+  *Amended 2026-09-25 (audit 5a.4).* An import is a write under §9.4's last-write-wins, and
+  until this date it ignored that. Every matched row was stamped `updatedAt = now`, even when it
+  was identical, which claimed an edit nobody made. A re-imported older file also overwrote newer
+  edits, and the stamp then carried those overwrites to every device.
+
+  Now:
+  - A component identical to its row writes nothing.
+  - A component older than its row is kept out. "Older" means the file's `LAST-MODIFIED` (else
+    `DTSTAMP`, which RFC 5545 makes equivalent when there is no `METHOD`) is earlier than the row's
+    `updatedAt`, compared to the second.
+  - A file that states no time still applies its differing content, because the person chose to
+    import it.
+  - The export writes `LAST-MODIFIED` from each row's `updatedAt`, so re-importing Tendril's own
+    file is decidable.
+  - Both apps' import messages count the rows left alone ("N unchanged").
+
+  `IcsRoundTripTest` +4: two failed first, and two are controls.
 
 ### 3.3 Tasks & Habits
 
@@ -4185,11 +4216,80 @@ single-writer Habit-folder case:
   every row's stored values. Bumping the database for a cell edit would propagate the schema and
   still lose the cell.
 
+  *Amended 2026-09-25 (audit 5a.2).* A row **joining** a database that already syncs — a new row
+  (`addRow`) or a labelled page (`LabelMembership.ensureTask`) — is not a binding change, and no
+  longer goes through one. Both called `enableSync` with the one row's id, and its `commit` touched
+  the database page and every row, so adding one row claimed an edit to all of them and beat any
+  unsynced edit to another row on the other device. They call `DatabaseSyncManager.addRowToSync`
+  now, which seeds the row's linked Entry and writes nothing else: the bindings are unchanged, the
+  bound columns are already empty, and the Entry is its own record with its own timestamp.
+  `WritePathSyncTest` pins it, red first.
+
+  *Amended 2026-09-25 (audit 5a.3).* **Deleting** a bound column was not a binding change either.
+  It unbound the role first, which crystallized every row's Entry value into the column and
+  touched every row. Then it purged the column and the values it had just written. No row's stored
+  cells differed at the end, yet every row claimed an edit. `DatabaseSyncManager.dropBinding` now
+  clears the role without crystallizing, and moves only the database page; the purge's tombstone
+  carries the column's removal. A plain unbind, where the column stays and receives the values,
+  still touches every row, because there the values are real content. `WritePathSyncTest` +1, red
+  first.
+
   Two mutations stay outside a launcher and say so at their own site. `setChecked` is gated by the
   narrower `viewOnlyLocked` (§3.1.2 keeps a to-do tappable on an otherwise locked page), and
   `addTag`'s bump is conditional — picking a tag the page already carries changes nothing, and
   bumping anyway would claim authorship of an edit that did not happen, which is enough under LWW to
   beat a real edit sitting unsynced on another device.
+
+  *Amended 2026-09-25 (audit 5a.5).* `launchAndReindex` claimed the edit unconditionally, including
+  for the block verbs whose change set `launchRecorded` had already found empty: moving the first
+  block up, turning a block into its own type, or dropping a group where it already was. Those
+  verbs now exit through `launchAndReindexIfChanged`, which neither rebuilds the index nor touches
+  the page when nothing changed. That is `addTag`'s rule, applied to the whole family. Every recorded
+  op writes blocks and nothing else, so the block diff decides it completely. `WritePathSyncTest`
+  +1, red first.
+
+  *Amended 2026-09-25 (audit 5a.6).* The same rule applies to five more sites that claimed an edit
+  they had not made:
+  - **Canvas arrows.** The arrow sheet re-sends the label on every keystroke, and a direction or
+    label write could find its edge already gone. Both still touched the page. The Canvas's new
+    `launchAndTouchIfChanged` touches only on a real write.
+  - **The database's hue** set to the hue it already has, through the database screen's own
+    `launchAndTouchIfChanged`. `addView` is left as it was: its early return needs a database page
+    with no database row, a state its screen cannot be opened in.
+  - **`LabelMembership.bindLabel`** with the label the database already carries.
+  - **`EntryEditor.save`** of an unchanged entry.
+  - **`TasksHabitsViewModel.updateHabit`** with an untouched sheet.
+
+  The last also fixes a data loss, not only a false claim: it laid the sheet's fields over the
+  sheet's own copy of the habit, taken when the sheet opened, so a check-in made meanwhile had its
+  streak written back to what it was. It now edits the row as it currently is.
+
+  Tests: `WritePathSyncTest` +2, `LabelMembershipTest` +1, `EntryEditorTest` +1 and
+  `TasksHabitsUpdateHabitTest` (new) +2. All six failed first; the check-in case read streak 0
+  where it should have read 1.
+
+  *Amended 2026-09-25 (audit 5a.7).* This is the opposite failure: a real edit that never
+  travelled. **Replacing a block's picture did not reach the other device, whatever the file
+  type.** Three rules, each sound by itself, combined to stop it:
+  - A picture's folder name is `<block uid>.<extension>`.
+  - The folder copy is written only when that name is absent.
+  - A device fetches only for a block holding no local picture.
+
+  A replacement kept the name, so nothing was published; and the peer already had a picture, so
+  nothing was fetched. `PageDetailViewModel.setBlockImage` now puts a replacement into a **new
+  block** in the same place: a new uid, the same caption, order and parent, with its children
+  re-pointed. The old block is deleted. A new uid is a name nobody holds, which all three rules
+  already handle. Older builds handle it too, which ruled out renaming the files by version. The
+  first picture on a block still goes in place.
+
+  What does not carry over is block identity:
+  - A block reference cannot name an image block, because the picker's search excludes `IMAGE`.
+  - Undo history recorded before the swap no longer reaches the old block.
+  - The old block's folder file stays in the folder, as any deleted image block's does. Only
+    purging a page removes folder images.
+
+  `WritePathSyncTest` +1, run through the whole folder sync, failed first: B kept the first
+  picture.
 
   **Whole-page LWW is unchanged.** The accepted v1 limitation above stands exactly as written; this
   only makes the timestamp it depends on tell the truth about what happened.
@@ -4597,6 +4697,21 @@ available:
 - `Entry.googleEventId` (nullable) is the linkage field, added to the snapshot record (§9.4) too so
   the link survives cross-device Syncthing sync rather than a second device re-discovering and
   duplicating an event the first device already linked.
+
+  *Amended 2026-09-25 (audit 5a.1).* Until this date it did not survive the sync. A push sets the
+  id without moving `updatedAt`, and the snapshot merge carried entries record-wise on
+  `updatedAt`, so a peer holding the same version never learned the id. Worse, a later edit on a
+  peer that lacked the id won and wiped it here, and the next push inserted a duplicate event.
+  Bumping on the push was rejected: it would claim an edit nobody made, and under LWW it would beat
+  a real edit on the other device (the §9.4 false-authorship class). The merge now carries this one
+  field **field-wise** (`SnapshotSyncOrchestrator.adoptedGoogleEventId`):
+  - a known id always beats an absent one, whichever record is newer;
+  - between two known ids, the newer record's id stands;
+  - a trashed winner keeps its own id, because the push that trashes an event clears the id on
+    purpose.
+
+  This is sound because the id only ever goes from absent to known while an entry lives.
+  `GoogleEventIdSyncTest` pins it: two of its tests failed first, and the third is a control.
 - **Transport**: plain `HttpURLConnection` plus the existing `kotlinx.serialization` dependency, not
   a new HTTP library — consistent with this codebase's preference for direct platform APIs over
   added abstraction (`SecretStore`'s direct Keystore usage over `androidx.security` is the same

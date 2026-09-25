@@ -561,11 +561,37 @@ class PageDetailViewModel(
      * other block mutation: the image is not indexed, but `pages.updatedAt` still has to move or
      * the change never reaches the other device (the §9.4 defect fixed in `0d2a932`).
      */
+    /**
+     * A block's first picture is written under its uid. A **replacement** goes into a new block
+     * in the same place — new uid, same caption, order and parent, its children re-pointed — and
+     * the old block is deleted (audit 5a.7).
+     *
+     * The picture's folder name is its block's uid (§9.4 / S4), the folder copy is written only
+     * when that name is absent, and a device fetches only for a block holding no local picture.
+     * Replacing in place therefore never left this device: the name did not change, so nothing
+     * was published, and the other device already had a picture, so nothing was fetched. A new
+     * block is a name nobody holds, which every one of those rules already handles, and older
+     * builds with them. What does not follow the swap is block identity: a reference can't name an
+     * image block (the picker excludes `IMAGE`), and undo history recorded before the swap no
+     * longer reaches the old block.
+     */
     fun setBlockImage(block: Block, fileName: String, bytes: ByteArray) = launchAndReindex {
+        val live = blockDao.getById(block.id) ?: return@launchAndReindex
+        val now = Instant.now()
+        val replacing = live.imagePath != null
+        val target = if (replacing) live.copy(id = 0, uid = java.util.UUID.randomUUID().toString(), createdAt = now) else live
         val extension = fileName.substringAfterLast('.', "")
-        val name = if (extension.isBlank()) block.uid else "${block.uid}.$extension"
+        val name = if (extension.isBlank()) target.uid else "${target.uid}.$extension"
         val path = localImages.write(name, bytes)
-        blockDao.update(block.copy(imagePath = path, updatedAt = java.time.Instant.now()))
+        if (!replacing) {
+            blockDao.update(target.copy(imagePath = path, updatedAt = now))
+            return@launchAndReindex
+        }
+        val newId = blockDao.insert(target.copy(imagePath = path, updatedAt = now))
+        for (child in blockDao.getForPage(pageId).filter { it.parentBlockId == live.id }) {
+            blockDao.update(child.copy(parentBlockId = newId, updatedAt = now))
+        }
+        blockDao.delete(live.id)
     }
 
     fun setCalloutColor(block: Block, color: String) = launchAndReindex {
@@ -762,7 +788,7 @@ class PageDetailViewModel(
         return outline.map { it.block }.filter { it.id in closed }
     }
 
-    private fun launchRecorded(label: String, onDone: (BlockEdit?) -> Unit = {}, op: suspend (List<Block>) -> Unit) = launchAndReindex {
+    private fun launchRecorded(label: String, onDone: (BlockEdit?) -> Unit = {}, op: suspend (List<Block>) -> Unit) = launchAndReindexIfChanged {
         val before = blockDao.getForPage(pageId)
         op(before)
         val after = blockDao.getForPage(pageId)
@@ -772,6 +798,7 @@ class PageDetailViewModel(
         val edit = if (changed.isEmpty()) null else BlockEdit(label, before.filter { it.id in changed }, after.filter { it.id in changed })
         if (edit != null) { undoStack.push(edit); undoChanged() }
         onDone(edit)
+        edit != null
     }
 
     /** Delete a run and its subtrees — one entry. */
@@ -937,12 +964,21 @@ class PageDetailViewModel(
         }
     }
 
-    private fun launchAndReindex(block: suspend () -> Unit) {
+    private fun launchAndReindex(block: suspend () -> Unit) = launchAndReindexIfChanged { block(); true }
+
+    /**
+     * [launchAndReindex] for a verb that knows whether it changed anything — [launchRecorded], which
+     * diffs the page's blocks around its op. When it returns false nothing is rebuilt and the page
+     * is not touched: under §9.4's last-write-wins a bump is a claim of authorship, and until
+     * 2026-09-25 (audit 5a.5) moving the first block up or turning a block into its own type made
+     * that claim and beat a real edit to the page on the other device.
+     */
+    private fun launchAndReindexIfChanged(block: suspend () -> Boolean) {
         if (contentLocked()) return
         viewModelScope.launch {
             // §0.6.13 — the body as it stands before this edit, at most once per window.
             pageHistory.captureBeforeEdit(pageId)
-            block()
+            if (!block()) return@launch
             contentRepository.rebuildFtsForPage(pageId)
             touch()
         }
