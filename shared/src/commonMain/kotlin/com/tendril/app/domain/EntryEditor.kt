@@ -27,13 +27,34 @@ class EntryEditor(
     private val entryDao: EntryDao,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
 ) {
-    /** Writes [edited] as the new state of its own row, normalised for its kind. */
+    /**
+     * [edited]'s **editable** fields — the ones the edit sheet has controls for — laid over its row
+     * as it is now, normalised for its kind.
+     *
+     * Not [edited] wholesale (audit 5a.8): the sheet hands back its copy of the entry from when it
+     * opened, and everything it has no control for — status, trash, the Google id, the parent and
+     * source links — is stale in that copy. Written back, it undid a tick, a trash or a Google
+     * push that landed while the sheet was open, and restored a trashed entry. Those fields are
+     * owned by their own paths ([ResolveEntryUseCase], the sync merge, the Google engine) and are
+     * read from the row, never from the sheet. A save with nothing changed writes nothing: under
+     * §9.4 the stamp alone is a claim of an edit (audit 5a.6).
+     */
     suspend fun save(edited: Entry, now: Instant = Instant.now()): Entry {
-        // A sheet saved with nothing changed writes nothing: under §9.4 the stamp alone is a claim
-        // of an edit, and beats a real one on the other device (audit 5a.6).
-        val stored = entryDao.getById(edited.id)
-        if (stored != null && edited.normalisedForKind().copy(updatedAt = stored.updatedAt) == stored) return stored
-        val normalised = edited.normalisedForKind().copy(updatedAt = now)
+        val stored = entryDao.getById(edited.id) ?: return edited.normalisedForKind()
+        val merged = stored.copy(
+            title = edited.title,
+            kind = edited.kind,
+            startDate = edited.startDate,
+            startTime = edited.startTime,
+            endDate = edited.endDate,
+            endTime = edited.endTime,
+            recurrenceRule = edited.recurrenceRule,
+            dueDate = edited.dueDate,
+            estimate = edited.estimate,
+            importance = edited.importance,
+        ).normalisedForKind()
+        if (merged == stored) return stored
+        val normalised = merged.copy(updatedAt = now)
         entryDao.update(normalised)
         entryDao.getById(normalised.id)?.let { entryScheduleCoordinator.onEntryChanged(it) }
         return normalised

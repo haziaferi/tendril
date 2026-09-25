@@ -56,6 +56,35 @@ class EntryEditorTest {
         assertEquals(at, entryDao.getById(e.id)!!.updatedAt)
     }
 
+    /**
+     * Audit 2026-09-24 5a.8. The edit sheet hands back the entry as it was when the sheet opened,
+     * with its own fields laid over it. Everything else in that copy — status, trash, the Google
+     * id — is stale, and `save` wrote it all back: a tick, a trash or a push landing while the
+     * sheet was open was undone by saving it.
+     */
+    @Test
+    fun `a save keeps what changed outside the sheet while it was open`() = runBlocking {
+        val sheet = task("Call bank", monday)
+        entryDao.update(entryDao.getById(sheet.id)!!.copy(status = EntryStatus.DONE, googleEventId = "g-1", updatedAt = at.plusSeconds(30)))
+
+        editor.save(sheet.copy(title = "Call the bank"), at.plusSeconds(60))
+
+        val saved = entryDao.getById(sheet.id)!!
+        assertEquals("the sheet's edit lands", "Call the bank", saved.title)
+        assertEquals("the tick made meanwhile survives", EntryStatus.DONE, saved.status)
+        assertEquals("and so does the Google id", "g-1", saved.googleEventId)
+    }
+
+    @Test
+    fun `a save does not restore an entry trashed while the sheet was open`() = runBlocking {
+        val sheet = event("Dentist", monday, LocalTime.of(15, 0))
+        entryDao.update(entryDao.getById(sheet.id)!!.copy(deletedAt = at.plusSeconds(30), updatedAt = at.plusSeconds(30)))
+
+        editor.save(sheet.copy(title = "Dentist, moved"), at.plusSeconds(60))
+
+        assertEquals(at.plusSeconds(30), entryDao.getById(sheet.id)!!.deletedAt)
+    }
+
     @Test
     fun `switching an event to a task drops the span and gains a status`() = runBlocking {
         val e = event("Lunch", monday, LocalTime.of(12, 0), LocalTime.of(13, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY"))
