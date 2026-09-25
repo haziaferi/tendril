@@ -1147,4 +1147,37 @@ class WritePathSyncTest {
         assertTrue("and the deletion still reaches B", b.propertyDao.getAll().none { it.name == "Date" })
     }
 
+    /**
+     * Audit 2026-09-24 5a.5. A block verb that changed nothing — the first block moved up, a
+     * block turned into the type it already is — still touched the page, though `launchRecorded`
+     * had already found its change set empty. The claim beat a real edit made on the other device.
+     */
+    @Test
+    fun `a block verb that changes nothing does not overwrite an edit made elsewhere`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Notes")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 0, content = "first", createdAt = t0, updatedAt = t0))
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 1, content = "second", createdAt = t0, updatedAt = t0))
+        syncAtoB()
+
+        val remoteId = b.pageIdOf(page.uid)
+        b.detail(remoteId).updateBlockContent(b.blockDao.getForPage(remoteId).single { it.content == "second" }, "second, from B")
+
+        val onA = a.detail(page.id)
+        val first = a.blockDao.getForPage(page.id).single { it.content == "first" }
+        onA.moveBlocks(setOf(first.id), -1)
+        onA.changeTypes(setOf(first.id), BlockType.PARAGRAPH)
+
+        assertEquals("nothing on the page changed, so its timestamp must not move", t0, a.pageDao.getById(page.id)!!.updatedAt)
+        syncAtoB()
+        assertEquals(listOf("first", "second, from B"), b.blockDao.getForPage(remoteId).sortedBy { it.order }.map { it.content })
+    }
 }
+
+/**
+ * Reached only because [ResolveEntryUseCase] is a constructor argument of the ViewModels under
+ * test; nothing here asserts on completions. Hand-written to match the rest of this package, and
+ * because two members is less code than the `every { }` stanzas would be.
+ */
+// FakeEntryCompletionDao moved to SyncTestDoubles.kt when S2 gave EntryCompletionDao its
+// snapshot reads: two doubles for one DAO in one package is a redeclaration, and the doubles
+// file is where the others already live.

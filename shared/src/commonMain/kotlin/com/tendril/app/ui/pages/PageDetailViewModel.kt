@@ -762,7 +762,7 @@ class PageDetailViewModel(
         return outline.map { it.block }.filter { it.id in closed }
     }
 
-    private fun launchRecorded(label: String, onDone: (BlockEdit?) -> Unit = {}, op: suspend (List<Block>) -> Unit) = launchAndReindex {
+    private fun launchRecorded(label: String, onDone: (BlockEdit?) -> Unit = {}, op: suspend (List<Block>) -> Unit) = launchAndReindexIfChanged {
         val before = blockDao.getForPage(pageId)
         op(before)
         val after = blockDao.getForPage(pageId)
@@ -772,6 +772,7 @@ class PageDetailViewModel(
         val edit = if (changed.isEmpty()) null else BlockEdit(label, before.filter { it.id in changed }, after.filter { it.id in changed })
         if (edit != null) { undoStack.push(edit); undoChanged() }
         onDone(edit)
+        edit != null
     }
 
     /** Delete a run and its subtrees — one entry. */
@@ -937,12 +938,21 @@ class PageDetailViewModel(
         }
     }
 
-    private fun launchAndReindex(block: suspend () -> Unit) {
+    private fun launchAndReindex(block: suspend () -> Unit) = launchAndReindexIfChanged { block(); true }
+
+    /**
+     * [launchAndReindex] for a verb that knows whether it changed anything — [launchRecorded], which
+     * diffs the page's blocks around its op. When it returns false nothing is rebuilt and the page
+     * is not touched: under §9.4's last-write-wins a bump is a claim of authorship, and until
+     * 2026-09-25 (audit 5a.5) moving the first block up or turning a block into its own type made
+     * that claim and beat a real edit to the page on the other device.
+     */
+    private fun launchAndReindexIfChanged(block: suspend () -> Boolean) {
         if (contentLocked()) return
         viewModelScope.launch {
             // §0.6.13 — the body as it stands before this edit, at most once per window.
             pageHistory.captureBeforeEdit(pageId)
-            block()
+            if (!block()) return@launch
             contentRepository.rebuildFtsForPage(pageId)
             touch()
         }
