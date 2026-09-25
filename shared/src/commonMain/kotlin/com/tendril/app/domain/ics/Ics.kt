@@ -44,6 +44,8 @@ object IcsWriter {
             out.line("BEGIN:$component")
             out.line("UID:${entry.uid}")
             out.line("DTSTAMP:${STAMP.format(now.atOffset(ZoneOffset.UTC))}")
+            // The row's own version, so a re-import can tell this file from a newer edit (audit 5a.4).
+            out.line("LAST-MODIFIED:${STAMP.format(entry.updatedAt.atOffset(ZoneOffset.UTC))}")
             out.line("SUMMARY:${escape(entry.title)}")
             entry.startDate?.let { start ->
                 out.line(dateProperty("DTSTART", start, entry.startTime, zone))
@@ -134,6 +136,9 @@ data class IcsComponent(
     val relatedTo: String? = null,
     /** RFC 5545 PRIORITY 1–9 (1 highest), null when absent or 0. */
     val priority: Int? = null,
+    /** When the producer last changed it: `LAST-MODIFIED`, else `DTSTAMP`; null when neither is a
+     * UTC time. What `IcsImporter` weighs against a row's `updatedAt` (audit 5a.4). */
+    val lastModified: Instant? = null,
 )
 
 object IcsReader {
@@ -176,6 +181,7 @@ object IcsReader {
                             exdates = exdates.toList(),
                             relatedTo = p["RELATED-TO"]?.second,
                             priority = p["PRIORITY"]?.second?.trim()?.toIntOrNull()?.takeIf { it in 1..9 },
+                            lastModified = (p["LAST-MODIFIED"] ?: p["DTSTAMP"])?.second?.let(::parseUtc),
                         )
                     }
                     props = null; kind = null
@@ -227,6 +233,11 @@ object IcsReader {
                 here.toLocalDate() to here.toLocalTime()
             }
         }.getOrDefault(null to null)
+    }
+
+    /** RFC 5545 requires `LAST-MODIFIED` and `DTSTAMP` in UTC; anything else reads as unstated. */
+    private fun parseUtc(value: String): Instant? = value.trim().takeIf { it.endsWith("Z") }?.let { v ->
+        runCatching { LocalDateTime.parse(v.removeSuffix("Z"), DATE_TIME).toInstant(ZoneOffset.UTC) }.getOrNull()
     }
 
     private fun unescape(text: String): String = text.replace("\\n", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")

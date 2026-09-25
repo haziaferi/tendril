@@ -480,7 +480,7 @@ private fun PortableBackupSection(
                         ?: error("Couldn't read the chosen file.")
                     icsImporter.import(text)
                 }.fold(
-                    { "Imported ${it.created} new, ${it.updated} updated" + if (it.skipped > 0) ", ${it.skipped} skipped" else "" },
+                    { "Imported ${it.created} new, ${it.updated} updated" + if (it.skipped > 0) ", ${it.skipped} skipped" else "" + if (it.kept > 0) ", ${it.kept} unchanged" else "" },
                     { it.message ?: "Calendar import failed." },
                 )
             }
