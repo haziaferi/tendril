@@ -60,6 +60,51 @@ class DatabaseSyncManager(
         now: Instant = Instant.now(),
         dueDatePropertyId: Long? = null,
     ): PageDatabase {
+        seedRows(rowIds, donePropertyId, deadlinePropertyId, recurrencePropertyId, dueDatePropertyId, now)
+        for (propertyId in listOfNotNull(donePropertyId, deadlinePropertyId, recurrencePropertyId, dueDatePropertyId)) {
+            propertyValueDao.deleteAllForProperty(propertyId)
+        }
+
+        val updated = database.copy(
+            syncToTasks = true,
+            donePropertyId = donePropertyId,
+            deadlinePropertyId = deadlinePropertyId,
+            dueDatePropertyId = dueDatePropertyId,
+            recurrencePropertyId = recurrencePropertyId,
+            updatedAt = now,
+        )
+        // Rows too, not just the database page: `deleteAllForProperty` above cleared the bound
+        // columns' stored values for *every* row, whatever `rowIds` asked for.
+        return commit(updated, now, touchRows = true)
+    }
+
+    /**
+     * §5.2 — a row joining a database that already syncs (a new row, or a labelled page, §0.6.8)
+     * gets its linked Entry, and nothing else is written. Idempotent, like [enableSync].
+     *
+     * Not [enableSync] with one id, which is what `addRow` and `LabelMembership` called until
+     * 2026-09-25 (audit 5a.2): its commit rewrote the bindings and touched the database page and
+     * every row, so one added row claimed an edit to all of them — and under §9.4's last-write-wins
+     * that claim beat any real, unsynced edit to another row made on the other device. The bindings
+     * do not change here, and the bound columns' stored values are already empty (cleared on bind,
+     * proxied since), so there is nothing to clear and no page whose synced content moved. The
+     * Entry is its own snapshot record with its own timestamp.
+     */
+    suspend fun addRowToSync(database: PageDatabase, rowId: Long, now: Instant = Instant.now()) {
+        val donePropertyId = database.donePropertyId ?: return
+        seedRows(listOf(rowId), donePropertyId, database.deadlinePropertyId, database.recurrencePropertyId, database.dueDatePropertyId, now)
+    }
+
+    /** One linked Entry per row in [rowIds] that has none, seeded from the bound properties'
+     * stored values (§5.2.1). Writes Entries and completions only — no page, no cell. */
+    private suspend fun seedRows(
+        rowIds: List<Long>,
+        donePropertyId: Long,
+        deadlinePropertyId: Long?,
+        recurrencePropertyId: Long?,
+        dueDatePropertyId: Long?,
+        now: Instant,
+    ) {
         for (rowId in rowIds) {
             if (entryDao.getBySourceRowId(rowId) != null) continue
             val row = pageDao.getById(rowId) ?: continue
@@ -104,21 +149,6 @@ class DatabaseSyncManager(
             // sync-on creates dated Entries in bulk, and until 2026-09-24 armed none of them.
             entryScheduleCoordinator.onEntryChanged(entry.copy(id = entryId))
         }
-        for (propertyId in listOfNotNull(donePropertyId, deadlinePropertyId, recurrencePropertyId, dueDatePropertyId)) {
-            propertyValueDao.deleteAllForProperty(propertyId)
-        }
-
-        val updated = database.copy(
-            syncToTasks = true,
-            donePropertyId = donePropertyId,
-            deadlinePropertyId = deadlinePropertyId,
-            dueDatePropertyId = dueDatePropertyId,
-            recurrencePropertyId = recurrencePropertyId,
-            updatedAt = now,
-        )
-        // Rows too, not just the database page: `deleteAllForProperty` above cleared the bound
-        // columns' stored values for *every* row, whatever `rowIds` asked for.
-        return commit(updated, now, touchRows = true)
     }
 
     /** §5.5 — bulk-cleanup: every row's linked Entry goes to Trash (restorable), bindings clear. */

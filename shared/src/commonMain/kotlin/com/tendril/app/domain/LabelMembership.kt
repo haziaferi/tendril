@@ -114,11 +114,7 @@ class LabelMembership(
             resolveEntryUseCase.restore(trashed.id, now)
             return
         }
-        val donePropertyId = database.donePropertyId ?: return
-        databaseSyncManager.enableSync(
-            database, donePropertyId, database.deadlinePropertyId, database.recurrencePropertyId,
-            listOf(pageId), now, dueDatePropertyId = database.dueDatePropertyId,
-        )
+        databaseSyncManager.addRowToSync(database, pageId, now)
     }
 
     /** Every page that was a member of [database] through [labelId] and is not native to it. */

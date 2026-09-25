@@ -769,19 +769,14 @@ class PageDatabaseViewModel(
     /** §5.2 — "every row in a sync-enabled database becomes its own linked Task", not just
      * the rows present at the moment sync was turned on: a row created afterward gets seeded
      * into the sync relationship immediately, via the same (idempotent) per-row step
-     * `enableSync` itself uses. */
+     * `enableSync` itself uses — and only that step, so no other row claims an edit (audit 5a.2). */
     fun addRow(title: String, onCreated: (Long) -> Unit) {
         if (locked()) return
         val db = database.value ?: return
         viewModelScope.launch {
             val now = Instant.now()
             val id = pageDao.insert(Page(title = title.ifBlank { "Untitled" }, databaseId = db.id, createdAt = now, updatedAt = now))
-            // Local val, not `db.donePropertyId` directly: a nullable property declared in a
-            // different module (`:shared`, §12.5) can't be smart-cast across the module boundary.
-            val donePropertyId = db.donePropertyId
-            if (db.syncToTasks && donePropertyId != null) {
-                databaseSyncManager.enableSync(db, donePropertyId, db.deadlinePropertyId, db.recurrencePropertyId, listOf(id), dueDatePropertyId = db.dueDatePropertyId)
-            }
+            if (db.syncToTasks) databaseSyncManager.addRowToSync(db, id, now)
             onCreated(id)
         }
     }

@@ -41,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -1078,6 +1079,40 @@ class WritePathSyncTest {
 
         assertEquals(listOf("from B, later"), a.blockDao.getForPage(page.id).map { it.content })
         assertTrue("and A's row moved with it", a.pageDao.getById(page.id)!!.updatedAt.isAfter(t0))
+    }
+
+    // ------------------------------------------------------------------ false authorship (audit 5a)
+
+    /**
+     * Audit 2026-09-24 5a.2. A row added to a Sync-to-Tasks database went through `enableSync`,
+     * whose commit touched the database page and **every** row — so each untouched row claimed
+     * an edit it never had, and under last-write-wins that claim beat a real, unsynced edit to
+     * the same row made on the other device.
+     */
+    @Test
+    fun `adding a row to a synced database does not overwrite another row's edit made elsewhere`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val db = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!
+        val doneId = a.propertyDao.insert(Property(databaseId = db.id, name = "Done", type = PropertyType.CHECKBOX, order = 1))
+        a.databaseSyncManager.enableSync(db, doneId, null, null, listOf(seeded.row.id), now = t0)
+        syncAtoB()
+
+        val remoteRowId = b.pageIdOf(seeded.row.uid)
+        val remoteDbPageId = b.pageIdOf(seeded.databasePage.uid)
+        b.database(remoteDbPageId).setCellValue(b.propertyDao.getByUid(seeded.property.uid)!!, b.pageDao.getById(remoteRowId)!!, "from B")
+
+        val onA = a.database(seeded.databasePage.id)
+        backgroundScope.launch { onA.database.collect { } }
+        onA.addRow("New") { }
+
+        assertEquals("the existing row was not edited on A, so its timestamp must not move", t0, a.pageDao.getById(seeded.row.id)!!.updatedAt)
+        syncAtoB()
+        assertEquals(
+            "B's cell edit is the only real edit to that row and must survive A's sync",
+            listOf("from B"),
+            b.propertyValueDao.getForRow(remoteRowId).map { it.value },
+        )
+        assertTrue("the new row still reaches B", b.pageDao.getAll().any { it.title == "New" })
     }
 }
 
