@@ -29,6 +29,10 @@ class EntryEditor(
 ) {
     /** Writes [edited] as the new state of its own row, normalised for its kind. */
     suspend fun save(edited: Entry, now: Instant = Instant.now()): Entry {
+        // A sheet saved with nothing changed writes nothing: under §9.4 the stamp alone is a claim
+        // of an edit, and beats a real one on the other device (audit 5a.6).
+        val stored = entryDao.getById(edited.id)
+        if (stored != null && edited.normalisedForKind().copy(updatedAt = stored.updatedAt) == stored) return stored
         val normalised = edited.normalisedForKind().copy(updatedAt = now)
         entryDao.update(normalised)
         entryDao.getById(normalised.id)?.let { entryScheduleCoordinator.onEntryChanged(it) }

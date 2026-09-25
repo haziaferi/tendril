@@ -1,5 +1,6 @@
 package com.tendril.app.sync
 
+import com.tendril.app.data.canvas.CanvasEdge
 import com.tendril.app.data.canvas.CanvasNode
 import com.tendril.app.data.canvas.CanvasNodeType
 import com.tendril.app.data.canvas.PageCanvas
@@ -1170,6 +1171,37 @@ class WritePathSyncTest {
         assertEquals("nothing on the page changed, so its timestamp must not move", t0, a.pageDao.getById(page.id)!!.updatedAt)
         syncAtoB()
         assertEquals(listOf("first", "second, from B"), b.blockDao.getForPage(remoteId).sortedBy { it.order }.map { it.content })
+    }
+
+    /** Audit 2026-09-24 5a.6 — the canvas's arrow writes: a label set to the one it has, and a
+     * write whose edge had already gone, each still touched the page. */
+    @Test
+    fun `canvas arrow writes that change nothing move no timestamp`() = runTest(mainDispatcher) {
+        val page = seedPageOnA("Board", PageKind.CANVAS)
+        val canvasId = a.canvasDao.insert(PageCanvas(pageId = page.id, createdAt = t0, updatedAt = t0))
+        val from = a.nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = 0f, y = 0f, text = "a", createdAt = t0, updatedAt = t0))
+        val to = a.nodeDao.insert(CanvasNode(canvasId = canvasId, type = CanvasNodeType.TEXT, x = 9f, y = 0f, text = "b", createdAt = t0, updatedAt = t0))
+        val edgeId = a.edgeDao.insert(CanvasEdge(canvasId = canvasId, fromNodeId = from, toNodeId = to, label = "then"))
+        val edge = a.edgeDao.getById(edgeId)!!
+        val onA = a.canvas(page.id)
+
+        onA.setEdgeLabel(edge, "then")
+        a.edgeDao.delete(edgeId)
+        onA.cycleEdgeDirection(edge)
+        onA.setEdgeLabel(edge, "gone")
+
+        assertEquals(t0, a.pageDao.getById(page.id)!!.updatedAt)
+    }
+
+    /** Audit 2026-09-24 5a.6 — the database's hue set to the one it has. */
+    @Test
+    fun `a database hue set to its own value moves no timestamp`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        a.pageDatabaseDao.update(a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!.copy(hue = 200))
+
+        a.database(seeded.databasePage.id).setHue(200)
+
+        assertEquals(t0, a.pageDao.getById(seeded.databasePage.id)!!.updatedAt)
     }
 }
 

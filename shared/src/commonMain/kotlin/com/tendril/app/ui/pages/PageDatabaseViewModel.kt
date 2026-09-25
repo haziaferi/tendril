@@ -135,10 +135,15 @@ class PageDatabaseViewModel(
      * schema a moment earlier and not yet synced. The lazily-created view costs nothing by
      * staying local — every device performs the same repair for itself.
      */
-    private fun launchAndTouch(pageIdToBump: Long, block: suspend () -> Unit) {
+    private fun launchAndTouch(pageIdToBump: Long, block: suspend () -> Unit) =
+        launchAndTouchIfChanged(pageIdToBump) { block(); true }
+
+    /** [launchAndTouch] for a write that can find nothing to do — the database not loaded, or the
+     * value already the one asked for. Touches only when [block] says it wrote (audit 5a.6): under
+     * §9.4 a bump with no edit behind it beats a real edit on the other device. */
+    private fun launchAndTouchIfChanged(pageIdToBump: Long, block: suspend () -> Boolean) {
         viewModelScope.launch {
-            block()
-            pageDao.touch(pageIdToBump, Instant.now())
+            if (block()) pageDao.touch(pageIdToBump, Instant.now())
         }
     }
 
@@ -752,9 +757,11 @@ class PageDatabaseViewModel(
         // §3.1.2 — [launchAndTouch] does not check the lock (Canvas's funnel of that name does),
         // and a hue sheet open when View-Only went on still called this on Done.
         if (locked()) return
-        launchAndTouch(pageId) {
-            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouch
+        launchAndTouchIfChanged(pageId) {
+            val db = database.value ?: pageDatabaseDao.getByPageId(pageId) ?: return@launchAndTouchIfChanged false
+            if (db.hue == hue) return@launchAndTouchIfChanged false
             pageDatabaseDao.update(db.copy(hue = hue))
+            true
         }
     }
 

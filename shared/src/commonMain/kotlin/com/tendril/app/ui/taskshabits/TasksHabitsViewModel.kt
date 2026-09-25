@@ -196,9 +196,23 @@ class TasksHabitsViewModel(
         viewModelScope.launch { checkInHabitUseCase.undoCheckIn(habitId); rearm(habitId) }
     }
 
-    /** S10 — the habit's fields edited after creation (`Habit.edited`); the alarm re-arms from the row as it now is (§9.7). */
+    /**
+     * S10 — the habit's fields edited after creation (`Habit.edited`); the alarm re-arms from the
+     * row as it now is (§9.7).
+     *
+     * The sheet's fields go over the row as it is **now**, not over [habit], which is the sheet's
+     * copy from when it opened: laying them over that copy wrote back its streak and completion
+     * dates, undoing a check-in made while the sheet was open. An untouched sheet writes nothing,
+     * since under §9.4 the stamp alone claims an edit (audit 5a.6, both).
+     */
     fun updateHabit(habit: Habit, title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?, unit: String?, amountPerCheckIn: Double?, dailyAmount: Double?) {
-        viewModelScope.launch { habitDao.update(habit.edited(title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount, Instant.now())); rearm(habit.id) }
+        viewModelScope.launch {
+            val live = habitDao.getById(habit.id) ?: return@launch
+            val edited = live.edited(title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount, Instant.now())
+            if (edited.copy(updatedAt = live.updatedAt) == live) return@launch
+            habitDao.update(edited)
+            rearm(habit.id)
+        }
     }
 
     fun trashHabit(habitId: Long) {

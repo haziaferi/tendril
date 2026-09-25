@@ -82,9 +82,13 @@ class LabelMembership(
      * labelled — the confirmation is not asked here, the bind sheet's copy already says so. */
     suspend fun bindLabel(database: PageDatabase, labelId: Long, now: Instant = Instant.now()): PageDatabase {
         val previous = database.labelId
-        val updated = database.copy(labelId = labelId, updatedAt = now)
-        pageDatabaseDao.update(updated)
-        pageDao.touch(database.pageId, now)
+        // The label it already has changes nothing in the database's record, so nothing is written
+        // or touched (audit 5a.6, §9.4); the members' tasks below are still ensured, idempotently.
+        val updated = if (previous == labelId) database else database.copy(labelId = labelId, updatedAt = now)
+        if (updated !== database) {
+            pageDatabaseDao.update(updated)
+            pageDao.touch(database.pageId, now)
+        }
         if (previous != null && previous != labelId) retireOrphansOf(updated, previous, now)
         if (updated.syncToTasks) {
             for (member in pageDao.getMembersOf(updated.id, labelId)) {

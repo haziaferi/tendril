@@ -48,6 +48,14 @@ class EntryEditorTest {
         assertEquals(listOf(e.id), changed.map { it.id })
     }
 
+    /** Audit 2026-09-24 5a.6 — a sheet saved with nothing changed claimed an edit (§9.4). */
+    @Test
+    fun `saving an unchanged entry writes nothing`() = runBlocking {
+        val e = event("Dentist", monday, LocalTime.of(15, 0))
+        editor.save(e, at.plusSeconds(60))
+        assertEquals(at, entryDao.getById(e.id)!!.updatedAt)
+    }
+
     @Test
     fun `switching an event to a task drops the span and gains a status`() = runBlocking {
         val e = event("Lunch", monday, LocalTime.of(12, 0), LocalTime.of(13, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY"))
