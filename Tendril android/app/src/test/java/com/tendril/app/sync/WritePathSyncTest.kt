@@ -153,9 +153,23 @@ class WritePathSyncTest {
             pageHistory = PageHistory(pageDao, blockDao, FakePageRevisionDao()),
         )
 
+        /** One store for the editor and the folder sync both, as on a device: the picture the
+         * editor writes is the picture the orchestrator publishes. */
+        val localImages = InMemoryLocalImageStore()
+
+        /** The whole-folder sync, for what [engine] alone does not carry: images (§9.4 / S4). */
+        val orchestrator by lazy {
+            SnapshotSyncOrchestrator(
+                entryDao = entryDao, habitDao = habitDao, pageDao = pageDao, pagesSyncEngine = engine,
+                purgeRegistry = purgeRegistry, reminderDao = FakeReminderDao(), entryCompletionDao = completionDao,
+                habitCompletionDao = habitCompletionDao, checkInDao = FakeCheckInDao(), timeLogDao = FakeTimeLogDao(),
+                localImages = localImages,
+            )
+        }
+
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
-            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, InMemoryLocalImageStore(), labelMembership,
+            resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, localImages, labelMembership,
             habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao), PageHistory(pageDao, blockDao, FakePageRevisionDao()),
             FakeAiKeyStore(), MapKeyValueStore(), FakeCheckInDao(),
         )
@@ -1191,6 +1205,35 @@ class WritePathSyncTest {
         onA.setEdgeLabel(edge, "gone")
 
         assertEquals(t0, a.pageDao.getById(page.id)!!.updatedAt)
+    }
+
+    /**
+     * Audit 2026-09-24 5a.7. An image's folder name is its block's uid, the folder copy is written
+     * only when that name is absent, and a device fetches only for a block with no local picture —
+     * so a replaced picture never left the device that replaced it. Replacing now swaps in a new
+     * block (a new uid, so a new name), which every one of those rules already handles.
+     */
+    @Test
+    fun `a replaced picture reaches the other device`() = runTest(mainDispatcher) {
+        val folder = InMemorySyncFileStore()
+        val png1 = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1)
+        val png2 = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 2)
+        val page = seedPageOnA("Trip")
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.IMAGE, order = 0, content = "the view", createdAt = t0, updatedAt = t0))
+        val caption = a.blockDao.getForPage(page.id).single()
+        a.blockDao.insert(Block(pageId = page.id, type = BlockType.PARAGRAPH, order = 1, content = "under it", parentBlockId = caption.id, createdAt = t0, updatedAt = t0))
+        val onA = a.detail(page.id)
+        onA.setBlockImage(caption, "first.png", png1)
+        a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
+
+        onA.setBlockImage(a.blockDao.getForPage(page.id).single { it.type == BlockType.IMAGE }, "second.png", png2)
+        a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
+
+        val onB = b.blockDao.getForPage(b.pageIdOf(page.uid))
+        val image = onB.single { it.type == BlockType.IMAGE }
+        assertTrue("B shows the new picture", b.localImages.read(requireNotNull(image.imagePath) { "B fetched nothing" })!!.contentEquals(png2))
+        assertEquals("the caption travels with it", "the view", image.content)
+        assertEquals("and the block nested under it is still under it", image.id, onB.single { it.content == "under it" }.parentBlockId)
     }
 
     /** Audit 2026-09-24 5a.6 — the database's hue set to the one it has. */
