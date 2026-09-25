@@ -1225,6 +1225,11 @@ class WritePathSyncTest {
         val onA = a.detail(page.id)
         onA.setBlockImage(caption, "first.png", png1)
         a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
+        // Snapshots carry `updatedAt` in milliseconds, and on a fast runner the replacement below
+        // can stamp the same millisecond as the first picture did — an equal timestamp is the same
+        // version, so B would rightly keep what it has (CI on 2026-09-25 failed this way once in
+        // two runs of one commit). B's copy is set back so the replacement is unambiguously newer.
+        b.pageDao.touch(b.pageIdOf(page.uid), t0)
 
         onA.setBlockImage(a.blockDao.getForPage(page.id).single { it.type == BlockType.IMAGE }, "second.png", png2)
         a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
