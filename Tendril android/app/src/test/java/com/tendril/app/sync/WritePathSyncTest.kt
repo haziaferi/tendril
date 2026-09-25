@@ -1114,13 +1114,37 @@ class WritePathSyncTest {
         )
         assertTrue("the new row still reaches B", b.pageDao.getAll().any { it.title == "New" })
     }
-}
 
-/**
- * Reached only because [ResolveEntryUseCase] is a constructor argument of the ViewModels under
- * test; nothing here asserts on completions. Hand-written to match the rest of this package, and
- * because two members is less code than the `every { }` stanzas would be.
- */
-// FakeEntryCompletionDao moved to SyncTestDoubles.kt when S2 gave EntryCompletionDao its
-// snapshot reads: two doubles for one DAO in one package is a redeclaration, and the doubles
-// file is where the others already live.
+    /**
+     * Audit 2026-09-24 5a.3. Deleting a bound column unbound it first — crystallizing the Entry's
+     * dates into that column for every row, and touching every row — and then purged the column
+     * and the values it had just written. No row's synced content changed, yet every row claimed
+     * an edit, and beat a real one made on the other device.
+     */
+    @Test
+    fun `deleting a bound column does not overwrite another row's edit made elsewhere`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val db = a.pageDatabaseDao.getByPageId(seeded.databasePage.id)!!
+        val doneId = a.propertyDao.insert(Property(databaseId = db.id, name = "Done", type = PropertyType.CHECKBOX, order = 1))
+        val dateId = a.propertyDao.insert(Property(databaseId = db.id, name = "Date", type = PropertyType.DATE, order = 2))
+        a.propertyValueDao.setValue(dateId, seeded.row.id, "2026-09-30")
+        a.databaseSyncManager.enableSync(db, doneId, dateId, null, listOf(seeded.row.id), now = t0)
+        syncAtoB()
+
+        val remoteRowId = b.pageIdOf(seeded.row.uid)
+        b.database(b.pageIdOf(seeded.databasePage.uid))
+            .setCellValue(b.propertyDao.getByUid(seeded.property.uid)!!, b.pageDao.getById(remoteRowId)!!, "from B")
+
+        val onA = a.database(seeded.databasePage.id)
+        backgroundScope.launch { onA.database.collect { } }
+        onA.requestDeleteProperty(a.propertyDao.getById(dateId)!!)
+        onA.confirmDeleteProperty()
+
+        assertNull("the column is gone", a.propertyDao.getById(dateId))
+        assertEquals("no stored cell of the row changed, so its timestamp must not move", t0, a.pageDao.getById(seeded.row.id)!!.updatedAt)
+        syncAtoB()
+        assertEquals("B's cell edit survives", listOf("from B"), b.propertyValueDao.getForRow(remoteRowId).map { it.value })
+        assertTrue("and the deletion still reaches B", b.propertyDao.getAll().none { it.name == "Date" })
+    }
+
+}

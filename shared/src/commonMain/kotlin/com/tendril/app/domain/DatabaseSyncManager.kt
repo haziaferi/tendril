@@ -202,6 +202,21 @@ class DatabaseSyncManager(
         return commit(database.withPropertyIdFor(role, null).copy(updatedAt = now), now, touchRows = true)
     }
 
+    /**
+     * §5.5 — the binding half of *deleting* a bound column: the role stops proxying, and nothing is
+     * crystallized, because the column and every value in it are purged straight after.
+     *
+     * Not [unbindProperty], which the delete used until 2026-09-25 (audit 5a.3): it wrote each
+     * row's Entry value into the doomed column and touched every row, so a delete that left no
+     * row's stored cells changed still claimed an edit to all of them — enough, under §9.4's
+     * last-write-wins, to beat a real edit to another cell on the other device. Only the database
+     * page moves here; the purge's tombstone carries the column's removal.
+     */
+    suspend fun dropBinding(database: PageDatabase, role: BindingRole, now: Instant = Instant.now()): PageDatabase {
+        if (database.propertyIdFor(role) == null) return database
+        return commit(database.withPropertyIdFor(role, null).copy(updatedAt = now), now, touchRows = false)
+    }
+
     /** §5.2.1 rebind — `unbindProperty` immediately followed by `bindProperty`, as one atomic
      * action. No Entry is ever deleted or recreated (`sourceRowId` is untouched throughout). */
     suspend fun rebindProperty(database: PageDatabase, role: BindingRole, newPropertyId: Long, now: Instant = Instant.now()): PageDatabase =

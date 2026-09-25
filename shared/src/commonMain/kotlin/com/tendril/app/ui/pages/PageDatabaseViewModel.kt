@@ -661,9 +661,11 @@ class PageDatabaseViewModel(
             if (db != null) {
                 when (property.id) {
                     db.donePropertyId -> databaseSyncManager.disableSync(db)
-                    db.deadlinePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DEADLINE)
-                    db.dueDatePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.DUE_DATE)
-                    db.recurrencePropertyId -> databaseSyncManager.unbindProperty(db, BindingRole.RECURRENCE)
+                    // Dropped, not unbound: crystallizing into a column purged two lines down
+                    // wrote nothing that survives and touched every row (audit 5a.3).
+                    db.deadlinePropertyId -> databaseSyncManager.dropBinding(db, BindingRole.DEADLINE)
+                    db.dueDatePropertyId -> databaseSyncManager.dropBinding(db, BindingRole.DUE_DATE)
+                    db.recurrencePropertyId -> databaseSyncManager.dropBinding(db, BindingRole.RECURRENCE)
                     // §0.6.14 — a pointer, not a binding: nothing to crystallise, just cleared.
                     db.blockedByPropertyId -> pageDatabaseDao.update(db.copy(blockedByPropertyId = null, updatedAt = Instant.now()))
                 }
