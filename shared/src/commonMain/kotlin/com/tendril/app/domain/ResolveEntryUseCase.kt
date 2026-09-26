@@ -145,6 +145,13 @@ class ResolveEntryUseCase(
      * removes its Provider mirror (§3.2) too. */
     suspend fun trash(entryId: Long, now: Instant = Instant.now()) {
         if (entryDao.getById(entryId) == null) return
+        // A series takes its exception rows with it, stamped with the same instant so [restore]
+        // can bring back exactly these (audit 5.12). Left live, a moved occurrence stayed in the
+        // Calendar and the phone's calendar app after "The whole series goes".
+        for (exception in entryDao.getExceptionsOf(entryId)) {
+            entryDao.softDelete(exception.id, now)
+            entryDao.getById(exception.id)?.let { entryScheduleCoordinator.onEntryRemoved(it) }
+        }
         entryDao.softDelete(entryId, now)
         // Re-read rather than reusing the pre-delete snapshot. The coordinator tears down the
         // Calendar mirror, which writes back to this same row to clear its mirror id — handed
@@ -156,6 +163,16 @@ class ResolveEntryUseCase(
     }
 
     suspend fun restore(entryId: Long, now: Instant = Instant.now()) {
+        val trashedAt = entryDao.getById(entryId)?.deletedAt
+        // The exception rows [trash] took with this series — same instant — and only those: one
+        // trashed on its own before stays in Trash. Restored first, so the series' own re-arm and
+        // re-mirror below already see them (its EXDATEs, §9.11).
+        if (trashedAt != null) {
+            for (exception in entryDao.getAll().filter { it.originalEntryId == entryId && it.deletedAt == trashedAt }) {
+                entryDao.restore(exception.id, now)
+                entryDao.getById(exception.id)?.let { entryScheduleCoordinator.onEntryChanged(it) }
+            }
+        }
         entryDao.restore(entryId, now)
         entryDao.getById(entryId)?.let { entryScheduleCoordinator.onEntryChanged(it) }
     }
