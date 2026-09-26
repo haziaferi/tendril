@@ -75,9 +75,10 @@ class CalendarProviderSync(
     suspend fun ensureCalendarAndBackfill() {
         if (!hasPermission()) return
         ensureCalendar() ?: return
+        val exceptionsByBase = entryDao.getAllExceptions().groupBy { it.originalEntryId }
         entryDao.getAll()
             .filter { it.deletedAt == null && it.startDate != null && it.source != EntrySource.GOOGLE_CALENDAR }
-            .forEach { upsertEntry(it) }
+            .forEach { upsertEntry(it, exceptionsByBase[it.id].orEmpty()) }
     }
 
     /**
@@ -122,9 +123,19 @@ class CalendarProviderSync(
         return ContentUris.parseId(result)
     }
 
-    suspend fun upsertEntry(entry: Entry) {
+    /**
+     * @param exceptions [entry]'s exception rows when it is a series (§4.1). Each one's original
+     * date becomes an `EXDATE` on the series' event: a moved occurrence is mirrored as its own
+     * event, and a skipped one not at all, so without them the system calendar showed a moved
+     * occurrence on both days and a skipped one anyway (audit 5.4). Pass them whenever the series
+     * is written, or a re-upsert clears them.
+     */
+    suspend fun upsertEntry(written: Entry, exceptions: List<Entry> = emptyList()) {
         if (!hasPermission()) return
-        if (entry.deletedAt != null || entry.startDate == null || entry.source == EntrySource.GOOGLE_CALENDAR) {
+        val entry = withoutSeriesRow(written)
+        // A skip row is a tombstone for one occurrence, not an event (audit 5.4): mirrored, it put
+        // an event on the very day it skipped. It reaches the calendar only as its series' EXDATE.
+        if (entry.deletedAt != null || entry.startDate == null || entry.source == EntrySource.GOOGLE_CALENDAR || entry.isExceptionSkip == true) {
             // No longer (or never) Provider-eligible — remove any stale mirrored copy.
             if (entry.providerEventId != null) removeEntry(entry)
             return
@@ -134,7 +145,7 @@ class CalendarProviderSync(
         // a lambda whose last expression isn't Unit would not be.
         val calendarId = ensureCalendar() ?: return
         withContext(Dispatchers.IO) {
-            val values = entry.toCalendarValues(calendarId)
+            val values = entry.toCalendarValues(calendarId, exceptions)
             val existingId = entry.providerEventId
             if (existingId != null && eventStillExists(existingId)) {
                 provider { context.contentResolver.update(asSyncAdapter(eventUri(existingId)), values, null, null) }
@@ -146,6 +157,20 @@ class CalendarProviderSync(
                 }
             }
         }
+    }
+
+    /**
+     * An exception row written before 2026-09-26 was a copy of its series, `providerEventId`
+     * included (audit 5.4), so upserting it updated the *series'* event with this one occurrence.
+     * The id is this device's own and never synced, so it is dropped here, once, and the row gets
+     * an event of its own on this upsert.
+     */
+    private suspend fun withoutSeriesRow(entry: Entry): Entry {
+        val own = entry.providerEventId ?: return entry
+        val seriesId = entry.originalEntryId ?: return entry
+        if (entryDao.getById(seriesId)?.providerEventId != own) return entry
+        entryDao.setProviderEventId(entry.id, null)
+        return entry.copy(providerEventId = null)
     }
 
     suspend fun removeEntry(entry: Entry) {
@@ -187,7 +212,7 @@ class CalendarProviderSync(
         .build()
 }
 
-private fun Entry.toCalendarValues(calendarId: Long): ContentValues {
+private fun Entry.toCalendarValues(calendarId: Long, exceptions: List<Entry>): ContentValues {
     val zone = ZoneId.systemDefault()
     val date = requireNotNull(startDate)
     // Bound to a local val, not used as `startTime` directly below: a nullable property
@@ -232,5 +257,19 @@ private fun Entry.toCalendarValues(calendarId: Long): ContentValues {
                 put(CalendarContract.Events.DTEND, endInstant.toEpochMilli())
             }
         }
+        if (rrule != null) {
+            // Each exception's original occurrence, as the instant that occurrence starts in UTC —
+            // the form the provider matches instances against. Put even when empty, so an
+            // exception deleted since clears what the last write left.
+            val exdates = exceptions.mapNotNull { it.originalOccurrenceDate }.distinct().sorted().map { day ->
+                val start = if (time == null) day.atStartOfDay(ZoneOffset.UTC).toInstant()
+                else LocalDateTime.of(day, time).atZone(zone).toInstant()
+                EXDATE_FORMAT.format(start.atOffset(ZoneOffset.UTC))
+            }
+            if (exdates.isEmpty()) putNull(CalendarContract.Events.EXDATE)
+            else put(CalendarContract.Events.EXDATE, exdates.joinToString(","))
+        }
     }
 }
+
+private val EXDATE_FORMAT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")

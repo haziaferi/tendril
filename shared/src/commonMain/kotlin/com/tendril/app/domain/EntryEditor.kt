@@ -94,6 +94,10 @@ class EntryEditor(
                 recurrenceRule = null,
                 originalEntryId = entry.id, originalOccurrenceDate = occurrenceDate, isExceptionSkip = false,
                 sourceRowId = null,
+                // The series' rows elsewhere, never this occurrence's (audit 5.4): copied, the
+                // system-calendar mirror updated the *series* to this date, moving every later
+                // occurrence on the phone, and the Google push would have overwritten the series.
+                providerEventId = null, googleEventId = null,
                 createdAt = now, updatedAt = now,
             )
             val id = entryDao.insert(override)

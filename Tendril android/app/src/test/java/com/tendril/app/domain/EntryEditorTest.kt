@@ -85,6 +85,26 @@ class EntryEditorTest {
         assertEquals(at.plusSeconds(30), entryDao.getById(sheet.id)!!.deletedAt)
     }
 
+    /**
+     * Audit 2026-09-24 5.4, as the 2026-09-26 walk found it. The occurrence moved alone was a copy
+     * of its series, external ids included: its `providerEventId` was the series' own row in the
+     * system calendar, so mirroring it *updated the series* to the moved date — on the phone every
+     * later occurrence then showed on the wrong weekday. Its `googleEventId` was the series' Google
+     * event, which the next push would have overwritten with the one occurrence.
+     */
+    @Test
+    fun `an occurrence moved alone does not carry its series' external ids`() = runBlocking {
+        val base = event("Yoga", monday, LocalTime.of(7, 0), LocalTime.of(8, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY"))
+        entryDao.update(entryDao.getById(base.id)!!.copy(providerEventId = 221L, googleEventId = "g-series"))
+        val series = entryDao.getById(base.id)!!
+
+        val moved = editor.move(series, monday.plusWeeks(1), monday.plusWeeks(1).plusDays(1), scope = MoveScope.THIS_ONE, now = at)
+
+        assertNull("the system calendar row is the series', not this occurrence's", moved.providerEventId)
+        assertNull("and so is the Google event", moved.googleEventId)
+        assertEquals("the series keeps both", 221L, entryDao.getById(base.id)!!.providerEventId)
+    }
+
     @Test
     fun `switching an event to a task drops the span and gains a status`() = runBlocking {
         val e = event("Lunch", monday, LocalTime.of(12, 0), LocalTime.of(13, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY"))
