@@ -38,6 +38,11 @@ suspend fun reconcileAlarms(context: Context) {
     entryDao.getAllSchedulable().forEach { entry ->
         container.alarmScheduler.rescheduleFor(entry, exceptionsByBase[entry.id].orEmpty())
     }
+    // Habits too (audit 5.3). This sweep swept entries only, and a reboot drops every alarm, so
+    // after one no habit reminder rang until the habit was checked in or edited. Every habit, not
+    // only live ones: `rescheduleHabit` clears a trashed habit's alarm rather than setting one.
+    // There are a handful of habits, so this costs nothing beside the entry sweep.
+    container.database.habitDao().getAll().forEach(container.alarmScheduler::rescheduleHabit)
     // §3.2/§9.9 item 3 — Provider registration's own self-healing sweep, riding alongside the
     // alarm one above. No-ops if permission was never granted; can't request it from a
     // boot-time BroadcastReceiver (no Activity), so a first grant only ever happens from

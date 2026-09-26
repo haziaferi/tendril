@@ -42,6 +42,7 @@ class AlarmSchedulerInstrumentedTest {
     private class FakeReminderDao(private val byEntry: Map<Long, List<Reminder>>) : ReminderDao {
         override suspend fun insert(reminder: Reminder): Long = 1L
         override suspend fun getForEntry(entryId: Long): List<Reminder> = byEntry[entryId].orEmpty()
+        override suspend fun getAllForEntry(entryId: Long): List<Reminder> = byEntry[entryId].orEmpty()
         override fun observeForEntry(entryId: Long): Flow<List<Reminder>> = flowOf(byEntry[entryId].orEmpty())
         override suspend fun softDelete(id: Long, deletedAt: java.time.Instant) = Unit
         override suspend fun getAll(): List<Reminder> = byEntry.values.flatten()

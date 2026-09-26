@@ -497,6 +497,8 @@ class RecordingEntryScheduleCoordinator : EntryScheduleCoordinator {
 
     override suspend fun onEntryChanged(entry: Entry) { changed += entry }
     override suspend fun onEntryRemoved(entry: Entry) { removed += entry }
+    val habits = mutableListOf<com.tendril.app.data.habit.Habit>()
+    override suspend fun onHabitChanged(habit: com.tendril.app.data.habit.Habit) { habits += habit }
 }
 
 /** §0.6.13 — in-memory page revisions, newest first like the real DAO. */

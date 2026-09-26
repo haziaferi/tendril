@@ -2,6 +2,7 @@
 
 package com.tendril.app.ui.trash
 
+import com.tendril.app.domain.restoreHabitsFromTrash
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,7 +39,6 @@ import com.tendril.app.generated.resources.trash_habits_title
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
-import java.time.Instant
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.heading
@@ -67,7 +67,7 @@ fun HabitTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
     var pendingDeleteForever by remember { mutableStateOf<List<Habit>?>(null) }
 
     fun restore(ids: Collection<Long>) {
-        scope.launch { ids.forEach { core.database.habitDao().restore(it, Instant.now()) } }
+        scope.launch { restoreHabitsFromTrash(core.database.habitDao(), core.entryScheduleCoordinator, ids) }
     }
 
     TendrilSheet(scrolls = false, onDismiss = onDismiss, modifier = Modifier.fillMaxHeight(0.6f)) {

@@ -1679,7 +1679,7 @@ class UnknownEnumQuarantineTest {
             pagesSyncEngine = mockk(relaxed = true),
             localImages = InMemoryLocalImageStore(),
             passphrase = { null },
-            rearmAlarms = {},
+            rearmAlarms = { _ -> },
         )
 
     private val manifestJson =

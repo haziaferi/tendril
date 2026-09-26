@@ -61,7 +61,7 @@ class PortableArchiveTest {
         pagesSyncEngine = mockk(relaxed = true),
         localImages = InMemoryLocalImageStore(),
         passphrase = { passphrase },
-        rearmAlarms = { rearms.count++ },
+        rearmAlarms = { ids -> rearms.count++; rearms.entryIds += ids },
     )
 
     private fun localEntry(uid: String, title: String) = Entry(
@@ -487,7 +487,7 @@ class PortableArchiveTest {
      * and the Provider sweep. A JVM test can have neither, and neither is what these tests are
      * about — the claim is that the path calls its re-arm at all.
      */
-    class RearmCounter { var count = 0 }
+    class RearmCounter { var count = 0; val entryIds = mutableListOf<Long>() }
 
     @Test
     fun `a restore re-arms alarms for what it restored`() = runBlocking {
@@ -513,5 +513,25 @@ class PortableArchiveTest {
         archive(FakeEntryDao(), FakeHabitDao(), backing, rearms = rearms).importAdditive(uri)
 
         assertEquals("import armed nothing", 1, rearms.count)
+    }
+
+    /**
+     * Audit 2026-09-24 5.2. The re-arm is `reconcileAlarms`, which visits only entries that are
+     * still schedulable. An import that makes an entry done, dateless or trashed leaves it out of
+     * that sweep, and so leaves its alarm armed — and the receivers check only the trash, so a
+     * done task still rang. The import now names every entry it changed, and each is rescheduled,
+     * which cancels what no longer applies.
+     */
+    @Test
+    fun `an import that finishes a task names it for re-arming`() = runBlocking {
+        val entryDao = FakeEntryDao(listOf(localEntry("task-1", "Ring the vet")))
+        val backing = FakeContentResolverBacking()
+        val rearms = RearmCounter()
+        val done = entryRecord("task-1", "Ring the vet", updatedAt = 9_000L).copy(status = "DONE")
+
+        archive(entryDao, FakeHabitDao(), backing, rearms = rearms).importAdditive(backing.givenFile(validArchiveBytes(done)))
+
+        assertEquals("the import did change it", com.tendril.app.data.entry.EntryStatus.DONE, entryDao.getById(1)!!.status)
+        assertEquals("and must say so, or its alarm stays armed", listOf(1L), rearms.entryIds)
     }
 }

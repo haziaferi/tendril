@@ -198,6 +198,10 @@ data class SnapshotMergeResult(
      * to do, not "unknown". A caller must not read it as a reason to fall back to a full sweep.
      */
     val touchedEntryIds: List<Long> = emptyList(),
+    /** §9.7 — [touchedEntryIds]' rule for habits: every local habit id this pass inserted or
+     * updated, for the caller to re-arm (audit 5.3). The desktop's `replan()` reads every habit
+     * and needs none of it; the phone arms one habit at a time and needs all of it. */
+    val touchedHabitIds: List<Long> = emptyList(),
 ) {
     /**
      * True when the folder holds encrypted snapshots this device cannot read. Callers **must
@@ -345,6 +349,9 @@ private class ReadTally {
     /** §9.7 — see [SnapshotMergeResult.touchedEntryIds]. A set: the entry pass and the reminder
      * pass can both reach the same row, and the caller wants one coordinator call for it. */
     val touchedEntryIds = mutableSetOf<Long>()
+
+    /** §9.7 — see [SnapshotMergeResult.touchedHabitIds]. */
+    val touchedHabitIds = mutableSetOf<Long>()
 
     /** Records this pass refused to apply because it could not read them — see
      * [SnapshotMergeResult.quarantinedRecords]. */
@@ -1148,6 +1155,7 @@ class SnapshotSyncOrchestrator(
                 undecryptableFiles = read.tally.undecryptable,
                 quarantinedRecords = read.tally.quarantined.toList(),
                 touchedEntryIds = read.tally.touchedEntryIds.toList(),
+                touchedHabitIds = read.tally.touchedHabitIds.toList(),
             ),
             held = held,
         )
@@ -1664,7 +1672,9 @@ class SnapshotSyncOrchestrator(
                 held?.hold(element, record.uid)
                 continue
             }
-            if (local == null) habitDao.insert(entity) else habitDao.update(entity.copy(id = local.id))
+            // §9.7 — see [SnapshotMergeResult.touchedHabitIds].
+            if (local == null) tally.touchedHabitIds += habitDao.insert(entity)
+            else { habitDao.update(entity.copy(id = local.id)); tally.touchedHabitIds += local.id }
         }
         return allRead
     }

@@ -112,7 +112,13 @@ class AppContainer(context: Context) {
         // §9.7 — an Import or a Restore rewrites entries, habits and reminders without going
         // near a ViewModel, so nothing else in those paths arms an alarm. The same sweep the
         // app open and the boot receiver run; idempotent, so running it once more here is free.
-        rearmAlarms = { reconcileAlarms(context) },
+        // Then each entry the import changed, through the coordinator (audit 5.2): the sweep
+        // visits only what can still ring, so an entry an import made done, dateless or trashed
+        // kept its alarm — and the receivers check only the trash. A reschedule cancels it.
+        rearmAlarms = { changedEntryIds ->
+            reconcileAlarms(context)
+            changedEntryIds.forEach { id -> database.entryDao().getById(id)?.let { entryScheduleCoordinator.onEntryChanged(it) } }
+        },
         viewLockState = viewLockState,
     )
     /** §9.4's sync triggers — lifecycle and the Settings button both run through this one

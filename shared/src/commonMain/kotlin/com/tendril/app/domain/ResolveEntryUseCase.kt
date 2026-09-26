@@ -52,6 +52,11 @@ class ResolveEntryUseCase(
         require(status != EntryStatus.PENDING) { "resolve() only takes a terminal status (DONE/SKIPPED)" }
         val entry = entryDao.getById(entryId) ?: return
         require(entry.kind == EntryKind.TASK) { "Only TASK Entries resolve; EVENT has no done/not-done state (§4)" }
+        // Already resolved this way: nothing happened, so nothing is logged (audit 5.2). A task an
+        // import or the other device finished could still post an overdue notification armed
+        // before, and its Done wrote a second completion. A recurring task is never left resolved
+        // (it advances to PENDING), so this cannot swallow a real occurrence's Done.
+        if (entry.status == status) return
 
         val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
         val occurrenceDate = entry.startDate ?: today

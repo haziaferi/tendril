@@ -102,9 +102,11 @@ class AlarmScheduler(
         cancel(reminderRequestCode(entryId, reminderId), ReminderAlarmReceiver::class.java, entryId, reminderId)
     }
 
+    /** Tombstoned reminders included (audit 5.1): a reminder deleted on another device arrives
+     * as a tombstone, and its alarm, armed while it was live, is still this device's to cancel. */
     suspend fun cancelAllFor(entryId: Long) {
         cancel(overdueRequestCode(entryId), OverdueAlarmReceiver::class.java, entryId)
-        reminderDao.getForEntry(entryId).forEach { reminder ->
+        reminderDao.getAllForEntry(entryId).forEach { reminder ->
             cancel(reminderRequestCode(entryId, reminder.id), ReminderAlarmReceiver::class.java, entryId, reminder.id)
         }
     }

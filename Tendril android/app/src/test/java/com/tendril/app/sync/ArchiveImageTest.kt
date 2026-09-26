@@ -82,7 +82,7 @@ class ArchiveImageTest {
             pagesSyncEngine = engine,
             localImages = localImages,
             passphrase = { passphrase },
-            rearmAlarms = {},
+            rearmAlarms = { _ -> },
         )
 
         /** A page with one IMAGE block, optionally already holding a local file. */
