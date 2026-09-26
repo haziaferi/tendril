@@ -69,12 +69,16 @@ class CalendarProviderSync(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
     /** Call once permission is granted — on first grant, and again on every boot/app-open
-     * reconciliation sweep alongside [com.tendril.app.notifications.reconcileAlarms]. Fully
-     * idempotent: finds the existing local calendar rather than duplicating it, and every
-     * per-Entry write below is itself an upsert. */
+     * reconciliation sweep alongside [com.tendril.app.notifications.reconcileAlarms]. Idempotent:
+     * one calendar on Tendril's account afterwards, whatever was there before (audit 5.11 — this
+     * said "finds the existing local calendar rather than duplicating it" while it did the
+     * opposite), and every per-Entry write below is itself an upsert. */
     suspend fun ensureCalendarAndBackfill() {
         if (!hasPermission()) return
-        ensureCalendar() ?: return
+        val calendarId = ensureCalendar() ?: return
+        // Any other calendar on Tendril's account is one a lost preference left behind (audit
+        // 5.11): visible, holding events nothing tracks, each shown beside its live twin.
+        withContext(Dispatchers.IO) { tendrilCalendarIds().filter { it != calendarId }.forEach(::deleteCalendar) }
         val exceptionsByBase = entryDao.getAllExceptions().groupBy { it.originalEntryId }
         entryDao.getAll()
             .filter { it.deletedAt == null && it.startDate != null && it.source != EntrySource.GOOGLE_CALENDAR }
@@ -93,9 +97,36 @@ class CalendarProviderSync(
      * [com.tendril.app.domain.AndroidEntryScheduleCoordinator]. This is where AlarmScheduler
      * puts its own equivalent check.
      */
+    /**
+     * The calendar is known only by the id [preferences] holds, and that can be lost — the app's
+     * data cleared, a reinstall after an uninstall. Until 2026-09-26 (audit 5.11) a lost id meant
+     * a new calendar beside the old, which stayed visible with every event it held: the phone on
+     * that date had eight. When the id is gone, so is any record of which events are whose, so
+     * every calendar on Tendril's account is replaced by one fresh one and the backfill re-mirrors
+     * into it. Only Tendril's own local account is touched.
+     */
     private suspend fun ensureCalendar(): Long? = withContext(Dispatchers.IO) {
         preferences.calendarId.value?.takeIf { calendarStillExists(it) }
-            ?: createCalendar()?.also { preferences.setCalendarId(it) }
+            ?: run {
+                tendrilCalendarIds().forEach(::deleteCalendar)
+                createCalendar()?.also { preferences.setCalendarId(it) }
+            }
+    }
+
+    private fun tendrilCalendarIds(): List<Long> {
+        val cursor = provider {
+            context.contentResolver.query(
+                CalendarContract.Calendars.CONTENT_URI, arrayOf(CalendarContract.Calendars._ID),
+                "${CalendarContract.Calendars.ACCOUNT_NAME} = ? AND ${CalendarContract.Calendars.ACCOUNT_TYPE} = ?",
+                arrayOf(ACCOUNT_NAME, CalendarContract.ACCOUNT_TYPE_LOCAL), null,
+            )
+        } ?: return emptyList()
+        return cursor.use { c -> generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList() }
+    }
+
+    /** As the sync adapter, so the provider deletes the calendar's events with it. */
+    private fun deleteCalendar(id: Long) {
+        provider { context.contentResolver.delete(asSyncAdapter(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, id)), null, null) }
     }
 
     private fun calendarStillExists(id: Long): Boolean {
