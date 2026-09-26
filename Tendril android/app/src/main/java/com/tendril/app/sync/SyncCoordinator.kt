@@ -201,6 +201,12 @@ class SyncCoordinator(
                 merge.touchedEntryIds.forEach { id ->
                     entryDao.getById(id)?.let { container.entryScheduleCoordinator.onEntryChanged(it) }
                 }
+                // Habits by the same rule (audit 5.3): a habit merged in, or changed on the other
+                // device, was never re-armed here — its reminder kept the old time, or never rang.
+                val habitDao = container.database.habitDao()
+                merge.touchedHabitIds.forEach { id ->
+                    habitDao.getById(id)?.let { container.entryScheduleCoordinator.onHabitChanged(it) }
+                }
                 // A quarantined record is a successful pass, not a failed one — the merge did
                 // everything it safely could — but it must not be silent. A device that quietly
                 // drops a peer's page on every pass looks exactly like a device in sync, and the

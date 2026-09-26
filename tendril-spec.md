@@ -168,6 +168,11 @@ second copy of the reasoning.
 | 2026-09-25 (audit 5a.6: five more writes claimed edits; a habit sheet undid check-ins) | §9.4 amended. Each of these touched a page or stamped a record with nothing changed: Canvas `setEdgeLabel` (re-sent per keystroke) and `cycleEdgeDirection` or `setEdgeLabel` on an edge already gone; `PageDatabaseViewModel.setHue` with the current hue; `LabelMembership.bindLabel` with the current label; `EntryEditor.save` unchanged; and `TasksHabitsViewModel.updateHabit` untouched. Each now writes only when something differs. The Canvas and database screens gained a `launchAndTouchIfChanged` beside `launchAndTouch`. `updateHabit` also laid the sheet's fields over the habit as it was when the sheet opened, so a check-in made meanwhile lost its streak; it now edits the live row. `addView`'s early return was reviewed and left: it needs a database page with no database row. Shared, so both apps. `WritePathSyncTest` +2, `LabelMembershipTest` +1, `EntryEditorTest` +1, `TasksHabitsUpdateHabitTest` (new) +2, all red first. | §9.4 |
 | 2026-09-25 (audit 5a.7: a replaced picture never left the device) | §9.4 amended. A picture's folder name is `<block uid>.<extension>`, the folder copy is written only when absent, and a device fetches only for a block with no local picture. So replacing a picture in place was never published and never fetched, whatever its type; the audit row said same extension only, and the test used that case. `setBlockImage` now puts a replacement into a new block in the same place (new uid; same caption, order and parent; children re-pointed) and deletes the old one, which the existing rules and older builds already handle. Chosen over versioned file names, which older builds would not have fetched, and over a content hash in the record, which needs publish-state tracking. The costs are recorded: undo before the swap no longer reaches the old block, and the old block's folder file stays as any deleted image block's does; block references can't name image blocks. Shared, so both apps. `WritePathSyncTest` +1, red first; its devices gained the folder orchestrator and a shared image store. | §9.4 |
 | 2026-09-25 (audit 5a.8: saving the entry sheet undid what landed while it was open) | §3.2 amended (the edit path). `EntryEditor.save` wrote the sheet's whole copy of the entry, taken when the sheet opened. A tick, a trash or a Google push that landed meanwhile was undone, and a trashed entry was restored. Found while fixing 5a.6's `updateHabit`, which had the same shape, and recorded as a hypothesis first. `save` now lays the sheet's ten editable fields over the live row; status, trash, the Google id and the links are read from the row. The other caller, `Review.someday`, edits dates only, so it is unaffected. Shared, so both apps. `EntryEditorTest` +2, both red first (DONE read PENDING; the trashed entry's `deletedAt` read null). | §3.2 |
+| 2026-09-26 (audit 5.1–5.3: phone alarms that outlived their reason, and habits never re-armed) | §9.7 amended. **5.1** `AlarmScheduler.cancelAllFor` found reminders through `getForEntry`, which skips tombstones, so a reminder deleted on the other device kept its alarm and rang. The new `ReminderDao.getAllForEntry` is for cancelling only. **5.2** `reconcileAlarms` visits only schedulable entries, so an import that made an entry done, dateless or trashed left its alarm. `importAdditive` now hands `rearmAlarms` the ids it changed, and each is rescheduled. `ResolveEntryUseCase.resolve` no longer logs a second completion for a task already resolved the same way. **5.3** `reconcileAlarms` (launch, boot, import) re-armed no habit, so after any reboot no habit reminder rang; it now re-arms every habit. The merge reports `touchedHabitIds`, which `SyncCoordinator` re-arms, and Trash restore re-arms through `restoreHabitsFromTrash`. Proved on the phone by `ReminderRearmInstrumentedTest` (two red first, one control; the whole on-device suite is 22/22 after). JVM tests: `PortableArchiveTest` +1, `HabitRearmTest` (new) +2, `ResolveEntryUseCaseTest` (new) +2, each red first except one control. Still open: a stale overdue notification's Done on a recurring task completes the occurrence it has moved to. | §9.7 |
+| 2026-09-26 (audit 5.4: a moved occurrence moved the whole series on the phone's calendar) | §9.11 amended. The walk refuted the audit's prediction and found worse. `EntryEditor.move`'s THIS_ONE override was a copy of its series, `providerEventId` and `googleEventId` included, so mirroring it updated the series' own event, and every later occurrence showed on the moved weekday in the phone's calendar. The override now starts with neither id. The series' event carries an `EXDATE` per exception, written whenever the series or an exception changes. Skip rows, which were mirrored as events on the day they skip, are no longer mirrored. Pre-fix rows are repaired on their next mirror. The `EntryEditor` change is shared; the calendar mirror is Android-only. `SeriesMirrorInstrumentedTest` (phone, 2 cases, both red first), `EntryEditorTest` +1, red first. Still open: Google's side of exceptions. | §9.11 |
+| 2026-09-26 (audit 5.11: a lost preference left another Tendril calendar behind) | §9.11 amended. `CalendarProviderSync.ensureCalendar` knew its calendar only by a preference id, so each loss of the app's data created another calendar and left the old one visible with its events. The phone walked on this date had eight. A missing id now replaces every calendar on Tendril's local account with one, and the launch sweep removes extras. Android-only. `CalendarRegistrationInstrumentedTest` (phone, 2 cases, both red first). | §9.11 |
+| 2026-09-26 (audit 5.6: the edit sheet's dates in ISO) | §3.2 amended. `EntryEditSheet` rendered the event's end date and the task's Deadline with `LocalDate.toString()` beside a *When* in `dayLabel`'s day form. Walked on the phone (`2026-09-26` beside `sab 26`), fixed to `dayLabel`, re-walked (`sab 26` throughout). Composable text, which the JVM suite cannot reach; the walk is the proof. Shared, so both apps' sheets. | §3.2 |
+| 2026-09-26 (audit 5.12: a trashed series left its moved occurrence behind) | §5.5.1 amended. `ResolveEntryUseCase.trash` soft-deleted the series row alone, so a moved occurrence outlived "The whole series goes" in the Calendar and the phone's calendar app. Found on the walk's own cleanup. Exception rows now go with the series under the same `deleted_at`, and `restore` brings back exactly those. Shared, so both apps. `ResolveEntryUseCaseTest` +2, the trash case red first; re-walked, the phone's calendar held nothing after. | §5.5.1 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -2071,7 +2076,10 @@ filter rows moved into its list column on a wide window (14f·1's walk, #2).
   repeat, deadline, estimate and flag. It used to write back the sheet's whole copy from when it
   opened, so a tick, a trash or a Google push that landed while the sheet was open was undone, and
   a trashed entry came back. Status, trash, the Google id, and the parent and source links belong
-  to their own paths and are read from the row. `EntryEditorTest` +2, red first.)* The Day view is a list, not an hour grid, so dragging to another *hour* waits for the timeline
+  to their own paths and are read from the row. `EntryEditorTest` +2, red first.)*
+  *(Amended 2026-09-26, audit 5.6 — the sheet's end date and Deadline showed ISO
+  (`2026-09-26`) beside a *When* in the day form (`sab 26`); walked on the phone. Both use
+  `dayLabel` now; re-walked. `docs/critiques/phone-walk-2026-09-26-function.md`.)* The Day view is a list, not an hour grid, so dragging to another *hour* waits for the timeline
   step 7's Plan mode builds; the sheet changes the time meanwhile.)* *(**2026-09-12, step 7b:** it
   no longer waits — Plan mode's grid is that timeline, and a block dragged on it moves to the hour
   it is dropped on. See §0.6.5.)* Neither half held on this screen. Quick Add is Calendar's only write
@@ -3238,7 +3246,11 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   behind it.)* Two actions per item: **Restore**
   (clears `deleted_at`, reappears exactly where it was — same `parent_id`/`database_id`, no
   re-creation) and **Delete forever** (the actual permanent removal, with its own confirm dialog,
-  same pattern as §5.5's others).
+  same pattern as §5.5's others). *(Amended 2026-09-26, audit 5.12 — a series in Trash takes its
+  exception rows with it, stamped with the series' own `deleted_at`, and Restore brings back
+  exactly those. The confirm said "The whole series goes"; the walk found its moved occurrence
+  left live, in the Calendar and in the phone's calendar app. An exception trashed on its own
+  earlier stays in Trash. `ResolveEntryUseCaseTest` +2 (the trash case red first).)*
 - **Bulk actions (Decided 2026-08-08).** Every Trash item has a selection checkbox, plus a
   header-level "Select all" — a deliberate improvement over Notion, whose own Trash lacks this and
   makes batch cleanup a one-at-a-time chore. Selected items get the same Restore / Delete forever
@@ -4812,6 +4824,28 @@ merge and archive import alike); an archive import that makes an entry DONE or d
 armed alarm; merged and imported habits are not re-armed (build-order B5); a restored habit is not
 re-armed (§5.5.1).)*
 
+*(**Amended 2026-09-26 (audit 5.1–5.3).** Each item recorded above was proved and fixed. The
+alarm cases were proved on the phone by `ReminderRearmInstrumentedTest`, which counts alarms from
+`dumpsys alarm` and failed first; the hand-over cases by JVM tests, which also failed first.*
+
+- ***5.1.*** *A cancel now reads `ReminderDao.getAllForEntry`, which includes tombstones. Arming
+  still reads `getForEntry`, so a deleted reminder is cancelled but never armed. Before, the
+  deleted reminder's alarm stayed armed, and the receiver, which checks only the entry, rang it.*
+- ***5.2.*** *`PortableArchive.importAdditive` hands `rearmAlarms` every entry it inserted or
+  overwrote, and each one is rescheduled through the coordinator. That cancels what a done,
+  undated or trashed entry no longer rings; the sweep alone never visits those. A restore still
+  sweeps only: after its wipe every row is new, and `AUTOINCREMENT` never reuses an id. Tapping
+  Done on a task that is already done now logs nothing, where it logged a second completion.
+  Still open: a stale overdue notification's Done on a **recurring** task completes the
+  occurrence the task has since moved to, because the notification does not carry its occurrence
+  date.*
+- ***5.3, wider than recorded.*** *`reconcileAlarms` is the sweep run at every launch, after every
+  boot and after every import. It re-armed no habit at all, so **after any reboot no habit
+  reminder rang** until each habit was checked in or edited. It now re-arms every habit. The
+  folder-sync merge reports the habits it changed (`SnapshotMergeResult.touchedHabitIds`), and
+  `SyncCoordinator` re-arms them. A restore from Trash re-arms through `restoreHabitsFromTrash`.
+  The desktop's `replan()` reads every habit and every reminder, so none of this reached it.)*
+
 ### 9.8 Architecture review (2026-07-14 — Review Mode, deep-review strategy)
 
 Requested as a final audit of the Entry/recurrence/notification cluster before Phase 1. Mode:
@@ -5140,6 +5174,43 @@ account name/type; `Entry.providerEventId` never appears in a snapshot record an
 locally by every merge path (snapshot, Google pull, and `.tendril` import alike); no Entry with
 `source = GOOGLE_CALENDAR` is mirrored; and a recurring write sends `DURATION`, never `DTEND`
 alongside `RRULE`.
+
+*(**Amended 2026-09-26 (audit 5.4, from the phone walk).** Recurring series with exceptions were
+not mirrored as Tendril shows them. The audit predicted a moved occurrence showing twice; the walk
+found worse. Moving one occurrence of a weekly event (**This one**) made every later occurrence show
+on the new weekday in the phone's calendar. The cause was `EntryEditor.move`, which built the
+override row as a copy of its series with `providerEventId` included, so mirroring the override
+updated the series' own event.*
+
+*Three defects were fixed:*
+
+- *An override no longer inherits its series' `providerEventId` or `googleEventId`.*
+- *The series' event carries an `EXDATE` for each exception's original occurrence, written whenever
+  the series or one of its exceptions changes.*
+- *A skip row is never mirrored. It used to put an event on the very day it skipped.*
+
+*Rows written before the fix are repaired on their next mirror. Their provider id is the device's
+own and never synced, so it is dropped when it equals the series'. The walk's series was repaired
+this way, verified from the provider.*
+
+*Tests: `SeriesMirrorInstrumentedTest` on the phone (two cases, both failed first) and
+`EntryEditorTest` +1, which also failed first.*
+
+*Still open, needing Google's recurring-exception API: pushed to Google, a moved occurrence is a
+separate event, and the Google series still holds the original date. Rows written before the fix
+also still carry the series' `googleEventId`.)*
+
+*(**Amended 2026-09-26 (audit 5.11, found on the phone walk).** The phone held **eight** calendars
+named Tendril, all visible, two of them still holding events. `ensureCalendar` knew its calendar
+only by the id kept in the app's own preferences, so every loss of those created another. A loss
+comes from clearing the app's data, or reinstalling after an uninstall. The old calendar stayed,
+and the phone's calendar app showed its entries beside their live twins. The KDoc said it "finds
+the existing local calendar rather than duplicating it". Now, when the id is missing, every
+calendar on Tendril's own local account is replaced by one fresh one, into which the backfill
+re-mirrors; the ids that would say which old event is whose were lost with the preference. The
+launch sweep also removes any other calendar on that account. `CalendarRegistrationInstrumentedTest`
+(two cases, both failed first; clearing the preferences reproduced a ninth calendar live) pins it.
+After the fix, the phone holds one.)*
 
 ---
 

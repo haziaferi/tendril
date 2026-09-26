@@ -124,7 +124,7 @@ class PortableArchive(
      * open as well as on boot), so calling it once more at the end of an import costs a sweep and
      * risks nothing.
      */
-    private val rearmAlarms: suspend () -> Unit,
+    private val rearmAlarms: suspend (changedEntryIds: Collection<Long>) -> Unit,
     /**
      * §3.1.2's View-Only toggle, as the user decided it: the lock is absolute and it covers
      * Settings. [importAdditive] and [restoreFromBackup] are the largest create and destroy
@@ -299,8 +299,10 @@ class PortableArchive(
         // After the pages, necessarily — see [restoreImages].
         val imagesRestored = restoreImages(archive.images)
         decodeRelations(contents).takeIf { it.isNotEmpty() }?.let { pagesSyncEngine.mergeRelations(it) }
-        contents[FILE_ENTRIES_ACTIVE]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
-        contents[FILE_ENTRIES_ARCHIVED]?.let { quarantined += applyEntries(decodeEntries(it)); entriesFound++ }
+        // Audit 5.2 — every entry this import inserts or overwrites, for the re-arm below.
+        val changedEntryIds = mutableSetOf<Long>()
+        contents[FILE_ENTRIES_ACTIVE]?.let { quarantined += applyEntries(decodeEntries(it), changedEntryIds); entriesFound++ }
+        contents[FILE_ENTRIES_ARCHIVED]?.let { quarantined += applyEntries(decodeEntries(it), changedEntryIds); entriesFound++ }
         contents[FILE_HABITS]?.let { quarantined += applyHabits(decodeHabits(it)); habitsFound++ }
         // After the entries, necessarily: both resolve `entryUid` against rows applyEntries
         // may only just have inserted.
@@ -311,7 +313,7 @@ class PortableArchive(
         quarantined += applyTimeLogs(decodeTimeLogs(contents[FILE_TIME_LOGS]))
         // §9.7 — see [rearmAlarms]. Last, after every apply* above: the sweep arms from the rows
         // as they now stand, so anything earlier would arm the state this import is replacing.
-        rearmAlarms()
+        rearmAlarms(changedEntryIds)
         ImportResult(
             hadManifest = contents.containsKey(MANIFEST_NAME),
             imagesRestored = imagesRestored,
@@ -400,8 +402,8 @@ class PortableArchive(
         pagesSyncEngine.mergePages(pageRecords)
         restoreImages(archive.images)
         if (relations.isNotEmpty()) pagesSyncEngine.mergeRelations(relations)
-        applyEntries(activeEntries)
-        applyEntries(archivedEntries)
+        applyEntries(activeEntries, mutableSetOf())
+        applyEntries(archivedEntries, mutableSetOf())
         applyHabits(habits)
         applyReminders(reminders)
         applyCompletions(completions)
@@ -410,8 +412,10 @@ class PortableArchive(
         applyTimeLogs(timeLogs)
         // §9.7 — see [rearmAlarms]. The wipe above cancelled nothing and the applies armed
         // nothing, so without this the device holds a full set of restored reminders and no
-        // alarm for any of them until the next cold start.
-        rearmAlarms()
+        // alarm for any of them until the next cold start. No changed ids: after the wipe every
+        // restored row is new, so the sweep reaches each one that can ring, and a wiped row's
+        // leftover alarm finds no entry when it fires (AUTOINCREMENT never reuses an id).
+        rearmAlarms(emptyList())
     }
 
     // Decode and apply are split so [restoreFromBackup] can prove an archive is readable
@@ -582,7 +586,8 @@ class PortableArchive(
      * count is returned rather than logged so the caller can say so out loud (§9.4's rule that a
      * sync problem is surfaced, not swallowed).
      */
-    private suspend fun applyEntries(records: List<EntrySnapshotRecord>): Int {
+    /** @param changed receives the local id of every entry inserted or overwritten (audit 5.2). */
+    private suspend fun applyEntries(records: List<EntrySnapshotRecord>, changed: MutableCollection<Long>): Int {
         if (records.isEmpty()) return 0
         val uidToId = entryDao.getAll().associate { it.uid to it.id }.toMutableMap()
         val rowUidToId = pageDao.getAll().associate { it.uid to it.id }
@@ -603,7 +608,7 @@ class PortableArchive(
             }
             val local = entryDao.getByUid(record.uid)
             if (local == null) {
-                uidToId[record.uid] = entryDao.insert(decoded)
+                uidToId[record.uid] = entryDao.insert(decoded).also { changed += it }
             } else if (remoteUpdatedAt.isAfter(local.updatedAt)) {
                 // providerEventId is per-device only (§9.11) and isn't in the snapshot record,
                 // so `toEntity` defaults it to null — a whole-row update then wrote that null
@@ -612,6 +617,7 @@ class PortableArchive(
                 // paths (SnapshotSyncOrchestrator, GoogleCalendarSyncEngine) already preserve
                 // it; this one was the outlier.
                 entryDao.update(decoded.copy(id = local.id, providerEventId = local.providerEventId))
+                changed += local.id
             }
         }
         return quarantined

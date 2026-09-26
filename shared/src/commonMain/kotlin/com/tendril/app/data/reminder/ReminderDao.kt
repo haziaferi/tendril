@@ -16,6 +16,13 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE entryId = :entryId AND deletedAt IS NULL")
     suspend fun getForEntry(entryId: Long): List<Reminder>
 
+    /** Every reminder the entry has ever had, tombstones included — for **cancelling** only
+     * (audit 5.1). An alarm armed for a reminder later deleted on another device arrives here as
+     * a tombstone; a cancel that read [getForEntry] could not see it, so it stayed armed and rang.
+     * Arming still reads [getForEntry], so a tombstone is never scheduled. */
+    @Query("SELECT * FROM reminders WHERE entryId = :entryId")
+    suspend fun getAllForEntry(entryId: Long): List<Reminder>
+
     /** Every reminder, tombstoned ones included — deliberately unfiltered, unlike the two reads
      * above. §9.4's write pass rewrites `reminders.json` in full from these rows, so a tombstone
      * that stopped travelling would let the reminder back in on the next device to merge, which
@@ -36,10 +43,9 @@ interface ReminderDao {
     @Query("DELETE FROM reminders")
     suspend fun deleteAll()
 
-    /** Soft, not hard — see [Reminder.deletedAt]. Both reads above filter on
-     * `deletedAt IS NULL`, which is what makes this safe to swap in underneath every existing
-     * caller: a tombstoned reminder cannot reach [com.tendril.app.notifications.AlarmScheduler]
-     * through any query it already uses, so no call site has to remember to exclude it. */
+    /** Soft, not hard — see [Reminder.deletedAt]. [observeForEntry] and [getForEntry] filter on
+     * `deletedAt IS NULL`, so a tombstoned reminder is never *armed*; [getAllForEntry] is what lets
+     * the scheduler still *cancel* one (audit 5.1). */
     @Query("UPDATE reminders SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun softDelete(id: Long, deletedAt: java.time.Instant)
 }

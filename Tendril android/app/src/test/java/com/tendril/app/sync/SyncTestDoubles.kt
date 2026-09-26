@@ -184,6 +184,9 @@ class FakeReminderDao(seed: List<Reminder> = emptyList()) : ReminderDao {
     override suspend fun getForEntry(entryId: Long): List<Reminder> =
         rows.values.filter { it.entryId == entryId && it.deletedAt == null }
 
+    override suspend fun getAllForEntry(entryId: Long): List<Reminder> =
+        rows.values.filter { it.entryId == entryId }
+
     override fun observeForEntry(entryId: Long): Flow<List<Reminder>> =
         flowOf(rows.values.filter { it.entryId == entryId && it.deletedAt == null })
 

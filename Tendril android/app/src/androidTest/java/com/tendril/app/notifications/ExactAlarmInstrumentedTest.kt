@@ -49,6 +49,7 @@ class ExactAlarmInstrumentedTest {
     private class EmptyReminderDao : ReminderDao {
         override suspend fun insert(reminder: Reminder): Long = 1L
         override suspend fun getForEntry(entryId: Long): List<Reminder> = emptyList()
+        override suspend fun getAllForEntry(entryId: Long): List<Reminder> = emptyList()
         override fun observeForEntry(entryId: Long): Flow<List<Reminder>> = flowOf(emptyList())
         override suspend fun softDelete(id: Long, deletedAt: Instant) = Unit
         override suspend fun getAll(): List<Reminder> = emptyList()

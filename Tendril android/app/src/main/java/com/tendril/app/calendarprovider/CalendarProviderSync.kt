@@ -69,15 +69,20 @@ class CalendarProviderSync(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
     /** Call once permission is granted — on first grant, and again on every boot/app-open
-     * reconciliation sweep alongside [com.tendril.app.notifications.reconcileAlarms]. Fully
-     * idempotent: finds the existing local calendar rather than duplicating it, and every
-     * per-Entry write below is itself an upsert. */
+     * reconciliation sweep alongside [com.tendril.app.notifications.reconcileAlarms]. Idempotent:
+     * one calendar on Tendril's account afterwards, whatever was there before (audit 5.11 — this
+     * said "finds the existing local calendar rather than duplicating it" while it did the
+     * opposite), and every per-Entry write below is itself an upsert. */
     suspend fun ensureCalendarAndBackfill() {
         if (!hasPermission()) return
-        ensureCalendar() ?: return
+        val calendarId = ensureCalendar() ?: return
+        // Any other calendar on Tendril's account is one a lost preference left behind (audit
+        // 5.11): visible, holding events nothing tracks, each shown beside its live twin.
+        withContext(Dispatchers.IO) { tendrilCalendarIds().filter { it != calendarId }.forEach(::deleteCalendar) }
+        val exceptionsByBase = entryDao.getAllExceptions().groupBy { it.originalEntryId }
         entryDao.getAll()
             .filter { it.deletedAt == null && it.startDate != null && it.source != EntrySource.GOOGLE_CALENDAR }
-            .forEach { upsertEntry(it) }
+            .forEach { upsertEntry(it, exceptionsByBase[it.id].orEmpty()) }
     }
 
     /**
@@ -92,9 +97,36 @@ class CalendarProviderSync(
      * [com.tendril.app.domain.AndroidEntryScheduleCoordinator]. This is where AlarmScheduler
      * puts its own equivalent check.
      */
+    /**
+     * The calendar is known only by the id [preferences] holds, and that can be lost — the app's
+     * data cleared, a reinstall after an uninstall. Until 2026-09-26 (audit 5.11) a lost id meant
+     * a new calendar beside the old, which stayed visible with every event it held: the phone on
+     * that date had eight. When the id is gone, so is any record of which events are whose, so
+     * every calendar on Tendril's account is replaced by one fresh one and the backfill re-mirrors
+     * into it. Only Tendril's own local account is touched.
+     */
     private suspend fun ensureCalendar(): Long? = withContext(Dispatchers.IO) {
         preferences.calendarId.value?.takeIf { calendarStillExists(it) }
-            ?: createCalendar()?.also { preferences.setCalendarId(it) }
+            ?: run {
+                tendrilCalendarIds().forEach(::deleteCalendar)
+                createCalendar()?.also { preferences.setCalendarId(it) }
+            }
+    }
+
+    private fun tendrilCalendarIds(): List<Long> {
+        val cursor = provider {
+            context.contentResolver.query(
+                CalendarContract.Calendars.CONTENT_URI, arrayOf(CalendarContract.Calendars._ID),
+                "${CalendarContract.Calendars.ACCOUNT_NAME} = ? AND ${CalendarContract.Calendars.ACCOUNT_TYPE} = ?",
+                arrayOf(ACCOUNT_NAME, CalendarContract.ACCOUNT_TYPE_LOCAL), null,
+            )
+        } ?: return emptyList()
+        return cursor.use { c -> generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList() }
+    }
+
+    /** As the sync adapter, so the provider deletes the calendar's events with it. */
+    private fun deleteCalendar(id: Long) {
+        provider { context.contentResolver.delete(asSyncAdapter(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, id)), null, null) }
     }
 
     private fun calendarStillExists(id: Long): Boolean {
@@ -122,9 +154,19 @@ class CalendarProviderSync(
         return ContentUris.parseId(result)
     }
 
-    suspend fun upsertEntry(entry: Entry) {
+    /**
+     * @param exceptions [entry]'s exception rows when it is a series (§4.1). Each one's original
+     * date becomes an `EXDATE` on the series' event: a moved occurrence is mirrored as its own
+     * event, and a skipped one not at all, so without them the system calendar showed a moved
+     * occurrence on both days and a skipped one anyway (audit 5.4). Pass them whenever the series
+     * is written, or a re-upsert clears them.
+     */
+    suspend fun upsertEntry(written: Entry, exceptions: List<Entry> = emptyList()) {
         if (!hasPermission()) return
-        if (entry.deletedAt != null || entry.startDate == null || entry.source == EntrySource.GOOGLE_CALENDAR) {
+        val entry = withoutSeriesRow(written)
+        // A skip row is a tombstone for one occurrence, not an event (audit 5.4): mirrored, it put
+        // an event on the very day it skipped. It reaches the calendar only as its series' EXDATE.
+        if (entry.deletedAt != null || entry.startDate == null || entry.source == EntrySource.GOOGLE_CALENDAR || entry.isExceptionSkip == true) {
             // No longer (or never) Provider-eligible — remove any stale mirrored copy.
             if (entry.providerEventId != null) removeEntry(entry)
             return
@@ -134,7 +176,7 @@ class CalendarProviderSync(
         // a lambda whose last expression isn't Unit would not be.
         val calendarId = ensureCalendar() ?: return
         withContext(Dispatchers.IO) {
-            val values = entry.toCalendarValues(calendarId)
+            val values = entry.toCalendarValues(calendarId, exceptions)
             val existingId = entry.providerEventId
             if (existingId != null && eventStillExists(existingId)) {
                 provider { context.contentResolver.update(asSyncAdapter(eventUri(existingId)), values, null, null) }
@@ -146,6 +188,20 @@ class CalendarProviderSync(
                 }
             }
         }
+    }
+
+    /**
+     * An exception row written before 2026-09-26 was a copy of its series, `providerEventId`
+     * included (audit 5.4), so upserting it updated the *series'* event with this one occurrence.
+     * The id is this device's own and never synced, so it is dropped here, once, and the row gets
+     * an event of its own on this upsert.
+     */
+    private suspend fun withoutSeriesRow(entry: Entry): Entry {
+        val own = entry.providerEventId ?: return entry
+        val seriesId = entry.originalEntryId ?: return entry
+        if (entryDao.getById(seriesId)?.providerEventId != own) return entry
+        entryDao.setProviderEventId(entry.id, null)
+        return entry.copy(providerEventId = null)
     }
 
     suspend fun removeEntry(entry: Entry) {
@@ -187,7 +243,7 @@ class CalendarProviderSync(
         .build()
 }
 
-private fun Entry.toCalendarValues(calendarId: Long): ContentValues {
+private fun Entry.toCalendarValues(calendarId: Long, exceptions: List<Entry>): ContentValues {
     val zone = ZoneId.systemDefault()
     val date = requireNotNull(startDate)
     // Bound to a local val, not used as `startTime` directly below: a nullable property
@@ -232,5 +288,19 @@ private fun Entry.toCalendarValues(calendarId: Long): ContentValues {
                 put(CalendarContract.Events.DTEND, endInstant.toEpochMilli())
             }
         }
+        if (rrule != null) {
+            // Each exception's original occurrence, as the instant that occurrence starts in UTC —
+            // the form the provider matches instances against. Put even when empty, so an
+            // exception deleted since clears what the last write left.
+            val exdates = exceptions.mapNotNull { it.originalOccurrenceDate }.distinct().sorted().map { day ->
+                val start = if (time == null) day.atStartOfDay(ZoneOffset.UTC).toInstant()
+                else LocalDateTime.of(day, time).atZone(zone).toInstant()
+                EXDATE_FORMAT.format(start.atOffset(ZoneOffset.UTC))
+            }
+            if (exdates.isEmpty()) putNull(CalendarContract.Events.EXDATE)
+            else put(CalendarContract.Events.EXDATE, exdates.joinToString(","))
+        }
     }
 }
+
+private val EXDATE_FORMAT: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")

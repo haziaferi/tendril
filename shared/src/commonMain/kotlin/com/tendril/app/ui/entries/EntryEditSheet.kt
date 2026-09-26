@@ -130,7 +130,7 @@ fun EntryEditSheet(
                     }
                     if (endDate != null || endTime != null) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = { picker = Picker.END_DATE }) { Text((endDate ?: date).toString()) }
+                            TextButton(onClick = { picker = Picker.END_DATE }) { Text(dayLabel(endDate ?: date ?: LocalDate.now(), LocalDate.now())) }
                             if (time != null) TextButton(onClick = { picker = Picker.END_TIME }) { Text(endTime?.toString() ?: "End time") }
                         }
                     }
@@ -147,7 +147,10 @@ fun EntryEditSheet(
                 LabelledRow("Deadline") {
                     Switch(checked = deadline != null, onCheckedChange = { on -> deadline = if (on) (deadline ?: date ?: LocalDate.now()) else null })
                 }
-                if (deadline != null) TextButton(onClick = { picker = Picker.DEADLINE }) { Text(deadline.toString()) }
+                // Audit 5.6 — the day form the *When* above uses (F·P4), not ISO; walked 2026-09-26.
+                // A local val: `deadline` is a delegated state property, which does not smart-cast.
+                val shownDeadline = deadline
+                if (shownDeadline != null) TextButton(onClick = { picker = Picker.DEADLINE }) { Text(dayLabel(shownDeadline, LocalDate.now())) }
                 TendrilField(
                     value = estimateMinutes,
                     onValueChange = { if (it.all(Char::isDigit)) estimateMinutes = it },
