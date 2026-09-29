@@ -147,6 +147,7 @@ class MainActivity : FragmentActivity() {
             ) { results ->
                 if (results.values.all { it }) {
                     lifecycleScope.launch { container.calendarProviderSync.ensureCalendarAndBackfill() }
+                    container.systemCalendarSync.start(applicationContext)
                 }
             }
             // Asked at most once per process. Re-launching on every cold start after a denial
@@ -155,8 +156,11 @@ class MainActivity : FragmentActivity() {
             LaunchedEffect(notificationsSettled) {
                 if (!notificationsSettled) return@LaunchedEffect
                 when {
-                    container.calendarProviderSync.hasPermission() ->
+                    container.calendarProviderSync.hasPermission() -> {
                         container.calendarProviderSync.ensureCalendarAndBackfill()
+                        // §9.12 — read the ticked calendars now, and whenever they change.
+                        container.systemCalendarSync.start(applicationContext)
+                    }
                     !calendarAsked -> {
                         calendarAsked = true
                         calendarPermissionLauncher.launch(

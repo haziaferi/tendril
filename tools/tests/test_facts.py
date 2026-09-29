@@ -49,6 +49,30 @@ def test_audit_rows_separate_unproven_from_proved_but_unfixed(tmp_path):
     assert rows["fixed_or_clean"] == 2
 
 
+def test_a_hypothesis_table_is_read_by_its_finding_not_by_what_would_settle_it(tmp_path):
+    # Found 2026-09-29: an audit's hypothesis table has no Status column — its fourth column is
+    # "Would settle it" — so reading that column as the status counted every open hypothesis as
+    # fixed, and a remedy that said "not changed from here" as proved-but-unfixed.
+    doc = tmp_path / "audit.md"
+    doc.write_text(
+        "| # | Where | Finding | Status | Proof |\n"
+        "|---|---|---|---|---|\n"
+        "| 1.1 | `a` | x | executed — fixed | t |\n"
+        "\n"
+        "| # | Where | Finding | Would settle it |\n"
+        "|---|---|---|---|\n"
+        "| 5.1 | `b` | y. **Fixed 2026-09-26:** z | a test |\n"
+        "| 5.2 | `c` | open, nothing done | a walk (the setting is not changed from here) |\n"
+        "| 5.3 | `d` | **Pinned, not changed:** the ratio | a test |\n"
+        "| 5.4 | `e` | **Fixed:** w. Recorded, not changed: v | t |\n",
+        encoding="utf-8")
+    rows = facts.audit_rows(str(doc))
+    assert rows["total"] == 5
+    assert rows["hypothesis"] == ["5.2"]
+    assert rows["not_changed"] == ["5.3"]
+    assert rows["fixed_or_clean"] == 3
+
+
 def test_junit_counts_sum_tests_and_failures(tmp_path):
     root = str(tmp_path)
     write(root, "r/TEST-a.xml", b'<testsuite name="a" tests="3" skipped="0" failures="1" errors="0">')

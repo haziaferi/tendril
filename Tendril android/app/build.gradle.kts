@@ -91,6 +91,10 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.glance.appwidget)
+    // Unused since §9.12 retired the Google engine (2026-09-29), and kept only because the offline
+    // Gradle cache cannot serve the graph without it: removed, the runtime classpath resolves
+    // lifecycle-livedata differently and `processDebugNavigationResources` fails offline. Remove it
+    // on the next build that can reach dl.google.com.
     implementation(libs.play.services.auth)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation("junit:junit:4.13.2")

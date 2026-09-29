@@ -105,6 +105,26 @@ class EntryEditorTest {
         assertEquals("the series keeps both", 221L, entryDao.getById(base.id)!!.providerEventId)
     }
 
+    /** §9.12 — the sheet's *Calendar* field is one of the fields it edits, so a save carries it. */
+    @Test
+    fun `a save carries the calendar the sheet chose`() = runBlocking {
+        val sheet = event("Yoga", monday, LocalTime.of(9, 0))
+
+        editor.save(sheet.copy(calendarKey = "bitfire.at.davdroid|me|3"), at.plusSeconds(60))
+
+        assertEquals("bitfire.at.davdroid|me|3", entryDao.getById(sheet.id)!!.calendarKey)
+    }
+
+    /** A task has no calendar (§9.12: CalDAV event calendars hold no tasks). */
+    @Test
+    fun `an event switched to a task leaves its calendar`() = runBlocking {
+        val sheet = stored(event("Yoga", monday, LocalTime.of(9, 0)).copy(id = 0, uid = "in-cal", calendarKey = "bitfire.at.davdroid|me|3"))
+
+        editor.save(sheet.copy(kind = EntryKind.TASK), at.plusSeconds(60))
+
+        assertEquals(null, entryDao.getById(sheet.id)!!.calendarKey)
+    }
+
     @Test
     fun `switching an event to a task drops the span and gains a status`() = runBlocking {
         val e = event("Lunch", monday, LocalTime.of(12, 0), LocalTime.of(13, 0), rule = RecurrenceRule.Fixed("FREQ=WEEKLY"))

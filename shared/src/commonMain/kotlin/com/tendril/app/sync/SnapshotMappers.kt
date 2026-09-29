@@ -53,6 +53,7 @@ fun Entry.toSnapshot(idToUid: Map<Long, String>, rowIdToUid: Map<Long, String>):
     deletedAt = deletedAt?.toEpochMilli(),
     source = source.name,
     googleEventId = googleEventId,
+    calendarKey = calendarKey,
     createdAt = createdAt.toEpochMilli(),
     updatedAt = updatedAt.toEpochMilli(),
 )
@@ -142,6 +143,7 @@ fun EntrySnapshotRecord.toEntity(uidToId: Map<String, Long>, rowUidToId: Map<Str
     // an origin this build doesn't know is safest read as the one that grants none.
     source = enumOrNull<EntrySource>(source) ?: EntrySource.MANUAL,
     googleEventId = googleEventId,
+    calendarKey = calendarKey,
     createdAt = Instant.ofEpochMilli(createdAt),
     updatedAt = Instant.ofEpochMilli(updatedAt),
 )

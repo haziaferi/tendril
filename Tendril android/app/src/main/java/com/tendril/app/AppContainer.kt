@@ -3,6 +3,11 @@ package com.tendril.app
 import com.tendril.app.sync.AndroidLocalImageStore
 import android.content.Context
 import com.tendril.app.calendarprovider.CalendarProviderSync
+import com.tendril.app.calendarprovider.AndroidCalendarChoices
+import com.tendril.app.calendarprovider.CalendarReadBack
+import com.tendril.app.calendarprovider.SystemCalendarSync
+import com.tendril.app.calendarprovider.SystemCalendars
+import com.tendril.app.storage.SystemCalendarPreferences
 import com.tendril.app.data.TendrilDatabase
 import com.tendril.app.data.openTendrilDatabase
 import com.tendril.app.domain.AndroidEntryScheduleCoordinator
@@ -18,14 +23,11 @@ import com.tendril.app.markdown.MarkdownExporter
 import com.tendril.app.domain.ResolveEntryUseCase
 import com.tendril.app.domain.TemplateManager
 import com.tendril.app.domain.ViewLockState
-import com.tendril.app.googlecalendar.GoogleCalendarAuthManager
-import com.tendril.app.googlecalendar.GoogleCalendarSyncEngine
 import com.tendril.app.notifications.AlarmScheduler
 import com.tendril.app.notifications.reconcileAlarms
 import com.tendril.app.notionimport.NotionImporter
 import com.tendril.app.storage.AppLockPreferences
 import com.tendril.app.storage.CalendarProviderPreferences
-import com.tendril.app.storage.GoogleCalendarPreferences
 import com.tendril.app.storage.AndroidAiKeyStore
 import com.tendril.app.storage.SecretStore
 import com.tendril.app.storage.SyncFolderManager
@@ -69,6 +71,17 @@ class AppContainer(context: Context) {
     val entryScheduleCoordinator =
         AndroidEntryScheduleCoordinator(alarmScheduler, calendarProviderSync, database.entryDao())
     val resolveEntryUseCase = ResolveEntryUseCase(database.entryDao(), database.entryCompletionDao(), entryScheduleCoordinator)
+    /** §9.12 — calendars a sync app (DAVx5, the Google account) keeps on this phone. */
+    val systemCalendars = SystemCalendars(context)
+    val systemCalendarPreferences = SystemCalendarPreferences(context)
+    val systemCalendarSync = SystemCalendarSync(
+        idForKey = systemCalendars::idForKey,
+        readBackFor = { CalendarReadBack(database.entryDao(), database.calendarLinkDao(), systemCalendars, entryScheduleCoordinator, resolveEntryUseCase) },
+        ticked = { systemCalendarPreferences.ticked.value },
+        setTicked = systemCalendarPreferences::setTicked,
+        linkDao = database.calendarLinkDao(),
+        hasPermission = calendarProviderSync::hasPermission,
+    ).also { sync -> entryScheduleCoordinator.onCalendarEntryChanged = sync::requestSync }
     val pageContentRepository = PageContentRepository(database.pageDao(), database.blockDao(), database.pageFtsDao(), database.blockFtsDao())
     val purgeRegistry = PurgeRegistry(
         database.purgedRecordDao(), database.pageDao(), database.entryDao(), database.habitDao(),
@@ -139,20 +152,8 @@ class AppContainer(context: Context) {
     val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao())
     /** §0.6.5 — the notification's Stop action and the shade's chronometer share this with the UI. */
     val timeTracker = TimeTracker(database.timeLogDao())
-    val googleCalendarPreferences = GoogleCalendarPreferences(context)
-    // `by lazy`, not an eager val: GoogleCalendarAuthManager's constructor calls
-    // Identity.getAuthorizationClient(...), so an eager one built a Play Services
-    // authorization client on every cold start whether or not Google Calendar had ever been
-    // connected. No network call was made by that — but §3.5 states the stronger property
-    // outright ("no client/library is constructed at startup"), and this is what makes it true.
-    val googleCalendarAuthManager by lazy { GoogleCalendarAuthManager(context, googleCalendarPreferences) }
-    // Lazy for the same reason — an eager engine forces the auth manager above, which would
-    // put the Play Services client straight back into the startup path.
-    val googleCalendarSyncEngine by lazy {
-        GoogleCalendarSyncEngine(
-            database.entryDao(), googleCalendarAuthManager, googleCalendarPreferences, entryScheduleCoordinator,
-        )
-    }
+    /** §9.12's *Calendar* field on the phone. */
+    val calendarChoices = AndroidCalendarChoices(systemCalendars, systemCalendarPreferences)
     // audit 4.3 — checkbox-only mode draws over the keyguard, so it must refuse to turn on at
     // all when App Lock is the thing standing in front of the app.
     val checkboxOnlyState = CheckboxOnlyState { appLockPreferences.enabled.value }

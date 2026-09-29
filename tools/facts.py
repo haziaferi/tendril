@@ -51,14 +51,29 @@ def audit_rows(path: str) -> dict:
     """Rows of an audit table, by what their status proves. "Open" in prose has meant both
     *unproven* and *unfixed*; these are kept apart."""
     hyp, unchanged, done, total = [], [], 0, 0
+    # A hypothesis table has no Status column: its fourth is "Would settle it", and a row's
+    # status is whatever its Finding says has since happened to it.
+    settle_table = False
     with open(path, encoding="utf-8") as f:
         for line in f:
+            if line.startswith("| # |"):
+                settle_table = "would settle it" in line.lower()
+                continue
             m = ROW.match(line)
             if not m:
                 continue
             cells = [c.strip() for c in line.split(" | ")]
-            status = cells[3].strip("* ").lower() if len(cells) > 3 else ""
             total += 1
+            if settle_table:
+                finding = cells[2].lower() if len(cells) > 2 else ""
+                if re.search(r"\bfixed\b", finding):
+                    done += 1
+                elif "not changed" in finding:
+                    unchanged.append(m.group(1))
+                else:
+                    hyp.append(m.group(1))
+                continue
+            status = cells[3].strip("* ").lower() if len(cells) > 3 else ""
             if status.startswith("hypothesis"):
                 hyp.append(m.group(1))
             elif "not changed" in status or "not fixed" in status:

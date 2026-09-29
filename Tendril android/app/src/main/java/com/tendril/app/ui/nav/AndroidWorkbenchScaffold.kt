@@ -55,11 +55,13 @@ fun AndroidWorkbenchScaffold(container: AppContainer) {
             CalendarScreen(
                 core = container.workbenchCore,
                 onOpenPage = onOpenPage,
+                calendarChoices = container.calendarChoices,
                 settingsSheet = { onDismiss ->
                     CalendarSettingsSheet(
-                        authManager = container.googleCalendarAuthManager,
-                        syncEngine = container.googleCalendarSyncEngine,
-                        preferences = container.googleCalendarPreferences,
+                        systemCalendars = container.systemCalendars,
+                        sync = container.systemCalendarSync,
+                        preferences = container.systemCalendarPreferences,
+                        hasPermission = container.calendarProviderSync::hasPermission,
                         keyValueStore = container.workbenchCore.keyValueStore,
                         onDismiss = onDismiss,
                     )

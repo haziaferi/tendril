@@ -87,7 +87,8 @@ data class Entry(
     /**
      * Where this Entry came from. [EntrySource.DATABASE_SYNC] is produced by
      * [com.tendril.app.domain.DatabaseSyncManager]; [EntrySource.GOOGLE_CALENDAR] by a pull in
-     * `GoogleCalendarSyncEngine` (§9.5.1).
+     * the Google engine §9.12 retired (§9.5.1) — rows it made keep the label; [EntrySource.CALENDAR]
+     * by §9.12's read-back.
      *
      * `GOOGLE_CALENDAR` is load-bearing, not decorative: `CalendarProviderSync` excludes those
      * rows from the system Calendar Provider mirror (§9.11), on the reasoning that they already
@@ -99,11 +100,9 @@ data class Entry(
      */
     val source: EntrySource = EntrySource.MANUAL,
 
-    /** Google Calendar sync (§3.2, §9.5), EVENT-only in practice — null until this Entry has
-     * been pushed at least once, or when it originated from a pulled Google event. Cleared
-     * (not repopulated) when [com.tendril.app.googlecalendar.GoogleCalendarSyncEngine] deletes
-     * the remote copy on a local Trash transition, so restoring from Trash re-creates a fresh
-     * remote event rather than writing to an id that no longer exists. */
+    /** The retired direct Google sync's event id (§9.5.1, retired by §9.12 on 2026-09-29).
+     * Nothing sets it any more; rows that carry one keep it, and the snapshot merge still carries
+     * it field-wise (audit 5a.1) so an older peer that still has the engine sees it. */
     val googleEventId: String? = null,
 
     /** System Calendar Provider registration (§3.2, §9.9 item 3) — `CalendarContract.Events`'
@@ -113,6 +112,12 @@ data class Entry(
      * (§9.4) — a remote-wins merge must preserve whatever this device's own value already
      * was, never adopt another device's Provider row id. */
     val providerEventId: Long? = null,
+
+    /** §9.12 — the synced calendar this event lives in, or null for this phone only. Names the
+     * calendar independently of any device's row ids (account type, account name, the calendar's
+     * `_sync_id`), so it **travels** in the snapshot record, unlike [providerEventId]. Set on the
+     * phone only; the desktop keeps what it receives. */
+    val calendarKey: String? = null,
 
     val createdAt: Instant,
     val updatedAt: Instant,
@@ -141,4 +146,11 @@ data class Entry(
  * [GOOGLE_CALENDAR] is the only member any call site branches on. The entire worst case is one
  * row's provenance label reading MANUAL.
  */
-enum class EntrySource { MANUAL, DATABASE_SYNC, GOOGLE_CALENDAR }
+enum class EntrySource {
+    MANUAL, DATABASE_SYNC, GOOGLE_CALENDAR,
+
+    /** §9.12 — first read from a synced calendar. An event written *from* Tendril keeps [MANUAL]:
+     * this says where an entry began, not where it lives ([Entry.calendarKey] says that). An
+     * older peer folds it to [MANUAL], the behaviourally identical reading (see above). */
+    CALENDAR,
+}

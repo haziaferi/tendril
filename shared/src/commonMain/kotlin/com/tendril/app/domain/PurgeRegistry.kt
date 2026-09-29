@@ -136,8 +136,8 @@ class PurgeRegistry(
 
     /**
      * Alarms and the Calendar Provider mirror come down before the row does. Trashing an Entry
-     * normally does this already, but an Entry can reach Trash from `GoogleCalendarSyncEngine`'s
-     * pull without going through the coordinator, so its alarms may still be live — and an alarm
+     * normally does this already, but an Entry can reach Trash by a path that skips the
+     * coordinator (the retired Google engine's pull was one; a merged tombstone is another), so its alarms may still be live — and an alarm
      * outliving its row is a wakeup for nothing. It matters twice as much here as at the Trash
      * button, because [applyToLocalRecords] deletes Entries purged on *another* device, where
      * this side never saw the deletion coming.

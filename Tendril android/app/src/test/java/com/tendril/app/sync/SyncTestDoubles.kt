@@ -113,8 +113,6 @@ class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
     override suspend fun getAll(): List<Entry> = rows.values.toList()
     override suspend fun getById(id: Long): Entry? = rows[id]
     override suspend fun getByUid(uid: String): Entry? = rows.values.firstOrNull { it.uid == uid }
-    override suspend fun getByGoogleEventId(googleEventId: String): Entry? =
-        rows.values.firstOrNull { it.googleEventId == googleEventId }
 
     /** Column-scoped like the real query — touches `providerEventId` and nothing else, so a
      * test can still catch a whole-row write clobbering a concurrent change. */

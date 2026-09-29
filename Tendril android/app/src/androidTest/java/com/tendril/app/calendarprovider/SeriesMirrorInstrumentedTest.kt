@@ -86,6 +86,39 @@ class SeriesMirrorInstrumentedTest {
         }
     }
 
+    /**
+     * §9.12 — an event that lives in a synced calendar is already visible there, so the one-way
+     * Tendril calendar must not show it a second time; and one moved there from this phone only
+     * loses the copy the mirror made while it was local.
+     */
+    @Test
+    fun anEventInASyncedCalendarIsNotMirroredAndLosesItsLocalCopy() = runBlocking {
+        val container = AppContainer.from(context)
+        val sync = container.calendarProviderSync
+        assumeTrue("needs calendar permission granted to the app", sync.hasPermission())
+        val entryDao = container.database.entryDao()
+        val title = "Mirror skip " + UUID.randomUUID().toString().take(8)
+        val day = LocalDate.now().plusWeeks(3)
+        val now = Instant.now()
+        val id = entryDao.insert(
+            Entry(title = title, kind = EntryKind.EVENT, startDate = day, startTime = null, endDate = null, endTime = null,
+                recurrenceRule = null, createdAt = now, updatedAt = now),
+        )
+        try {
+            sync.upsertEntry(entryDao.getById(id)!!)
+            assertEquals("phone-only: mirrored", listOf(day), daysShown(title, day, day.plusDays(1)))
+
+            entryDao.update(entryDao.getById(id)!!.copy(calendarKey = "bitfire.at.davdroid|me|3"))
+            sync.upsertEntry(entryDao.getById(id)!!)
+
+            assertEquals("in a synced calendar: not mirrored", emptyList<LocalDate>(), daysShown(title, day, day.plusDays(1)))
+            assertEquals(null, entryDao.getById(id)!!.providerEventId)
+        } finally {
+            entryDao.getById(id)?.let { sync.removeEntry(it) }
+            entryDao.deleteForever(id)
+        }
+    }
+
     @Test
     fun aMovedAndASkippedOccurrenceShowWhereTendrilShowsThem() = runBlocking {
         val container = AppContainer.from(context)

@@ -99,6 +99,21 @@ class EntryFieldsSyncTest {
         assertEquals(LocalDate.of(2026, 9, 11), child.startDate)
     }
 
+    /** §9.12 — the calendar an event lives in travels, so an edit made on the desktop goes back to
+     * the phone still naming it; and a record from before v26 reads as this phone only. */
+    @Test
+    fun `the calendar an event lives in reaches the other device`() = runBlocking {
+        val store = InMemorySyncFileStore()
+        val a = Device(entries = listOf(task(1, "yoga").copy(calendarKey = "bitfire.at.davdroid|me|/cal/"), task(2, "local")))
+        a.orchestrator.writeSnapshots(store)
+
+        val b = Device()
+        b.orchestrator.readAndMerge(store)
+
+        assertEquals("bitfire.at.davdroid|me|/cal/", b.entryDao.getAll().single { it.uid == "yoga" }.calendarKey)
+        assertEquals(null, b.entryDao.getAll().single { it.uid == "local" }.calendarKey)
+    }
+
     @Test
     fun `a record from a build without these fields reads as a task without them`() = runBlocking {
         val store = InMemorySyncFileStore()

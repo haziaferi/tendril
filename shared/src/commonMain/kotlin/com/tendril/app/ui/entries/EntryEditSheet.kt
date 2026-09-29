@@ -53,6 +53,9 @@ import java.time.LocalTime
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.calendar.CalendarChoices
+import com.tendril.app.ui.calendar.CalendarOption
+import androidx.compose.runtime.collectAsState
 
 /**
  * §0.8 step 6b / §3.2 — the edit sheet that was never built. Every field an Entry has, in the
@@ -60,6 +63,8 @@ import com.tendril.app.ui.theme.label
  * `EntryEditor.save` enforces the same on the way to the row. Edits to a recurring entry apply
  * to the whole series — moving one occurrence alone is the drag's question, not this sheet's.
  * [showUrgency] is the Settings switch (14g·3): the ladder's picker is shown only when it is on.
+ * [calendarChoices] is §9.12's *Calendar* field — the phone's synced calendars; null on a device
+ * that has none (the desktop), which shows no field and keeps whatever the event holds.
  */
 @Composable
 fun EntryEditSheet(
@@ -68,6 +73,7 @@ fun EntryEditSheet(
     onSave: (Entry) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    calendarChoices: CalendarChoices? = null,
 ) {
     var title by remember { mutableStateOf(entry.title) }
     var kind by remember { mutableStateOf(entry.kind) }
@@ -84,6 +90,7 @@ fun EntryEditSheet(
     var repeatTouched by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<Picker?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var calendarKey by remember { mutableStateOf(entry.calendarKey) }
 
     // Fully expanded from the start: on desktop a half-open sheet's buttons sit below the
     // window with no gesture to reach them (tendril-spec.md §0.10 item 11).
@@ -143,6 +150,24 @@ fun EntryEditSheet(
                 }
             }
 
+            // §9.12 — where the event lives. An occurrence moved on its own stays with its series.
+            if (kind == EntryKind.EVENT && calendarChoices != null && entry.originalEntryId == null) {
+                val options by calendarChoices.options.collectAsState()
+                Text("Calendar", style = MaterialTheme.typography.label, modifier = Modifier.padding(top = 8.dp))
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val shown = listOf(CalendarOption("", "This phone only")) + options +
+                        // A calendar since un-ticked still names where the event is.
+                        listOfNotNull(entry.calendarKey?.takeIf { key -> options.none { it.key == key } }?.let { CalendarOption(it, "Not read now") })
+                    shown.forEach { option ->
+                        FilterChip(
+                            selected = (calendarKey ?: "") == option.key,
+                            onClick = { calendarKey = option.key.ifEmpty { null }; calendarChoices.remember(calendarKey) },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
+            }
+
             if (kind == EntryKind.TASK) {
                 LabelledRow("Deadline") {
                     Switch(checked = deadline != null, onCheckedChange = { on -> deadline = if (on) (deadline ?: date ?: LocalDate.now()) else null })
@@ -195,6 +220,7 @@ fun EntryEditSheet(
                                     dueDate = if (kind == EntryKind.TASK) deadline else null,
                                     estimate = if (kind == EntryKind.TASK) estimateMinutes.toLongOrNull()?.takeIf { it > 0 }?.let(Duration::ofMinutes) else null,
                                     importance = if (kind == EntryKind.TASK) importance else 0,
+                                    calendarKey = if (kind == EntryKind.EVENT) calendarKey else null,
                                 ),
                             )
                         },
