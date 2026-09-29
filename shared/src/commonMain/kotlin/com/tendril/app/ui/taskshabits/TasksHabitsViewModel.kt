@@ -129,6 +129,8 @@ class TasksHabitsViewModel(
     fun setDeadline(entryId: Long, deadline: LocalDate?) {
         viewModelScope.launch {
             val entry = entryDao.getById(entryId) ?: return@launch
+            // Unchanged writes nothing: under §9.4 the stamp alone claims an edit (5a.6's class).
+            if (entry.dueDate == deadline) return@launch
             entryDao.update(entry.copy(dueDate = deadline, updatedAt = Instant.now()))
         }
     }
@@ -137,7 +139,9 @@ class TasksHabitsViewModel(
     fun setImportance(entryId: Long, level: Int) {
         viewModelScope.launch {
             val entry = entryDao.getById(entryId) ?: return@launch
-            entryDao.update(entry.copy(importance = level.coerceIn(0, 4), updatedAt = Instant.now()))
+            val importance = level.coerceIn(0, 4)
+            if (entry.importance == importance) return@launch
+            entryDao.update(entry.copy(importance = importance, updatedAt = Instant.now()))
         }
     }
 

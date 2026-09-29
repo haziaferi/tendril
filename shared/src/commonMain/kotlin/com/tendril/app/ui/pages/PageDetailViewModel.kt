@@ -25,6 +25,7 @@ import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.BindingRole
+import com.tendril.app.domain.writeBoundEntryField
 import com.tendril.app.data.habit.HabitDao
 import com.tendril.app.domain.CheckInHabitUseCase
 import com.tendril.app.domain.CheckboxOnlyState
@@ -717,13 +718,12 @@ class PageDetailViewModel(
         if (contentLocked()) return
         val entry = rowLinkedEntry.value ?: return
         viewModelScope.launch {
+            // Through the live row, not the drawn [rowLinkedEntry] (see [writeBoundEntryField]).
             if (role == BindingRole.DUE_DATE) {
-                entryDao.update(entry.copy(dueDate = date, updatedAt = Instant.now()))
+                writeBoundEntryField(entryDao, entryScheduleCoordinator, entry.id, rearm = false) { it.copy(dueDate = date) }
                 return@launch
             }
-            val updated = entry.copy(startDate = date, updatedAt = Instant.now())
-            entryDao.update(updated)
-            entryScheduleCoordinator.onEntryChanged(updated)
+            writeBoundEntryField(entryDao, entryScheduleCoordinator, entry.id, rearm = true) { it.copy(startDate = date) }
         }
     }
 
@@ -731,9 +731,7 @@ class PageDetailViewModel(
         if (contentLocked()) return
         val entry = rowLinkedEntry.value ?: return
         viewModelScope.launch {
-            val updated = entry.copy(recurrenceRule = RecurrenceRule.Elastic(intervalToPeriod(count, unit)), updatedAt = Instant.now())
-            entryDao.update(updated)
-            entryScheduleCoordinator.onEntryChanged(updated)
+            writeBoundEntryField(entryDao, entryScheduleCoordinator, entry.id, rearm = true) { it.copy(recurrenceRule = RecurrenceRule.Elastic(intervalToPeriod(count, unit))) }
         }
     }
 

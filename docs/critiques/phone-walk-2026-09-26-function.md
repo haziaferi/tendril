@@ -18,7 +18,8 @@ own calendars only, never another account's. Every fix has its own commit on
 | 5.12 | Cleanup: the series deleted from its 3 Oct occurrence ("The whole series goes") | The moved occurrence stayed on Fri 25, in Tendril and in the provider | Fixed: exceptions go and return with their series |
 | 5.12 | Re-walk: restore from Trash, delete the series again | Fri 25 empty, and the provider holds no event of it | Pass |
 
-**Recorded, not changed:** the Tasks Trash sheet shows each item's deletion date as ISO
-(`Event · 2026-09-26`), 5.6's class on another sheet.
+**Recorded, then changed the same day:** the Tasks Trash sheet showed each item's date as ISO
+(`Event · 2026-09-26`), 5.6's class on another sheet. It is the entry's own date, not the deletion
+date as first written here. Fixed to `dayLabel` (`EntryTrashSubtitleTest`); not re-walked.
 
 The walk's two items are in Tendril's Trash (restorable), not deleted forever.

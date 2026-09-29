@@ -134,6 +134,7 @@ class AppContainer(context: Context) {
     val notionImporter = NotionImporter(
         context, database.pageDao(), database.blockDao(), database.pageDatabaseDao(),
         database.propertyDao(), database.propertyValueDao(), pageContentRepository,
+        viewLockState = viewLockState,
     )
     val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao())
     /** §0.6.5 — the notification's Stop action and the shade's chronometer share this with the UI. */
