@@ -41,6 +41,7 @@ import com.tendril.app.data.pagedatabase.ViewFilter
 import com.tendril.app.data.pagedatabase.ViewType
 import com.tendril.app.data.pagedatabase.setValue
 import com.tendril.app.domain.BindingRole
+import com.tendril.app.domain.writeBoundEntryField
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryScheduleCoordinator
 import com.tendril.app.domain.LabelMembership
@@ -1128,21 +1129,17 @@ class PageDatabaseViewModel(
         if (locked()) return
         viewModelScope.launch {
             if (role == BindingRole.DUE_DATE) {
-                entryDao.update(entry.copy(dueDate = date, updatedAt = Instant.now()))
+                writeBoundEntryField(entryDao, entryScheduleCoordinator, entry.id, rearm = false) { it.copy(dueDate = date) }
                 return@launch
             }
-            val updated = entry.copy(startDate = date, updatedAt = Instant.now())
-            entryDao.update(updated)
-            entryScheduleCoordinator.onEntryChanged(updated)
+            writeBoundEntryField(entryDao, entryScheduleCoordinator, entry.id, rearm = true) { it.copy(startDate = date) }
         }
     }
 
     fun setRecurrence(entry: Entry, count: Int, unit: com.tendril.app.data.entry.IntervalUnit) {
         if (locked()) return
         viewModelScope.launch {
-            val updated = entry.copy(recurrenceRule = RecurrenceRule.Elastic(intervalToPeriod(count, unit)), updatedAt = Instant.now())
-            entryDao.update(updated)
-            entryScheduleCoordinator.onEntryChanged(updated)
+            writeBoundEntryField(entryDao, entryScheduleCoordinator, entry.id, rearm = true) { it.copy(recurrenceRule = RecurrenceRule.Elastic(intervalToPeriod(count, unit))) }
         }
     }
 }

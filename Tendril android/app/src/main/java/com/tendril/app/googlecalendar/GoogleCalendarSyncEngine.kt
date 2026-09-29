@@ -39,10 +39,10 @@ sealed class SyncOutcome {
 }
 
 @Serializable
-private data class GoogleEventDateTime(val date: String? = null, val dateTime: String? = null, val timeZone: String? = null)
+internal data class GoogleEventDateTime(val date: String? = null, val dateTime: String? = null, val timeZone: String? = null)
 
 @Serializable
-private data class GoogleEvent(
+internal data class GoogleEvent(
     val id: String? = null,
     val status: String? = null,
     val summary: String? = null,
@@ -112,20 +112,17 @@ class GoogleCalendarSyncEngine(
     }
 
     private suspend fun push(accessToken: String, since: Instant?) {
-        val candidates = entryDao.getAll()
-            .filter { it.kind == EntryKind.EVENT && (since == null || it.updatedAt.isAfter(since)) }
-        for (entry in candidates) {
-            if (entry.deletedAt != null) {
-                val eventId = entry.googleEventId ?: continue
-                runCatching { deleteEvent(accessToken, eventId) }
-                entryDao.setGoogleEventId(entry.id, null)
-                continue
+        for (step in planGooglePush(entryDao.getAll(), since, ZoneId.systemDefault())) when (step) {
+            is GooglePushStep.Unlink -> {
+                step.remoteToDelete?.let { runCatching { deleteEvent(accessToken, it) } }
+                entryDao.setGoogleEventId(step.entry.id, null)
             }
-            val body = json.encodeToString(entry.toGoogleEvent())
-            val existingId = entry.googleEventId
-            val remote = if (existingId == null) insertEvent(accessToken, body) else updateEvent(accessToken, existingId, body)
-            if (remote.id != null && remote.id != existingId) {
-                entryDao.setGoogleEventId(entry.id, remote.id)
+            is GooglePushStep.Upsert -> {
+                val body = json.encodeToString(step.event)
+                val remote = if (step.existingId == null) insertEvent(accessToken, body) else updateEvent(accessToken, step.existingId, body)
+                if (remote.id != null && remote.id != step.entry.googleEventId) {
+                    entryDao.setGoogleEventId(step.entry.id, remote.id)
+                }
             }
         }
     }
@@ -173,11 +170,7 @@ class GoogleCalendarSyncEngine(
                     // account. A locally-created event doesn't, so it simply vanished from
                     // every system calendar surface. `createdAt` was overwritten with
                     // `Instant.now()` the same way.
-                    val updated = event.toEntry(eventId).copy(
-                        id = local.id, uid = local.uid, sourceRowId = local.sourceRowId,
-                        providerEventId = local.providerEventId,
-                        source = local.source, createdAt = local.createdAt,
-                    )
+                    val updated = pulledOver(local, event.toEntry(eventId))
                     entryDao.update(updated)
                     // A remote edit can move start_date — exactly §9.7's "every write path
                     // that can move an Entry's start_date must cancel old alarms and schedule
@@ -260,13 +253,82 @@ class GoogleCalendarSyncEngine(
         }
 }
 
-private fun Entry.toGoogleEvent(): GoogleEvent {
-    val zone = ZoneId.systemDefault()
+/**
+ * [remote] — Google's copy of [local], newer — as the row to store. Only what a Google event
+ * carries is taken from it: summary, dates, recurrence and `updated`. `source` and `createdAt`
+ * stay local (see the pull), `providerEventId` is per-device (§3.2), and the row's place in its
+ * series — `originalEntryId`, `originalOccurrenceDate`, `isExceptionSkip` — is Tendril's alone.
+ * Google sends a moved occurrence back as a plain event, so taking its copy wholesale cut the
+ * occurrence loose after the push that made it (it comes back newer in the same pass, §9.5.1),
+ * and the series showed the original date again beside it.
+ */
+internal fun pulledOver(local: Entry, remote: Entry): Entry = remote.copy(
+    id = local.id, uid = local.uid, sourceRowId = local.sourceRowId,
+    providerEventId = local.providerEventId,
+    source = local.source, createdAt = local.createdAt,
+    originalEntryId = local.originalEntryId, originalOccurrenceDate = local.originalOccurrenceDate,
+    isExceptionSkip = local.isExceptionSkip,
+)
+
+/** One write of a push, decided by [planGooglePush] without the network. */
+internal sealed interface GooglePushStep {
+    val entry: Entry
+
+    /** Clear [entry]'s link; delete [remoteToDelete] from Google when there is one. */
+    data class Unlink(override val entry: Entry, val remoteToDelete: String?) : GooglePushStep
+
+    /** Send [event] — as a new event when [existingId] is null, over it otherwise. */
+    data class Upsert(override val entry: Entry, val existingId: String?, val event: GoogleEvent) : GooglePushStep
+}
+
+/**
+ * What a push sends, from every stored entry and the last sync's [since] — §9.5.1 for a series'
+ * exception rows, the same shape as the system-calendar mirror (§9.11, audit 5.4): the series
+ * goes with an EXDATE for every exception it has, a moved occurrence as an event of its own, and a
+ * skip as nothing at all. An exception that changed re-sends its series, whose own row did not
+ * change and would otherwise keep Google holding the old date.
+ *
+ * An exception row may carry its series' `googleEventId`, copied into overrides made before
+ * 2026-09-26. That id is never the row's own: pushed over, it rewrote the whole Google series as
+ * one date, and trashing the row deleted the series. Such a row gets an event of its own, which
+ * replaces the copied id.
+ */
+internal fun planGooglePush(all: List<Entry>, since: Instant?, zone: ZoneId): List<GooglePushStep> {
+    val events = all.filter { it.kind == EntryKind.EVENT }
+    val byId = events.associateBy { it.id }
+    val changed = events.filter { since == null || it.updatedAt.isAfter(since) }
+    val toSend = changed.map { it.id }.toSet() + changed.mapNotNull { it.originalEntryId }
+    val steps = mutableListOf<GooglePushStep>()
+    for (entry in events.filter { it.id in toSend }) {
+        val series = entry.originalEntryId?.let(byId::get)
+        val ownId = entry.googleEventId?.takeUnless { series != null && it == series.googleEventId }
+        if (entry.deletedAt != null || entry.isExceptionSkip == true) {
+            if (entry.googleEventId != null) steps += GooglePushStep.Unlink(entry, ownId)
+            continue
+        }
+        val exdates = if (entry.originalEntryId == null && entry.recurrenceRule is RecurrenceRule.Fixed) {
+            events.filter { it.originalEntryId == entry.id && it.deletedAt == null }.mapNotNull { it.originalOccurrenceDate }.sorted()
+        } else emptyList()
+        steps += GooglePushStep.Upsert(entry, ownId, entry.toGoogleEvent(zone, exdates))
+    }
+    return steps
+}
+
+private val EXDATE_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+private val EXDATE_DATE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+
+private fun Entry.toGoogleEvent(zone: ZoneId, exdates: List<LocalDate> = emptyList()): GoogleEvent {
+    val exdateLines = exdates.map { date ->
+        // The instance's own start, in the zone the event's start is sent in — Google matches an
+        // EXDATE to an instance by it; an all-day series' is a bare date.
+        if (startTime == null) "EXDATE;VALUE=DATE:${EXDATE_DATE.format(date)}"
+        else "EXDATE;TZID=${zone.id}:${EXDATE_DATE_TIME.format(LocalDateTime.of(date, startTime))}"
+    }
     return GoogleEvent(
         summary = title,
         start = toGoogleDateTime(startDate, startTime, zone),
         end = toGoogleDateTime(endDate ?: startDate, endTime ?: startTime, zone),
-        recurrence = (recurrenceRule as? RecurrenceRule.Fixed)?.let { listOf("RRULE:${it.rrule}") },
+        recurrence = (recurrenceRule as? RecurrenceRule.Fixed)?.let { listOf("RRULE:${it.rrule}") + exdateLines },
     )
 }
 
@@ -282,7 +344,7 @@ private fun toGoogleDateTime(date: LocalDate?, time: LocalTime?, zone: ZoneId): 
     }
 }
 
-private fun GoogleEvent.toEntry(googleEventId: String): Entry {
+internal fun GoogleEvent.toEntry(googleEventId: String): Entry {
     val (startDate, startTime) = start.toLocalDateAndTime()
     val (endDate, endTime) = end.toLocalDateAndTime()
     val rrule = recurrence?.firstOrNull { it.startsWith("RRULE:") }?.removePrefix("RRULE:")

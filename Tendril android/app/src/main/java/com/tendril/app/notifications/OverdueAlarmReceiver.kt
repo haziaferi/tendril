@@ -42,8 +42,8 @@ class OverdueAlarmReceiver : BroadcastReceiver() {
                     .setContentText(context.getString(R.string.notification_overdue_text))
                     .setContentIntent(contentIntent)
                     .setAutoCancel(true)
-                    .addAction(0, context.getString(R.string.action_done), EntryActionReceiver.pendingIntent(context, entryId, EntryActionReceiver.ACTION_DONE))
-                    .addAction(0, context.getString(R.string.action_skip), EntryActionReceiver.pendingIntent(context, entryId, EntryActionReceiver.ACTION_SKIP))
+                    .addAction(0, context.getString(R.string.action_done), EntryActionReceiver.pendingIntent(context, entryId, EntryActionReceiver.ACTION_DONE, entry.startDate))
+                    .addAction(0, context.getString(R.string.action_skip), EntryActionReceiver.pendingIntent(context, entryId, EntryActionReceiver.ACTION_SKIP, entry.startDate))
                     .build()
 
                 NotificationManagerCompat.from(context).notify(notificationId(entryId), notification)

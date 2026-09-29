@@ -48,7 +48,7 @@ class ResolveEntryUseCase(
     private val completionDao: EntryCompletionDao,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
 ) {
-    suspend fun resolve(entryId: Long, status: EntryStatus, now: Instant = Instant.now()) {
+    suspend fun resolve(entryId: Long, status: EntryStatus, now: Instant = Instant.now(), occurrence: LocalDate? = null) {
         require(status != EntryStatus.PENDING) { "resolve() only takes a terminal status (DONE/SKIPPED)" }
         val entry = entryDao.getById(entryId) ?: return
         require(entry.kind == EntryKind.TASK) { "Only TASK Entries resolve; EVENT has no done/not-done state (§4)" }
@@ -57,6 +57,11 @@ class ResolveEntryUseCase(
         // before, and its Done wrote a second completion. A recurring task is never left resolved
         // (it advances to PENDING), so this cannot swallow a real occurrence's Done.
         if (entry.status == status) return
+        // The recurring half of the same (audit 5.2): a caller that names the occurrence it was
+        // shown — the overdue notification — resolves that one or nothing. Once the app has
+        // resolved it the task has advanced, PENDING, and the guard above cannot tell; the
+        // notification's Done then completed the *next* occurrence, days early.
+        if (occurrence != null && entry.startDate != occurrence) return
 
         val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
         val occurrenceDate = entry.startDate ?: today

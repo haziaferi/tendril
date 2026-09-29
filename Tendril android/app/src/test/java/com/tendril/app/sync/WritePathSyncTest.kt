@@ -1251,6 +1251,85 @@ class WritePathSyncTest {
 
         assertEquals(t0, a.pageDao.getById(seeded.databasePage.id)!!.updatedAt)
     }
+
+    private suspend fun boundTaskOnA(): com.tendril.app.data.entry.Entry {
+        val id = a.entryDao.insert(
+            com.tendril.app.data.entry.Entry(
+                title = "A row", kind = com.tendril.app.data.entry.EntryKind.TASK, startDate = java.time.LocalDate.of(2026, 9, 25),
+                startTime = null, endDate = null, endTime = null, recurrenceRule = null,
+                status = com.tendril.app.data.entry.EntryStatus.PENDING, createdAt = t0, updatedAt = t0,
+            ),
+        )
+        return a.entryDao.getById(id)!!
+    }
+
+    /**
+     * 5a.8's class in a bound cell, found 2026-09-26 while sweeping for 5a.6's. `setBoundDate` and
+     * `setRecurrence` wrote the row's copy of its entry — the one the table drew — whole, so a
+     * tick that landed since (the Tasks tab, the widget, a merge) was written back to PENDING.
+     */
+    @Test
+    fun `a bound date written from the table keeps a tick made since the table drew`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val drawn = boundTaskOnA()
+        a.entryDao.update(drawn.copy(status = com.tendril.app.data.entry.EntryStatus.DONE))
+
+        a.database(seeded.databasePage.id).setBoundDate(drawn, com.tendril.app.domain.BindingRole.DEADLINE, java.time.LocalDate.of(2026, 9, 28))
+
+        val stored = a.entryDao.getById(drawn.id)!!
+        assertEquals(java.time.LocalDate.of(2026, 9, 28), stored.startDate)
+        assertEquals(com.tendril.app.data.entry.EntryStatus.DONE, stored.status)
+    }
+
+    @Test
+    fun `a repeat written from the table keeps a trash made since the table drew`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val drawn = boundTaskOnA()
+        a.entryDao.softDelete(drawn.id, t0.plusSeconds(5))
+
+        a.database(seeded.databasePage.id).setRecurrence(drawn, 1, com.tendril.app.data.entry.IntervalUnit.WEEK)
+
+        assertEquals(t0.plusSeconds(5), a.entryDao.getById(drawn.id)!!.deletedAt)
+    }
+
+    @Test
+    fun `a bound date set to the one it has moves no timestamp`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val drawn = boundTaskOnA()
+
+        a.database(seeded.databasePage.id).setBoundDate(drawn, com.tendril.app.domain.BindingRole.DEADLINE, drawn.startDate)
+
+        assertEquals(t0, a.entryDao.getById(drawn.id)!!.updatedAt)
+    }
+
+    /** The same two writes on a Row's own page, from the entry its page drew. */
+    @Test
+    fun `a bound date written from the row's page keeps a tick made since the page drew`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val drawn = a.entryDao.getById(a.entryDao.insert(boundTaskOnA().copy(id = 0, uid = "row-bound", sourceRowId = seeded.row.id)))!!
+        val page = a.detail(seeded.row.id)
+        backgroundScope.launch { page.rowLinkedEntry.collect {} }
+        a.entryDao.update(drawn.copy(status = com.tendril.app.data.entry.EntryStatus.DONE))
+
+        page.setRowBoundDate(com.tendril.app.domain.BindingRole.DEADLINE, java.time.LocalDate.of(2026, 9, 28))
+
+        val stored = a.entryDao.getById(drawn.id)!!
+        assertEquals(java.time.LocalDate.of(2026, 9, 28), stored.startDate)
+        assertEquals(com.tendril.app.data.entry.EntryStatus.DONE, stored.status)
+    }
+
+    @Test
+    fun `a repeat set from the row's page to the one it has moves no timestamp`() = runTest(mainDispatcher) {
+        val seeded = seedDatabaseOnA()
+        val weekly = com.tendril.app.data.entry.RecurrenceRule.Elastic(java.time.Period.ofDays(7))
+        val drawn = a.entryDao.getById(a.entryDao.insert(boundTaskOnA().copy(id = 0, uid = "row-bound", sourceRowId = seeded.row.id, recurrenceRule = weekly)))!!
+        val page = a.detail(seeded.row.id)
+        backgroundScope.launch { page.rowLinkedEntry.collect {} }
+
+        page.setRowRecurrence(1, com.tendril.app.data.entry.IntervalUnit.WEEK)
+
+        assertEquals(t0, a.entryDao.getById(drawn.id)!!.updatedAt)
+    }
 }
 
 /**

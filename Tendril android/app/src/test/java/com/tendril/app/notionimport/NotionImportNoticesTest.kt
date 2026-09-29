@@ -8,6 +8,7 @@ import com.tendril.app.data.pagedatabase.PageDatabaseDao
 import com.tendril.app.data.pagedatabase.PropertyDao
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.ViewLockState
 import com.tendril.app.sync.FakeContentResolverBacking
 import com.tendril.app.sync.fakeContext
 import com.tendril.app.sync.zipOf
@@ -45,7 +46,7 @@ class NotionImportNoticesTest {
         backing = FakeContentResolverBacking()
     }
 
-    private fun importer(): NotionImporter {
+    private fun importer(viewLockState: ViewLockState? = null): NotionImporter {
         val pageDao = mockk<PageDao>(relaxed = true)
         var nextPageId = 1L
         coEvery { pageDao.insert(any<Page>()) } answers { nextPageId++ }
@@ -60,12 +61,27 @@ class NotionImportNoticesTest {
             propertyDao = mockk<PropertyDao>(relaxed = true),
             propertyValueDao = mockk<PropertyValueDao>(relaxed = true),
             pageContentRepository = mockk<PageContentRepository>(relaxed = true),
+            viewLockState = viewLockState,
         )
     }
 
     private companion object {
         const val VALID_MD = "Export/Meeting notes 0123456789abcdef0123456789abcdef.md"
         val BODY = "# Meeting notes\n\nSome text\n".toByteArray(Charsets.UTF_8)
+    }
+
+    /**
+     * Audit 5.5. View-Only reached this importer only through `SettingsScreen` swapping the
+     * section out; `PortableArchive`, its sibling on the same screen, refuses on its own. A second
+     * caller — or a picker result landing after the lock went on — imported into a locked device.
+     */
+    @Test
+    fun `nothing is imported while View-Only is on`() = runBlocking {
+        val lock = ViewLockState().apply { setViewOnly(true) }
+        val refused = runCatching { importer(lock).import(backing.givenFile(zipOf(VALID_MD to BODY))) }
+
+        assertTrue("the import went ahead under View-Only", refused.isFailure)
+        assertTrue(refused.exceptionOrNull()!!.message!!.contains("View-Only"))
     }
 
     private fun skipNotice(notices: List<String>) = notices.singleOrNull { "skipped" in it }

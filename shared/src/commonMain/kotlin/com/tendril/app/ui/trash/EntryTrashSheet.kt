@@ -39,6 +39,9 @@ import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryKind
 import com.tendril.app.ui.components.EmptyState
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import com.tendril.app.domain.dayLabel
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.heading
@@ -120,7 +123,7 @@ fun EntryTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(entry.title, style = MaterialTheme.typography.body)
                                 Text(
-                                    entry.trashSubtitle(),
+                                    entry.trashSubtitle(LocalDate.now()),
                                     style = MaterialTheme.typography.description,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -164,8 +167,12 @@ fun EntryTrashSheet(core: WorkbenchCore, onDismiss: () -> Unit) {
  * subtitle: the two actions sit on the same row, so a wrapping subtitle squeezes them. The
  * trashed timestamp is left out deliberately — `observeTrash` already orders newest-first, so
  * it earned less than the width it cost. */
-private fun Entry.trashSubtitle(): String {
+private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+fun Entry.trashSubtitle(today: LocalDate): String {
     val kindLabel = if (kind == EntryKind.TASK) "Task" else "Event"
-    val due = startDate?.let { date -> listOfNotNull(date.toString(), startTime?.toString()).joinToString(" ") } ?: "No date"
+    // The tray's day form, like every other date the phone shows (audit 5.6's class, found here
+    // on the 2026-09-26 walk).
+    val due = startDate?.let { date -> listOfNotNull(dayLabel(date, today), startTime?.format(CLOCK)).joinToString(" ") } ?: "No date"
     return "$kindLabel · $due"
 }

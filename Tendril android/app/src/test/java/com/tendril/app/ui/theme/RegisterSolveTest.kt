@@ -69,6 +69,21 @@ class RegisterSolveTest {
         }
     }
 
+    /**
+     * Audit 5.9. An `@mention` is the accent drawn on the selection's tint (14h·2), a pair no
+     * floor above names: the accent is solved against the ground, the tint's own text is
+     * `accentSoftText`. Measured on Ink light at 6.66:1 (`coloured-elements-function.md` #1).
+     * The floor is the tint's own text floor, since that is what the mention's text is sitting on.
+     */
+    @Test
+    fun `a mention - the accent on its tint - reads on every register`() {
+        cases.forEach { c ->
+            val p = paletteFor(c.register, c.dark, c.oled)
+            val r = ratio(p.accent, p.accentSoft)
+            assertTrue("${c.name}: mention ${"%.2f".format(r)}", r >= Floors.SOFT_TEXT)
+        }
+    }
+
     @Test
     fun `a second channel and the third hue read as data at four point six`() {
         // One token since the design layer (#6): `third` is solved to DATA, where the old

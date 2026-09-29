@@ -154,7 +154,10 @@ class FakeEntryDao(seed: List<Entry> = emptyList()) : EntryDao {
     override suspend fun deleteAll() { rows.clear() }
 
     override fun observeById(id: Long): Flow<Entry?> = flowOf(rows[id])
-    override fun observeBySourceRowIds(rowPageIds: List<Long>): Flow<List<Entry>> = flowOf(emptyList())
+    // One emission of what is stored at subscription — a screen's drawn copy, which a later write
+    // makes stale; that is the state the bound-field tests need.
+    override fun observeBySourceRowIds(rowPageIds: List<Long>): Flow<List<Entry>> =
+        flowOf(rows.values.filter { it.sourceRowId in rowPageIds && it.deletedAt == null })
     override fun observeTasks(): Flow<List<Entry>> = flowOf(rows.values.toList())
     override fun observeDated(): Flow<List<Entry>> = flowOf(rows.values.toList())
     override fun observeTrash(): Flow<List<Entry>> = flowOf(emptyList())

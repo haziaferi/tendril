@@ -17,6 +17,7 @@ import com.tendril.app.data.pagedatabase.PropertyType
 import com.tendril.app.data.pagedatabase.PropertyValue
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import com.tendril.app.domain.PageContentRepository
+import com.tendril.app.domain.ViewLockState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -58,6 +59,11 @@ private class ZipContents(val texts: List<TextEntry>, val assets: List<AssetEntr
  * enter the heap — so this bounds the one part that genuinely has to be resident. */
 private const val MAX_TEXT_BYTES = 64L * 1024 * 1024
 
+/** §3.1.2 — worded like `PortableArchive`'s import refusal: the toggle, where it is, and that nothing changed. */
+private const val VIEW_ONLY_NOTION_REFUSAL =
+    "View-Only is on, so nothing can be imported into this device. Turn it off with the eye in " +
+        "the Pages toolbar, then import again — nothing has been changed."
+
 private val NOTION_ID_REGEX = Regex("[0-9a-fA-F]{32}")
 private val TRAILING_ID_REGEX = Regex("\\s[0-9a-fA-F]{32}$")
 
@@ -76,6 +82,8 @@ class NotionImporter(
     private val propertyDao: PropertyDao,
     private val propertyValueDao: PropertyValueDao,
     private val pageContentRepository: PageContentRepository,
+    /** §3.1.2 — nullable for fixtures only, as `PortableArchive`'s is; `AppContainer` passes the real one. */
+    private val viewLockState: ViewLockState? = null,
 ) {
     /** §7.3.6 — the data an imported database's post-import "Sync to Tasks?" step needs, so the
      * Settings UI can reuse [com.tendril.app.ui.pages.EnableSyncSheet] and
@@ -95,6 +103,9 @@ class NotionImporter(
      * in `filesDir`.
      */
     suspend fun import(zipUri: Uri): NotionImportSummary = withContext(Dispatchers.IO) {
+        // The guard behind `SettingsScreen`'s, as `PortableArchive` has (audit 5.5): the section
+        // is swapped out under View-Only, but a picker result can land after the lock went on.
+        check(viewLockState?.viewOnly?.value != true) { VIEW_ONLY_NOTION_REFUSAL }
         val stagingDir = File(context.cacheDir, "notion_import_${UUID.randomUUID()}").apply { mkdirs() }
         try {
             importStaged(readZip(zipUri, stagingDir))

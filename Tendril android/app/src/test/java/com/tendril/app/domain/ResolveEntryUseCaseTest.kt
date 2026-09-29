@@ -86,6 +86,42 @@ class ResolveEntryUseCaseTest {
         assertEquals("trashed on its own, it stays in Trash", at.minusSeconds(3600), entryDao.getById(earlier)!!.deletedAt)
     }
 
+    private fun weeklyTask(): Long = runBlocking {
+        entryDao.insert(
+            Entry(title = "Water plants", kind = EntryKind.TASK, startDate = LocalDate.of(2026, 9, 25), startTime = null,
+                endDate = null, endTime = null, recurrenceRule = com.tendril.app.data.entry.RecurrenceRule.Elastic(java.time.Period.ofDays(7)),
+                status = EntryStatus.PENDING, createdAt = at, updatedAt = at),
+        )
+    }
+
+    /**
+     * Audit 5.2's open half. The 25th's overdue notification stays in the shade after the task is
+     * done from the app, and a recurring task is never left DONE — it advances to the 2nd,
+     * PENDING — so the already-done guard cannot catch it. Its Done then completed the 2nd, a week
+     * early: a completion nobody made, and the series pushed on another period.
+     */
+    @Test
+    fun `a stale Done for an occurrence already resolved does not complete the next`() = runBlocking {
+        val id = weeklyTask()
+        val occurrence = LocalDate.of(2026, 9, 25)
+        resolve.resolve(id, EntryStatus.DONE, at, occurrence)
+
+        resolve.resolve(id, EntryStatus.DONE, at.plusSeconds(60), occurrence)
+
+        assertEquals(1, completionDao.getAll().size)
+        assertEquals(LocalDate.of(2026, 10, 2), entryDao.getById(id)!!.startDate)
+    }
+
+    /** Control: the notification for the occurrence that is due still resolves it. */
+    @Test
+    fun `a Done for the occurrence that is due still resolves it`() = runBlocking {
+        val id = weeklyTask()
+        resolve.resolve(id, EntryStatus.DONE, at, LocalDate.of(2026, 9, 25))
+
+        assertEquals(1, completionDao.getAll().size)
+        assertEquals(LocalDate.of(2026, 10, 2), entryDao.getById(id)!!.startDate)
+    }
+
     /** Control: a skipped task can still be marked done — a different outcome is a real change. */
     @Test
     fun `a skipped task can still be marked done`() = runBlocking {

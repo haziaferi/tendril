@@ -173,6 +173,9 @@ second copy of the reasoning.
 | 2026-09-26 (audit 5.11: a lost preference left another Tendril calendar behind) | §9.11 amended. `CalendarProviderSync.ensureCalendar` knew its calendar only by a preference id, so each loss of the app's data created another calendar and left the old one visible with its events. The phone walked on this date had eight. A missing id now replaces every calendar on Tendril's local account with one, and the launch sweep removes extras. Android-only. `CalendarRegistrationInstrumentedTest` (phone, 2 cases, both red first). | §9.11 |
 | 2026-09-26 (audit 5.6: the edit sheet's dates in ISO) | §3.2 amended. `EntryEditSheet` rendered the event's end date and the task's Deadline with `LocalDate.toString()` beside a *When* in `dayLabel`'s day form. Walked on the phone (`2026-09-26` beside `sab 26`), fixed to `dayLabel`, re-walked (`sab 26` throughout). Composable text, which the JVM suite cannot reach; the walk is the proof. Shared, so both apps' sheets. | §3.2 |
 | 2026-09-26 (audit 5.12: a trashed series left its moved occurrence behind) | §5.5.1 amended. `ResolveEntryUseCase.trash` soft-deleted the series row alone, so a moved occurrence outlived "The whole series goes" in the Calendar and the phone's calendar app. Found on the walk's own cleanup. Exception rows now go with the series under the same `deleted_at`, and `restore` brings back exactly those. Shared, so both apps. `ResolveEntryUseCaseTest` +2, the trash case red first; re-walked, the phone's calendar held nothing after. | §5.5.1 |
+| 2026-09-26 (the audit's residuals: a stale Done, Google and exceptions, the Notion lock, Trash dates) | **The stale Done (5.2's open half), §9.7 amended.** An overdue notification left in the shade after a recurring task was done in the app completed the occurrence the task had moved to. The notification now carries its occurrence date, and `ResolveEntryUseCase.resolve(occurrence = …)` resolves that occurrence or nothing; the stale one is dismissed without a write. Shared use case, Android notification. `ResolveEntryUseCaseTest` +2, red first. **Google and a series' exceptions (5.4's Google half), §9.5.1 amended, wider than recorded.** The push sent skip rows as events, sent moved occurrences beside a series with no EXDATE, and wrote over or deleted the Google series through the copied id a pre-fix override carries. The pull cut a moved occurrence loose from its series in the same pass that pushed it. The push is now planned by `planGooglePush` with the mirror's EXDATE shape, and `pulledOver` keeps the row's place in its series. Android-only. `GooglePushPlanTest` (new), six red first, one control. Not walked against a live Google calendar. **The Notion import under View-Only (5.5), §3.1.2 amended.** `NotionImporter.import` refuses on its own, as `PortableArchive` does. Android-only. `NotionImportNoticesTest` +1, red first. **Trash dates, §5.5.1 amended.** The Tasks Trash sheet's ISO date is `dayLabel` now. Shared, so both apps. `EntryTrashSubtitleTest` (new), two red first. **The mention (5.9)** is pinned, not changed: `RegisterSolveTest` +1 holds the accent on its tint to the tint's text floor (4.6) in every register and mode; validated by raising the floor to 8.0, where it failed. | §9.7, §9.5.1, §9.11, §3.1.2, §5.5.1 |
+| 2026-09-26 (audit 5.13, 5.14: bound cells wrote the copy they drew) | §9.4 amended. Sweeping every entry write for more of 5a.6 found two the sweep missed and a data loss beside them. **5.13** — the task pane's Deadline and Urgency stamped `updatedAt` on an unchanged value. **5.14** — the four bound-field writes, in the database table and on a Row's own page, wrote the screen's drawn copy of the entry whole, so a tick, trash or Google id that landed since was undone (5a.8's class). All go through the new `writeBoundEntryField` now: the one field, over the stored row, only on a change. Shared, so both apps. `TasksPaneWritesTest` (new) +3 and `WritePathSyncTest` +5, seven red first. `FakeEntryDao.observeBySourceRowIds` now emits the stored rows once, which the Row-page cases need. | §9.4 |
+| 2026-09-29 (calendar sync through the system calendar) | **New §9.12, decided, not built; §9.5 and §9.5.1 retired; §9.8 R3 amended.** Connecting Google on the phone failed with `UNREGISTERED_ON_API_CONSOLE`: the direct engine needs a Cloud project, an OAuth client per signing key and a Production consent screen, and the person declined to run one. Tendril will instead read and write calendars that a sync app (DAVx5, or the phone's Google account) keeps in the system calendar. The person's choices: calendars ticked in a picker are read; each event picks its calendar, including this phone only, defaulting to the last choice; tasks stay in the LOCAL Tendril calendar. Three platform behaviours were probed on the phone first, against DAVx5 and a Google CalDAV calendar: `UID_2445` survives upload and a server-side edit (the provider `_id` does not); exceptions reach the server; nothing but a sync-app-specific tag records a change, so the read-back uses fingerprints and a three-way table, the provider winning a true conflict. Android only. `docs/decisions/2026-09-29-calendar-sync-route.md` holds the reasoning. | §9.12, §9.5, §9.5.1, §9.8, §9.11 |
 | 2026-09-16 (the type vocabulary) | §2.3 amended: Inter bundled and the default (`THIRD_PARTY_NOTICES/OFL-Inter.txt`), every family at true 400/500/600 through `variationSettings` (the desktop had drawn every Medium as Regular), the eye pass 400/500/600, the scale 11 · 12.5 · 14 · 16 · 18 (+ 20 / 24 for the editor's H2 / H1), **seven styles** in `ui/theme/TendrilType.kt` with the element map, the editor's own sizes, `tools/audit.py` rule 12 *literal type*; 45 literal sizes, 31 weights and 40 `bodyLarge` chrome sites folded. Critiques: `docs/critiques/type-vocabulary-mock.md`, `-function.md` (measured beside Notion). Desktop verified; the phone pending. Tests 795. | §2.3 |
 | 2026-09-16 (hover previews) | §3.1.1 amended (B§13.6 #3): `domain/preview/PagePreview.kt` (`pagePreview`, `referencePreview`, `databasePreview`, `canvasPreview`), `ui/components/HoverPreview.kt` (`hoverPreview`, `HoverPreviewState`, `HoverPreviewCard`); the four targets (the inline span through the field's `TextLayoutResult`, the mention block, the block-reference card, the Road Map's nodes — the shelf's and a pop-out's too); §3.4 one line; §2.2 the density factors **0.85 / 0.95 / 1.23** (the user's mid-walk note beside Notion — Compact read a bit large; measured in `docs/critiques/hover-preview-function.md` #4); §0.10 item 14's after-the-pass list: #3 done. `PaneChrome.openBeside` / `openInWindow`. Critiques: `docs/critiques/hover-preview-mock.md`, `-function.md`. Desktop verified; the phone composes nothing. Tests 788 → 795. | §3.1.1, §3.4, §2.2, §0.10 |
 | 2026-09-16 (drag between panes) | §3.2 amended (B§13.6 #5): the Calendar's task tray (`domain/plan/Tray.kt`, `ui/calendar/TaskTray.kt` — the pane and the Touch strip), the drag (`ui/components/Pointer.kt` `dragSource`), the targets (`ui/calendar/DropGeometry.kt`), `EntryEditor.clearWhen` / `CalendarViewModel.unschedule`; `WeekGridView` reports its geometry and takes an external target; the Week strip and the Month grid report their cells. §0.6.14: the Timeline's *No date* rows drag onto a day, and **the bar envelops its title** (the user's three mid-walk notes — Notion's rule). §2.2 *A drag's start*. §0.10 item 14's after-the-pass list: #5 done. Critiques: `docs/critiques/drag-between-panes-mock.md`, `-function.md`. Desktop verified; the phone's strip pending. Tests 778 → 788. | §3.2, §0.6.14, §2.2, §0.10 |
@@ -1824,9 +1827,10 @@ so the first undo after unlocking reversed the edit *before* it. The lock is now
 stack moves. A third write is named here as an exemption rather than gated:
 `PageDetailViewModel.onOpened` refreshes reference blocks' cached `content` — derived from the
 referenced block, no `updatedAt` bump — the same idempotent repair-on-open as `ensureDefaultView`
-and Canvas's lazy `PageCanvas`. Still guarded in the UI only, and recorded as such: the Notion
-import (`NotionImporter` takes no `ViewLockState`; `SettingsScreen` swaps the section out under the
-lock), where `PortableArchive` refuses on its own.)*
+and Canvas's lazy `PageCanvas`. The Notion import was guarded in the UI only until 2026-09-26
+(audit 5.5): `SettingsScreen` swaps the section out under the lock, but a picker result can land
+after the lock goes on. `NotionImporter.import` now refuses on its own, as `PortableArchive` does,
+with the same wording. `NotionImportNoticesTest` +1, red first.)*
 
 ### 3.1.3 Page templates (Decided 2026-08-08)
 
@@ -3250,7 +3254,10 @@ explicitly above ("no longer a way to back out... short of manually reconstructi
   exception rows with it, stamped with the series' own `deleted_at`, and Restore brings back
   exactly those. The confirm said "The whole series goes"; the walk found its moved occurrence
   left live, in the Calendar and in the phone's calendar app. An exception trashed on its own
-  earlier stays in Trash. `ResolveEntryUseCaseTest` +2 (the trash case red first).)*
+  earlier stays in Trash. `ResolveEntryUseCaseTest` +2 (the trash case red first).)* *(Amended
+  2026-09-26 — the Tasks Trash sheet showed an entry's date in ISO (`Event · 2026-09-26`), audit
+  5.6's class on another sheet. It uses `dayLabel` and a 24-hour clock now, like the task rows.
+  `EntryTrashSubtitleTest` (new), two of three red first.)*
 - **Bulk actions (Decided 2026-08-08).** Every Trash item has a selection checkbox, plus a
   header-level "Select all" — a deliberate improvement over Notion, whose own Trash lacks this and
   makes batch cleanup a one-at-a-time chore. Selected items get the same Restore / Delete forever
@@ -4280,6 +4287,20 @@ single-writer Habit-folder case:
   `TasksHabitsUpdateHabitTest` (new) +2. All six failed first; the check-in case read streak 0
   where it should have read 1.
 
+  *Amended 2026-09-26 (audit 5.13 and 5.14, found sweeping for more of 5a.6).* The sweep above
+  was not complete. **5.13:** the task pane's Deadline and Urgency (`TasksHabitsViewModel`
+  `setDeadline`, `setImportance`) stamped `updatedAt` whatever they wrote; each writes only on a
+  change now. **5.14, 5a.8's data loss in the bound cells:** a Row's bound When, deadline and
+  repeat — from the database table (`PageDatabaseViewModel.setBoundDate`, `setRecurrence`) and
+  from the Row's own page (`PageDetailViewModel.setRowBoundDate`, `setRowRecurrence`) — wrote the
+  copy of the entry the screen had drawn, whole. A tick, a trash or a Google id that landed since
+  was written back: DONE read PENDING, a trashed entry came back. All four now go through
+  `writeBoundEntryField` (`domain/`), which lays the one field over the row as stored now and
+  writes nothing when it is unchanged. Tests: `TasksPaneWritesTest` (new, two red first, one
+  control) and `WritePathSyncTest` +5, all red first. Still stamped on a no-op, recorded: a
+  rebind in `DatabaseSyncManager` re-reads each row's value and stamps every entry even where the
+  value is the same.
+
   *Amended 2026-09-25 (audit 5a.7).* This is the opposite failure: a real edit that never
   travelled. **Replacing a block's picture did not reach the other device, whatever the file
   type.** Three rules, each sound by itself, combined to stop it:
@@ -4646,6 +4667,9 @@ the consequence: losing this passphrase makes the synced folder unreadable on an
 
 ### 9.5 Google Calendar OAuth without Play Store
 
+*(**Retired 2026-09-29 by §9.12.** Tendril no longer talks to Google itself; calendars sync through the
+system calendar. Kept as the record of what the direct route required and why it was dropped.)*
+
 - Fully workable for personal/sideloaded use — no Play Store review needed.
 - **Real trap to avoid**: if the OAuth consent screen is left in "Testing" mode in Google Cloud
   Console, every connection automatically expires after 7 days, forcing repeated re-authentication.
@@ -4677,6 +4701,9 @@ the consequence: losing this passphrase makes the synced folder unreadable on an
   (Security → Third-party apps & services) until this is verified and wired.
 
 ### 9.5.1 Google Calendar sync engine (Decided/Implemented 2026-08-29)
+
+*(**Retired 2026-09-29 by §9.12** — the engine is removed when §9.12 is built; until then it is
+present and unreachable without a Cloud project.)*
 
 The actual push/pull mechanics, built on top of §9.5's OAuth mechanism, once an access token is
 available:
@@ -4724,6 +4751,28 @@ available:
 
   This is sound because the id only ever goes from absent to known while an entry lives.
   `GoogleEventIdSyncTest` pins it: two of its tests failed first, and the third is a control.
+- **A series' exceptions** *(Amended 2026-09-26, audit 5.4's Google half; wider than recorded)*.
+  The push sent every EVENT row as an event of its own and knew nothing of exception rows:
+  - a skip row was pushed as an event, so a skipped day *appeared* on Google;
+  - a moved occurrence was pushed as a standalone event while the series, sent with no EXDATE,
+    still held the original date — the occurrence twice;
+  - an override made before 2026-09-26 carries its series' `googleEventId` (§9.11's amendment),
+    so its push rewrote the whole Google series as one date, and trashing it deleted the series.
+
+  The push now has the mirror's shape (§9.11): the series goes with an `EXDATE` per exception, in
+  the zone its start is sent in (`VALUE=DATE` for an all-day series); a moved occurrence is an
+  event of its own; a skip is nothing. An exception that changed re-sends its series. An id equal
+  to the series' is never an exception's own: it is not written over or deleted, and the row gets
+  an event of its own, which replaces the copied id.
+
+  The pull had the matching hole. A moved occurrence comes back newer in the same pass (push runs
+  first), as a plain Google event, and was stored wholesale — it stopped being an occurrence of its
+  series, and the series showed the original date again beside it. `pulledOver` now keeps
+  `originalEntryId`, `originalOccurrenceDate` and `isExceptionSkip` from the local row, beside the
+  fields it already kept. Android-only. `GooglePushPlanTest` (new): six of seven red first
+  against the push and pull logic lifted out unchanged; one control. **Not walked:** whether
+  Google accepts these EXDATE lines is unproved until a push reaches a real calendar. Google's
+  own exceptions (an instance edited in Google) are still pulled as separate events.
 - **Transport**: plain `HttpURLConnection` plus the existing `kotlinx.serialization` dependency, not
   a new HTTP library — consistent with this codebase's preference for direct platform APIs over
   added abstraction (`SecretStore`'s direct Keystore usage over `androidx.security` is the same
@@ -4836,9 +4885,13 @@ alarm cases were proved on the phone by `ReminderRearmInstrumentedTest`, which c
   undated or trashed entry no longer rings; the sweep alone never visits those. A restore still
   sweeps only: after its wipe every row is new, and `AUTOINCREMENT` never reuses an id. Tapping
   Done on a task that is already done now logs nothing, where it logged a second completion.
-  Still open: a stale overdue notification's Done on a **recurring** task completes the
-  occurrence the task has since moved to, because the notification does not carry its occurrence
-  date.*
+  A stale overdue notification's Done on a **recurring** task used to complete the occurrence
+  the task had since moved to, because the notification did not carry its occurrence date.
+  **Fixed 2026-09-26:** the notification's Done and Skip carry the `start_date` it was posted
+  for, and `ResolveEntryUseCase.resolve(occurrence = …)` resolves that occurrence or nothing. A
+  stale notification is dismissed without a write, since what it asked is already done. One
+  posted before the fix has no date and resolves as before. `ResolveEntryUseCaseTest` +2, the
+  stale case red first.*
 - ***5.3, wider than recorded.*** *`reconcileAlarms` is the sweep run at every launch, after every
   boot and after every import. It re-armed no habit at all, so **after any reboot no habit
   reminder rang** until each habit was checked in or edited. It now re-arms every habit. The
@@ -4895,6 +4948,8 @@ to §3.2 above).
 reading `Instances` for convenience.
 *Risk:* needs to actually be visible to Phase-3-you, not just decided here — it's in §3.2 now for
 that reason.
+*(Amended 2026-09-29 by §9.12: the UI still reads only Room, but Provider writes stop being
+one-directional — §9.12's read-back brings ticked calendars' events into Room rows.)*
 
 **[R4] `AlarmScheduler` as a named component, with reboot recovery — MEDIUM impact.**
 *Problem:* elastic recurrence requires event-driven (not schedule-ahead) alarm management, and
@@ -5196,9 +5251,9 @@ this way, verified from the provider.*
 *Tests: `SeriesMirrorInstrumentedTest` on the phone (two cases, both failed first) and
 `EntryEditorTest` +1, which also failed first.*
 
-*Still open, needing Google's recurring-exception API: pushed to Google, a moved occurrence is a
-separate event, and the Google series still holds the original date. Rows written before the fix
-also still carry the series' `googleEventId`.)*
+*Google's side was open here until the same day; §9.5.1's "A series' exceptions" closes it
+without Google's recurring-exception API, with the same EXDATE shape as this mirror, and repairs
+rows written before the fix that still carry the series' `googleEventId`.)*
 
 *(**Amended 2026-09-26 (audit 5.11, found on the phone walk).** The phone held **eight** calendars
 named Tendril, all visible, two of them still holding events. `ensureCalendar` knew its calendar
@@ -5211,6 +5266,121 @@ re-mirrors; the ids that would say which old event is whose were lost with the p
 launch sweep also removes any other calendar on that account. `CalendarRegistrationInstrumentedTest`
 (two cases, both failed first; clearing the preferences reproduced a ninth calendar live) pins it.
 After the fix, the phone holds one.)*
+
+### 9.12 CalDAV through the system calendar (Decided 2026-09-29 — not yet built)
+
+Replaces §9.5 and §9.5.1. Tendril stops talking to any calendar server itself. A sync app on the
+phone — DAVx5 for any CalDAV server, including Google's; or the phone's own Google account — keeps
+calendars in the system calendar (`CalendarContract`), and Tendril reads and writes **those**
+calendars. Chosen because the direct engine needed a Google Cloud project, an OAuth client per
+signing key and a Production consent screen before a single event could move (walked 2026-09-29:
+`UNREGISTERED_ON_API_CONSOLE` until that setup exists), and the person declined to run one. The
+decision record, with the costs weighed: `docs/decisions/2026-09-29-calendar-sync-route.md`.
+**Android only.** The desktop has no system calendar to read; events reach it through the
+Syncthing folder (§9.4) as they always have.
+
+**Verified on the phone, 2026-09-29** (DAVx5 4.x against a Google account's CalDAV calendar, test
+events written with `adb shell content` as an ordinary, non-sync-adapter caller — the way Tendril
+will write):
+
+1. **Identity survives the round trip.** An event inserted with `UID_2445 = tendril-probe-uid-1`
+   was uploaded by DAVx5 as `tendril-probe-uid-1.ics` — its iCalendar UID *is* the value Tendril
+   wrote — and after the title was edited on calendar.google.com and synced down, the row still
+   carried it. The provider's `_id` is **not** stable: after the first upload DAVx5 re-created the
+   exception row (752 → 753). Tendril keys on `UID_2445`, never on `_id`.
+2. **Exceptions reach the server.** A weekly series of four with one occurrence moved through
+   `Events.CONTENT_EXCEPTION_URI` (8 Oct → 9 Oct) showed on Google as 1, 15, 22 Oct and 9 Oct, with
+   8 Oct empty. The provider **refuses an exception that sets `dtend`** ("Exceptions can't
+   overwrite dtend"); an exception takes its series' `duration`.
+3. **No change timestamp.** After the server-side edit nothing an app can rely on moved except
+   `sync_data1`, which is DAVx5's own version tag — another sync app gives it another meaning. Change
+   detection is by fingerprint (below).
+
+*Unverified:* the same three with the phone's own Google-account sync instead of DAVx5 — whether
+`UID_2445` is set on events it downloads, and whether it uploads app-written exceptions. Settled by
+repeating the probes in one of the Google-synced calendars. Until then the picker labels which sync
+app owns each calendar, and this section's guarantees are stated for DAVx5.
+
+**What the person chooses.**
+
+- **Calendars to show** — Calendar settings lists every calendar in the system calendar, grouped by
+  account and labelled with its sync app ("DAVx5", "Google", "Phone"); ticked ones are read into
+  Tendril. Tendril's own LOCAL calendar (§9.11) is never offered. The same server calendar can
+  appear twice (once through DAVx5, once through the Google account); the picker shows the owner
+  account beside each so the person can tick one of the two.
+- **Where an event lives** — the event sheet gains a *Calendar* field: every ticked calendar with
+  write access (`calendar_access_level ≥ CONTRIBUTOR`), plus **This phone only**. A new event
+  starts on **the last one chosen** (a preference, per device). Tasks have no such field.
+- **Tasks stay in the Tendril calendar.** CalDAV event calendars have no tasks; dated tasks keep
+  mirroring one way into the LOCAL calendar exactly as §9.11 describes.
+
+**Model.**
+
+- `Entry.calendarKey: String?` — synced (§9.4). Null means this phone only. Otherwise a key that
+  names the calendar independently of the device's row ids: account type, account name, and the
+  calendar's `_sync_id` (for DAVx5, the collection URL). The desktop preserves it and cannot set it;
+  an event created there is local until edited on the phone.
+- `calendar_links` — **per device, never synced** (like `providerEventId`): one row per linked
+  provider event, `entryUid`, `calendarKey`, the occurrence it overrides (null for a series or a
+  single event), and `fingerprint` — a hash of the mapped fields as both sides last agreed.
+- `EntrySource.CALENDAR` for an entry first read from a calendar. An event written from Tendril
+  keeps `MANUAL`: the source says where it began, not where it lives.
+- Mapped fields, and only these: title, start/end (or `duration` for a series and its exceptions),
+  all-day, time zone, RRULE, and the exception structure. Provider fields Tendril has no model for —
+  description, location, attendees, reminders, colour — are **left untouched** by Tendril's writes:
+  it updates its columns only, so a location set in another app survives an edit in Tendril.
+
+**Writes (Tendril → system calendar).** As an ordinary app, never `CALLER_IS_SYNCADAPTER` — that
+is what marks the row dirty so the sync app uploads it. Insert sets `UID_2445 = Entry.uid`. A moved
+occurrence is an exception through `CONTENT_EXCEPTION_URI` with `originalInstanceTime` and no
+`dtend`; a skipped one is an exception with `eventStatus = CANCELED`. Trash deletes the provider
+row (the sync app turns it into a server delete); restore re-inserts. An event whose `calendarKey`
+names a calendar is **not** also mirrored into the LOCAL calendar — it is already visible in its
+own. Changing an event's calendar is a delete from the old one and an insert into the new.
+
+**Read-back (system calendar → Tendril).** Runs on launch, when the Calendar opens, on a
+debounced `ContentObserver` for `Events`, and from *Sync now*. For each ticked calendar it reads
+every row and groups them by `UID_2445` (a series with its exceptions, through `original_id` /
+`original_sync_id`). A row with no `UID_2445` has not been through its sync app yet and is skipped
+until it has. Then, per event, with **R** Tendril's current fields, **P** the provider's, and **L**
+the stored fingerprint:
+
+| R vs L | P vs L | Action |
+|---|---|---|
+| same | same | nothing |
+| same | changed | take P into Tendril (an edit made elsewhere) |
+| changed | same | write R to the provider |
+| changed | changed | **P wins**; Tendril's version is kept as a note on the entry's history, never silently dropped |
+| — (no link) | — | new: create the entry from P, link it |
+| linked | row gone | the entry moves to Trash (§5.5.1), never a hard delete |
+
+P wins a true conflict because the server is what every other client of that calendar sees; §9.4's
+last-write-wins has no timestamp to compare here. A take-from-P write goes through `EntryEditor`
+and the coordinator like any other edit (§9.7), and its `updatedAt` is the moment of the read — the
+edit reaches the desktop through the folder sync as an ordinary one.
+
+**Recurrence.** A series read back is expanded by §4.1.1's expander, whose RRULE subset was chosen
+when the Google pull was its only source. A rule outside it is stored and shown at its first
+occurrence with the divergence notice §4.1.1 describes, and **Tendril never writes that series
+back** — rewriting a rule it cannot parse would corrupt it on the server.
+
+**§9.8 R3, amended.** "Room stays authoritative for Tendril's UI always" holds: the Calendar,
+widgets and alarms still read only Room. What changes is that Provider writes are no longer
+one-directional — the read-back above is the one path that brings Provider rows into Room, and it
+does so into Room rows, never by reading `Instances` for display.
+
+**Retired with this section.** `GoogleCalendarSyncEngine`, `GoogleCalendarAuthManager`,
+`GoogleCalendarPreferences`, the Play Services authorization dependency, and the *Google Calendar
+sync* block of Calendar settings. `Entry.googleEventId` stays in the schema and the snapshot record
+— rows may carry it — but nothing sets it. Existing `source = GOOGLE_CALENDAR` rows are matched
+on first read-back by iCalendar UID (`googleEventId@google.com`) and relinked; unmatched ones are
+left as they are. `GooglePushPlanTest` goes with the engine; audit 5.4's Google half becomes moot
+rather than walked.
+
+**Tests.** The reconcile table is a pure function over (R, P, L) rows — JVM tests, one per row of
+the table plus the exception and unparseable-rule cases. The provider adapter is proved on the phone
+against a LOCAL calendar the test creates and deletes, so no server is touched; the DAVx5 behaviour
+above is re-walked before release.
 
 ---
 

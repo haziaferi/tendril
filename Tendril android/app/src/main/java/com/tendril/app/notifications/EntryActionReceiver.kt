@@ -11,6 +11,7 @@ import com.tendril.app.data.entry.EntryStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * Handles the overdue notification's inline Done/Skip actions (§9.7) — routes through
@@ -22,6 +23,10 @@ class EntryActionReceiver : BroadcastReceiver() {
         val entryId = intent.getLongExtra(AlarmScheduler.EXTRA_ENTRY_ID, -1L)
         val action = intent.getStringExtra(EXTRA_ACTION)
         if (entryId < 0 || action == null) return
+        // The occurrence this notification was posted for; absent from one posted before this
+        // extra existed, which then resolves as it always did.
+        val occurrence = intent.getLongExtra(EXTRA_OCCURRENCE, Long.MIN_VALUE)
+            .takeIf { it != Long.MIN_VALUE }?.let(LocalDate::ofEpochDay)
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO).launch {
@@ -31,9 +36,10 @@ class EntryActionReceiver : BroadcastReceiver() {
                     appLockEnabled = container.appLockPreferences.enabled.value,
                     entryId = entryId,
                     action = action,
-                ) { id, status -> container.resolveEntryUseCase.resolve(id, status) }
+                ) { id, status -> container.resolveEntryUseCase.resolve(id, status, occurrence = occurrence) }
                 // Only a write earns the dismissal. Cancelling a refused notification would
-                // make "nothing happened" look exactly like "done".
+                // make "nothing happened" look exactly like "done". A stale one — its occurrence
+                // already resolved — is dismissed: that "done" is true.
                 if (resolved) {
                     NotificationManagerCompat.from(context).cancel(OverdueAlarmReceiver.notificationId(entryId))
                 }
@@ -47,8 +53,9 @@ class EntryActionReceiver : BroadcastReceiver() {
         const val ACTION_DONE = "com.tendril.app.action.DONE"
         const val ACTION_SKIP = "com.tendril.app.action.SKIP"
         private const val EXTRA_ACTION = "action"
+        private const val EXTRA_OCCURRENCE = "occurrence_epoch_day"
 
-        fun pendingIntent(context: Context, entryId: Long, action: String): PendingIntent {
+        fun pendingIntent(context: Context, entryId: Long, action: String, occurrence: LocalDate?): PendingIntent {
             // Distinct request code per (entry, action) — Done and Skip need separate
             // PendingIntents for the same Entry, not just distinct from other entries'.
             val requestCode = (entryId.toInt() shl 1) or (if (action == ACTION_DONE) 0 else 1)
@@ -68,6 +75,7 @@ class EntryActionReceiver : BroadcastReceiver() {
             val intent = Intent(context, EntryActionReceiver::class.java).apply {
                 putExtra(AlarmScheduler.EXTRA_ENTRY_ID, entryId)
                 putExtra(EXTRA_ACTION, action)
+                occurrence?.let { putExtra(EXTRA_OCCURRENCE, it.toEpochDay()) }
             }
             return PendingIntent.getBroadcast(
                 context, requestCode, intent,
