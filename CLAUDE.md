@@ -139,8 +139,9 @@ none of them looked at the desktop's identical merge, which had the same defect.
   not, so a declaration used only that way reads as dead. Write `"${NAME}"` or concatenate instead
   of suppressing, or amend `strip_literals` with a test in `tools/tests`.
 - **`shared/schemas/` is Room's KSP output directory** (`shared/build.gradle.kts:95`). An Android
-  build deletes files there it did not generate — never park a scratch file in it. The 18 tracked
-  exports survive.
+  build deletes files there it did not generate — never park a scratch file in it. The tracked
+  exports survive (`git ls-files shared/schemas` — one per schema version; this line said 18 until
+  v26 made it 19).
 - **A feature ends with a walk**, on the phone and the desktop, written up in
   `docs/critiques/<name>-function.md` as a tried/observed table. Hardware runs go through
   `uiautomator` dumps rather than screenshots, so the result is diffable.

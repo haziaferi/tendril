@@ -64,11 +64,14 @@ def test_a_hypothesis_table_is_read_by_its_finding_not_by_what_would_settle_it(t
         "| 5.1 | `b` | y. **Fixed 2026-09-26:** z | a test |\n"
         "| 5.2 | `c` | open, nothing done | a walk (the setting is not changed from here) |\n"
         "| 5.3 | `d` | **Pinned, not changed:** the ratio | a test |\n"
-        "| 5.4 | `e` | **Fixed:** w. Recorded, not changed: v | t |\n",
+        "| 5.4 | `e` | **Fixed:** w. Recorded, not changed: v | t |\n"
+        # Found the same day: a hypothesis whose prose recalls an earlier flake that was "fixed"
+        # read as fixed. The status is the bold marker a row is amended with, not any word in it.
+        "| 5.5 | `f` | red once; an earlier flake was fixed by a reset | a loop |\n",
         encoding="utf-8")
     rows = facts.audit_rows(str(doc))
-    assert rows["total"] == 5
-    assert rows["hypothesis"] == ["5.2"]
+    assert rows["total"] == 6
+    assert rows["hypothesis"] == ["5.2", "5.5"]
     assert rows["not_changed"] == ["5.3"]
     assert rows["fixed_or_clean"] == 3
 
