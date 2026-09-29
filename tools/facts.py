@@ -65,10 +65,12 @@ def audit_rows(path: str) -> dict:
             cells = [c.strip() for c in line.split(" | ")]
             total += 1
             if settle_table:
-                finding = cells[2].lower() if len(cells) > 2 else ""
-                if re.search(r"\bfixed\b", finding):
+                # Only the bold marker a row is amended with (**Fixed 2026-09-26:**, **Pinned,
+                # not changed:**) is its status; prose may recall an earlier fix of something else.
+                marks = " ".join(re.findall(r"\*\*([^*]*)\*\*", cells[2] if len(cells) > 2 else "")).lower()
+                if re.search(r"\bfixed\b", marks):
                     done += 1
-                elif "not changed" in finding:
+                elif "not changed" in marks:
                     unchanged.append(m.group(1))
                 else:
                     hyp.append(m.group(1))

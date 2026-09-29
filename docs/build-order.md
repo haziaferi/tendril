@@ -75,7 +75,7 @@ One more constraint that shapes how items may be *split*: `tools/audit.py` check
 | X2 | **Live embed blocks** | Acquired *after* the exclusion was written: desktop Milestone 3 moved `PageDetailScreen` into `shared/commonMain`, so every block type must now render on Android *and* desktop JVM. Compose Desktop has no WebView; JCEF/KCEF is the same per-ABI native problem. **A static preview card is buildable and small.** Decide which rendering you accept. |
 | X3 | **Wallpaper *sampling* for widget contrast** | `WallpaperManager.getDrawable()` is restricted from Android 13 to the default launcher on `targetSdk 36`. Not buildable for a sideloaded app. **But `getWallpaperColors(FLAG_SYSTEM)` is API 27+, needs no permission, and returns `HINT_SUPPORTS_DARK_TEXT` — the platform literally answering the light/dark question.** Build the declared/hinted half (W1, W2 below); do not plan the sampled half. |
 | X4 | **Desktop App Lock** | `BiometricPrompt` has no JVM equivalent. But Windows Hello via JNA is reachable and a passphrase gate is trivial. Inv3 pushed back on this being category (b) at all, and I agree — it is a dependency choice, not a constraint. |
-| X5 | **Desktop Google Calendar** | Play Services' `AuthorizationClient` is Android-only. A desktop OAuth loopback flow works — **but it would produce a persistent refresh token, which is exactly what the Android design congratulates itself on never holding.** That is a deliberate decision, not a port side-effect. |
+| X5 | **Desktop Google Calendar** | Play Services' `AuthorizationClient` is Android-only. A desktop OAuth loopback flow works — **but it would produce a persistent refresh token, which is exactly what the Android design congratulates itself on never holding.** That is a deliberate decision, not a port side-effect. *Moot 2026-09-29: the Google engine is retired (§9.12, #148), and the desktop gets calendar events through the folder sync.* |
 
 ### Deliberately not items (seen, skipped — do not "build" these)
 
@@ -187,8 +187,8 @@ These four lanes have **no file overlap with each other** and none with the EDIT
 | T11 [S] | Calendar's "Show Habits" toggle — reuse `HabitSchedule`, don't write a second cadence evaluator | — | Toggle on; habits due today appear on the day cell |
 | T12 [S] | Battery-optimization exemption prompt | — | Settings row opens the system dialog and reflects the granted state |
 | T13 [S] | Batched summary notification after a bulk import creates overdue Entries (deferral expired — both bulk creators shipped) | — | Import 50 overdue rows; one summary notification, not 50 |
-| G1 [S] | Disconnecting Google Calendar does not revoke the grant | — | Disconnect, then check the Google account permissions page — the grant is gone |
-| B15 [S] | Push unconditionally overwrites Google's copy rather than comparing timestamps | — | Edit an event in Google, then sync — the Google edit survives |
+| ~~G1~~ [S] | Disconnecting Google Calendar does not revoke the grant. *Moot 2026-09-29: the Google engine is retired (§9.12, #148).* | — | Disconnect, then check the Google account permissions page — the grant is gone |
+| ~~B15~~ [S] | Push unconditionally overwrites Google's copy rather than comparing timestamps. *Moot 2026-09-29: the Google engine is retired (§9.12, #148).* §9.12's read-back compares against a stored fingerprint instead. | — | Edit an event in Google, then sync — the Google edit survives |
 | B14 [S] | The kind↔recurrence-rule invariant (`Fixed`⇒EVENT, `Elastic`⇒TASK) is a convention no code enforces | — | A unit test asserting the invariant at every construction site passes |
 
 **Lane WIDGETS** ⇄ `widget/` (no overlap with anything)
@@ -306,13 +306,13 @@ One agent, one queue, in this order. Everything here is ⇄EDITOR or ⇄DB.
 
 ### STAGE 8 — Third-party integrations · parallel · ~4 weeks
 
-**No HTTP library exists and none is needed** — `GoogleCalendarSyncEngine` uses raw `HttpURLConnection` + `kotlinx.serialization`, `INTERNET` is declared, and §7.4 records a deliberate zero-non-AndroidX-dependency posture. Follow that idiom; do not add OkHttp/Ktor.
+**No HTTP library exists and none is needed** — the idiom is raw `HttpURLConnection` + `kotlinx.serialization` (`GoogleCalendarSyncEngine` was its example until the engine was retired on 2026-09-29, §9.12), `INTERNET` is declared, and §7.4 records a deliberate zero-non-AndroidX-dependency posture. Follow that idiom; do not add OkHttp/Ktor.
 
 | ID | Item | Depends on | Acceptance test |
 |---|---|---|---|
 | A1 [M] | **Claude-API-generated in-page mind map.** The Anthropic key path is fully built and has zero consumers: `SecretStore` encrypts `anthropic_api_key`, `SettingsScreen` renders `AnthropicKeySection`, and nothing reads it. **This is also the first test of §3.5's "zero network calls until this key is toggled on" promise.** Note the honest caveat from inv4: §3.5 deferred this key "to a future in-page mind-map generator", and that generator shipped as Canvas *with no AI in it* — so the feature needs a product decision about what it does before it can be estimated. Removing the Settings section is as legitimate an answer as building this | DK5 (for shared Canvas) | With a key set, a page generates a Canvas; with no key, zero network calls (verified by a proxy) |
 | N1 [L] | Notion API import as a second, richer path. Uses the *user's own* integration token — same shape as Google Calendar, no Tendril account. **Lands Android-only unless deliberately moved** | DB1 (typed relations), DK10 (if desktop) | A Notion workspace imports with relations as RELATION properties, not text |
-| G2 [M] | Google Calendar sync is EVENT-only and `primary`-only | S2 | **yes** — `Entry.googleCalendarId`, `@AutoMigration`; must ride the snapshot record the way `googleEventId` does | A second calendar can be picked and syncs |
+| ~~G2~~ [M] | Google Calendar sync is EVENT-only and `primary`-only. *Moot 2026-09-29: the Google engine is retired (§9.12, #148).* Several calendars are picked in §9.12's picker, keyed by `Entry.calendarKey` (v26). | S2 | **yes** — `Entry.googleCalendarId`, `@AutoMigration`; must ride the snapshot record the way `googleEventId` does | A second calendar can be picked and syncs |
 
 ---
 
@@ -336,7 +336,7 @@ Six lanes, defined by the files they lock. Two items may run concurrently **iff*
 | **SYNC** | `sync/SnapshotRecords.kt`, `SnapshotMappers.kt`, `PagesSyncEngine.kt`, `PageSnapshotRecords.kt`, `SnapshotSyncOrchestrator.kt`, `PurgeRegistry.kt`, `PortableArchive.kt`, `TendrilDatabase.kt` | **Strictly serial internally.** S1→S2→S3/S4→S5/S6/S7→E1→E2/E3→S8→S9→S10. Nine items, one agent, the whole plan long |
 | **EDITOR** | `ui/pages/PageDetailScreen.kt`, `PageDetailViewModel.kt`, `domain/BlockOutline.kt`, `data/page/Block.kt`, `SpanVisualTransformation.kt`, `PageFts.kt`, `PageContentRepository.kt` | **Strictly serial internally** — ~15 items |
 | **DB** | `ui/pages/PageDatabaseScreen.kt`, `PageDatabaseViewModel.kt`, `pagedatabase/*`, `DatabaseSyncManager.kt` | **Strictly serial internally** — ~15 items. **Overlaps EDITOR on `PageDetailScreen.kt`** (B3, DB10, P19, row properties), so EDITOR and DB are *not* fully independent: they need a shared queue for those four items or a handoff protocol |
-| **ENTRIES** | `ui/taskshabits/`, `ui/calendar/`, `notifications/`, `data/habit/`, `domain/HabitSchedule.kt`, `EntryOccurrences.kt`, `googlecalendar/` | Serial internally after B5→T1; T6/T10/T11/T12/G1/B15 are independent sub-lanes |
+| **ENTRIES** | `ui/taskshabits/`, `ui/calendar/`, `notifications/`, `data/habit/`, `domain/HabitSchedule.kt`, `EntryOccurrences.kt`, `calendarprovider/` (was `googlecalendar/`, removed 2026-09-29) | Serial internally after B5→T1; T6/T10/T11/T12 are independent sub-lanes (G1/B15 moot) |
 | **CANVAS** | `ui/canvas/`, `ui/roadmap/`, `data/page/PageRelation.kt`, `data/canvas/` | Small; B1→B2→T14, plus DB14 and B9 |
 | **DESKTOP** | `Tendril windows/src/`, `shared/jvmCommon/`, `composeResources/strings.xml`, `ui/nav/WorkbenchScaffold.kt` | Serial internally after DK1; DK2→DK3 is the bottleneck. **Consumes ENTRIES and CANVAS files at port time — cannot overlap them** |
 

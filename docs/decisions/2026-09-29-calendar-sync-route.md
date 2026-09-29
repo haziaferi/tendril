@@ -1,6 +1,6 @@
 # Calendar sync: Tendril's own Google engine, or the phone's system calendar?
 
-**Status: decided 2026-09-29 — route B, no Google engine, no fallback; specified as §9.12.** The person declined to
+**Status: decided 2026-09-29 — route B, no Google engine, no fallback; specified as §9.12. Built and walked against DAVx5 the same day (#148); what follows is the reasoning as it stood before any code, and "nothing here is built" below is that moment's truth.** The person declined to
 set up a Google Cloud project, which route A requires. Still open: which calendars Tendril reads,
 and whether tasks stay mirrored (decision 2 below); B's read-back is designed in the spec before
 any code. Written 2026-09-29, after a walk on the phone showed what
