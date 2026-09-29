@@ -337,14 +337,20 @@ fun ParsedEntry.toEntry(fallbackDate: LocalDate?, now: java.time.Instant): com.t
  * B§13.6 #7 — the one write quick add makes, shared by the Calendar's ViewModel and the desktop's
  * chord-opened popup (which has no ViewModel owner): insert what the preview showed, then let the
  * platform re-arm its alarms (§9.7). Null for a blank title, as the strip refuses one.
+ * [calendarKey] is the calendar a new event starts in (§9.12, the phone's last choice); the
+ * desktop passes none.
  */
 suspend fun quickAddEntry(
     entryDao: com.tendril.app.data.entry.EntryDao,
     coordinator: EntryScheduleCoordinator,
     parsed: ParsedEntry,
     date: LocalDate,
+    calendarKey: String? = null,
 ): com.tendril.app.data.entry.Entry? {
     if (parsed.title.isBlank()) return null
-    val id = entryDao.insert(parsed.toEntry(fallbackDate = date, now = java.time.Instant.now()))
+    // §9.12 — an event starts in the calendar last chosen; a task has none.
+    val entry = parsed.toEntry(fallbackDate = date, now = java.time.Instant.now())
+        .let { if (it.kind == EntryKind.EVENT) it.copy(calendarKey = calendarKey) else it }
+    val id = entryDao.insert(entry)
     return entryDao.getById(id)?.also { coordinator.onEntryChanged(it) }
 }

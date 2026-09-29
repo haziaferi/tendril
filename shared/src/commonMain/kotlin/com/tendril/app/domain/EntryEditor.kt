@@ -28,8 +28,8 @@ class EntryEditor(
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
 ) {
     /**
-     * [edited]'s **editable** fields — the ones the edit sheet has controls for — laid over its row
-     * as it is now, normalised for its kind.
+     * [edited]'s **editable** fields — the ones the edit sheet has controls for, the calendar among
+     * them (§9.12) — laid over its row as it is now, normalised for its kind.
      *
      * Not [edited] wholesale (audit 5a.8): the sheet hands back its copy of the entry from when it
      * opened, and everything it has no control for — status, trash, the Google id, the parent and
@@ -52,6 +52,8 @@ class EntryEditor(
             dueDate = edited.dueDate,
             estimate = edited.estimate,
             importance = edited.importance,
+            // §9.12's *Calendar* field — the eleventh the sheet edits.
+            calendarKey = edited.calendarKey,
         ).normalisedForKind()
         if (merged == stored) return stored
         val normalised = merged.copy(updatedAt = now)
@@ -124,6 +126,8 @@ class EntryEditor(
     private fun Entry.normalisedForKind(): Entry = when (kind) {
         EntryKind.TASK -> copy(
             endDate = null, endTime = null,
+            // A task has no calendar: CalDAV event calendars hold no tasks (§9.12).
+            calendarKey = null,
             status = status ?: EntryStatus.PENDING,
             // A task repeats by period, never by RRULE.
             recurrenceRule = recurrenceRule?.takeIf { it is RecurrenceRule.Elastic },

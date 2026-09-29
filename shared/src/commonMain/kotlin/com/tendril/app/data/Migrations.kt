@@ -306,3 +306,13 @@ val MIGRATION_24_25 = object : Migration(24, 25) {
         connection.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS `block_fts` USING FTS4(`pageId` INTEGER NOT NULL, `blockId` INTEGER NOT NULL, `plainText` TEXT NOT NULL)")
     }
 }
+
+/** v26 (2026-09-29) — §9.12, calendar sync through the system calendar: the synced calendar an
+ * event lives in (`entries.calendarKey`, null for this phone only, so no backfill), and the
+ * per-device links the read-back compares against. */
+val MIGRATION_25_26 = object : Migration(25, 26) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `entries` ADD COLUMN `calendarKey` TEXT")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `calendar_links` (`calendarKey` TEXT NOT NULL, `entryUid` TEXT NOT NULL, `occurrence` TEXT NOT NULL, `fingerprint` TEXT NOT NULL, PRIMARY KEY(`calendarKey`, `entryUid`, `occurrence`))")
+    }
+}

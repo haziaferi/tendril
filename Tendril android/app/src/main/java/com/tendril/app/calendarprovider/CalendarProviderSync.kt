@@ -22,7 +22,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.TimeZone
 
-private const val ACCOUNT_NAME = "Tendril"
+internal const val ACCOUNT_NAME = "Tendril"
 private const val CALENDAR_NAME = "tendril_local"
 
 // Ink theme's light-mode accent (§2.3) — a fixed, reasonable default. Not live-themed: a
@@ -81,7 +81,7 @@ class CalendarProviderSync(
         withContext(Dispatchers.IO) { tendrilCalendarIds().filter { it != calendarId }.forEach(::deleteCalendar) }
         val exceptionsByBase = entryDao.getAllExceptions().groupBy { it.originalEntryId }
         entryDao.getAll()
-            .filter { it.deletedAt == null && it.startDate != null && it.source != EntrySource.GOOGLE_CALENDAR }
+            .filter { it.deletedAt == null && it.startDate != null && it.source != EntrySource.GOOGLE_CALENDAR && it.calendarKey == null }
             .forEach { upsertEntry(it, exceptionsByBase[it.id].orEmpty()) }
     }
 
@@ -166,7 +166,9 @@ class CalendarProviderSync(
         val entry = withoutSeriesRow(written)
         // A skip row is a tombstone for one occurrence, not an event (audit 5.4): mirrored, it put
         // an event on the very day it skipped. It reaches the calendar only as its series' EXDATE.
-        if (entry.deletedAt != null || entry.startDate == null || entry.source == EntrySource.GOOGLE_CALENDAR || entry.isExceptionSkip == true) {
+        // An event that lives in a synced calendar (§9.12) is already visible there; mirrored too,
+        // it showed twice. One moved there from this phone only loses its copy here.
+        if (entry.deletedAt != null || entry.startDate == null || entry.source == EntrySource.GOOGLE_CALENDAR || entry.isExceptionSkip == true || entry.calendarKey != null) {
             // No longer (or never) Provider-eligible — remove any stale mirrored copy.
             if (entry.providerEventId != null) removeEntry(entry)
             return

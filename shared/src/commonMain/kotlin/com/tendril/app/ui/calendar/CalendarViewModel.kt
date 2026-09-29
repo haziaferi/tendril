@@ -133,10 +133,10 @@ class CalendarViewModel(
     /** Quick Add (§3.2) — deliberately minimal, single-line capture; no reminders list here.
      * §0.8 step 5: the line is read by [com.tendril.app.domain.QuickAddParser] on the screen,
      * previewed, and arrives here already a Task or an Event; [date] is the day on view, used
-     * when the line named none. */
-    fun quickAdd(parsed: ParsedEntry, date: LocalDate) {
+     * when the line named none; [calendarKey] the calendar a new event starts in (§9.12). */
+    fun quickAdd(parsed: ParsedEntry, date: LocalDate, calendarKey: String? = null) {
         if (parsed.title.isBlank()) return
-        viewModelScope.launch { quickAddEntry(entryDao, entryScheduleCoordinator, parsed, date) }
+        viewModelScope.launch { quickAddEntry(entryDao, entryScheduleCoordinator, parsed, date, calendarKey) }
     }
 
     /** §9.8 R1 — the checked/unchecked decision lives in [ResolveEntryUseCase.setDone], not in

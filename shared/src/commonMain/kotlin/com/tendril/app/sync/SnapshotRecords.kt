@@ -45,6 +45,9 @@ data class EntrySnapshotRecord(
     /** §9.5 — travels with the record so a second device doesn't push a duplicate Google
      * event for an Entry the first device already linked. */
     val googleEventId: String? = null,
+    /** §9.12 — the synced calendar the event lives in; absent (a pre-v26 peer) reads as this phone
+     * only. Carried record-wise: choosing the calendar is an edit and moves `updatedAt`. */
+    val calendarKey: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )

@@ -16,7 +16,15 @@ class AndroidEntryScheduleCoordinator(
     private val calendarProviderSync: CalendarProviderSync,
     private val entryDao: EntryDao,
 ) : EntryScheduleCoordinator {
+    /**
+     * §9.12 — asks for a read-back pass when an event that lives in a synced calendar changed, so
+     * the edit reaches that calendar. Set by `AppContainer` once the sync exists (it depends on
+     * this coordinator, so it cannot be a constructor argument).
+     */
+    var onCalendarEntryChanged: () -> Unit = {}
+
     override suspend fun onEntryChanged(entry: Entry) {
+        if (entry.calendarKey != null) onCalendarEntryChanged()
         // A recurring EVENT's alarms anchor to its next occurrence, and an exception row can
         // skip or move that occurrence (§4.1) — so the scheduler needs them alongside the row.
         // Fetched here rather than inside AlarmScheduler so the scheduler keeps its single DAO
@@ -37,6 +45,7 @@ class AndroidEntryScheduleCoordinator(
     }
 
     override suspend fun onEntryRemoved(entry: Entry) {
+        if (entry.calendarKey != null) onCalendarEntryChanged()
         alarmScheduler.cancelAllFor(entry.id)
         calendarProviderSync.removeEntry(entry)
     }

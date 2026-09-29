@@ -17,8 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 
-/** What one snapshot-sync pass did. Named to keep it distinct from
- * `com.tendril.app.googlecalendar.SyncOutcome`, which is a different mechanism (§9.5.1). */
+/** What one snapshot-sync pass did (§9.4). */
 sealed interface SnapshotSyncOutcome {
     /** No SAF folder granted yet (§9.3) — not a failure, just nothing to sync with. */
     data object NoFolder : SnapshotSyncOutcome

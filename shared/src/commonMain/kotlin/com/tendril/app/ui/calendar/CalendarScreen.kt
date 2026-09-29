@@ -226,6 +226,8 @@ fun CalendarScreen(
     modifier: Modifier = Modifier,
     /** 14g·3 — the Settings switch that shows the urgency ladder (on by default, both platforms). */
     showUrgency: Boolean = true,
+    /** §9.12 — the phone's synced calendars; null on the desktop, which has none. */
+    calendarChoices: CalendarChoices? = null,
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
@@ -330,6 +332,7 @@ fun CalendarScreen(
             onSave = { viewModel.save(it); editTarget = null },
             onDelete = { viewModel.trash(entry.id); editTarget = null },
             onDismiss = { editTarget = null },
+            calendarChoices = calendarChoices,
         )
     }
     pendingTimeMove?.let { move ->
@@ -411,7 +414,7 @@ fun CalendarScreen(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding).onGloballyPositioned { layerOrigin = it.boundsInRoot().topLeft }) {
         Column(modifier = Modifier.fillMaxSize()) {
             if (wide && quickAddOpen) {
-                QuickAddBar(today = selectedDate, onQuickAdd = { viewModel.quickAdd(it, selectedDate) }, onClose = { quickAddOpen = false })
+                QuickAddBar(today = selectedDate, onQuickAdd = { viewModel.quickAdd(it, selectedDate, calendarChoices?.lastChosen?.value) }, onClose = { quickAddOpen = false })
             }
             // L·P2 (the phone's second fix PR, 2026-09-18): the phone's segmented row and layer chips are
             // gone — the bar carries `Week ▾` on both forms and the phone's `···` holds *Layers ▸* (a pushed
@@ -484,7 +487,7 @@ fun CalendarScreen(
                     now = dayLogsNow.second,
                     onPrev = { selectedDate = selectedDate.minusDays(1) },
                     onNext = { selectedDate = selectedDate.plusDays(1) },
-                    onQuickAdd = { viewModel.quickAdd(it, selectedDate) },
+                    onQuickAdd = { viewModel.quickAdd(it, selectedDate, calendarChoices?.lastChosen?.value) },
                     showQuickAdd = !wide,
                     showNav = !wide,
                     strokes = strokesOn(selectedDate),

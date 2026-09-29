@@ -41,7 +41,7 @@ import java.io.File
 class PopulatedMigrationTest {
 
     @Test
-    fun `a v8 file with an entry, a reminder, a completion, a habit with history and a page reaches v25 intact`() {
+    fun `a v8 file with an entry, a reminder, a completion, a habit with history and a page reaches v26 intact`() {
         val context = RuntimeEnvironment.getApplication()
         val file = context.getDatabasePath(TENDRIL_DB_NAME)
         createAtVersion(file, 8) { db ->
@@ -121,6 +121,39 @@ class PopulatedMigrationTest {
                 assertEquals(listOf("r-1"), db.reminderDao().getAll().map { it.uid })
                 assertEquals(listOf("c-1"), db.entryCompletionDao().getAll().map { it.uid })
                 assertEquals(listOf("t-1"), db.timeLogDao().getAll().map { it.uid })
+            }
+        } finally {
+            open.database.close()
+        }
+    }
+
+    /** v26 (§9.12): an entry from before the calendar sync is "this phone only", and the per-device
+     * link table exists and replaces a link rather than adding a second one. */
+    @Test
+    fun `a v25 file reaches v26 with its events phone-only and a link table that upserts`() {
+        val context = RuntimeEnvironment.getApplication()
+        val file = context.getDatabasePath(TENDRIL_DB_NAME)
+        createAtVersion(file, 25) { db ->
+            db.execSQL("INSERT INTO entries (id, uid, title, kind, source, importance, createdAt, updatedAt) VALUES (1, 'e-1', 'Yoga', 'EVENT', 'MANUAL', 0, 1000, 1000)")
+        }
+
+        val open = openTendrilDatabase(context)
+        try {
+            assertFalse("a migration threw and the file was set aside", open.recovered)
+            runBlocking {
+                val entry = open.database.entryDao().getAll().single()
+                assertEquals("Yoga", entry.title)
+                assertEquals("an event from before v26 lives on this phone only", null, entry.calendarKey)
+
+                val links = open.database.calendarLinkDao()
+                links.upsert(com.tendril.app.data.calendar.CalendarLink("cal", "e-1", "", "f1"))
+                links.upsert(com.tendril.app.data.calendar.CalendarLink("cal", "e-1", "", "f2"))
+                links.upsert(com.tendril.app.data.calendar.CalendarLink("cal", "e-1", "2026-10-08", "f3"))
+                assertEquals(
+                    "one link per event and occurrence, the newest fingerprint kept",
+                    setOf("" to "f2", "2026-10-08" to "f3"),
+                    links.getForCalendar("cal").map { it.occurrence to it.fingerprint }.toSet(),
+                )
             }
         } finally {
             open.database.close()

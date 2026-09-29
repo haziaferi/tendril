@@ -614,8 +614,8 @@ class PortableArchive(
                 // so `toEntity` defaults it to null — a whole-row update then wrote that null
                 // over this device's real CalendarContract row id, orphaning the mirror and
                 // leaving the backfill sweep to insert a duplicate. The two sibling merge
-                // paths (SnapshotSyncOrchestrator, GoogleCalendarSyncEngine) already preserve
-                // it; this one was the outlier.
+                // paths (SnapshotSyncOrchestrator, and the Google engine retired by §9.12) already
+                // preserved it; this one was the outlier.
                 entryDao.update(decoded.copy(id = local.id, providerEventId = local.providerEventId))
                 changed += local.id
             }

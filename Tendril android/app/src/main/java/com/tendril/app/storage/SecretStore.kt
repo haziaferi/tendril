@@ -27,10 +27,9 @@ private const val GCM_TAG_LENGTH_BITS = 128
  * Google deprecated in 1.1.0 (2025) in favor of exactly this: "existing platform APIs and
  * direct use of Android Keystore."
  *
- * Google Calendar sync (§3.2) deliberately does *not* store anything here: the on-device
- * `AuthorizationClient` flow (§9.5) never yields a persistent refresh token to protect — see
- * [com.tendril.app.googlecalendar.GoogleCalendarAuthManager]'s class doc and the corresponding
- * §9.5 correction for why. Writing a key here does not itself make any network call — the app
+ * Calendar sync stores nothing here: since 2026-09-29 (§9.12) it goes through the phone's system
+ * calendar and the app that syncs it, and the direct Google engine it replaced (§9.5, retired)
+ * never held a refresh token either. Writing a key here does not itself make any network call — the app
  * stays fully local until a feature that actually uses the key is built and invoked (§3.5).
  *
  * Note: this store's key is hardware/Keystore-bound to *this device* — that's correct for

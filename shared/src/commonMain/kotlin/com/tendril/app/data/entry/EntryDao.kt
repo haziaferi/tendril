@@ -27,10 +27,6 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE uid = :uid")
     suspend fun getByUid(uid: String): Entry?
 
-    /** §9.5 — the Google Calendar sync engine's linkage lookup, deciding insert vs. update. */
-    @Query("SELECT * FROM entries WHERE googleEventId = :googleEventId")
-    suspend fun getByGoogleEventId(googleEventId: String): Entry?
-
     @Query("SELECT * FROM entries WHERE id = :id")
     fun observeById(id: Long): Flow<Entry?>
 
