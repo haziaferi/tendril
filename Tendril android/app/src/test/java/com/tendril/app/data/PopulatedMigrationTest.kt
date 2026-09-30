@@ -41,7 +41,7 @@ import java.io.File
 class PopulatedMigrationTest {
 
     @Test
-    fun `a v8 file with an entry, a reminder, a completion, a habit with history and a page reaches v26 intact`() {
+    fun `a v8 file with an entry, a reminder, a completion, a habit with history and a page reaches the current version intact`() {
         val context = RuntimeEnvironment.getApplication()
         val file = context.getDatabasePath(TENDRIL_DB_NAME)
         createAtVersion(file, 8) { db ->
@@ -157,6 +157,66 @@ class PopulatedMigrationTest {
             }
         } finally {
             open.database.close()
+        }
+    }
+
+    /**
+     * v27 (§6.3, plan Phase 3) — calendar habits arrive beside the habits already there, and none
+     * of those changes: an interval habit with its streak and undo snapshot, a counting habit and
+     * its amounts, a trashed habit, and their check-ins, live and undone, all read back as they
+     * were written, now as interval habits with nothing else set. The five default blocks are
+     * there after the first open, and a second open adds none.
+     */
+    @Test
+    fun `a v26 file with interval, counting and trashed habits and their check-ins reaches v27 unchanged, with the five blocks`() {
+        val context = RuntimeEnvironment.getApplication()
+        val file = context.getDatabasePath(TENDRIL_DB_NAME)
+        createAtVersion(file, 26) { db ->
+            db.execSQL("INSERT INTO habits (id, uid, title, time, duration, frequency, streak, lastCompletedDate, previousStreak, previousCompletedDate, createdAt, updatedAt) VALUES (1, 'h-1', 'Stretch', 27000, 600, '1:DAY', 4, 20360, 3, 20359, 1000, 2000)")
+            db.execSQL("INSERT INTO habits (id, uid, title, frequency, streak, previousStreak, unit, amountPerCheckIn, dailyAmount, createdAt, updatedAt) VALUES (2, 'h-2', 'Water', '1:DAY', 0, 0, 'cups', 1.0, 8.0, 1000, 1000)")
+            db.execSQL("INSERT INTO habits (id, uid, title, frequency, streak, previousStreak, deletedAt, createdAt, updatedAt) VALUES (3, 'h-3', 'Run', '2:WEEK', 0, 0, 3000, 1000, 3000)")
+            db.execSQL("INSERT INTO habit_completions (id, uid, habitId, date, checkedAt) VALUES (1, 'c-1', 1, 20360, 1500)")
+            db.execSQL("INSERT INTO habit_completions (id, uid, habitId, date, checkedAt, deletedAt) VALUES (2, 'c-2', 1, 20359, 1400, 1600)")
+            db.execSQL("INSERT INTO habit_completions (id, uid, habitId, date, checkedAt, value) VALUES (3, 'c-3', 2, 20360, 1700, 2.0)")
+        }
+
+        val open = openTendrilDatabase(context)
+        try {
+            assertFalse("a migration threw and the file was set aside", open.recovered)
+            runBlocking {
+                val habits = open.database.habitDao().getAll().sortedBy { it.id }
+                assertEquals(listOf("Stretch", "Water", "Run"), habits.map { it.title })
+                val stretch = habits[0]
+                assertEquals(listOf<Any?>(java.time.LocalTime.of(7, 30), java.time.Duration.ofMinutes(10), 4, java.time.LocalDate.ofEpochDay(20360), 3, java.time.LocalDate.ofEpochDay(20359)),
+                    listOf(stretch.time, stretch.duration, stretch.streak, stretch.lastCompletedDate, stretch.previousStreak, stretch.previousCompletedDate))
+                assertEquals(listOf<Any?>("cups", 1.0, 8.0), listOf(habits[1].unit, habits[1].amountPerCheckIn, habits[1].dailyAmount))
+                assertEquals(java.time.Instant.ofEpochMilli(3000), habits[2].deletedAt)
+                for (h in habits) {
+                    assertEquals(com.tendril.app.data.habit.HabitScheduleKind.INTERVAL, h.scheduleKind)
+                    assertEquals(listOf<Any?>(null, null, 0.0, null, null, null, null, null, null),
+                        listOf(h.calendarRule, h.blockUid, h.sortOrder, h.labelId, h.pauseFrom, h.pauseUntil, h.activeFrom, h.activeUntil, h.note))
+                }
+                val log = open.database.habitCompletionDao().getAll().sortedBy { it.id }
+                assertEquals(listOf("c-1", "c-2", "c-3"), log.map { it.uid })
+                assertEquals(listOf(null, java.time.Instant.ofEpochMilli(1600), null), log.map { it.deletedAt })
+                assertEquals(listOf(null, null, 2.0), log.map { it.value })
+                assertTrue("no check-in from before v27 names an occurrence", log.all { it.occurrenceKey == null })
+
+                val blocks = open.database.habitBlockDao().getAll().sortedBy { it.position }
+                assertEquals(com.tendril.app.data.habit.DEFAULT_HABIT_BLOCKS.map { it.uid to (it.startMinute to it.endMinute) }, blocks.map { it.uid to (it.startMinute to it.endMinute) })
+                assertTrue("H1 — the defaults follow the app's language until renamed", blocks.all { it.name == null })
+                assertTrue(open.database.habitScheduleEditDao().getAll().isEmpty())
+            }
+        } finally {
+            open.database.close()
+        }
+
+        val again = openTendrilDatabase(context)
+        try {
+            assertFalse(again.recovered)
+            assertEquals("a second open seeds nothing more", 5, runBlocking { again.database.habitBlockDao().getAll().size })
+        } finally {
+            again.database.close()
         }
     }
 

@@ -68,26 +68,26 @@ class HabitScheduleTest {
     fun `a habit never checked in is due immediately`() {
         // No history to count a period from, and a brand-new habit that stayed silent for a
         // period would look broken.
-        assertTrue(isHabitDueOn(habit(lastCompleted = null), LocalDate.parse("2026-09-05")))
+        assertTrue(isHabitDueOn(habit(lastCompleted = null), LocalDate.parse("2026-09-05"), NO_CALENDAR))
     }
 
     @Test
     fun `a habit done today is not due again today`() {
         val h = habit(lastCompleted = LocalDate.parse("2026-09-05"))
-        assertFalse(isHabitDueOn(h, LocalDate.parse("2026-09-05")))
+        assertFalse(isHabitDueOn(h, LocalDate.parse("2026-09-05"), NO_CALENDAR))
     }
 
     @Test
     fun `a daily habit becomes due the next day`() {
         val h = habit(count = 1, lastCompleted = LocalDate.parse("2026-09-04"))
-        assertTrue(isHabitDueOn(h, LocalDate.parse("2026-09-05")))
+        assertTrue(isHabitDueOn(h, LocalDate.parse("2026-09-05"), NO_CALENDAR))
     }
 
     @Test
     fun `a three-day habit is not due on day two`() {
         val h = habit(count = 3, lastCompleted = LocalDate.parse("2026-09-04"))
-        assertFalse(isHabitDueOn(h, LocalDate.parse("2026-09-06")))
-        assertTrue(isHabitDueOn(h, LocalDate.parse("2026-09-07")))
+        assertFalse(isHabitDueOn(h, LocalDate.parse("2026-09-06"), NO_CALENDAR))
+        assertTrue(isHabitDueOn(h, LocalDate.parse("2026-09-07"), NO_CALENDAR))
     }
 
     @Test
@@ -95,7 +95,7 @@ class HabitScheduleTest {
         // A clock that ran backwards, or a device whose timezone moved. Not due beats "due
         // forever" -- the streak already covers that day.
         val h = habit(lastCompleted = LocalDate.parse("2026-09-05"))
-        assertFalse(isHabitDueOn(h, LocalDate.parse("2026-09-01")))
+        assertFalse(isHabitDueOn(h, LocalDate.parse("2026-09-01"), NO_CALENDAR))
     }
 
     // ------------------------------------------------------------ the next reminder
@@ -162,3 +162,6 @@ class HabitScheduleTest {
         }
     }
 }
+
+/** Interval habits read no calendar: every case here is an interval habit, pinned unchanged by v27. */
+private val NO_CALENDAR = com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList())

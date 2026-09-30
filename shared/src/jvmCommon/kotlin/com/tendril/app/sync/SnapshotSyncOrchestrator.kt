@@ -13,6 +13,8 @@ import com.tendril.app.data.checkin.CheckInDao
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.data.habit.HabitBlockDao
+import com.tendril.app.data.habit.HabitScheduleEditDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.reminder.Reminder
@@ -49,6 +51,8 @@ private const val FILE_ENTRY_COMPLETIONS = "entry_completions.json"
 private const val FILE_HABIT_COMPLETIONS = "habit_completions.json"
 private const val FILE_CHECK_INS = "check_ins.json"
 private const val FILE_TIME_LOGS = "time_logs.json"
+private const val FILE_HABIT_BLOCKS = "habit_blocks.json"
+private const val FILE_HABIT_SCHEDULE_EDITS = "habit_schedule_edits.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
 
@@ -66,7 +70,7 @@ private const val FILE_META = "sync_meta.json"
  * both would put one uid in two files at once. Pooling by family says that once, instead of
  * leaving each future file to remember it.
  */
-private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION, HABIT_COMPLETION, CHECK_IN, TIME_LOG }
+private enum class RecordFamily { ENTRY, HABIT, RELATION, PURGE, REMINDER, COMPLETION, HABIT_COMPLETION, CHECK_IN, TIME_LOG, HABIT_BLOCK, HABIT_SCHEDULE_EDIT }
 
 /**
  * **Every folder-wide array file the write pass publishes — the list a new one must join.**
@@ -114,6 +118,12 @@ private enum class FolderArrayFile(
     ),
     CHECK_INS(FILE_CHECK_INS, RecordFamily.CHECK_IN, CheckInSnapshotRecord.serializer().descriptor),
     TIME_LOGS(FILE_TIME_LOGS, RecordFamily.TIME_LOG, TimeLogSnapshotRecord.serializer().descriptor),
+    HABIT_BLOCKS(FILE_HABIT_BLOCKS, RecordFamily.HABIT_BLOCK, HabitBlockSnapshotRecord.serializer().descriptor),
+    HABIT_SCHEDULE_EDITS(
+        FILE_HABIT_SCHEDULE_EDITS,
+        RecordFamily.HABIT_SCHEDULE_EDIT,
+        HabitScheduleEditSnapshotRecord.serializer().descriptor,
+    ),
     RELATIONS(FILE_RELATIONS, RecordFamily.RELATION, PageRelationSnapshotRecord.serializer().descriptor),
     PURGED(FILE_PURGED, RecordFamily.PURGE, PurgedRecordSnapshot.serializer().descriptor),
 }
@@ -373,6 +383,8 @@ private class ReadTally {
     val habitCompletions = HeldBuilder(FolderArrayFile.HABIT_COMPLETIONS, quarantined)
     val checkIns = HeldBuilder(FolderArrayFile.CHECK_INS, quarantined)
     val timeLogs = HeldBuilder(FolderArrayFile.TIME_LOGS, quarantined)
+    val habitBlocks = HeldBuilder(FolderArrayFile.HABIT_BLOCKS, quarantined)
+    val habitScheduleEdits = HeldBuilder(FolderArrayFile.HABIT_SCHEDULE_EDITS, quarantined)
     val relations = HeldBuilder(FolderArrayFile.RELATIONS, quarantined)
     val purged = HeldBuilder(FolderArrayFile.PURGED, quarantined)
 
@@ -482,6 +494,9 @@ class SnapshotSyncOrchestrator(
     private val habitCompletionDao: HabitCompletionDao,
     private val checkInDao: CheckInDao,
     private val timeLogDao: TimeLogDao,
+    /** §6.3 (v27) — the time blocks and the scoped edits calendar habits are read with. */
+    private val habitBlockDao: HabitBlockDao,
+    private val habitScheduleEditDao: HabitScheduleEditDao,
     private val pagesSyncEngine: PagesSyncEngine,
     private val purgeRegistry: PurgeRegistry,
     /** §9.4 / S4 — where this device keeps its image files. Required rather than defaulted: a
@@ -677,6 +692,10 @@ class SnapshotSyncOrchestrator(
         val allHabitCompletions = habitCompletionDao.getAll()
         val allCheckIns = checkInDao.getAll()
         val allTimeLogs = timeLogDao.getAll()
+        val allHabitBlocks = habitBlockDao.getAll()
+        val allHabitScheduleEdits = habitScheduleEditDao.getAll()
+        val purgedHabitUids = purgeRegistry.tombstones(PurgedKind.HABIT).keys
+        val habitLabelNames = allHabits.mapNotNull { it.labelId }.distinct().associateWith { pagesSyncEngine.labelNameOf(it) }
         val habitIdToUid = allHabits.associate { it.id to it.uid }
         val (active, archived) = allEntries.partition { it.isActive() }
 
@@ -706,7 +725,7 @@ class SnapshotSyncOrchestrator(
                 FolderArrayFile.ENTRIES_ARCHIVED ->
                     elementsOf(archived.filterNot { it.uid in suppressed }.map { it.toSnapshot(idToUid, rowIdToUid) })
                 FolderArrayFile.HABITS ->
-                    elementsOf(allHabits.filterNot { it.uid in suppressed }.map { it.toSnapshot() })
+                    elementsOf(allHabits.filterNot { it.uid in suppressed }.map { h -> h.toSnapshot(h.labelId?.let(habitLabelNames::get)) })
                 // §4 / S2. `mapNotNull` rather than `map` only as a belt: `entryId` is a CASCADE
                 // foreign key and [idToUid] is built from every Entry row, so a reminder whose
                 // owner is missing is a state the database does not permit. Dropping it beats
@@ -761,6 +780,17 @@ class SnapshotSyncOrchestrator(
                 // resurrects the thing it was deleting, on every device that had already carried
                 // it out.
                 FolderArrayFile.PURGED -> elementsOf(purgeRegistry.all().map { it.toSnapshot() })
+                // §6.3 — a block is edited and tombstoned, so every row travels, as a habit does.
+                FolderArrayFile.HABIT_BLOCKS ->
+                    elementsOf(allHabitBlocks.filterNot { it.uid in suppressed }.map { it.toSnapshot() })
+                // §6.3 — the habit completions' rule: every row travels, tombstoned or not, so an
+                // undone edit does not walk back in. An edit of a habit purged for good stays home:
+                // its habit has a tombstone and no row, and the edit would circulate for nothing.
+                FolderArrayFile.HABIT_SCHEDULE_EDITS ->
+                    elementsOf(
+                        allHabitScheduleEdits.filterNot { it.uid in suppressed || (it.target == "HABIT" && it.refUid in purgedHabitUids) }
+                            .map { it.toSnapshot() }
+                    )
             }
             publishArrayFile(store, file, local, held, key, read)
         }
@@ -1080,6 +1110,10 @@ class SnapshotSyncOrchestrator(
         mergeHabitFile(store, read)
         // After the Habits, for the same reason the two below follow the Entries.
         mergeHabitCompletionFile(store, read)
+        // §6.3 — neither needs the other or the Habits merged first (a block and an edit name a
+        // uid, not a local id), but the edits read the habit tombstones the purged file set.
+        mergeHabitBlockFile(store, read)
+        mergeHabitScheduleEditFile(store, read)
         mergeCheckInFile(store, read)
         // After the Entries, necessarily: both resolve `entryUid` to a local Entry id, and a
         // record whose owner has not merged here yet is held rather than dropped — see
@@ -1110,6 +1144,9 @@ class SnapshotSyncOrchestrator(
                 name.startsWith("habit_completions") ->
                     mergeHabitCompletionContent(readRootText(store, name, read), read.tally)
                 name.startsWith("check_ins") -> mergeCheckInContent(readRootText(store, name, read), read.tally)
+                name.startsWith("habit_blocks") -> mergeHabitBlockContent(readRootText(store, name, read), read.tally)
+                name.startsWith("habit_schedule_edits") ->
+                    mergeHabitScheduleEditContent(readRootText(store, name, read), read.tally)
                 name.startsWith("time_logs") -> mergeTimeLogContent(readRootText(store, name, read), read.tally)
                 name.startsWith("page_relations") -> mergeRelationsContent(readRootText(store, name, read))
                 name.startsWith("purged_records") -> mergePurgedContent(readRootText(store, name, read))
@@ -1145,6 +1182,8 @@ class SnapshotSyncOrchestrator(
                     FolderArrayFile.TIME_LOGS -> read.tally.timeLogs
                     FolderArrayFile.RELATIONS -> read.tally.relations
                     FolderArrayFile.PURGED -> read.tally.purged
+                    FolderArrayFile.HABIT_BLOCKS -> read.tally.habitBlocks
+                    FolderArrayFile.HABIT_SCHEDULE_EDITS -> read.tally.habitScheduleEdits
                 }.frozen()
             },
         )
@@ -1662,7 +1701,7 @@ class SnapshotSyncOrchestrator(
             // has no member for is a "newer version of Tendril", and that is the sentence the
             // person is shown.
             val entity: Habit? = try {
-                record.toEntity()
+                record.toEntity(labelId = null)
             } catch (e: SnapshotDecodeException) {
                 tally.quarantine(QuarantinedRecord.HABIT, record.uid, e)
                 null
@@ -1672,9 +1711,80 @@ class SnapshotSyncOrchestrator(
                 held?.hold(element, record.uid)
                 continue
             }
+            // §6.3 (P4) — the Label by name, found or created only once the record has won:
+            // a losing record must not leave a Label behind.
+            val labelled = entity.copy(labelId = pagesSyncEngine.labelIdFor(record.labelName))
             // §9.7 — see [SnapshotMergeResult.touchedHabitIds].
-            if (local == null) tally.touchedHabitIds += habitDao.insert(entity)
-            else { habitDao.update(entity.copy(id = local.id)); tally.touchedHabitIds += local.id }
+            if (local == null) tally.touchedHabitIds += habitDao.insert(labelled)
+            else { habitDao.update(labelled.copy(id = local.id)); tally.touchedHabitIds += local.id }
+        }
+        return allRead
+    }
+
+    private suspend fun mergeHabitBlockFile(store: SyncFileStore, read: ReadKey) {
+        mergeHabitBlockContent(readRootText(store, FolderArrayFile.HABIT_BLOCKS.fileName, read), read.tally, held = read.tally.habitBlocks)
+    }
+
+    /**
+     * §6.3 — time blocks, merged as habits are: the later `updatedAt` wins, a deletion being one
+     * more update. The five defaults carry fixed uids and `updatedAt` 0 on every device, so two
+     * devices that each seeded them merge to five rows, and any real edit is newer than a seed.
+     */
+    private suspend fun mergeHabitBlockContent(content: String, tally: ReadTally, held: HeldBuilder? = null): Boolean {
+        val elements = decodeArray(content, held) ?: return false
+        var allRead = true
+        for (element in elements) {
+            val record = decodeRecord<HabitBlockSnapshotRecord>(element)
+            if (record == null) {
+                allRead = false
+                tally.quarantineElement(QuarantinedRecord.HABIT_BLOCK, element)
+                // Held only once the peer's copy is known to have won — the habit arm's reason.
+                val uid = element.uidOrNull()
+                if (element.outranks(uid?.let { habitBlockDao.getByUid(it) }?.updatedAt)) held?.hold(element, uid)
+                continue
+            }
+            val local = habitBlockDao.getByUid(record.uid)
+            if (local != null && !Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) continue
+            val entity = record.toEntity()
+            if (local == null) habitBlockDao.insert(entity) else habitBlockDao.update(entity.copy(id = local.id))
+        }
+        return allRead
+    }
+
+    private suspend fun mergeHabitScheduleEditFile(store: SyncFileStore, read: ReadKey) {
+        mergeHabitScheduleEditContent(
+            readRootText(store, FolderArrayFile.HABIT_SCHEDULE_EDITS.fileName, read),
+            read.tally,
+            held = read.tally.habitScheduleEdits,
+        )
+    }
+
+    /**
+     * §6.3 — scoped edits, on [mergeHabitCompletionContent]'s rule: a uid is inserted once and
+     * tombstoned once, and "deleted on any device wins". Nothing is resolved to a local id, so
+     * nothing is held for a missing owner — an edit whose habit has not arrived yet does nothing
+     * until it does. An edit of a habit purged for good is not taken in (the write pass's rule).
+     */
+    private suspend fun mergeHabitScheduleEditContent(content: String, tally: ReadTally, held: HeldBuilder? = null): Boolean {
+        val elements = decodeArray(content, held) ?: return false
+        val purgedHabitUids = purgeRegistry.tombstones(PurgedKind.HABIT).keys
+        var allRead = true
+        for (element in elements) {
+            val record = decodeRecord<HabitScheduleEditSnapshotRecord>(element)
+            if (record == null) {
+                allRead = false
+                tally.quarantineElement(QuarantinedRecord.HABIT_SCHEDULE_EDIT, element)
+                held?.hold(element, element.uidOrNull())
+                continue
+            }
+            if (record.target == "HABIT" && record.refUid in purgedHabitUids) continue
+            val local = habitScheduleEditDao.getByUid(record.uid)
+            val remoteDeletedAt = record.deletedAt?.let(Instant::ofEpochMilli)
+            when {
+                local == null -> habitScheduleEditDao.insert(record.toEntity())
+                local.deletedAt == null && remoteDeletedAt != null -> habitScheduleEditDao.softDelete(local.id, remoteDeletedAt)
+                else -> Unit
+            }
         }
         return allRead
     }

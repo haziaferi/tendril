@@ -48,6 +48,8 @@ class PlaintextTrustTest {
             habitCompletionDao = FakeHabitCompletionDao(),
             checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
+            habitBlockDao = FakeHabitBlockDao(),
+            habitScheduleEditDao = FakeHabitScheduleEditDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

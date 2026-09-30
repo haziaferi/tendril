@@ -8,6 +8,9 @@ import com.tendril.app.data.habit.HabitCompletionDao
 import com.tendril.app.data.checkin.CheckInDao
 import com.tendril.app.data.track.TimeLogDao
 import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.data.habit.DEFAULT_HABIT_BLOCKS
+import com.tendril.app.data.habit.HabitBlockDao
+import com.tendril.app.data.habit.HabitScheduleEditDao
 import com.tendril.app.data.page.PageDao
 import com.tendril.app.data.purge.PurgedKind
 import com.tendril.app.data.reminder.ReminderDao
@@ -36,6 +39,8 @@ private const val FILE_CHECK_INS = "check_ins.json"
 private const val FILE_TIME_LOGS = "time_logs.json"
 private const val FILE_RELATIONS = "page_relations.json"
 private const val FILE_PURGED = "purged_records.json"
+private const val FILE_HABIT_BLOCKS = "habit_blocks.json"
+private const val FILE_HABIT_SCHEDULE_EDITS = "habit_schedule_edits.json"
 private const val PAGES_DIR_PREFIX = "pages/"
 
 /** §9.4 / S4 — the archive's image channel. Deliberately the same directory name the sync
@@ -82,6 +87,9 @@ class PortableArchive(
     private val habitCompletionDao: HabitCompletionDao,
     private val checkInDao: CheckInDao,
     private val timeLogDao: TimeLogDao,
+    /** §6.3 (v27) — the time blocks and scoped edits calendar habits are read with; in the archive as in the sync folder. */
+    private val habitBlockDao: HabitBlockDao,
+    private val habitScheduleEditDao: HabitScheduleEditDao,
     private val purgeRegistry: PurgeRegistry,
     private val pagesSyncEngine: PagesSyncEngine,
     /**
@@ -163,6 +171,9 @@ class PortableArchive(
         val allHabitCompletions = habitCompletionDao.getAll()
         val allCheckIns = checkInDao.getAll()
         val allTimeLogs = timeLogDao.getAll()
+        val allHabitBlocks = habitBlockDao.getAll()
+        val allHabitScheduleEdits = habitScheduleEditDao.getAll()
+        val habitLabelNames = allHabits.mapNotNull { it.labelId }.distinct().associateWith { pagesSyncEngine.labelNameOf(it) }
         val habitIdToUid = allHabits.associate { it.id to it.uid }
         val (active, archived) = allEntries.partition { it.isActive() }
         val pageRecords = pagesSyncEngine.exportPages()
@@ -206,7 +217,10 @@ class PortableArchive(
                 zip.writeEntry(MANIFEST_NAME, json.encodeToString(manifest), key = null)
                 zip.writeEntry(FILE_ENTRIES_ACTIVE, json.encodeToString(active.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
                 zip.writeEntry(FILE_ENTRIES_ARCHIVED, json.encodeToString(archived.map { it.toSnapshot(idToUid, rowIdToUid) }), key)
-                zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { it.toSnapshot() }), key)
+                zip.writeEntry(FILE_HABITS, json.encodeToString(allHabits.map { h -> h.toSnapshot(h.labelId?.let(habitLabelNames::get)) }), key)
+                // §6.3 — every block and every edit, tombstoned or not, on the sync folder's terms.
+                zip.writeEntry(FILE_HABIT_BLOCKS, json.encodeToString(allHabitBlocks.map { it.toSnapshot() }), key)
+                zip.writeEntry(FILE_HABIT_SCHEDULE_EDITS, json.encodeToString(allHabitScheduleEdits.map { it.toSnapshot() }), key)
                 // S2. Both name their Entry by uid, so both are dropped rather than exported
                 // if that Entry is gone — an archive is a snapshot of consistent state, and a
                 // reminder pointing at nothing would import as an alarm with no task.
@@ -311,6 +325,8 @@ class PortableArchive(
         quarantined += applyHabitCompletions(decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS]))
         quarantined += applyCheckIns(decodeCheckIns(contents[FILE_CHECK_INS]))
         quarantined += applyTimeLogs(decodeTimeLogs(contents[FILE_TIME_LOGS]))
+        applyHabitBlocks(decodeList(contents[FILE_HABIT_BLOCKS]))
+        applyHabitScheduleEdits(decodeList(contents[FILE_HABIT_SCHEDULE_EDITS]))
         // §9.7 — see [rearmAlarms]. Last, after every apply* above: the sweep arms from the rows
         // as they now stand, so anything earlier would arm the state this import is replacing.
         rearmAlarms(changedEntryIds)
@@ -363,6 +379,8 @@ class PortableArchive(
         val habitCompletions = decodeHabitCompletions(contents[FILE_HABIT_COMPLETIONS])
         val checkIns = decodeCheckIns(contents[FILE_CHECK_INS])
         val timeLogs = decodeTimeLogs(contents[FILE_TIME_LOGS])
+        val habitBlocks = decodeList<HabitBlockSnapshotRecord>(contents[FILE_HABIT_BLOCKS])
+        val habitScheduleEdits = decodeList<HabitScheduleEditSnapshotRecord>(contents[FILE_HABIT_SCHEDULE_EDITS])
         val purged = decodePurged(contents)
 
         require(
@@ -389,6 +407,8 @@ class PortableArchive(
         habitCompletionDao.deleteAll()
         checkInDao.deleteAll()
         timeLogDao.deleteAll()
+        habitBlockDao.deleteAll()
+        habitScheduleEditDao.deleteAll()
         // §5.5.1.1 — Restore is "become exactly what this archive says", so this device's own
         // purge history is discarded and the archive's adopted in its place. Keeping the local
         // tombstones would silently drop records the archive still holds.
@@ -410,6 +430,10 @@ class PortableArchive(
         applyHabitCompletions(habitCompletions)
         applyCheckIns(checkIns)
         applyTimeLogs(timeLogs)
+        applyHabitBlocks(habitBlocks)
+        // An archive from before v27 carries no blocks: the five an empty install starts with (H1).
+        habitBlockDao.insertIfAbsent(DEFAULT_HABIT_BLOCKS)
+        applyHabitScheduleEdits(habitScheduleEdits)
         // §9.7 — see [rearmAlarms]. The wipe above cancelled nothing and the applies armed
         // nothing, so without this the device holds a full set of restored reminders and no
         // alarm for any of them until the next cold start. No changed ids: after the wipe every
@@ -555,7 +579,7 @@ class PortableArchive(
         // maps to null by design rather than throwing, so it cannot turn a readable record
         // unreadable here and then readable again in `applyEntries`.
         val failures = entries.mapNotNull { runCatching { it.toEntity(emptyMap(), emptyMap()) }.exceptionOrNull() } +
-            habits.mapNotNull { runCatching { it.toEntity() }.exceptionOrNull() }
+            habits.mapNotNull { runCatching { it.toEntity(labelId = null) }.exceptionOrNull() }
         // Page reasons join the same list because they read the same way — the engine's `detail`
         // is already the quoted `label "VALUE"` shape the entity mappers' messages use, so the
         // person sees one sentence naming the offending values whichever half they came from.
@@ -748,20 +772,47 @@ class PortableArchive(
         if (records.isEmpty()) return 0
         var quarantined = 0
         for (record in records) {
-            val decoded = record.toEntityOrNull()
+            val decoded = record.toEntityOrNull(labelId = null)
             if (decoded == null) {
                 quarantined++
                 continue
             }
             val local = habitDao.getByUid(record.uid)
+            // §6.3 (P4) — the Label by name, created only for a record that is going in.
             if (local == null) {
-                habitDao.insert(decoded)
+                habitDao.insert(decoded.copy(labelId = pagesSyncEngine.labelIdFor(record.labelName)))
             } else if (Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) {
-                habitDao.update(decoded.copy(id = local.id))
+                habitDao.update(decoded.copy(id = local.id, labelId = pagesSyncEngine.labelIdFor(record.labelName)))
             }
         }
         return quarantined
     }
+
+    /** §6.3 — the sync folder's block rule: the later `updatedAt` wins. */
+    private suspend fun applyHabitBlocks(records: List<HabitBlockSnapshotRecord>) {
+        for (record in records) {
+            val local = habitBlockDao.getByUid(record.uid)
+            if (local == null) habitBlockDao.insert(record.toEntity())
+            else if (Instant.ofEpochMilli(record.updatedAt).isAfter(local.updatedAt)) habitBlockDao.update(record.toEntity().copy(id = local.id))
+        }
+    }
+
+    /** §6.3 — the sync folder's edit rule: inserted once, and a tombstone from either side wins. */
+    private suspend fun applyHabitScheduleEdits(records: List<HabitScheduleEditSnapshotRecord>) {
+        for (record in records) {
+            val local = habitScheduleEditDao.getByUid(record.uid)
+            val remoteDeletedAt = record.deletedAt?.let(Instant::ofEpochMilli)
+            when {
+                local == null -> habitScheduleEditDao.insert(record.toEntity())
+                local.deletedAt == null && remoteDeletedAt != null -> habitScheduleEditDao.softDelete(local.id, remoteDeletedAt)
+                else -> Unit
+            }
+        }
+    }
+
+    /** §6.3 — a whole file of one record shape, best-effort as every decode here is: a file that does not parse yields nothing. */
+    private inline fun <reified T> decodeList(content: String?): List<T> =
+        content?.let { runCatching { json.decodeFromString<List<T>>(it) }.getOrNull() } ?: emptyList()
 
     /**
      * Reads every entry into memory: JSON as text, `images/` as bytes.

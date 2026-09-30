@@ -83,6 +83,7 @@ import com.tendril.app.ui.settings.ThemeSection
 import com.tendril.app.ui.theme.ThemeSettings
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
+import com.tendril.app.ui.settings.LanguageSection
 
 @Composable
 fun SettingsScreen(
@@ -115,6 +116,8 @@ fun SettingsScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxWidth().padding(innerPadding).verticalScroll(rememberScrollState())) {
             AppearanceSection(core.themeSettings)
+            HorizontalDivider()
+            LanguageSection(core.languageSettings)
             HorizontalDivider()
             SyncFolderSection(syncFolderManager, syncStatusPreferences, syncCoordinator)
             HorizontalDivider()

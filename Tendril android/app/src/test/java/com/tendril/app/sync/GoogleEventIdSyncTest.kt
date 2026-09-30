@@ -35,6 +35,8 @@ class GoogleEventIdSyncTest {
             habitCompletionDao = FakeHabitCompletionDao(),
             checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
+            habitBlockDao = FakeHabitBlockDao(),
+            habitScheduleEditDao = FakeHabitScheduleEditDao(),
             localImages = InMemoryLocalImageStore(),
         )
 

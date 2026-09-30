@@ -48,6 +48,8 @@ class HabitCompletionSyncTest {
             habitCompletionDao = completionDao,
             checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
+            habitBlockDao = FakeHabitBlockDao(),
+            habitScheduleEditDao = FakeHabitScheduleEditDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

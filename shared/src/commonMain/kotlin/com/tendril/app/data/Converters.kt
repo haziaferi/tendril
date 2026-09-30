@@ -10,6 +10,7 @@ import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
 import com.tendril.app.data.habit.HabitFrequency
+import com.tendril.app.data.habit.HabitScheduleKind
 import com.tendril.app.data.page.BlockType
 import com.tendril.app.data.page.FormattingSpan
 import com.tendril.app.data.page.PageKind
@@ -203,6 +204,10 @@ class Converters {
             enumOrNull<IntervalUnit>(parts.getOrNull(1)) ?: IntervalUnit.DAY,
         )
     }
+
+    /** §6.3 (v27) — a kind this build does not know reads as the interval habit every row was before v27. */
+    @TypeConverter fun habitScheduleKindToString(value: HabitScheduleKind): String = value.name
+    @TypeConverter fun stringToHabitScheduleKind(value: String): HabitScheduleKind = enumOrNull<HabitScheduleKind>(value) ?: HabitScheduleKind.INTERVAL
 
     // --- Phase 5 enums ---
     @TypeConverter fun pageKindToString(value: PageKind): String = value.name

@@ -57,6 +57,8 @@ class PortableArchiveTest {
         habitCompletionDao = habitCompletionDao,
         checkInDao = checkInDao,
         timeLogDao = timeLogDao,
+        habitBlockDao = FakeHabitBlockDao(),
+        habitScheduleEditDao = FakeHabitScheduleEditDao(),
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         localImages = InMemoryLocalImageStore(),

@@ -30,14 +30,22 @@ val Habit.counts: Boolean get() = amountPerCheckIn != null
  * second tap: a tap is only ever *more*.
  */
 @Composable
-fun HabitCheck(habit: Habit, doneToday: Boolean, onCheckIn: () -> Unit, onUndo: () -> Unit, modifier: Modifier = Modifier) {
+fun HabitCheck(
+    habit: Habit,
+    doneToday: Boolean,
+    onCheckIn: () -> Unit,
+    onUndo: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** §6.3 (5a) — false on a day that is not today: a past day is read, a later one not yet happened. */
+    enabled: Boolean = true,
+) {
     if (!habit.counts) {
-        Checkbox(checked = doneToday, onCheckedChange = { if (it) onCheckIn() else onUndo() }, modifier = modifier)
+        Checkbox(checked = doneToday, onCheckedChange = { if (it) onCheckIn() else onUndo() }, modifier = modifier, enabled = enabled)
         return
     }
     val pointer = LocalDensityProfile.current.pointer
     val disc = if (pointer) 20.dp else 24.dp
-    IconButton(onClick = onCheckIn, modifier = modifier.size(if (pointer) 28.dp else 48.dp)) {
+    IconButton(onClick = onCheckIn, enabled = enabled, modifier = modifier.size(if (pointer) 28.dp else 48.dp)) {
         Box(
             modifier = Modifier
                 .size(disc)

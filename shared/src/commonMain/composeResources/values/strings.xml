@@ -47,4 +47,190 @@
     <string name="taskshabits_tab_tasks">Tasks</string>
     <string name="taskshabits_undated_toggle">Someday</string>
     <string name="trash_entries_open">Trash</string>
+
+    <!-- Plan Phase 4 (L1) - the language setting -->
+    <string name="settings_language">Language</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_italian">Italiano</string>
+    <string name="settings_language_note">The app’s words and its dates. Screens not yet translated stay in English.</string>
+
+    <!-- tendril-spec.md 6.3 (H1) - the five default time blocks, shown in the app’s language until renamed -->
+    <string name="plan_block_morning">Morning</string>
+    <string name="plan_block_midday">Midday</string>
+    <string name="plan_block_afternoon">Afternoon</string>
+    <string name="plan_block_evening">Evening</string>
+    <string name="plan_block_night">Night</string>
+
+    <!-- 6.3 - the Habits tab's views (V1, R1), from the approved mockup -->
+    <string name="plan_view_day">Day</string>
+    <string name="plan_view_week">Week</string>
+    <string name="plan_by_time">By time</string>
+    <string name="plan_by_area">By area</string>
+    <string name="plan_no_area">No area</string>
+    <string name="plan_any_time_today">Any time today</string>
+    <string name="plan_any_time">Any time</string>
+    <string name="plan_now">now</string>
+    <string name="plan_week_label">Week %1$d · %2$s – %3$s</string>
+    <string name="plan_nothing_planned">Nothing planned</string>
+    <string name="plan_past_read_only">Past weeks are read-only.</string>
+
+    <!-- 6.3 (V3) - the edit toolbar -->
+    <string name="plan_up">Up</string>
+    <string name="plan_down">Down</string>
+    <string name="plan_move_to">Move to…</string>
+    <string name="plan_edit">Edit</string>
+    <string name="plan_more">More…</string>
+    <string name="plan_done">Done</string>
+    <string name="plan_skip">Skip this one…</string>
+    <string name="plan_pause">Pause…</string>
+    <string name="plan_move_to_trash">Move to Trash</string>
+
+    <!-- 6.3 - the time and remove-time prompts -->
+    <string name="plan_time_title">Moving %1$s among set times</string>
+    <string name="plan_time_body">No time is suggested. %2$s runs %3$s–%4$s; a time outside it moves %1$s to the block that holds it.</string>
+    <string name="plan_time_field">Time</string>
+    <string name="plan_time_hint">HH:MM</string>
+    <string name="plan_err_time_format">Write the time as HH:MM, for example 14:30.</string>
+    <string name="plan_put_back">Put it back</string>
+    <string name="plan_set_time">Set time</string>
+    <string name="plan_remove_time_title">Moving %1$s out of set times</string>
+    <string name="plan_remove_time_body">%1$s is set for %2$s. In “Any time” it has no time.</string>
+    <string name="plan_remove_time">Remove %1$s</string>
+
+    <!-- 6.3 (D10) - Apply this change to -->
+    <string name="plan_scope_title">Apply this change to…</string>
+    <string name="plan_scope_occurrence">Only this entry</string>
+    <string name="plan_scope_day">This day</string>
+    <string name="plan_scope_week">This week only</string>
+    <string name="plan_scope_weekdays_week">Chosen weekdays this week</string>
+    <string name="plan_scope_from">Every week from now on</string>
+    <string name="plan_scope_weekdays_from">Chosen weekdays from now on</string>
+    <string name="plan_apply">Apply</string>
+    <string name="plan_choose_days">Choose at least one day.</string>
+
+    <!-- 6.3 - the blocks editor -->
+    <string name="plan_blocks">Blocks</string>
+    <string name="plan_block_from">From</string>
+    <string name="plan_block_to">to</string>
+    <string name="plan_add_weekday_change">Add a weekday change</string>
+    <string name="plan_err_block_order">The end must be after the start.</string>
+    <string name="plan_err_block_next">%1$s ends at %2$s, so %3$s can end at %4$s at the latest. Shorten %1$s first, or choose an earlier end.</string>
+
+    <!-- 6.3 - the add and edit sheet's calendar schedule (D5, Q1, Q3) -->
+    <string name="plan_schedule">Schedule</string>
+    <string name="plan_since_last_check_in">Since last check-in</string>
+    <string name="plan_on_the_calendar">On the calendar</string>
+    <string name="plan_rule_daily">Every day</string>
+    <string name="plan_rule_once">Once</string>
+    <string name="plan_rule_weekdays">On weekdays</string>
+    <string name="plan_rule_every_n_days">Every few days</string>
+    <string name="plan_rule_every_n_weeks">Every few weeks</string>
+    <string name="plan_rule_times_per_day">Times a day</string>
+    <string name="plan_rule_times_per_week">Times a week</string>
+    <string name="plan_rule_every_n_hours">Every few hours</string>
+    <string name="plan_how_many">How many</string>
+    <string name="plan_on_any_of">On any of</string>
+    <string name="plan_suggest_note">This week the app suggests %1$s. You confirm the days each week; nothing is placed until you do.</string>
+    <string name="plan_where">Where</string>
+    <string name="plan_at_set_time">At a set time…</string>
+    <string name="plan_length">Length</string>
+    <string name="plan_note">Note</string>
+    <string name="plan_optional">Optional</string>
+    <string name="plan_area">Area</string>
+
+    <!-- 6.3 (D5, Q1) - the week's suggestion line -->
+    <string name="plan_suggested">suggested</string>
+    <string name="plan_week_suggestion">%1$s, %2$s this week — suggested %3$s.</string>
+    <string name="plan_confirm_day">Confirm %1$s</string>
+    <string name="plan_choose_days_button">Choose days</string>
+
+    <!-- 6.3 - pause -->
+    <string name="plan_pause_title">Pause</string>
+    <string name="plan_pause_body">Paused, it leaves the plan; its check-ins stay.</string>
+    <string name="plan_pause_open">Until I resume it</string>
+    <string name="plan_pause_until">Until a date…</string>
+    <string name="plan_dont_pause">Don’t pause</string>
+    <string name="plan_resume">Resume</string>
+    <string name="plan_paused">Paused</string>
+
+    <!-- 6.3 (D4) - the two neutral notes -->
+    <string name="plan_note_outside_before">%1$s, %2$s, is before %3$s starts (%4$s), so it is in no block. Change its time, or start %3$s earlier.</string>
+    <string name="plan_note_outside_after">%1$s, %2$s, is after %3$s ends (%4$s), so it is in no block. Change its time, or end %3$s later.</string>
+    <string name="plan_note_overlap">%1$s (%2$s) and %3$s (%4$s) overlap by %5$s. Change either block’s times to separate them.</string>
+
+    <plurals name="plan_times_this_week">
+        <item quantity="one">once</item>
+        <item quantity="other">%1$d times</item>
+    </plurals>
+
+    <!-- 6.3 (plan Phase 5a) - the Day view -->
+    <string name="plan_today">Today</string>
+    <string name="plan_view_month">Month</string>
+    <string name="plan_previous_day">Previous day</string>
+    <string name="plan_next_day">Next day</string>
+    <string name="plan_outside_blocks">Outside the blocks</string>
+    <string name="plan_projected">expected</string>
+    <plurals name="plan_done_today">
+        <item quantity="one">%1$d done today</item>
+        <item quantity="other">%1$d done today</item>
+    </plurals>
+    <plurals name="plan_done_on_day">
+        <item quantity="one">%1$d done</item>
+        <item quantity="other">%1$d done</item>
+    </plurals>
+
+    <!-- 6.3 (plan Phase 5b) - edit mode's prompts -->
+    <string name="plan_move_title">Move %1$s</string>
+    <string name="plan_move_day">Day</string>
+    <string name="plan_move_block">Block</string>
+    <string name="plan_move_weekday_from">Every week from now on, on %1$s</string>
+    <string name="plan_err_time_outside">%1$s falls outside every block. Choose a time between %2$s and %3$s.</string>
+    <string name="plan_editing">Editing %1$s</string>
+
+    <!-- 6.3 (plan Phase 5c) - the sheet's calendar schedule, the blocks editor, pause -->
+    <string name="plan_edit_blocks">Edit blocks</string>
+    <string name="plan_paused_until">Paused until %1$s</string>
+    <string name="plan_paused_open">Paused until you resume it</string>
+    <string name="plan_block_name">Name</string>
+    <string name="plan_block_start">Starts</string>
+    <string name="plan_block_end">Ends</string>
+    <string name="plan_err_block_prev">%1$s starts at %2$s, so %3$s can start at %4$s at the earliest. Move %1$s first, or choose a later start.</string>
+    <string name="plan_remove">Remove</string>
+    <string name="plan_save">Save</string>
+    <string name="plan_more_options">More options</string>
+    <string name="plan_active_from">Starts on</string>
+    <string name="plan_active_until">Ends on</string>
+    <string name="plan_none">None</string>
+    <string name="plan_err_n">Choose a number from %1$d to %2$d.</string>
+    <string name="plan_err_times_count">Give %1$d times, or leave this empty.</string>
+    <string name="plan_err_until">The last time must come after the first.</string>
+    <string name="plan_times_optional">Times (optional, for example 08:00, 20:00)</string>
+    <string name="plan_every_how_many">Every how many</string>
+    <string name="plan_from">From</string>
+    <string name="plan_until">Until</string>
+    <string name="plan_date">Date</string>
+    <string name="plan_step_hours">every %1$d h, %2$s–%3$s</string>
+    <string name="plan_every_n_days_n">every %1$d days</string>
+    <string name="plan_every_n_weeks_n">every %1$d weeks</string>
+    <string name="plan_times_a_day_n">%1$d times a day</string>
+    <string name="plan_times_a_week_n">%1$d times a week</string>
+    <string name="plan_add_weekday_times">Weekday times</string>
+    <string name="plan_on_calendar_label">On the calendar</string>
+
+    <!-- 6.3 (plan Phase 5d) - the Week view, by area, the keys -->
+    <string name="plan_today_marker">today</string>
+    <string name="plan_previous_week">Previous week</string>
+    <string name="plan_next_week">Next week</string>
+    <string name="plan_keys_move">↑ ↓</string>
+    <string name="plan_key_move_to">Ctrl+M</string>
+    <string name="plan_key_edit">Enter</string>
+    <string name="plan_key_done">Esc</string>
+    <plurals name="plan_and_more">
+        <item quantity="one">and %1$d more today</item>
+        <item quantity="other">and %1$d more today</item>
+    </plurals>
+    <plurals name="plan_and_more_day">
+        <item quantity="one">and %1$d more</item>
+        <item quantity="other">and %1$d more</item>
+    </plurals>
 </resources>

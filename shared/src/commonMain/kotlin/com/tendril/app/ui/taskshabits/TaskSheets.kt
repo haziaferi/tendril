@@ -168,12 +168,22 @@ internal fun DeadlineDialog(current: LocalDate?, onSet: (LocalDate?) -> Unit, on
  * Settings, and then as a plain number with no adjective.
  */
 @Composable
-internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, onDismiss: () -> Unit, onEdit: () -> Unit = {}) {
+internal fun HabitDetailSheet(habit: Habit, viewModel: TasksHabitsViewModel, showStreak: Boolean, runningTarget: com.tendril.app.domain.track.TrackTarget?, onDismiss: () -> Unit, onEdit: () -> Unit = {}) {
     TendrilSheet(title = habit.title, onDismiss = onDismiss) {
+        // §6.3 (5c) — the schedule in words, the sheet's first line; a paused habit says so.
+        Text(scheduleText(habit), style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp)) // type: META — the schedule
+        PausedLine(habit)
         HabitDetailContent(habit, viewModel, showStreak)
-        // S10 — the phone's way to every field (the desktop's pane has the chip).
-        if (!LocalViewOnly.current) Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-            TextButton(onClick = onEdit) { Text("Edit…") }
+        // S10 — the phone's way to every field (the desktop's pane has the chip). T4 — the row's
+        // timer lives here now, beside Pause… and Edit….
+        if (!LocalViewOnly.current) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            val isRunning = runningTarget == com.tendril.app.domain.track.TrackTarget.Habit(habit.id)
+            AssistChip(
+                onClick = { viewModel.toggleTracking(com.tendril.app.domain.track.TrackTarget.Habit(habit.id)) },
+                label = { Text(if (isRunning) "Stop timer" else "Start timer") },
+            )
+            PauseChip(habit, viewModel)
+            AssistChip(onClick = onEdit, label = { Text("Edit…") })
         }
     }
 }

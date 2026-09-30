@@ -180,7 +180,7 @@ These four lanes have **no file overlap with each other** and none with the EDIT
 | T4 [XS] | `EntryStatus.SKIPPED` is only reachable from a notification | T1 | Skip is in the task action menu |
 | T5 [S] | "Custom" (interval + unit) recurrence missing from the standalone Task dialog — §6.2's own reference case ("every two months") is unreachable | T1 | Add a task repeating every 2 months from the dialog |
 | T6 [M] | Widen the RRULE subset (BYSETPOS, BYWEEKNO, BYYEARDAY); unsupported parts collapse a series to its first occurrence | — | New unit tests in `RecurrenceExpansionTest` for "last Friday of the month" pass |
-| T7 [L] | **Habits cannot express "3 times a week" or specific weekdays.** Encoding-only (`"count:unit"` string) — **no schema change** — but the streak semantics are the real work: §6.1's "missing an instance creates no backlog" must still hold under a quota model | B5 | A 3×/week habit shows a streak after 3 check-ins in one week and does not break on a missed day |
+| ~~T7~~ [L] | *Superseded 2026-09-29 by HP1 (Stage 5H below): calendar habits carry weekdays and "X times a week" as a schedule of their own, by a schema change rather than this encoding change; interval habits keep `"count:unit"` untouched.* **Habits cannot express "3 times a week" or specific weekdays.** Encoding-only (`"count:unit"` string) — **no schema change** — but the streak semantics are the real work: §6.1's "missing an instance creates no backlog" must still hold under a quota model | B5 | A 3×/week habit shows a streak after 3 check-ins in one week and does not break on a missed day |
 | T8 [S] | Habit reminder has check-off but no snooze/dismiss | B5 | Snooze re-fires 10 min later without colliding in the request-code region |
 | T9 [S] | `entry_completions` is write-only — no history screen | S2 | A task's detail shows its completion history, synced from the other device |
 | T10 [M] | Calendar Week's Cards/Grid hour-grid toggle (persist in a DataStore preference, not Room) | — | Toggle to Grid; timed entries land at their hour; survives restart |
@@ -255,7 +255,7 @@ One agent, one queue, in this order. Everything here is ⇄EDITOR or ⇄DB.
 | DB3 [L] | **Formula language** — lexer, parser, evaluator, dependency graph, cycle detection. Expression lives in the existing `Property.config`. Almost all pure, testable logic | DB2 | — | `prop("A") + prop("B")` evaluates in a cell; a cycle is reported, not hung |
 | DB4 [M] | Per-column Summary footer + "Explain this value" derivation trace | DB3 | — | A column footer shows sum/avg/empty; tapping a computed cell shows its inputs |
 | DB5 [S] | Formula/rollup-driven view grouping | DB3 | — | A Board groups by a formula result |
-| DB12 [L] | Database-driven "Sync to Habits" | T7, DB1 | **yes** — binding columns on `page_databases` + `Habit.sourceRowId`, `@AutoMigration` | Bind a database to Habits; a row creates a habit and unbinding leaves it |
+| DB12 [L] | Database-driven "Sync to Habits" | HP1 (was T7, superseded 2026-09-29), DB1 | **yes** — binding columns on `page_databases` + `Habit.sourceRowId`, `@AutoMigration` | Bind a database to Habits; a row creates a habit and unbinding leaves it |
 | DB13 [M] | No way back out of a confirmed property-type conversion or deletion | DB1 | **yes** if a stash table is chosen (or extend Trash) | Convert TEXT→NUMBER, undo, the original strings are back |
 | DB15 [S] | Notion import pre-creates a matching Board/Gallery/Calendar view — **verify a real export actually carries the metadata first** | — | — | Importing a Notion board arrives as a Board view, not a bare Table |
 | B18 [M] | **One Trash list, and restoring a Row restores its linked Entry.** There are *three* trash sheets, not two (the spec's own note is wrong). A superseded branch had a merged sheet that was deliberately dropped in the PR #1 integration because it purged without recording a tombstone — **do not resurrect it; rebuild on `PurgeRegistry`** | — | — | One Trash list shows pages, rows, entries and habits; restoring a row restores its entry |
@@ -263,6 +263,16 @@ One agent, one queue, in this order. Everything here is ⇄EDITOR or ⇄DB.
 | P20 [M] | Nested-page canvases. Needs `CanvasScreen` in `shared/` (DK5) first, and a spec entry reversing `PageCanvas.kt`'s recorded "a canvas is never embedded content" | DK5 | — | A canvas renders inside a page body |
 | P22 [S] | Streak / gamification on the daily journal. **This is a design exclusion, not a time deferral** — confirm you want it | — | — | The journal shows a streak count |
 | P23 [M] | Onboarding wizard and pre-seeded sample content | — | — | A fresh install shows sample content and a first-run walkthrough |
+
+---
+
+### STAGE 5H — Habit planner · SERIAL, ALONE while its migration is in flight · added 2026-09-29
+
+Plan: `docs/plans/2026-09-29-habit-planner.md`; decisions: `docs/decisions/2026-09-29-habit-planner.md`. Added after this document's 2026-09-07 pass, so unlike the rows above its scope is the person's, not asserted. It carries one Room migration (v26 → v27), so it takes Stage 1's rule for the length of its Phase 3: **nothing else touches `shared/…/data/` or the snapshot format while that migration is in flight.** Its Phases 0–2 (documents, mockups, a pure engine) and 4–6 can sit beside other lanes, except Lane ENTRIES' `ui/taskshabits/` and `domain/HabitSchedule.kt`, which it owns until done.
+
+| ID | Item | Depends on | Schema | Acceptance test |
+|---|---|---|---|---|
+| HP1 [XL] | **Calendar habits and the planner's views in the Habits tab**: time blocks, calendar rules, scoped edits, check-ins per occurrence, Labels as areas, Markdown/PDF exports, then import and retirement of the standalone planner | — | **yes** — `habits` columns, `habit_blocks`, `habit_block_overrides`, `habit_schedule_edits`, `habit_completions.occurrenceKey`; one hand-written migration, `PopulatedMigrationTest` | The ten golden cases reproduce in `shared/`; interval habits unchanged; the walk on phone and desktop per the plan's Phase 5 |
 
 ---
 

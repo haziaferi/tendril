@@ -71,8 +71,11 @@ class HabitReminderAlarmReceiver : BroadcastReceiver() {
     private suspend fun postReminder(context: Context, container: AppContainer, habitId: Long) {
         val habit = container.database.habitDao().getById(habitId) ?: return
         if (habit.deletedAt != null) return
+        // §6.3 (Q5) — a calendar habit arms nothing; an alarm armed while it was an interval habit,
+        // and not yet cancelled when it changed (on another device, say), posts nothing either.
+        if (habit.scheduleKind != com.tendril.app.data.habit.HabitScheduleKind.INTERVAL) return
         // Checked off since the alarm was set — on this device or another one that synced.
-        if (!isHabitDueOn(habit, LocalDate.now())) return
+        if (!isHabitDueOn(habit, LocalDate.now(), container.habitCalendarSource.load())) return
 
         val openIntent = PendingIntent.getActivity(
             context,

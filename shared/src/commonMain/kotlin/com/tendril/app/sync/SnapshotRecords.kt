@@ -77,6 +77,19 @@ data class HabitSnapshotRecord(
     val deletedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long,
+    /** §6.3 (v27) — the calendar habit's columns, every one defaulted so an older peer's record
+     * decodes as the interval habit it is, and an older peer carries these through
+     * `mergeUnknownFields` untouched. The Label travels by name, as a database's does. */
+    val scheduleKind: String = "INTERVAL",
+    val calendarRule: String? = null,
+    val blockUid: String? = null,
+    val sortOrder: Double = 0.0,
+    val labelName: String? = null,
+    val pauseFrom: String? = null,
+    val pauseUntil: String? = null,
+    val activeFrom: String? = null,
+    val activeUntil: String? = null,
+    val note: String? = null,
 )
 
 /**
@@ -146,6 +159,38 @@ data class HabitCompletionSnapshotRecord(
     val checkedAt: Long,
     /** §0.10 item 3 — the amount this check-in logged; null on a plain habit's. */
     val value: Double? = null,
+    val deletedAt: Long? = null,
+    /** §6.3 (v27, P3) — the calendar occurrence this check-in is for; null on an interval habit's. */
+    val occurrenceKey: String? = null,
+)
+
+/** §6.3 (v27) — a time block, travelling as [com.tendril.app.data.habit.HabitBlock] does locally:
+ * tombstoned, and otherwise the later [updatedAt] wins; its weekday times ride in [overrides] (H2). */
+@Serializable
+data class HabitBlockSnapshotRecord(
+    val uid: String,
+    val name: String? = null,
+    val startMinute: Int,
+    val endMinute: Int,
+    val position: Int,
+    val icon: String? = null,
+    val hue: Int? = null,
+    val overrides: String? = null,
+    val updatedAt: Long,
+    val deletedAt: Long? = null,
+)
+
+/** §6.3 (v27) — one "Apply this change to…", travelling as
+ * [com.tendril.app.data.habit.HabitScheduleEdit] does locally: inserted once, tombstoned once, no
+ * `updatedAt` — the habit completions' rule. Its three texts travel verbatim. */
+@Serializable
+data class HabitScheduleEditSnapshotRecord(
+    val uid: String,
+    val target: String,
+    val refUid: String,
+    val scope: String,
+    val changes: String,
+    val createdAt: Long,
     val deletedAt: Long? = null,
 )
 

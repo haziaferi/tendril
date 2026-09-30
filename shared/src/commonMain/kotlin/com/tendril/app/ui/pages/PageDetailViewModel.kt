@@ -61,6 +61,8 @@ import com.tendril.app.data.checkin.CheckInDao
 import com.tendril.app.domain.checkin.checkInOffered
 import java.time.YearMonth
 import com.tendril.app.domain.journal.todayHabits
+import com.tendril.app.domain.plan.HabitCalendarSource
+import com.tendril.app.domain.plan.habitDoneOn
 import com.tendril.app.domain.journal.todayTasks
 import com.tendril.app.domain.track.minuteTicker
 import com.tendril.app.domain.outdentPlanFor
@@ -106,6 +108,8 @@ class PageDetailViewModel(
     private val labelMembership: LabelMembership,
     private val habitDao: HabitDao,
     private val checkInHabitUseCase: CheckInHabitUseCase,
+    /** §6.3 — a calendar habit on today's strip: its days and its done rule (H3). */
+    private val habitCalendarSource: HabitCalendarSource,
     private val pageHistory: PageHistory,
     private val aiKeyStore: AiKeyStore,
     private val keyValueStore: KeyValueStore,
@@ -136,8 +140,9 @@ class PageDetailViewModel(
         combine(page.filterNotNull(), minuteTicker().map { LocalDate.now() }.distinctUntilChanged()) { p, today -> p to today }
             .flatMapLatest { (p, today) ->
                 if (journalDayOf(p, pageDao.findRootByTitle("Journal")) != today) flowOf(null)
-                else combine(entryDao.observeTasks(), habitDao.observeActive()) { tasks, habits ->
-                    today to JournalToday(todayTasks(tasks, today), todayHabits(habits, today))
+                else combine(entryDao.observeTasks(), habitDao.observeActive(), habitCalendarSource.observe(), habitCalendarSource.observeLiveOn(today)) { tasks, habits, calendar, live ->
+                    val onStrip = todayHabits(habits, today, calendar)
+                    today to JournalToday(todayTasks(tasks, today), onStrip, onStrip.filter { habitDoneOn(it, today, calendar, live) }.map { it.id }.toSet())
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

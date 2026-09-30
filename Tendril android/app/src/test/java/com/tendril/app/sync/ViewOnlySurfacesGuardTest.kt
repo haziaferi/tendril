@@ -497,6 +497,8 @@ class ViewOnlySurfacesGuardTest {
         habitCompletionDao = FakeHabitCompletionDao(),
         checkInDao = FakeCheckInDao(),
         timeLogDao = FakeTimeLogDao(),
+        habitBlockDao = FakeHabitBlockDao(),
+        habitScheduleEditDao = FakeHabitScheduleEditDao(),
         purgeRegistry = mockk(relaxed = true),
         pagesSyncEngine = mockk(relaxed = true),
         localImages = InMemoryLocalImageStore(),

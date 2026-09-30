@@ -108,6 +108,8 @@ import com.tendril.app.ui.settings.TaskSettings
 import com.tendril.app.ui.taskshabits.HabitDetailSheet
 import com.tendril.app.ui.taskshabits.TasksHabitsViewModel
 import com.tendril.app.domain.plan.habitStrokes
+import com.tendril.app.domain.plan.HabitCalendar
+import com.tendril.app.data.habit.HabitScheduleKind
 import com.tendril.app.domain.plan.HabitStroke
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -196,13 +198,15 @@ private sealed class CalendarExtra {
     }
 }
 
-/** Habits on every day of the range, and the date cells that fall inside it. */
-private fun extrasIn(from: LocalDate, to: LocalDate, layers: CalendarLayers, habits: List<Habit>, cells: List<DatedCell>): List<CalendarExtra> {
+/** Habits on every day of the range — a calendar habit only on a day it has an occurrence with a set time (§6.3, H4) — and the date cells that fall inside it. */
+private fun extrasIn(from: LocalDate, to: LocalDate, layers: CalendarLayers, habits: List<Habit>, calendar: HabitCalendar, cells: List<DatedCell>): List<CalendarExtra> {
     val out = mutableListOf<CalendarExtra>()
     if (layers.habits) {
         var day = from
         while (!day.isAfter(to)) {
-            habits.forEach { out += CalendarExtra.HabitAt(it, day) }
+            habits.forEach { h ->
+                if (h.scheduleKind != HabitScheduleKind.CALENDAR || calendar.occurrences(h, day).any { it.time != null }) out += CalendarExtra.HabitAt(h, day)
+            }
             day = day.plusDays(1)
         }
     }
@@ -231,7 +235,7 @@ fun CalendarScreen(
 ) {
     val viewModel: CalendarViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.database.propertyValueDao(), core.timeTracker, core.keyValueStore) }
+            initializer { CalendarViewModel(core.database.entryDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.entryEditor, core.database.habitDao(), core.habitCalendarSource, core.database.propertyValueDao(), core.timeTracker, core.keyValueStore) }
         }
     )
     // 14f·2 — the opening view is a Settings choice (`calendar_default_view`); with nothing
@@ -256,12 +260,14 @@ fun CalendarScreen(
     val allEntries by viewModel.entries.collectAsState()
     val layers by viewModel.layers.collectAsState()
     val timedHabits by viewModel.timedHabits.collectAsState()
+    val habitCalendar by viewModel.habitCalendar.collectAsState()
+    val habitCheckInsToday by viewModel.habitCheckInsToday.collectAsState()
     // §3.2 (2026-09-21) — a click on a habit stroke opens the habit's sheet, the Tasks tab's own (shared).
     var habitSheet by remember { mutableStateOf<Habit?>(null) }
     val habitsViewModel: TasksHabitsViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                TasksHabitsViewModel(core.database.entryDao(), core.database.habitDao(), core.database.habitCompletionDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.checkInHabitUseCase, core.timeTracker)
+                TasksHabitsViewModel(core.database.entryDao(), core.database.habitDao(), core.database.habitCompletionDao(), core.resolveEntryUseCase, core.entryScheduleCoordinator, core.checkInHabitUseCase, core.timeTracker, core.habitCalendarSource)
             }
         }
     )
@@ -314,15 +320,19 @@ fun CalendarScreen(
 
     // §3.2 (2026-09-21) — the habit's sheet from a stroke, the Tasks tab's own; *Edit…* opens the Add sheet on it (S10).
     var editHabit by remember { mutableStateOf<Habit?>(null) }
-    habitSheet?.let { habit ->
+    habitSheet?.let { opened ->
+        val habit = timedHabits.firstOrNull { it.id == opened.id } ?: opened // the live row, not the copy it opened with (5c's walk)
         val showStreak = remember(core) { TaskSettings(core.keyValueStore) }.observeShowHabitStreaks()
-        HabitDetailSheet(habit, habitsViewModel, showStreak = showStreak, onDismiss = { habitSheet = null }, onEdit = { habitSheet = null; editHabit = habit })
+        val runningTarget by core.timeTracker.runningTargetState()
+        HabitDetailSheet(habit, habitsViewModel, showStreak = showStreak, runningTarget = runningTarget, onDismiss = { habitSheet = null }, onEdit = { habitSheet = null; editHabit = habit })
     }
     editHabit?.let { habit ->
+        val habitBlocks by habitsViewModel.blocks.collectAsState()
+        val labels by remember(core) { core.database.labelDao().observeAll() }.collectAsState(initial = emptyList())
         AddHabitDialog(
             onDismiss = { editHabit = null },
-            onAdd = { title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount -> habitsViewModel.updateHabit(habit, title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount); editHabit = null },
-            initial = habit,
+            onSave = { habitsViewModel.saveHabit(habit, it); editHabit = null },
+            blocks = habitBlocks, labels = labels, initial = habit, suggest = habitsViewModel::weekSuggestion,
         )
     }
     editTarget?.let { entry ->
@@ -440,10 +450,11 @@ fun CalendarScreen(
                 if (view == CalendarView.DAY) EntryOccurrences.onDay(entries, selectedDate)
                 else EntryOccurrences.expand(entries, range.first, range.second)
             }
-            val extras = remember(layers, timedHabits, dateCells, range) { extrasIn(range.first, range.second, layers, timedHabits, dateCells) }
-            // §3.2 (2026-09-21) — the grids' habit strokes: every active timed habit on the day, under the Layers menu's *Habits*.
-            val strokesOn: (LocalDate) -> List<HabitStroke> = remember(layers, timedHabits, today) {
-                { day -> if (layers.habits) habitStrokes(timedHabits, day, today) else emptyList() }
+            val extras = remember(layers, timedHabits, habitCalendar, dateCells, range) { extrasIn(range.first, range.second, layers, timedHabits, habitCalendar, dateCells) }
+            // §3.2 (2026-09-21) — the grids' habit strokes: every active timed habit on the day, under the Layers menu's *Habits*;
+            // a calendar habit's only on its days, one per occurrence with a set time (§6.3, H4).
+            val strokesOn: (LocalDate) -> List<HabitStroke> = remember(layers, timedHabits, habitCalendar, habitCheckInsToday, today) {
+                { day -> if (layers.habits) habitStrokes(timedHabits, day, today, habitCalendar, habitCheckInsToday) else emptyList() }
             }
 
             val trayDragStart: (Entry, Offset) -> Unit = { entry, pos -> trayDrag = TrayDrag(entry, pos) }

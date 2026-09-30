@@ -316,3 +316,30 @@ val MIGRATION_25_26 = object : Migration(25, 26) {
         connection.execSQL("CREATE TABLE IF NOT EXISTS `calendar_links` (`calendarKey` TEXT NOT NULL, `entryUid` TEXT NOT NULL, `occurrence` TEXT NOT NULL, `fingerprint` TEXT NOT NULL, PRIMARY KEY(`calendarKey`, `entryUid`, `occurrence`))")
     }
 }
+
+/**
+ * v27 (2026-09-29) — §6.3, calendar habits (plan Phase 3). Additive only: every existing habit
+ * becomes an interval habit with nothing else set, and every existing check-in keeps a null
+ * occurrence key, so each read from before v27 answers exactly as it did. The default blocks are
+ * not written here but by [SeedDefaultHabitBlocks] on open, which covers a fresh file as well.
+ */
+val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `scheduleKind` TEXT NOT NULL DEFAULT 'INTERVAL'")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `calendarRule` TEXT")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `blockUid` TEXT")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `sortOrder` REAL NOT NULL DEFAULT 0")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `labelId` INTEGER")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `pauseFrom` INTEGER")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `pauseUntil` INTEGER")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `activeFrom` INTEGER")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `activeUntil` INTEGER")
+        connection.execSQL("ALTER TABLE `habits` ADD COLUMN `note` TEXT")
+        connection.execSQL("ALTER TABLE `habit_completions` ADD COLUMN `occurrenceKey` TEXT")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `habit_blocks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uid` TEXT NOT NULL, `name` TEXT, `startMinute` INTEGER NOT NULL, `endMinute` INTEGER NOT NULL, `position` INTEGER NOT NULL, `icon` TEXT, `hue` INTEGER, `overrides` TEXT, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_habit_blocks_uid` ON `habit_blocks` (`uid`)")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `habit_schedule_edits` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uid` TEXT NOT NULL, `target` TEXT NOT NULL, `refUid` TEXT NOT NULL, `scope` TEXT NOT NULL, `changes` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `deletedAt` INTEGER)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_habit_schedule_edits_uid` ON `habit_schedule_edits` (`uid`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_habit_schedule_edits_refUid` ON `habit_schedule_edits` (`refUid`)")
+    }
+}

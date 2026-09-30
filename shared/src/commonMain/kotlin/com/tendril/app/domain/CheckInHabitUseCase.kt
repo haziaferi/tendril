@@ -4,6 +4,8 @@ import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.habit.HabitCompletionDao
 import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.data.habit.HabitScheduleKind
+import com.tendril.app.domain.plan.HabitCalendarSource
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -21,6 +23,9 @@ import java.time.temporal.ChronoUnit
 class CheckInHabitUseCase(
     private val habitDao: HabitDao,
     private val habitCompletionDao: HabitCompletionDao,
+    /** §6.3 — a calendar habit's occurrences, which its check-ins are keyed by (P3). Required: a
+     * default would let a call site check calendar habits in against no calendar at all. */
+    private val calendar: HabitCalendarSource,
 ) {
     /**
      * §0.10 item 3 — a **counting** habit ([Habit.amountPerCheckIn] set) logs every tap: a new
@@ -28,8 +33,9 @@ class CheckInHabitUseCase(
      * times a day as it is tapped; the day still counts once for the streak and
      * `lastCompletedDate`. A plain habit keeps its one check a day.
      */
-    suspend fun checkIn(habitId: Long, today: LocalDate = LocalDate.now(), value: Double? = null) {
+    suspend fun checkIn(habitId: Long, today: LocalDate = LocalDate.now(), value: Double? = null, occurrenceKey: String? = null) {
         val habit = habitDao.getById(habitId) ?: return
+        if (habit.scheduleKind == HabitScheduleKind.CALENDAR) return checkInOccurrence(habit, today, value, occurrenceKey)
         val counting = habit.amountPerCheckIn != null
         if (counting) {
             habitCompletionDao.insert(HabitCompletion(habitId = habitId, date = today, checkedAt = Instant.now(), value = value ?: habit.amountPerCheckIn))
@@ -65,9 +71,10 @@ class CheckInHabitUseCase(
      * rather than recomputing (a weekly+ habit's grace period means "subtract a day" can't
      * reconstruct what `lastCompletedDate` actually was). Only undoes today's check-in — a
      * no-op if today was never checked in, so a stale/duplicate tap can't corrupt older state. */
-    suspend fun undoCheckIn(habitId: Long, today: LocalDate = LocalDate.now()) {
+    suspend fun undoCheckIn(habitId: Long, today: LocalDate = LocalDate.now(), occurrenceKey: String? = null) {
         val habit = habitDao.getById(habitId) ?: return
         if (habit.lastCompletedDate != today) return // nothing to undo
+        if (habit.scheduleKind == HabitScheduleKind.CALENDAR) return undoOccurrence(habit, today, occurrenceKey)
 
         val now = Instant.now()
         val live = habitCompletionDao.getLiveForDay(habitId, today)
@@ -88,5 +95,36 @@ class CheckInHabitUseCase(
                 updatedAt = Instant.now(),
             )
         )
+    }
+
+    /**
+     * §6.3 (P3, H3) — a calendar habit: one check-in per occurrence, keyed by it. [occurrenceKey]
+     * names the occurrence (the Habits tab); null takes the first of today's not yet checked
+     * (the widget and the strip, which show the habit as one row). A key that is not one of
+     * today's occurrences, or is already checked, writes nothing — a stale tap cannot log a day twice.
+     * The streak stays 0 (Q4); `lastCompletedDate` records the day, with the one before it kept
+     * for [undoOccurrence].
+     */
+    private suspend fun checkInOccurrence(habit: Habit, today: LocalDate, value: Double?, occurrenceKey: String?) {
+        val keys = calendar.load().occurrences(habit, today).map { it.key }
+        val done = habitCompletionDao.getLiveForDay(habit.id, today).mapNotNull { it.occurrenceKey }.toSet()
+        val key = occurrenceKey ?: keys.firstOrNull { it !in done } ?: return
+        if (key !in keys || key in done) return
+        habitCompletionDao.insert(
+            HabitCompletion(habitId = habit.id, date = today, checkedAt = Instant.now(), value = value ?: habit.amountPerCheckIn, occurrenceKey = key),
+        )
+        if (habit.lastCompletedDate == today) return
+        habitDao.update(habit.copy(lastCompletedDate = today, previousCompletedDate = habit.lastCompletedDate, updatedAt = Instant.now()))
+    }
+
+    /** [checkInOccurrence]'s undo: [occurrenceKey]'s check-in, or with none named the day's latest; once none is left the day stops counting. */
+    private suspend fun undoOccurrence(habit: Habit, today: LocalDate, occurrenceKey: String?) {
+        val now = Instant.now()
+        val live = habitCompletionDao.getLiveForDay(habit.id, today)
+        val gone = if (occurrenceKey != null) live.filter { it.occurrenceKey == occurrenceKey } else listOfNotNull(live.maxByOrNull { it.checkedAt })
+        if (gone.isEmpty()) return // nothing checked under that key: nothing to undo
+        for (row in gone) habitCompletionDao.softDelete(row.id, now)
+        if (live.size > gone.size) return
+        habitDao.update(habit.copy(lastCompletedDate = habit.previousCompletedDate, previousCompletedDate = null, updatedAt = now))
     }
 }

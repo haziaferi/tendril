@@ -4,6 +4,7 @@ import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.page.Page
 import com.tendril.app.domain.isHabitDueOn
+import com.tendril.app.domain.plan.HabitCalendar
 import com.tendril.app.domain.recurrence.EntryOccurrence
 import com.tendril.app.domain.recurrence.EntryOccurrences
 import java.time.LocalDate
@@ -13,7 +14,12 @@ import java.time.format.DateTimeParseException
  * §3.1.4 (amended, §0.8 step 8b / B§6 #15) — what today's Journal page shows above its blocks.
  * Pure: the page's ViewModel feeds it the live task and habit lists and asks nothing else.
  */
-data class JournalToday(val tasks: List<EntryOccurrence>, val habits: List<Habit>)
+data class JournalToday(
+    val tasks: List<EntryOccurrence>,
+    val habits: List<Habit>,
+    /** H3 — the ids of [habits] whose row reads done: checked in today, or every one of today's occurrences checked (`habitDoneOn`). */
+    val doneHabitIds: Set<Long> = emptySet(),
+)
 
 /** The prefix `PagesViewModel.openJournal` titles a day's page with — `journal/2026-09-13`. */
 const val JOURNAL_TITLE_PREFIX = "journal/"
@@ -28,16 +34,16 @@ const val JOURNAL_TITLE_PREFIX = "journal/"
  * shows for a page — a Journal day's stored title is `journal/2026-09-13` (the storage name;
  * `PagesViewModel.openJournal` writes it and [journalDayOf] parses it), which read as a
  * repeated prefix under a parent already called Journal. The title string is untouched; the
- * date is the display: *13 Sep 2026*. Any other title is returned as it is.
+ * date is the display: *13 Sep 2026*, *13 set 2026* in Italian (plan Phase 4, L2 — dates follow
+ * the app's language, where this was pinned to English). Any other title is returned as it is.
  */
-fun displayTitle(title: String): String {
+fun displayTitle(title: String, locale: java.util.Locale = java.util.Locale.getDefault()): String {
     val m = JOURNAL_TITLE.matchEntire(title.trim()) ?: return title
     val day = runCatching { LocalDate.parse(m.groupValues[1]) }.getOrNull() ?: return title
-    return day.format(JOURNAL_DISPLAY)
+    return day.format(java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu", locale))
 }
 
 private val JOURNAL_TITLE = Regex("journal/(\\d{4}-\\d{2}-\\d{2})")
-private val JOURNAL_DISPLAY: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu", java.util.Locale.ENGLISH)
 
 fun journalDayOf(page: Page, journalRoot: Page?): LocalDate? {
     if (journalRoot == null || page.parentId != journalRoot.id) return null
@@ -61,10 +67,11 @@ fun todayTasks(tasks: List<Entry>, today: LocalDate): List<EntryOccurrence> =
 
 /**
  * The habits that belong on today's page: due today, **or** already checked in today —
- * [isHabitDueOn] is false the moment a habit is done, and the one just ticked must stay on the
- * strip with its box checked. Timed ones first by hour, then by title.
+ * [isHabitDueOn] is false the moment an interval habit is done, and the one just ticked must stay
+ * on the strip with its box checked. A calendar habit is due on any day it has an occurrence in
+ * [calendar] (§6.3), done or not. Timed ones first by hour, then by title.
  */
-fun todayHabits(habits: List<Habit>, today: LocalDate): List<Habit> =
+fun todayHabits(habits: List<Habit>, today: LocalDate, calendar: HabitCalendar): List<Habit> =
     habits
-        .filter { it.deletedAt == null && (isHabitDueOn(it, today) || it.lastCompletedDate == today) }
+        .filter { it.deletedAt == null && (isHabitDueOn(it, today, calendar) || it.lastCompletedDate == today) }
         .sortedWith(compareBy<Habit, java.time.LocalTime?>(nullsLast()) { it.time }.thenBy { it.title.lowercase() })

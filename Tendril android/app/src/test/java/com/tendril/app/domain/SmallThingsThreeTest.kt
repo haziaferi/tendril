@@ -31,8 +31,10 @@ class SmallThingsThreeTest {
 
     @Test
     fun `L12 a Journal day's storage title reads as its date, any other title as itself`() {
-        assertEquals("13 Sep 2026", displayTitle("journal/2026-09-13"))
-        assertEquals("1 Oct 2026", displayTitle(" journal/2026-10-01 "))
+        assertEquals("13 Sep 2026", displayTitle("journal/2026-09-13", java.util.Locale.ENGLISH))
+        assertEquals("1 Oct 2026", displayTitle(" journal/2026-10-01 ", java.util.Locale.ENGLISH))
+        // Plan Phase 4 (L2) — the date in the app's language, where it was pinned to English
+        assertEquals("13 set 2026", displayTitle("journal/2026-09-13", java.util.Locale.ITALIAN))
         assertEquals("journal/2026-13-40", displayTitle("journal/2026-13-40"))
         assertEquals("Call the library", displayTitle("Call the library"))
         assertEquals("journal notes", displayTitle("journal notes"))

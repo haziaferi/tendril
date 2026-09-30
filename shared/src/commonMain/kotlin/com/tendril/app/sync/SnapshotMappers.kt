@@ -13,6 +13,9 @@ import com.tendril.app.data.habit.HabitCompletion
 import com.tendril.app.data.checkin.CheckIn
 import com.tendril.app.data.track.TimeLog
 import com.tendril.app.data.habit.HabitFrequency
+import com.tendril.app.data.habit.HabitBlock
+import com.tendril.app.data.habit.HabitScheduleEdit
+import com.tendril.app.data.habit.HabitScheduleKind
 import com.tendril.app.data.reminder.Reminder
 import com.tendril.app.data.reminder.ReminderOffset
 import java.time.Duration
@@ -153,7 +156,8 @@ fun EntrySnapshotRecord.toEntity(uidToId: Map<String, Long>, rowUidToId: Map<Str
 fun EntrySnapshotRecord.toEntityOrNull(uidToId: Map<String, Long>, rowUidToId: Map<String, Long>): Entry? =
     runCatching { toEntity(uidToId, rowUidToId) }.getOrNull()
 
-fun Habit.toSnapshot(): HabitSnapshotRecord = HabitSnapshotRecord(
+/** [labelName] is the habit's Label by name (§6.3, P4), resolved by the caller: a Label travels by name. */
+fun Habit.toSnapshot(labelName: String?): HabitSnapshotRecord = HabitSnapshotRecord(
     uid = uid,
     title = title,
     time = time?.toString(),
@@ -169,6 +173,16 @@ fun Habit.toSnapshot(): HabitSnapshotRecord = HabitSnapshotRecord(
     deletedAt = deletedAt?.toEpochMilli(),
     createdAt = createdAt.toEpochMilli(),
     updatedAt = updatedAt.toEpochMilli(),
+    scheduleKind = scheduleKind.name,
+    calendarRule = calendarRule,
+    blockUid = blockUid,
+    sortOrder = sortOrder,
+    labelName = labelName,
+    pauseFrom = pauseFrom?.toString(),
+    pauseUntil = pauseUntil?.toString(),
+    activeFrom = activeFrom?.toString(),
+    activeUntil = activeUntil?.toString(),
+    note = note,
 )
 
 /**
@@ -180,7 +194,12 @@ fun Habit.toSnapshot(): HabitSnapshotRecord = HabitSnapshotRecord(
  * same way `IntervalUnit.valueOf` threw on a unit added later. Neither is corruption, and neither
  * should cost the other habits in the same file.
  */
-fun HabitSnapshotRecord.toEntity(): Habit {
+fun HabitSnapshotRecord.toEntity(labelId: Long?): Habit {
+    // §6.3 — a kind a newer build added is that build's habit, not an interval one: quarantined
+    // rather than shown on the wrong days. A calendar rule this build cannot read is not checked
+    // here; it is kept as text and reads as "no occurrences" (PlanCodec).
+    val kind = enumOrNull<HabitScheduleKind>(scheduleKind) ?: undecodable("habit schedule kind", scheduleKind)
+    fun day(label: String, v: String?): LocalDate? = v?.let { runCatching { LocalDate.parse(it) }.getOrElse { undecodable(label, v) } }
     val parts = frequency.split(":")
     val count = parts.getOrNull(0)?.toIntOrNull() ?: undecodable("habit frequency", frequency)
     val unit = enumOrNull<IntervalUnit>(parts.getOrNull(1)) ?: undecodable("habit frequency unit", frequency)
@@ -200,11 +219,43 @@ fun HabitSnapshotRecord.toEntity(): Habit {
         deletedAt = deletedAt?.let(Instant::ofEpochMilli),
         createdAt = Instant.ofEpochMilli(createdAt),
         updatedAt = Instant.ofEpochMilli(updatedAt),
+        scheduleKind = kind,
+        calendarRule = calendarRule,
+        blockUid = blockUid,
+        sortOrder = sortOrder,
+        labelId = labelId,
+        pauseFrom = day("habit pause date", pauseFrom),
+        pauseUntil = day("habit pause date", pauseUntil),
+        activeFrom = day("habit active date", activeFrom),
+        activeUntil = day("habit active date", activeUntil),
+        note = note,
     )
 }
 
 /** [HabitSnapshotRecord.toEntity]'s quarantining form — see [EntrySnapshotRecord.toEntityOrNull]. */
-fun HabitSnapshotRecord.toEntityOrNull(): Habit? = runCatching { toEntity() }.getOrNull()
+fun HabitSnapshotRecord.toEntityOrNull(labelId: Long?): Habit? = runCatching { toEntity(labelId) }.getOrNull()
+
+fun HabitBlock.toSnapshot(): HabitBlockSnapshotRecord = HabitBlockSnapshotRecord(
+    uid = uid, name = name, startMinute = startMinute, endMinute = endMinute, position = position,
+    icon = icon, hue = hue, overrides = overrides, updatedAt = updatedAt.toEpochMilli(), deletedAt = deletedAt?.toEpochMilli(),
+)
+
+/** Never throws: every field is a number or text kept as it came. */
+fun HabitBlockSnapshotRecord.toEntity(): HabitBlock = HabitBlock(
+    uid = uid, name = name, startMinute = startMinute, endMinute = endMinute, position = position,
+    icon = icon, hue = hue, overrides = overrides, updatedAt = Instant.ofEpochMilli(updatedAt), deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+)
+
+fun HabitScheduleEdit.toSnapshot(): HabitScheduleEditSnapshotRecord = HabitScheduleEditSnapshotRecord(
+    uid = uid, target = target, refUid = refUid, scope = scope, changes = changes,
+    createdAt = createdAt.toEpochMilli(), deletedAt = deletedAt?.toEpochMilli(),
+)
+
+/** Never throws: the three texts are kept verbatim and read by `PlanCodec`, which skips what it cannot read. */
+fun HabitScheduleEditSnapshotRecord.toEntity(): HabitScheduleEdit = HabitScheduleEdit(
+    uid = uid, target = target, refUid = refUid, scope = scope, changes = changes,
+    createdAt = Instant.ofEpochMilli(createdAt), deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+)
 
 /**
  * [entryUid] is resolved by the caller from the owning Entry rather than looked up here, which
@@ -305,6 +356,7 @@ fun HabitCompletion.toSnapshot(habitUid: String): HabitCompletionSnapshotRecord 
         checkedAt = checkedAt.toEpochMilli(),
         value = value,
         deletedAt = deletedAt?.toEpochMilli(),
+        occurrenceKey = occurrenceKey,
     )
 
 /** Throws [SnapshotDecodeException] on a date this build cannot parse. */
@@ -315,6 +367,7 @@ fun HabitCompletionSnapshotRecord.toEntity(habitId: Long): HabitCompletion = Hab
     checkedAt = Instant.ofEpochMilli(checkedAt),
     value = value,
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
+    occurrenceKey = occurrenceKey,
 )
 
 fun CheckIn.toSnapshot(): CheckInSnapshotRecord = CheckInSnapshotRecord(

@@ -248,6 +248,9 @@ class FakeHabitCompletionDao(seed: List<HabitCompletion> = emptyList()) : HabitC
     override fun observeLiveForDay(date: LocalDate): Flow<List<HabitCompletion>> =
         flowOf(rows.values.filter { it.date == date && it.deletedAt == null })
 
+    override fun observeLiveBetween(from: LocalDate, until: LocalDate): Flow<List<HabitCompletion>> =
+        flowOf(rows.values.filter { !it.date.isBefore(from) && !it.date.isAfter(until) && it.deletedAt == null })
+
     override suspend fun getLiveForDay(habitId: Long, date: LocalDate): List<HabitCompletion> =
         rows.values.filter { it.habitId == habitId && it.date == date && it.deletedAt == null }
 
@@ -367,6 +370,61 @@ class FakeCheckInDao(seed: List<CheckIn> = emptyList()) : CheckInDao {
     override suspend fun getAll(): List<CheckIn> = rows.values.toList()
 
     override suspend fun getByUid(uid: String): CheckIn? = rows.values.firstOrNull { it.uid == uid }
+
+    override suspend fun softDelete(id: Long, deletedAt: Instant) {
+        rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt) }
+    }
+
+    override suspend fun deleteAll() { rows.clear() }
+}
+
+/** §6.3 (v27) — time blocks in memory; `insertIfAbsent` keeps a uid already there, as `OR IGNORE` does. */
+class FakeHabitBlockDao(seed: List<com.tendril.app.data.habit.HabitBlock> = emptyList()) : com.tendril.app.data.habit.HabitBlockDao {
+    private val rows = linkedMapOf<Long, com.tendril.app.data.habit.HabitBlock>()
+    private var nextId = 1L
+
+    init { seed.forEach { val id = if (it.id > 0) it.id else nextId; rows[id] = it.copy(id = id); nextId = maxOf(nextId, id) + 1 } }
+
+    override suspend fun insert(block: com.tendril.app.data.habit.HabitBlock): Long {
+        val id = nextId++
+        rows[id] = block.copy(id = id)
+        return id
+    }
+
+    override suspend fun update(block: com.tendril.app.data.habit.HabitBlock) { rows[block.id] = block }
+
+    override suspend fun insertIfAbsent(blocks: List<com.tendril.app.data.habit.HabitBlock>) {
+        blocks.filter { b -> rows.values.none { it.uid == b.uid } }.forEach { insert(it) }
+    }
+
+    override suspend fun getAll(): List<com.tendril.app.data.habit.HabitBlock> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): com.tendril.app.data.habit.HabitBlock? = rows.values.firstOrNull { it.uid == uid }
+
+    override fun observeLive(): Flow<List<com.tendril.app.data.habit.HabitBlock>> =
+        flowOf(rows.values.filter { it.deletedAt == null }.sortedWith(compareBy({ it.position }, { it.uid })))
+
+    override suspend fun deleteAll() { rows.clear() }
+}
+
+/** §6.3 (v27) — scoped edits in memory: inserted once, tombstoned once. */
+class FakeHabitScheduleEditDao(seed: List<com.tendril.app.data.habit.HabitScheduleEdit> = emptyList()) : com.tendril.app.data.habit.HabitScheduleEditDao {
+    private val rows = linkedMapOf<Long, com.tendril.app.data.habit.HabitScheduleEdit>()
+    private var nextId = 1L
+
+    init { seed.forEach { val id = if (it.id > 0) it.id else nextId; rows[id] = it.copy(id = id); nextId = maxOf(nextId, id) + 1 } }
+
+    override suspend fun insert(edit: com.tendril.app.data.habit.HabitScheduleEdit): Long {
+        val id = nextId++
+        rows[id] = edit.copy(id = id)
+        return id
+    }
+
+    override suspend fun getAll(): List<com.tendril.app.data.habit.HabitScheduleEdit> = rows.values.toList()
+
+    override suspend fun getByUid(uid: String): com.tendril.app.data.habit.HabitScheduleEdit? = rows.values.firstOrNull { it.uid == uid }
+
+    override fun observeLive(): Flow<List<com.tendril.app.data.habit.HabitScheduleEdit>> = flowOf(rows.values.filter { it.deletedAt == null })
 
     override suspend fun softDelete(id: Long, deletedAt: Instant) {
         rows[id]?.let { rows[id] = it.copy(deletedAt = deletedAt) }

@@ -35,6 +35,8 @@ class CheckInSyncTest {
             habitCompletionDao = FakeHabitCompletionDao(),
             checkInDao = checkInDao,
             timeLogDao = FakeTimeLogDao(),
+            habitBlockDao = FakeHabitBlockDao(),
+            habitScheduleEditDao = FakeHabitScheduleEditDao(),
             localImages = InMemoryLocalImageStore(),
         )
     }

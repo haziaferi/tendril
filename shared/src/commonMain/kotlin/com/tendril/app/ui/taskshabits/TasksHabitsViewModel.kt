@@ -1,6 +1,32 @@
 package com.tendril.app.ui.taskshabits
 
 import com.tendril.app.data.habit.edited
+import com.tendril.app.domain.plan.HabitCalendarSource
+import com.tendril.app.domain.plan.HabitDayView
+import com.tendril.app.domain.plan.habitDay
+import com.tendril.app.domain.plan.DayRow
+import com.tendril.app.domain.plan.EditPos
+import com.tendril.app.domain.plan.MovePlan
+import com.tendril.app.domain.plan.PlanWrites
+import com.tendril.app.domain.plan.ScheduleEdit
+import com.tendril.app.domain.plan.ScopeChoice
+import com.tendril.app.domain.plan.editGroups
+import com.tendril.app.domain.plan.moveChoices
+import com.tendril.app.domain.plan.moveToDayWrites
+import com.tendril.app.domain.plan.moveWrites
+import com.tendril.app.domain.plan.originOf
+import com.tendril.app.domain.plan.planMove
+import com.tendril.app.domain.plan.skipChoices
+import com.tendril.app.domain.plan.skipWrites
+import com.tendril.app.domain.plan.toPlanEdit
+import com.tendril.app.domain.plan.toPlanHabit
+import java.time.DayOfWeek
+import java.util.UUID
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
@@ -39,6 +65,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
+/** The uid a habit being drafted in the add sheet goes by in the engine, for its suggestion (D5). */
+private const val DRAFT_UID = "draft"
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class TasksHabitsViewModel(
     private val entryDao: EntryDao,
     private val habitDao: HabitDao,
@@ -47,11 +77,251 @@ class TasksHabitsViewModel(
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val checkInHabitUseCase: CheckInHabitUseCase,
     private val timeTracker: TimeTracker,
+    /** §6.3 (5a) — the blocks, edits and check-ins the Day view is built from. */
+    private val habitCalendarSource: HabitCalendarSource,
 ) : ViewModel() {
     val tasks: StateFlow<List<Entry>> =
         entryDao.observeTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val habits: StateFlow<List<Habit>> =
         habitDao.observeActive().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val day = MutableStateFlow(LocalDate.now())
+
+    /** §6.3 (5a) — the day the Day view shows; today until the person steps to another. */
+    val shownDay: StateFlow<LocalDate> = day.asStateFlow()
+
+    fun showDay(date: LocalDate) { day.value = date }
+
+    /** The date as the clock has it, re-read each minute, so a view left open past midnight moves on. */
+    private val todayFlow = minuteTicker().map { LocalDate.now() }.distinctUntilChanged()
+
+    /**
+     * §6.3 (5a) — the shown day, by time: every habit of both kinds placed in the day's blocks, and
+     * what was done ([habitDay]). Null until the first read has arrived.
+     */
+    val dayView: StateFlow<HabitDayView?> = combine(
+        habits,
+        habitCalendarSource.observeRows(),
+        day.flatMapLatest { d -> habitCalendarSource.observeLiveOn(d).map { d to it } },
+        todayFlow,
+    ) { hs, (blocks, edits), (d, checkIns), today -> habitDay(d, today, hs, blocks, edits, checkIns) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** §6.3 (5b) — the entry in edit mode: which one, where it was, where it is now (pending until *Done*). */
+    data class EditSelection(val habitId: Long, val key: String?, val origin: EditPos, val pos: EditPos)
+
+    private val selection = MutableStateFlow<EditSelection?>(null)
+    val editSelection: StateFlow<EditSelection?> = selection.asStateFlow()
+
+    /** The stored blocks and edits as rows, held for the prompts, which read another day's blocks. */
+    private val rows = habitCalendarSource.observeRows().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.tendril.app.data.habit.HabitBlock>() to emptyList())
+
+    /** §6.3 (5c) — the blocks as stored, for the add sheet's *Where* and the blocks editor. */
+    val blocks: StateFlow<List<com.tendril.app.data.habit.HabitBlock>> = rows.map { it.first }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The stored edits in the engine's terms — what a change on a day starts from (`effectiveOn`). */
+    private val planEdits: StateFlow<List<ScheduleEdit>> = rows.map { (_, edits) -> edits.mapNotNull { it.toPlanEdit() } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The selected entry as the current view has it, or null. */
+    fun selectedRow(view: HabitDayView, sel: EditSelection): DayRow? =
+        (view.blocks.flatMap { it.timed + it.flexible } + view.anyTime + view.outside).firstOrNull { it.habit.id == sel.habitId && it.key == sel.key }
+
+    /** A tap on an entry of today or a later day (T2); a past day is read-only, so nothing is selected there. */
+    fun select(row: DayRow) {
+        val v = dayView.value ?: return
+        if (v.readOnly) return
+        val origin = originOf(v, row)
+        selection.value = EditSelection(row.habit.id, row.key, origin, origin)
+    }
+
+    fun moveSelectedUp() = step { groups, pos -> com.tendril.app.domain.plan.moveUp(groups, pos) }
+    fun moveSelectedDown() = step { groups, pos -> com.tendril.app.domain.plan.moveDown(groups, pos) }
+
+    private fun step(f: (List<com.tendril.app.domain.plan.EditGroup>, EditPos) -> EditPos) {
+        val v = dayView.value ?: return
+        val sel = selection.value ?: return
+        val row = selectedRow(v, sel) ?: return
+        selection.value = sel.copy(pos = f(editGroups(v, row), sel.pos))
+    }
+
+    /** *Move to…* a block on the same day: the entry goes to the end of that block's rest, then *Done*'s questions. */
+    fun placeSelectedAtEndOf(blockUid: String) {
+        val v = dayView.value ?: return
+        val sel = selection.value ?: return
+        val row = selectedRow(v, sel) ?: return
+        val groups = editGroups(v, row)
+        val g = groups.indexOfFirst { it.blockUid == blockUid }.takeIf { it >= 0 } ?: return
+        selection.value = sel.copy(pos = EditPos(g, timed = false, index = groups[g].flexible.size))
+    }
+
+    /** Declining any prompt puts the entry back (the planner's rule). */
+    fun cancelEdit() { selection.value = null }
+
+    /** What *Done* has to settle; null when the entry is back where it started. */
+    fun pendingMove(): MovePlan? {
+        val v = dayView.value ?: return null
+        val sel = selection.value ?: return null
+        val row = selectedRow(v, sel) ?: return null
+        return planMove(v, row, sel.origin, sel.pos)
+    }
+
+    fun moveChoicesFor(plan: MovePlan, time: Int?): List<ScopeChoice> = dayView.value?.let { moveChoices(it, plan, time, planEdits.value) } ?: emptyList()
+
+    fun commitMove(plan: MovePlan, time: Int?, choice: ScopeChoice?, days: Set<DayOfWeek>?) {
+        val v = dayView.value ?: return
+        val w = moveWrites(v, plan, time, choice, days, planEdits.value, Instant.now(), ::newUid)
+        selection.value = null
+        viewModelScope.launch { persist(w) }
+    }
+
+    fun skipChoicesFor(row: DayRow): List<ScopeChoice> = dayView.value?.let { skipChoices(it, row) } ?: emptyList()
+
+    fun commitSkip(row: DayRow, choice: ScopeChoice, days: Set<DayOfWeek>?) {
+        val v = dayView.value ?: return
+        val e = skipWrites(v, row, choice, days, Instant.now(), ::newUid)
+        selection.value = null
+        viewModelScope.launch { habitCalendarSource.addEdits(listOf(e)) }
+    }
+
+    fun canMoveSelectedWeekly(row: DayRow): Boolean = dayView.value?.let { com.tendril.app.domain.plan.canMoveWeekly(row, planEdits.value, it.date) } ?: false
+
+    /** Whether [minute] falls in [blockUid] as [date] has it — *Move to…* another day asks to remove a time that does not. */
+    fun timeFitsBlockOn(date: LocalDate, blockUid: String, minute: Int): Boolean {
+        val (blocks, edits) = rows.value
+        val day = habitDay(date, date, emptyList(), blocks, edits, emptyList())
+        return day.blocks.any { it.block.uid == blockUid && it.start <= minute && minute < it.end }
+    }
+
+    fun commitMoveToDay(row: DayRow, target: LocalDate, blockUid: String, removeTime: Boolean, weekly: Boolean) {
+        val v = dayView.value ?: return
+        val out = moveToDayWrites(v, row, target, blockUid, removeTime, weekly, planEdits.value, Instant.now(), ::newUid)
+        selection.value = null
+        viewModelScope.launch { habitCalendarSource.addEdits(out) }
+    }
+
+    private suspend fun persist(w: PlanWrites) {
+        habitCalendarSource.addEdits(w.edits)
+        for (h in w.habits) {
+            // over the row as it is now, as `updateHabit` does: a check-in made meanwhile must survive
+            val live = habitDao.getById(h.id) ?: continue
+            habitDao.update(live.copy(time = h.time, blockUid = h.blockUid, sortOrder = h.sortOrder, updatedAt = h.updatedAt))
+        }
+    }
+
+    private fun newUid() = UUID.randomUUID().toString()
+
+    /**
+     * §6.3 (5c) — the add and edit sheet's save, both kinds: a new habit, or [initial]'s fields laid
+     * over the row as it is now (a check-in made while the sheet was open survives, as in
+     * [updateHabit]); an untouched sheet writes nothing.
+     */
+    fun saveHabit(initial: Habit?, form: HabitForm) {
+        if (form.title.isBlank()) return
+        viewModelScope.launch {
+            val now = Instant.now()
+            fun Habit.withPlan() = copy(
+                scheduleKind = form.scheduleKind, calendarRule = form.calendarRule, blockUid = form.blockUid,
+                labelId = form.labelId, note = form.note, activeFrom = form.activeFrom, activeUntil = form.activeUntil,
+            )
+            if (initial == null) {
+                val id = habitDao.insert(
+                    Habit(
+                        title = form.title.trim(), time = form.time, duration = form.duration, frequency = form.frequency,
+                        unit = form.unit?.trim()?.takeIf { it.isNotEmpty() }, amountPerCheckIn = form.amountPerCheckIn, dailyAmount = form.dailyAmount,
+                        createdAt = now, updatedAt = now,
+                    ).withPlan(),
+                )
+                habitDao.getById(id)?.let { entryScheduleCoordinator.onHabitChanged(it) }
+                return@launch
+            }
+            val live = habitDao.getById(initial.id) ?: return@launch
+            val edited = live.edited(form.title, form.frequency, form.time, form.duration, form.unit, form.amountPerCheckIn, form.dailyAmount, now).withPlan()
+            if (edited.copy(updatedAt = live.updatedAt) == live) return@launch
+            habitDao.update(edited)
+            rearm(initial.id)
+        }
+    }
+
+    /** §6.3 (5c) — the planner's pause: from [from] until [until], or until resumed (null). Its check-ins stay. */
+    fun pauseHabit(habitId: Long, from: LocalDate, until: LocalDate?) {
+        viewModelScope.launch {
+            val live = habitDao.getById(habitId) ?: return@launch
+            habitDao.update(live.copy(pauseFrom = from, pauseUntil = until, updatedAt = Instant.now()))
+            rearm(habitId)
+        }
+    }
+
+    fun resumeHabit(habitId: Long) {
+        viewModelScope.launch {
+            val live = habitDao.getById(habitId) ?: return@launch
+            if (live.pauseFrom == null && live.pauseUntil == null) return@launch
+            habitDao.update(live.copy(pauseFrom = null, pauseUntil = null, updatedAt = Instant.now()))
+            rearm(habitId)
+        }
+    }
+
+    /** The blocks editor: the planner's rule, already checked by the sheet ([com.tendril.app.domain.plan.blockEditError]). */
+    fun saveBlockTimes(uid: String, start: Int, end: Int) {
+        val changed = com.tendril.app.domain.plan.editBlockTimes(rows.value.first, uid, start, end, Instant.now())
+        viewModelScope.launch { habitCalendarSource.saveBlocks(changed) }
+    }
+
+    /** H1 — a name typed; null goes back to the default's, in the app's language. */
+    fun renameBlock(uid: String, name: String?) {
+        val b = rows.value.first.firstOrNull { it.uid == uid } ?: return
+        viewModelScope.launch { habitCalendarSource.saveBlocks(listOf(b.copy(name = name, updatedAt = Instant.now()))) }
+    }
+
+    /** H2 — a block's weekday times, as `PlanCodec` writes them. */
+    fun setBlockOverrides(uid: String, text: String?) {
+        val b = rows.value.first.firstOrNull { it.uid == uid } ?: return
+        viewModelScope.launch { habitCalendarSource.saveBlocks(listOf(b.copy(overrides = text, updatedAt = Instant.now()))) }
+    }
+
+    /** D5 — the days this week the engine would suggest for a "times a week" [rule] being drafted, beside the habits already there. */
+    fun weekSuggestion(rule: com.tendril.app.domain.plan.CalendarRule, minutes: Int): List<LocalDate> {
+        // The walk (5c): the engine spreads over the whole week, as the planner did, and suggested a
+        // day already past for a habit made on a Wednesday. What the sheet shows is days still to come.
+        val today = LocalDate.now()
+        val weekly = rule as? com.tendril.app.domain.plan.CalendarRule.TimesPerWeek ?: return emptyList()
+        val remaining = weekly.days.filter { d -> d >= today.dayOfWeek }.toSet().takeIf { it.isNotEmpty() } ?: return emptyList()
+        val (blockRows, editRows) = rows.value
+        val draft = Habit(uid = DRAFT_UID, title = "", frequency = HabitFrequency(1, com.tendril.app.data.entry.IntervalUnit.DAY), duration = java.time.Duration.ofMinutes(minutes.toLong()), createdAt = Instant.EPOCH, updatedAt = Instant.EPOCH)
+        return com.tendril.app.domain.plan.suggestedDays(DRAFT_UID, weekly.copy(days = remaining), habits.value + draft, blockRows, editRows, com.tendril.app.domain.plan.mondayOf(today))
+    }
+
+    private val week = MutableStateFlow(com.tendril.app.domain.plan.mondayOf(LocalDate.now()))
+
+    /** §6.3 (5d) — the Monday of the week the Week view shows. */
+    val shownWeek: StateFlow<LocalDate> = week.asStateFlow()
+
+    fun showWeek(monday: LocalDate) { week.value = com.tendril.app.domain.plan.mondayOf(monday) }
+
+    /** §6.3 (5d) — the shown week: seven days as the Day view builds them, and Q1's suggestions. */
+    val weekView: StateFlow<com.tendril.app.domain.plan.HabitWeekView?> = combine(
+        habits,
+        habitCalendarSource.observeRows(),
+        week.flatMapLatest { m -> habitCalendarSource.observeLiveBetween(m, m.plusDays(6)).map { m to it } },
+        todayFlow,
+    ) { hs, (blocks, edits), (m, checkIns), today -> com.tendril.app.domain.plan.habitWeek(m, today, hs, blocks, edits, checkIns) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Q1 — *Confirm*: the week's days for an "X times a week" habit, that week alone. */
+    fun confirmWeek(habit: Habit, monday: LocalDate, days: Set<DayOfWeek>) {
+        val e = com.tendril.app.domain.plan.confirmWeekDays(habit, monday, days, Instant.now(), newUid())
+        viewModelScope.launch { habitCalendarSource.addEdits(listOf(e)) }
+    }
+
+    /** P3 — one occurrence of a calendar habit checked in; an interval habit's row has no key and checks in as ever. */
+    fun checkInOccurrence(habitId: Long, key: String?) {
+        viewModelScope.launch { checkInHabitUseCase.checkIn(habitId, occurrenceKey = key); rearm(habitId) }
+    }
+
+    fun undoOccurrence(habitId: Long, key: String?) {
+        viewModelScope.launch { checkInHabitUseCase.undoCheckIn(habitId, occurrenceKey = key); rearm(habitId) }
+    }
 
     /** §0.6.5 / step 7c — ▶/■ on a row; one timer at a time, see [TimeTracker.toggle]. */
     fun toggleTracking(target: TrackTarget) {

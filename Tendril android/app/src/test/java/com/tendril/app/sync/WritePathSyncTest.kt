@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -163,14 +164,17 @@ class WritePathSyncTest {
                 entryDao = entryDao, habitDao = habitDao, pageDao = pageDao, pagesSyncEngine = engine,
                 purgeRegistry = purgeRegistry, reminderDao = FakeReminderDao(), entryCompletionDao = completionDao,
                 habitCompletionDao = habitCompletionDao, checkInDao = FakeCheckInDao(), timeLogDao = FakeTimeLogDao(),
+                habitBlockDao = FakeHabitBlockDao(), habitScheduleEditDao = FakeHabitScheduleEditDao(),
                 localImages = localImages,
             )
         }
 
+        val habitCalendarSource = com.tendril.app.domain.plan.HabitCalendarSource(FakeHabitBlockDao(), FakeHabitScheduleEditDao(), habitCompletionDao)
+
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
             resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, localImages, labelMembership,
-            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao), PageHistory(pageDao, blockDao, FakePageRevisionDao()),
+            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao, habitCalendarSource), habitCalendarSource, PageHistory(pageDao, blockDao, FakePageRevisionDao()),
             FakeAiKeyStore(), MapKeyValueStore(), FakeCheckInDao(),
         )
 
@@ -1232,6 +1236,14 @@ class WritePathSyncTest {
         b.pageDao.touch(b.pageIdOf(page.uid), t0)
 
         onA.setBlockImage(a.blockDao.getForPage(page.id).single { it.type == BlockType.IMAGE }, "second.png", png2)
+        // The replacement is not done when the call returns. The sync above resumed this body on
+        // an IO thread inside the Unconfined event loop, and a `launch` made from inside that loop
+        // is queued, not run: it runs when this body next suspends — which is the `withContext`
+        // in the write below, so the edit and the export race. Under load the export won, read
+        // the old picture, found it equal to the folder's copy and wrote nothing, and B kept the
+        // first picture (CI 2026-09-25 and 2026-09-30; 1,941 of 9,600 runs under twelve loaded
+        // JVMs, 0 of 9,600 with this line). `yield()` hands the loop its queue first.
+        yield()
         a.orchestrator.writeSnapshots(folder); b.orchestrator.readAndMerge(folder)
 
         val onB = b.blockDao.getForPage(b.pageIdOf(page.uid))

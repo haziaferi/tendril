@@ -87,16 +87,22 @@ class HabitWidgetCheckInInstrumentedTest {
      * Matched on the receiver rather than on a moment: the habit's next firing is tomorrow, and
      * asserting a wall-clock time would re-implement `habitFiring`'s arithmetic in the test and
      * then check the test against itself.
+     *
+     * An alarm is a block, not a line: on 2026-09-30 this phone printed the package on the
+     * `Alarm{…}` line and the receiver on the `tag=*walarm*:<package>/<receiver>` line under it,
+     * and a one-line match counted an armed alarm as none — the suite went red with the re-arm
+     * working (a probe armed one and read it back). So the receiver may be on either line.
      */
     private fun habitAlarmCount(): Int {
         val fd = InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand("dumpsys alarm")
         val dump = android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)
             .bufferedReader().use { it.readText() }
-        return dump.lineSequence().count {
-            it.contains(context.packageName) &&
-                it.contains(HabitReminderAlarmReceiver::class.java.name) &&
-                it.contains("Alarm{")
+        val receiver = HabitReminderAlarmReceiver::class.java.name
+        val lines = dump.lines()
+        return lines.indices.count { i ->
+            lines[i].contains("Alarm{") && lines[i].contains(context.packageName) &&
+                (lines[i].contains(receiver) || lines.getOrNull(i + 1)?.contains(receiver) == true)
         }
     }
 
