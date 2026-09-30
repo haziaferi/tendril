@@ -145,6 +145,7 @@ internal fun HabitDayContent(
     var prompt by remember { mutableStateOf<EditPrompt?>(null) }
     var pauseTarget by remember { mutableStateOf<Habit?>(null) }
     var editBlocks by remember { mutableStateOf(false) }
+    val export = rememberPlanExport(viewModel, labels)
     val blocks by viewModel.blocks.collectAsState()
     var cursor by remember { mutableStateOf(-1) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -183,6 +184,7 @@ internal fun HabitDayContent(
             onUndo = { viewModel.undoOccurrence(it.habit.id, it.key) },
             onOpen = onOpen,
             onEditBlocks = { editBlocks = true },
+            onExport = { export(v.date) },
             selectedHabitId = selectedHabitId,
         )
         if (editBlocks) BlocksEditorSheet(blocks = blocks, onDismiss = { editBlocks = false }, onSaveTimes = viewModel::saveBlockTimes, onRename = viewModel::renameBlock, onOverrides = viewModel::setBlockOverrides)
@@ -233,6 +235,7 @@ internal fun HabitDayContent(
             selectedHabitId = selectedHabitId,
             editing = editing,
             onEditBlocks = { viewModel.cancelEdit(); editBlocks = true },
+            onExport = { viewModel.cancelEdit(); export(v.date) },
             cursor = if (editing == null) drawn.getOrNull(cursor) else null,
             modifier = Modifier.weight(1f),
         )

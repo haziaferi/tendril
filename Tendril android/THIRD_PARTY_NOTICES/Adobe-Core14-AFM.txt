@@ -1,0 +1,19 @@
+Helvetica and Helvetica-Bold advance widths
+===========================================
+
+shared/src/commonMain/kotlin/com/tendril/app/domain/plan/export/PdfWriter.kt carries the advance
+widths of Helvetica and Helvetica-Bold, read from Adobe's Core 14 AFM files (Helvetica.afm,
+Helvetica-Bold.afm) and re-ordered by WinAnsi code. No AFM file is distributed; the widths are
+the only part used, which is the modification noted here.
+
+Copyright (c) 1985, 1987, 1989, 1990, 1997 Adobe Systems Incorporated.  All Rights Reserved.
+
+The notice that accompanies the AFM files:
+
+This file and the 14 PostScript(R) AFM files it accompanies may be used, copied,
+and distributed for any purpose and without charge, with or without modification,
+provided that all copyright notices are retained; that the AFM files are not
+distributed without this file; that all modifications to this file or any of
+the AFM files are prominently noted in the modified file(s); and that this
+paragraph is not modified. Adobe Systems has no responsibility or obligation
+to support the use of the AFM files.
