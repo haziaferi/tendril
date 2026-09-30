@@ -244,6 +244,30 @@ from `main` on `habit-planner-exports`.
 | E2 | **An entry shows its time, name and duration when the habit has one, and each day its total.** No block load against capacity — the over/under framing D4 dropped. |
 | E3 | **A plan sheet: no check-ins marked**, as the standalone planner's; nothing is ever marked missed (§0.5.2). |
 
+## Phase 7 — import and retirement (the person, 2026-09-30)
+
+Begun from `main` at `7f6e826`, after #152 merged. Before asking anything, every place the
+standalone planner keeps data was read:
+
+| Source | What it holds |
+|---|---|
+| `planner.toml` | The five default blocks (06:30–09:00, 09:00–13:00, 13:00–18:00, 18:00–21:30, 21:30–23:30); no `[[override]]`, no `[[area]]` |
+| `habits/` | `_template.toml` only |
+| `edits.toml`, `habits/added.toml` | Absent: `sync.py` never ran with anything to fold in |
+| The published page's model | `items`, `areas`, `overrides`, `edits` all `[]` |
+| The page's database (`items`, `edits` collections) | Empty |
+| `habit-planner.zip` (2026-09-29) | A copy of the same empty project |
+| This machine's scheduled tasks | None: the weekly sync is not scheduled here |
+
+Tendril already seeds the same five blocks, with the same icons and hues
+(`DEFAULT_HABIT_BLOCKS`, `data/habit/HabitBlock.kt`), so there was nothing to import.
+
+| # | Decision |
+|---|---|
+| R1 | **No import code.** What was checked is recorded above; habits are added in Tendril directly. |
+| R2 | **Retire the weekly sync only.** The person removes the scheduled task where it runs (not on this machine); the two pages on claude.ai, the planner and its demo, stay. |
+| R3 | **The planner folder is archived** as `Downloads\Builds\Old\Habit planning system (retired 2026-09-30).zip`: 53 files, every one read back from the zip byte-equal to the folder. The person deletes the original. Nothing in the tree reads it: the golden cases were copied into `Tendril android/app/src/test/resources/habit-planner-golden/` in Phase 2, and the paths quoted above and in the plan now point into that archive. |
+
 ## Other findings from Phase 0
 
 - **`docs/build-order.md` T7** ("Habits cannot express 3 times a week or specific weekdays") is

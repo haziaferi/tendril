@@ -1,6 +1,6 @@
 # Habit planner in Tendril — plan for Claude Code
 
-Status: proposed 2026-09-29. Run it only when every branch is merged and deleted (Phase 0 checks this and stops otherwise). Work phase by phase; **stop at the end of every phase** and wait for the person's review. Never commit or push: the person reviews and commits.
+Status: proposed 2026-09-29. Run it only when every branch is merged and deleted (Phase 0 checks this and stops otherwise). **Done 2026-09-30**: Phases 1–5 merged as #151, Phase 6 as #152; Phase 7 found nothing to import, and the planner's weekly sync is the person's to remove where it runs. The reference implementation below is archived as `Downloads\Builds\Old\Habit planning system (retired 2026-09-30).zip`; see the decision record's Phase 7 section. Work phase by phase; **stop at the end of every phase** and wait for the person's review. Never commit or push: the person reviews and commits.
 
 ## 1. What this task is
 
