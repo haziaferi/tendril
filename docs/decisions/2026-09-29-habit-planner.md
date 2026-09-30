@@ -233,6 +233,17 @@ wording follows Tendril's voice where the planner's differs (a block is a *fasci
 
 Taken without asking, as the mockup drew them (R3's working assumptions): *N done today* in the day header (presence, counted up; nothing said on a day with none); By area's collapsed row for a habit several a day; Ctrl+M for *Move to…*. And: an interval habit enters the engine as a habit once on the shown day, so both kinds are placed by one set of rules (V2); only today's entries can be checked — a past day is read, a later one has not happened.
 
+## Phase 6 decisions (the person, 2026-09-30)
+
+Asked once, before any code; Phase 6 waited for #151 to merge (the person's choice), then began
+from `main` on `habit-planner-exports`.
+
+| # | Decision |
+|---|---|
+| E1 | **The PDF writer is Tendril's own, in `shared/`**: one file on the phone and the desktop, read back by the unit suite, no dependency (no PDF library is in the offline cache; the standalone planner printed HTML through a headless browser). PDF's built-in Helvetica, WinAnsi characters: Latin, Italian included; anything else prints as `?`. |
+| E2 | **An entry shows its time, name and duration when the habit has one, and each day its total.** No block load against capacity — the over/under framing D4 dropped. |
+| E3 | **A plan sheet: no check-ins marked**, as the standalone planner's; nothing is ever marked missed (§0.5.2). |
+
 ## Other findings from Phase 0
 
 - **`docs/build-order.md` T7** ("Habits cannot express 3 times a week or specific weekdays") is

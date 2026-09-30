@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tendril.app.data.entry.Entry
@@ -307,6 +308,14 @@ class TasksHabitsViewModel(
         todayFlow,
     ) { hs, (blocks, edits), (m, checkIns), today -> com.tendril.app.domain.plan.habitWeek(m, today, hs, blocks, edits, checkIns) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** §6.3 (Phase 6) — any week as the Week view builds it, read once, for an export. */
+    suspend fun planWeek(monday: LocalDate): com.tendril.app.domain.plan.HabitWeekView {
+        val (blocks, edits) = habitCalendarSource.observeRows().first()
+        val checkIns = habitCalendarSource.observeLiveBetween(monday, monday.plusDays(6)).first()
+        // The DAO's own flow, not [habits]: a `WhileSubscribed` state can still hold its empty initial value.
+        return com.tendril.app.domain.plan.habitWeek(monday, LocalDate.now(), habitDao.observeActive().first(), blocks, edits, checkIns)
+    }
 
     /** Q1 — *Confirm*: the week's days for an "X times a week" habit, that week alone. */
     fun confirmWeek(habit: Habit, monday: LocalDate, days: Set<DayOfWeek>) {

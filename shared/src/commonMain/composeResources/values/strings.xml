@@ -233,4 +233,13 @@
         <item quantity="one">and %1$d more</item>
         <item quantity="other">and %1$d more</item>
     </plurals>
+    <string name="plan_export">Export…</string>
+    <string name="plan_export_title">Export the week</string>
+    <string name="plan_export_body">A plan sheet: what is planned for the week, without check-ins.</string>
+    <string name="plan_export_markdown">The week as Markdown</string>
+    <string name="plan_export_pdf_days">Each day as PDF · A4 portrait</string>
+    <string name="plan_export_pdf_week">The week as PDF · A4 landscape</string>
+    <string name="plan_export_doc_title">Habit plan</string>
+    <string name="plan_export_total">Total</string>
+    <string name="plan_export_failed">The file could not be saved.</string>
 </resources>

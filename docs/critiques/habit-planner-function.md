@@ -84,3 +84,21 @@ the mockup drew a dialog: the house component. Not in 5b, by T1: *Pause…* (5c)
 Not in 5d: the Week *by area* (the Day view has it; a week of areas is seven of them and the
 mockup did not draw one); the desktop's Week is columns, not the mockup's full hour grid; the
 Tasks tab's *Merged* view is unchanged; pop-outs.
+
+## 6 — exports (2026-09-30)
+
+| Tried | Observed |
+|---|---|
+| The phone, Habits, *Day*: header `···` | *Edit blocks*, *Export…* |
+| *Export…* | *Export the week* — *A plan sheet: what is planned for the week, without check-ins.*; *The week as Markdown*, *Each day as PDF · A4 portrait*, *The week as PDF · A4 landscape* |
+| *The week as Markdown* | The system's save dialog, name `habit-plan-2026-W40.md`; it opened in the sync test folder (the last one used) — saved to Download instead. The sheet closed |
+| Pulled back, md5 equal on both sides | The week table by time; Wednesday by time as the Day view draws it (*Dawn* 07:30 Walk5a_Water (1/3); Midday; Evening 19:15 Walk5a_Journal), *Outside the blocks* with its note; by area, *No area* only (the phone's habits have no Label) |
+| *Each day as PDF*, *The week as PDF* | `…-days.pdf` (7 pages) and `…-week.pdf`, md5 equal |
+| The week PDF, read | **Found:** the Dawn row said 06:30–09:30, but at the weekend Dawn runs 08:00–10:30 (the 5c walk's weekday times) — only the notes below the table said so; and a *Total* row with nothing in it (no habit here has a duration). **Fixed**, test-first: the row takes the times most days have, a day that differs shows its own at the top of its cell; no *Total* row when there are no durations |
+| The week PDF again, from the Week header's new `···` | Sat 3 and Sun 4 read *08:00–10:30* in their Dawn cells; no *Total* row |
+| The desktop, Habits, *Day*: header `···` → *Export…* | The same sheet, as the slide-over |
+| *Each day as PDF* | The native save dialog, titled with the file's name; saved (to Downloads — the name typed into the dialog did not take, and Enter accepted the suggestion). Seven pages; Wednesday's matches the desktop's Day view — Morning 07:30 Stretch *1 h*, Evening 21:00 Pages read *1 h*, *Outside the blocks* 05:30 |
+| *The week as Markdown*, then Esc in the dialog | The sheet stays open; nothing written, nothing said |
+
+The walk's files were moved out of the desktop's Downloads into the session's scratch folder; the
+three on the phone are in its `Download` folder.

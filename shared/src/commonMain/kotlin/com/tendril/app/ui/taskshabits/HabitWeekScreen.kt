@@ -1,5 +1,8 @@
 package com.tendril.app.ui.taskshabits
 
+import androidx.compose.material.icons.outlined.MoreHoriz
+import com.tendril.app.generated.resources.plan_export
+import com.tendril.app.generated.resources.plan_more
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -81,13 +84,14 @@ import java.util.Locale
  * *Choose days*. On a wide window the days run across, on the phone down; a tap on a day opens it.
  */
 @Composable
-internal fun HabitWeekContent(viewModel: TasksHabitsViewModel, wide: Boolean, onOpenDay: (LocalDate) -> Unit) {
+internal fun HabitWeekContent(viewModel: TasksHabitsViewModel, wide: Boolean, onOpenDay: (LocalDate) -> Unit, labels: List<com.tendril.app.data.page.Label> = emptyList()) {
     val view by viewModel.weekView.collectAsState()
+    val export = rememberPlanExport(viewModel, labels)
     val v = view ?: return
     val today = LocalDate.now()
     var choosing by remember { mutableStateOf<WeekSuggestionCard?>(null) }
     Column(modifier = Modifier.fillMaxSize().then(if (wide) Modifier else Modifier.verticalScroll(rememberScrollState()))) {
-        WeekHeader(v.monday, today, onShow = viewModel::showWeek)
+        WeekHeader(v.monday, today, onShow = viewModel::showWeek, onExport = { export(v.monday) })
         for (card in v.suggestions) SuggestionCard(card, onConfirm = { viewModel.confirmWeek(card.habit, v.monday, card.days.map { it.dayOfWeek }.toSet()) }, onChoose = { choosing = card })
         if (wide) {
             Row(modifier = Modifier.fillMaxSize().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)) {
@@ -104,7 +108,7 @@ internal fun HabitWeekContent(viewModel: TasksHabitsViewModel, wide: Boolean, on
 }
 
 @Composable
-private fun WeekHeader(monday: LocalDate, today: LocalDate, onShow: (LocalDate) -> Unit) {
+private fun WeekHeader(monday: LocalDate, today: LocalDate, onShow: (LocalDate) -> Unit, onExport: () -> Unit) {
     val fmt = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
     Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { onShow(monday.minusWeeks(1)) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(Res.string.plan_previous_week)) }
@@ -115,6 +119,14 @@ private fun WeekHeader(monday: LocalDate, today: LocalDate, onShow: (LocalDate) 
         IconButton(onClick = { onShow(monday.plusWeeks(1)) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(Res.string.plan_next_week)) }
         Spacer(Modifier.weight(1f))
         if (today.isBefore(monday) || today.isAfter(monday.plusDays(6))) TextButton(onClick = { onShow(today) }) { Text(stringResource(Res.string.plan_today)) }
+        // Phase 6 — the Day header's `···`, here holding only *Export…*: blocks are edited from a day.
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(Res.string.plan_more)) }
+            com.tendril.app.ui.components.TendrilMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                com.tendril.app.ui.components.TendrilMenuItem(text = { Text(stringResource(Res.string.plan_export)) }, onClick = { menu = false; onExport() })
+            }
+        }
     }
 }
 

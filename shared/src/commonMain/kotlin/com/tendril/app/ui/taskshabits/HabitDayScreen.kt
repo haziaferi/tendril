@@ -60,6 +60,7 @@ import com.tendril.app.generated.resources.plan_and_more
 import com.tendril.app.generated.resources.plan_and_more_day
 import com.tendril.app.generated.resources.plan_more
 import com.tendril.app.generated.resources.plan_edit_blocks
+import com.tendril.app.generated.resources.plan_export
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -106,6 +107,8 @@ fun HabitDayList(
     onEditBlocks: () -> Unit = {},
     /** 5d — the keyboard's cursor on the desktop (14e's model): the row it rests on. */
     cursor: DayRow? = null,
+    /** Phase 6 — the header's `···`: *Export…* the day's week. */
+    onExport: () -> Unit = {},
 ) {
     val isToday = view.date == today
     val blockNames = view.blocks.associate { it.block.uid to blockName(it.block) }
@@ -114,7 +117,7 @@ fun HabitDayList(
     val shownOutside = groups?.getOrNull(view.blocks.size)?.timed ?: view.outside
     fun isSelected(r: DayRow) = if (editing != null) r == editing.first else r.habit.id == selectedHabitId
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-        item(key = "day_header") { DayHeader(view, isToday, onShowDay, today, onEditBlocks) }
+        item(key = "day_header") { DayHeader(view, isToday, onShowDay, today, onEditBlocks, onExport) }
         view.blocks.forEachIndexed { i, b ->
             item(key = "block_" + b.block.uid) { BlockHeading(b, blockNames.getValue(b.block.uid), now = isToday && nowMinute >= b.start && nowMinute < b.end) }
             val rows = groups?.get(i)?.let { it.timed + it.flexible } ?: (b.timed + b.flexible)
@@ -146,7 +149,7 @@ fun HabitDayList(
 }
 
 @Composable
-internal fun DayHeader(view: HabitDayView, isToday: Boolean, onShowDay: (LocalDate) -> Unit, today: LocalDate, onEditBlocks: () -> Unit) {
+internal fun DayHeader(view: HabitDayView, isToday: Boolean, onShowDay: (LocalDate) -> Unit, today: LocalDate, onEditBlocks: () -> Unit, onExport: () -> Unit = {}) {
     val title = view.date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()))
     Column(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -164,6 +167,7 @@ internal fun DayHeader(view: HabitDayView, isToday: Boolean, onShowDay: (LocalDa
                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(Res.string.plan_more)) }
                 TendrilMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     TendrilMenuItem(text = { Text(stringResource(Res.string.plan_edit_blocks)) }, onClick = { menu = false; onEditBlocks() })
+                    TendrilMenuItem(text = { Text(stringResource(Res.string.plan_export)) }, onClick = { menu = false; onExport() })
                 }
             }
         }
@@ -291,10 +295,11 @@ fun HabitAreaList(
     onEditBlocks: () -> Unit,
     selectedHabitId: Long?,
     modifier: Modifier = Modifier,
+    onExport: () -> Unit = {},
 ) {
     val isToday = view.date == today
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-        item(key = "day_header") { DayHeader(view, isToday, onShowDay, today, onEditBlocks) }
+        item(key = "day_header") { DayHeader(view, isToday, onShowDay, today, onEditBlocks, onExport) }
         for (g in groups) {
             item(key = "area_" + g.labelId) { GroupHeading(g.labelId?.let { labelNames[it] } ?: stringResource(Res.string.plan_no_area)) }
             items(g.rows, key = { "area_row_" + it.habit.id }) { a ->

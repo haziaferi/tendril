@@ -186,4 +186,13 @@
         <item quantity="one">e un’altra</item>
         <item quantity="other">e altre %1$d</item>
     </plurals>
+    <string name="plan_export">Esporta…</string>
+    <string name="plan_export_title">Esporta la settimana</string>
+    <string name="plan_export_body">Un foglio di piano: ciò che è previsto per la settimana, senza le registrazioni.</string>
+    <string name="plan_export_markdown">La settimana in Markdown</string>
+    <string name="plan_export_pdf_days">Ogni giorno in PDF · A4 verticale</string>
+    <string name="plan_export_pdf_week">La settimana in PDF · A4 orizzontale</string>
+    <string name="plan_export_doc_title">Piano delle abitudini</string>
+    <string name="plan_export_total">Totale</string>
+    <string name="plan_export_failed">Non è stato possibile salvare il file.</string>
 </resources>

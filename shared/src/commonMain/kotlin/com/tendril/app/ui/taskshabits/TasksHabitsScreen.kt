@@ -367,7 +367,7 @@ private fun TasksHabitsBody(
                         HabitDayContent(viewModel, wide = wide, onOpen = openHabit, onTrash = { viewModel.trashHabit(it.id); if ((selected as? Selected.Habit)?.id == it.id) selected = null }, selectedHabitId = (selected as? Selected.Habit)?.id, byArea = habitByArea, labels = labels)
                     } else if (habitRange == HabitRange.WEEK && habits.isNotEmpty()) {
                         // a tap on a day opens it (the mockup's phone Week)
-                        HabitWeekContent(viewModel, wide = wide, onOpenDay = { viewModel.showDay(it); habitRange = HabitRange.DAY })
+                        HabitWeekContent(viewModel, wide = wide, onOpenDay = { viewModel.showDay(it); habitRange = HabitRange.DAY }, labels = labels)
                     } else {
                         HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = openHabit, onAdd = { showAddDialog = true }, selectedId = (selected as? Selected.Habit)?.id, onEdit = { editHabit = it })
                     }
