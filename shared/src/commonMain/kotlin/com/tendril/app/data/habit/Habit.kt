@@ -1,5 +1,6 @@
 package com.tendril.app.data.habit
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -74,7 +75,30 @@ data class Habit(
     val deletedAt: Instant? = null,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** §6.3 (v27, D1) — which of the two schedules this habit keeps: [frequency] since the last
+     * check-in, or [calendarRule] on the calendar. Every habit from before v27 is [HabitScheduleKind.INTERVAL]. */
+    @ColumnInfo(defaultValue = "INTERVAL") val scheduleKind: HabitScheduleKind = HabitScheduleKind.INTERVAL,
+    /** §6.3 — the calendar rule as `PlanCodec` writes it; read only for a calendar habit. Kept as
+     * text so a rule a newer build writes survives this one untouched (it reads as "no occurrences"). */
+    val calendarRule: String? = null,
+    /** §6.3 (V2) — the time block a habit with no set [time] sits in; a set time chooses its block instead. */
+    val blockUid: String? = null,
+    /** §6.3 (D3) — the manual order inside a block; a move writes one row, so it is a real number. */
+    @ColumnInfo(defaultValue = "0") val sortOrder: Double = 0.0,
+    /** §6.3 (P4) — at most one Label, the planner's area. Travels by the label's name, as a database's does. */
+    val labelId: Long? = null,
+    /** §6.3 — a pause, both ends inclusive; [pauseFrom] with no [pauseUntil] is "until I resume it". */
+    val pauseFrom: LocalDate? = null,
+    val pauseUntil: LocalDate? = null,
+    /** §6.3 — the dates the habit runs between, both inclusive; null is open. */
+    val activeFrom: LocalDate? = null,
+    val activeUntil: LocalDate? = null,
+    /** §6.3 (Q3) — one line under the title. */
+    val note: String? = null,
 )
+
+/** §6.3 (D1) — a habit's schedule: since the last check-in, or on the calendar. */
+enum class HabitScheduleKind { INTERVAL, CALENDAR }
 
 /**
  * S10 (2026-09-20) — a habit edited after creation: the fields the Add sheet asked for, the rest

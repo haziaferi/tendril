@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.entry.EntryStatus
 import com.tendril.app.domain.journal.JournalToday
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
@@ -34,7 +33,7 @@ private val hourMinute: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
  * `ResolveEntryUseCase` the Tasks tab uses and a habit through `CheckInHabitUseCase` — so the
  * Journal is a place to work the day, not only to look at it.
  */
-fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewModel: PageDetailViewModel) {
+fun LazyListScope.journalTodayItems(today: JournalToday, viewModel: PageDetailViewModel) {
     item(key = "journal_today_header") {
         Text(
             "Today",
@@ -66,7 +65,7 @@ fun LazyListScope.journalTodayItems(today: JournalToday, date: LocalDate, viewMo
     items(today.habits, key = { "journal_habit_" + it.id }) { habit ->
         // S6 (small things IV) — the same check as the Habits and Merged rows: a counting habit's `+` disc.
         StripRow(
-            check = { HabitCheck(habit, doneToday = habit.lastCompletedDate == date, onCheckIn = { viewModel.checkInHabit(habit.id) }, onUndo = { viewModel.undoCheckInHabit(habit.id) }) },
+            check = { HabitCheck(habit, doneToday = habit.id in today.doneHabitIds, onCheckIn = { viewModel.checkInHabit(habit.id) }, onUndo = { viewModel.undoCheckInHabit(habit.id) }) },
             title = habit.title,
             detail = listOfNotNull(
                 habit.time?.format(hourMinute),

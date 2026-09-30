@@ -39,6 +39,20 @@ import com.tendril.app.ui.components.TendrilField
 import com.tendril.app.generated.resources.Res
 import com.tendril.app.generated.resources.taskshabits_add_habit
 import com.tendril.app.generated.resources.taskshabits_add_task
+import com.tendril.app.generated.resources.plan_schedule
+import com.tendril.app.generated.resources.plan_since_last_check_in
+import com.tendril.app.generated.resources.plan_on_the_calendar
+import com.tendril.app.generated.resources.plan_where
+import com.tendril.app.generated.resources.plan_any_time
+import com.tendril.app.generated.resources.plan_at_set_time
+import com.tendril.app.generated.resources.plan_area
+import com.tendril.app.generated.resources.plan_none
+import com.tendril.app.generated.resources.plan_note
+import com.tendril.app.generated.resources.plan_optional
+import com.tendril.app.generated.resources.plan_more_options
+import com.tendril.app.domain.plan.error
+import com.tendril.app.domain.plan.hasWhere
+import com.tendril.app.domain.plan.toRule
 import androidx.compose.ui.unit.dp
 import com.tendril.app.data.entry.IntervalUnit
 import com.tendril.app.data.entry.RecurrenceRule
@@ -216,12 +230,24 @@ fun AddTaskDialog(
     }
 
     @Composable
-    /** S10 (2026-09-20): with [initial] the same sheet **edits** a habit — its fields filled in, the title *Edit habit*, the button *Save*. */
+    /**
+     * S10 (2026-09-20): with [initial] the same sheet **edits** a habit — its fields filled in, the title *Edit habit*, the button *Save*.
+     *
+     * §6.3 (plan Phase 5c): one choice before the rest — *Since last check-in* (the habit as it
+     * always was) or *On the calendar* (the planner's rules); then *Where*, for both kinds (V2): any
+     * time, a block, or a set time — never both; the Label as its area (P4); a note (Q3); and, under
+     * *More options*, the dates it runs between. "Times a week" shows this week's suggested days
+     * ([suggest]) and says the person confirms them each week (D5).
+     */
     fun AddHabitDialog(
         onDismiss: () -> Unit,
-        onAdd: (title: String, frequency: HabitFrequency, time: LocalTime?, duration: Duration?, unit: String?, amountPerCheckIn: Double?, dailyAmount: Double?) -> Unit,
+        onSave: (HabitForm) -> Unit,
+        blocks: List<com.tendril.app.data.habit.HabitBlock>,
+        labels: List<com.tendril.app.data.page.Label>,
         initial: Habit? = null,
+        suggest: (com.tendril.app.domain.plan.CalendarRule, Int) -> List<LocalDate> = { _, _ -> emptyList() },
     ) {
+        val today = remember { LocalDate.now() }
         var title by remember { mutableStateOf(initial?.title ?: "") }
         // §0.10 item 3 — a habit that counts something: the unit, what a tap adds, and the optional number for a day.
         var counts by remember { mutableStateOf(initial?.amountPerCheckIn != null) }
@@ -230,10 +256,30 @@ fun AddTaskDialog(
         var perDay by remember { mutableStateOf(initial?.dailyAmount?.let(::amountText) ?: "") }
         var count by remember { mutableStateOf(initial?.frequency?.count?.toString() ?: "1") }
         var unit by remember { mutableStateOf(initial?.frequency?.unit ?: IntervalUnit.DAY) }
+        var calendar by remember { mutableStateOf(initial?.scheduleKind == com.tendril.app.data.habit.HabitScheduleKind.CALENDAR) }
+        var draft by remember {
+            mutableStateOf(
+                com.tendril.app.domain.plan.decodeRule(initial?.calendarRule)?.let { com.tendril.app.domain.plan.draftOf(it, today) }
+                    ?: com.tendril.app.domain.plan.ScheduleDraft(anchor = today, date = today),
+            )
+        }
+        var tried by remember { mutableStateOf(false) }
+        // Where: a block, a set time, or neither — never both (the mockup's rule).
         var hasTime by remember { mutableStateOf(initial?.time != null) }
+        var blockUid by remember { mutableStateOf(initial?.blockUid?.takeIf { initial.time == null }) }
         var time by remember { mutableStateOf(initial?.time ?: DEFAULT_TIME_OF_DAY) }
         var showTimePicker by remember { mutableStateOf(false) }
         var durationMinutes by remember { mutableStateOf(initial?.duration?.toMinutes()?.takeIf { it > 0 }?.toString() ?: "") }
+        var labelId by remember { mutableStateOf(initial?.labelId) }
+        var note by remember { mutableStateOf(initial?.note ?: "") }
+        var moreOptions by remember { mutableStateOf(initial?.activeFrom != null || initial?.activeUntil != null) }
+        var activeFrom by remember { mutableStateOf(initial?.activeFrom) }
+        var activeUntil by remember { mutableStateOf(initial?.activeUntil) }
+        val draftError = if (calendar) draft.error() else null
+        val where = !calendar || draft.hasWhere()
+        val suggestion = if (calendar && draft.kind == com.tendril.app.domain.plan.RepeatKind.TIMES_PER_WEEK && draftError == null) {
+            suggest(draft.toRule(), durationMinutes.toIntOrNull() ?: 0)
+        } else emptyList()
 
         // L15 + T3 (PR B, 2026-09-18): the one modal that was neither a slide-over nor a picker is a
         // `TendrilSheet` now — a slide-over on a wide window, a bottom sheet on the phone — with the
@@ -242,45 +288,58 @@ fun AddTaskDialog(
             Column {
                 TendrilField(value = title, onValueChange = { title = it }, placeholder = "Title", modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
-                Text("Every", style = MaterialTheme.typography.body)
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TendrilField(
-                        value = count,
-                        onValueChange = { if (it.all(Char::isDigit)) count = it },
-                        modifier = Modifier.weight(1f),
-                    )
+                Text(stringResource(Res.string.plan_schedule), style = MaterialTheme.typography.label) // type: GROUP_HEADER — the kind of schedule
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !calendar, onClick = { calendar = false }, label = { Text(stringResource(Res.string.plan_since_last_check_in)) })
+                    FilterChip(selected = calendar, onClick = { calendar = true }, label = { Text(stringResource(Res.string.plan_on_the_calendar)) })
                 }
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    IntervalUnit.entries.forEach { u ->
-                        FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u.name.lowercase(), maxLines = 1, overflow = TextOverflow.Ellipsis) })
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                // A habit's time is what places it in the day — the Merged tab lists exactly
-                // the habits that have one (§3.3). Optional, since a habit with no particular
-                // hour is still a habit.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Has time", style = MaterialTheme.typography.body, modifier = Modifier.fillMaxWidth().weight(1f))
-                    Switch(checked = hasTime, onCheckedChange = { hasTime = it })
-                }
-                if (hasTime) {
-                    TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
+                if (!calendar) {
+                    Text("Every", style = MaterialTheme.typography.label)
                     Spacer(Modifier.height(8.dp))
-                    // §3.3 — "optional time + duration (not required)". Offered only alongside a
-                    // time, because a length with no start is not something any surface can place:
-                    // the calendar overlay (§5.3) and the Merged tab both position a habit by its
-                    // time and would have nowhere to draw a duration without one.
-                    TendrilField(
-                        value = durationMinutes,
-                        onValueChange = { if (it.all(Char::isDigit)) durationMinutes = it },
-                        placeholder = "Duration (minutes, optional)",
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TendrilField(
+                            value = count,
+                            onValueChange = { if (it.all(Char::isDigit)) count = it },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        IntervalUnit.entries.forEach { u ->
+                            FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(u.name.lowercase(), maxLines = 1, overflow = TextOverflow.Ellipsis) })
+                        }
+                    }
+                } else {
+                    CalendarScheduleFields(draft, onDraft = { draft = it }, error = draftError.takeIf { tried }, suggestion = suggestion)
+                }
+                if (where) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(Res.string.plan_where), style = MaterialTheme.typography.label) // type: GROUP_HEADER — a block or a set time
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = !hasTime && blockUid == null, onClick = { hasTime = false; blockUid = null }, label = { Text(stringResource(Res.string.plan_any_time)) })
+                        for (b in blocks.filter { it.deletedAt == null }.sortedWith(compareBy({ it.position }, { it.uid }))) {
+                            FilterChip(selected = !hasTime && blockUid == b.uid, onClick = { hasTime = false; blockUid = b.uid }, label = { Text(blockName(b)) })
+                        }
+                        FilterChip(selected = hasTime, onClick = { hasTime = true; blockUid = null }, label = { Text(stringResource(Res.string.plan_at_set_time)) })
+                    }
+                    if (hasTime) {
+                        TextButton(onClick = { showTimePicker = true }) { Text("Time: $time") }
+                        Spacer(Modifier.height(8.dp))
+                        // §3.3 — "optional time + duration (not required)". Offered only alongside a
+                        // time, because a length with no start is not something any surface can place:
+                        // the calendar overlay (§5.3) and the Merged tab both position a habit by its
+                        // time and would have nowhere to draw a duration without one.
+                        TendrilField(
+                            value = durationMinutes,
+                            onValueChange = { if (it.all(Char::isDigit)) durationMinutes = it },
+                            placeholder = "Duration (minutes, optional)",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -299,34 +358,57 @@ fun AddTaskDialog(
                         style = MaterialTheme.typography.description, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
                     )
                 }
+                if (labels.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(Res.string.plan_area), style = MaterialTheme.typography.label) // type: GROUP_HEADER — the Label, P4
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = labelId == null, onClick = { labelId = null }, label = { Text(stringResource(Res.string.plan_none)) })
+                        for (l in labels) FilterChip(selected = labelId == l.id, onClick = { labelId = l.id }, label = { Text(l.name) })
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                TendrilField(value = note, onValueChange = { note = it.take(200) }, placeholder = stringResource(Res.string.plan_note) + " · " + stringResource(Res.string.plan_optional), modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = { moreOptions = !moreOptions }) { Text(stringResource(Res.string.plan_more_options)) }
+                if (moreOptions) ActiveRangeFields(activeFrom, activeUntil, today, onFrom = { activeFrom = it }, onUntil = { activeUntil = it })
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
                 TextButton(onClick = {
-                onAdd(
-                    title,
-                    HabitFrequency(count.toIntOrNull() ?: 1, unit),
-                    if (hasTime) time else null,
-                    // A blank or zero box means "no duration", not a zero-length habit.
-                    durationMinutes.toLongOrNull()?.takeIf { hasTime && it > 0 }?.let(Duration::ofMinutes),
-                    if (counts) countUnit.trim().takeIf { it.isNotEmpty() } else null,
-                    if (counts) (perCheckIn.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0) else null,
-                    if (counts) perDay.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } else null,
-                )
-                onDismiss()
-            }) { Text(if (initial == null) "Add" else "Save") }
+                    tried = true
+                    if (calendar && draftError != null) return@TextButton
+                    onSave(
+                        HabitForm(
+                            title = title,
+                            frequency = HabitFrequency(count.toIntOrNull() ?: 1, unit),
+                            time = if (where && hasTime) time else null,
+                            // A blank or zero box means "no duration", not a zero-length habit.
+                            duration = durationMinutes.toLongOrNull()?.takeIf { where && hasTime && it > 0 }?.let(Duration::ofMinutes),
+                            unit = if (counts) countUnit.trim().takeIf { it.isNotEmpty() } else null,
+                            amountPerCheckIn = if (counts) (perCheckIn.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0) else null,
+                            dailyAmount = if (counts) perDay.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 } else null,
+                            scheduleKind = if (calendar) com.tendril.app.data.habit.HabitScheduleKind.CALENDAR else com.tendril.app.data.habit.HabitScheduleKind.INTERVAL,
+                            calendarRule = if (calendar) com.tendril.app.domain.plan.encodeRule(draft.toRule()) else null,
+                            blockUid = if (where && !hasTime) blockUid else null,
+                            labelId = labelId,
+                            note = note.trim().takeIf { it.isNotEmpty() },
+                            activeFrom = activeFrom,
+                            activeUntil = activeUntil,
+                        ),
+                    )
+                    onDismiss()
+                }) { Text(if (initial == null) "Add" else "Save") }
+            }
+        }
+
+        if (showTimePicker) {
+            TimeOfDayDialog(
+                initial = time,
+                onDismiss = { showTimePicker = false },
+                onConfirm = { time = it; showTimePicker = false },
+            )
         }
     }
-
-    if (showTimePicker) {
-        TimeOfDayDialog(
-            initial = time,
-            onDismiss = { showTimePicker = false },
-            onConfirm = { time = it; showTimePicker = false },
-        )
-    }
-}
 
 /** An amount as the person typed it — whole numbers without the *.0*. */
 private fun amountText(v: Double): String = if (v == Math.floor(v)) v.toLong().toString() else v.toString()

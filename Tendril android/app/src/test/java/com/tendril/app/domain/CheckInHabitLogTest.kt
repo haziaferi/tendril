@@ -23,7 +23,7 @@ class CheckInHabitLogTest {
 
     private val habitDao = FakeHabitDao()
     private val logDao = FakeHabitCompletionDao()
-    private val useCase = CheckInHabitUseCase(habitDao, logDao)
+    private val useCase = CheckInHabitUseCase(habitDao, logDao, com.tendril.app.domain.plan.HabitCalendarSource(com.tendril.app.sync.FakeHabitBlockDao(), com.tendril.app.sync.FakeHabitScheduleEditDao(), logDao))
     private val today = LocalDate.of(2026, 9, 11)
 
     private fun seed(): Long = runBlocking {

@@ -12,6 +12,7 @@ import com.tendril.app.data.TendrilDatabase
 import com.tendril.app.data.openTendrilDatabase
 import com.tendril.app.domain.AndroidEntryScheduleCoordinator
 import com.tendril.app.domain.CheckInHabitUseCase
+import com.tendril.app.domain.plan.HabitCalendarSource
 import com.tendril.app.data.prefs.AndroidKeyValueStore
 import com.tendril.app.domain.track.TimeTracker
 import com.tendril.app.domain.CheckboxOnlyState
@@ -100,7 +101,7 @@ class AppContainer(context: Context) {
     val localImages = AndroidLocalImageStore(context)
     val snapshotSyncOrchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(), pagesSyncEngine, purgeRegistry,
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(), database.habitBlockDao(), database.habitScheduleEditDao(), pagesSyncEngine, purgeRegistry,
         localImages,
     )
     /** §7 in reverse — every live page as Markdown in a zip. Takes daos and a stream rather
@@ -114,6 +115,7 @@ class AppContainer(context: Context) {
     val portableArchive = PortableArchive(
         context, database.entryDao(), database.habitDao(), database.pageDao(),
         database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(),
+        database.habitBlockDao(), database.habitScheduleEditDao(),
         purgeRegistry, pagesSyncEngine,
         // §9.4 / S4 — the same store the sync folder's fetch writes into, so a picture that
         // arrived in a `.tendril` package and one that arrived from a peer are indistinguishable
@@ -149,7 +151,9 @@ class AppContainer(context: Context) {
         database.propertyDao(), database.propertyValueDao(), pageContentRepository,
         viewLockState = viewLockState,
     )
-    val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao())
+    /** §6.3 — what a calendar habit's day is read from, for the widget and the reminder receiver. */
+    val habitCalendarSource = HabitCalendarSource(database.habitBlockDao(), database.habitScheduleEditDao(), database.habitCompletionDao())
+    val checkInHabitUseCase = CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao(), habitCalendarSource)
     /** §0.6.5 — the notification's Stop action and the shade's chronometer share this with the UI. */
     val timeTracker = TimeTracker(database.timeLogDao())
     /** §9.12's *Calendar* field on the phone. */
@@ -169,6 +173,7 @@ class AppContainer(context: Context) {
     /** 14g·1 — the theme lives in the store now; the old file is read once and deleted. */
     /** 14g·3 — the Tasks switches, shared; the old file migrated once. */
     val taskSettings = workbenchCore.taskSettings.also { migrateLegacyTaskPreferences(context, workbenchCore.keyValueStore) }
+    val languageSettings = workbenchCore.languageSettings
     val themeSettings = workbenchCore.themeSettings.also { settings ->
         migrateLegacyThemePreferences(context, workbenchCore.keyValueStore)
         // §9.6 — Glance widget colours resolve at placement; a colour change pushes a refresh

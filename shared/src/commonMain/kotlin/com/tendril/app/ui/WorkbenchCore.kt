@@ -5,6 +5,7 @@ import com.tendril.app.data.prefs.AiKeyStore
 import com.tendril.app.data.prefs.KeyValueStore
 import com.tendril.app.ui.theme.ThemeSettings
 import com.tendril.app.domain.CheckInHabitUseCase
+import com.tendril.app.domain.plan.HabitCalendarSource
 import com.tendril.app.domain.CheckboxOnlyState
 import com.tendril.app.domain.DatabaseSyncManager
 import com.tendril.app.domain.EntryEditor
@@ -64,9 +65,13 @@ class WorkbenchCore(
      * need no change; [LabelMembership] holds no state of its own. */
     /** §0.6.6 — a habit's check-in log; derived here since §0.8 step 7a moved the screen. Android's
      * `AppContainer` keeps its own instance for the widget and notification paths. */
-    val checkInHabitUseCase: CheckInHabitUseCase by lazy { CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao()) }
+    val checkInHabitUseCase: CheckInHabitUseCase by lazy { CheckInHabitUseCase(database.habitDao(), database.habitCompletionDao(), habitCalendarSource) }
+    /** §6.3 — the blocks, edits and check-ins a calendar habit's day is read from, for every reader outside the Habits tab. */
+    val habitCalendarSource: HabitCalendarSource by lazy { HabitCalendarSource(database.habitBlockDao(), database.habitScheduleEditDao(), database.habitCompletionDao()) }
     /** 14g·1 — the theme (register · mode · typeface · OLED) in [keyValueStore], on both platforms. */
     val themeSettings: ThemeSettings by lazy { ThemeSettings(keyValueStore) }
+    /** Plan Phase 4 — the app's language (English or Italian), on both platforms. */
+    val languageSettings: com.tendril.app.ui.settings.LanguageSettings by lazy { com.tendril.app.ui.settings.LanguageSettings(keyValueStore) }
     /** 14g·3 — the Tasks switches, shared (the desktop's were hardcoded off before). */
     val taskSettings: com.tendril.app.ui.settings.TaskSettings by lazy { com.tendril.app.ui.settings.TaskSettings(keyValueStore) }
 

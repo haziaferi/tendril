@@ -171,7 +171,7 @@ internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, show
             Text(habit.title, style = MaterialTheme.typography.pageTitle, modifier = Modifier.weight(1f).padding(start = 4.dp))
         }
         Spacer(Modifier.height(10.dp))
-        DetailRow("Repeats", habit.frequency.label())
+        DetailRow("Repeats", scheduleText(habit)) // §6.3 (5c) — a calendar habit by its rule, an interval one as before
         DetailRow("At", habit.time?.toString(), unsetWord = "any time")
         DetailRow("For", habit.duration?.let(::formatHabitDuration), unsetWord = "no length")
         // §0.10 item 3 — what a tap adds; the number set for a day is a sentence in the presence, not a row here.
@@ -192,8 +192,10 @@ internal fun HabitDetailPane(habit: Habit, viewModel: TasksHabitsViewModel, show
                 leadingIcon = { Icon(if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null) },
             )
             AssistChip(onClick = onEdit, label = { Text("Edit…") })   // S10 — every field, in the Add sheet's frame
+            PauseChip(habit, viewModel)
             AssistChip(onClick = onTrash, label = { Text("Move to Trash") })
         }
+        PausedLine(habit)
     }
 }
 

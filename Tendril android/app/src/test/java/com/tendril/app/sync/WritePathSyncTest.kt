@@ -163,14 +163,17 @@ class WritePathSyncTest {
                 entryDao = entryDao, habitDao = habitDao, pageDao = pageDao, pagesSyncEngine = engine,
                 purgeRegistry = purgeRegistry, reminderDao = FakeReminderDao(), entryCompletionDao = completionDao,
                 habitCompletionDao = habitCompletionDao, checkInDao = FakeCheckInDao(), timeLogDao = FakeTimeLogDao(),
+                habitBlockDao = FakeHabitBlockDao(), habitScheduleEditDao = FakeHabitScheduleEditDao(),
                 localImages = localImages,
             )
         }
 
+        val habitCalendarSource = com.tendril.app.domain.plan.HabitCalendarSource(FakeHabitBlockDao(), FakeHabitScheduleEditDao(), habitCompletionDao)
+
         fun detail(pageId: Long) = PageDetailViewModel(
             pageId, pageDao, blockDao, labelDao, propertyDao, propertyValueDao, pageDatabaseDao, entryDao,
             resolveEntryUseCase, coordinator, contentRepository, templateManager, viewLockState, checkboxOnlyState, localImages, labelMembership,
-            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao), PageHistory(pageDao, blockDao, FakePageRevisionDao()),
+            habitDao, CheckInHabitUseCase(habitDao, habitCompletionDao, habitCalendarSource), habitCalendarSource, PageHistory(pageDao, blockDao, FakePageRevisionDao()),
             FakeAiKeyStore(), MapKeyValueStore(), FakeCheckInDao(),
         )
 

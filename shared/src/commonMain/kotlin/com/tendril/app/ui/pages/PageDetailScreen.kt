@@ -259,6 +259,7 @@ fun PageDetailScreen(
                     core.labelMembership,
                     core.database.habitDao(),
                     core.checkInHabitUseCase,
+                    core.habitCalendarSource,
                     core.pageHistory,
                     core.aiKeyStore,
                     core.keyValueStore,
@@ -668,7 +669,7 @@ fun PageDetailScreen(
                 journalDay?.takeIf { checkInOffered(it, LocalDate.now()) }?.let { day ->
                     checkInItems(day, checkIns, viewModel, onOpenSheet = { checkInSheetOpen = true })
                 }
-                journalToday?.let { (date, today) -> journalTodayItems(today, date, viewModel) }
+                journalToday?.let { (_, today) -> journalTodayItems(today, viewModel) }
                 // §5.1 Row-as-page — a Database row shows its property values as a compact
                 // strip above the same free-form Block body every other Page has. §0.6.8 — one
                 // strip per membership: the home database first, then each database a label

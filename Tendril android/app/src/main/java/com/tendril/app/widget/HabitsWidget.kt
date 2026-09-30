@@ -37,6 +37,9 @@ import androidx.glance.unit.ColorProvider
 import com.tendril.app.MainActivity
 import com.tendril.app.TendrilApp
 import com.tendril.app.data.habit.Habit
+import com.tendril.app.data.habit.HabitScheduleKind
+import com.tendril.app.domain.plan.habitDoneOn
+import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 
 /**
@@ -53,17 +56,22 @@ class HabitsWidget : GlanceAppWidget() {
         val container = (context.applicationContext as TendrilApp).container
         // One-shot read, not a live Flow collection (§8.1's own note on AgendaWidget) —
         // Glance widgets render from a snapshot on each update.
-        val habits = container.database.habitDao().getAll()
-            .filter { it.deletedAt == null }
-            .sortedBy { it.title }
         val today = LocalDate.now()
+        // §6.3 (H3) — a calendar habit is here on the days it has an occurrence, as one row that
+        // reads done once every one of the day's occurrences is; an interval habit as it always was.
+        val calendar = container.habitCalendarSource.load()
+        val live = container.habitCalendarSource.observeLiveOn(today).first()
+        val habits = container.database.habitDao().getAll()
+            .filter { it.deletedAt == null && (it.scheduleKind != HabitScheduleKind.CALENDAR || calendar.occurrences(it, today).isNotEmpty()) }
+            .sortedBy { it.title }
+        val doneIds = habits.filter { habitDoneOn(it, today, calendar, live) }.map { it.id }.toSet()
         val appLocked = container.appLockPreferences.enabled.value
 
         provideContent {
             val prefs = currentState<Preferences>()
             val config = prefs.toWidgetColorConfig()
             val theme = resolveWidgetTheme(container, context, config)
-            HabitsContent(theme, habits, today, appLocked)
+            HabitsContent(theme, habits, doneIds, appLocked)
         }
     }
 }
@@ -103,7 +111,11 @@ class CheckInHabitAction : ActionCallback {
             return
         }
         val habit = container.database.habitDao().getById(habitId) ?: return
-        if (habit.lastCompletedDate == LocalDate.now()) {
+        val today = LocalDate.now()
+        // H3 — the row's own done rule: a calendar habit's tap checks the next open occurrence
+        // until all are done, then undoes the last.
+        val live = container.habitCalendarSource.observeLiveOn(today).first()
+        if (habitDoneOn(habit, today, container.habitCalendarSource.load(), live)) {
             container.checkInHabitUseCase.undoCheckIn(habitId)
         } else {
             container.checkInHabitUseCase.checkIn(habitId)
@@ -121,7 +133,7 @@ class CheckInHabitAction : ActionCallback {
 }
 
 @Composable
-private fun HabitsContent(theme: WidgetTheme, habits: List<Habit>, today: LocalDate, appLocked: Boolean) {
+private fun HabitsContent(theme: WidgetTheme, habits: List<Habit>, doneIds: Set<Long>, appLocked: Boolean) {
     Column(modifier = GlanceModifier.fillMaxSize().background(theme.backgroundWithOpacity)) {
         Text(
             text = "Habits",
@@ -137,7 +149,7 @@ private fun HabitsContent(theme: WidgetTheme, habits: List<Habit>, today: LocalD
         } else {
             LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                 items(habits) { habit ->
-                    val doneToday = habit.lastCompletedDate == today
+                    val doneToday = habit.id in doneIds
                     Row(
                         modifier = GlanceModifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
                             // With App Lock on, a tap goes through the lock gate instead of

@@ -1,0 +1,3616 @@
+{
+ "name": "edit-day-series-shift",
+ "mondays": [
+  "2026-09-28",
+  "2026-10-05"
+ ],
+ "model": {
+  "settings": {
+   "languages": [
+    "en",
+    "it"
+   ],
+   "limit_minutes": 360,
+   "title": {
+    "en": "Planner Demo",
+    "it": "Demo del planner"
+   },
+   "print_theme": "dark"
+  },
+  "blocks": [
+   {
+    "id": "morning",
+    "name": {
+     "en": "Morning",
+     "it": "Mattina"
+    },
+    "start": "06:30",
+    "end": "09:00",
+    "icon": "sunrise",
+    "color": "peach"
+   },
+   {
+    "id": "midday",
+    "name": {
+     "en": "Midday",
+     "it": "Mezzogiorno"
+    },
+    "start": "09:00",
+    "end": "13:00",
+    "icon": "sun",
+    "color": "gold"
+   },
+   {
+    "id": "afternoon",
+    "name": {
+     "en": "Afternoon",
+     "it": "Pomeriggio"
+    },
+    "start": "13:00",
+    "end": "18:00",
+    "icon": "leaf",
+    "color": "sage"
+   },
+   {
+    "id": "evening",
+    "name": {
+     "en": "Evening",
+     "it": "Sera"
+    },
+    "start": "18:00",
+    "end": "21:30",
+    "icon": "sunset",
+    "color": "lavender"
+   },
+   {
+    "id": "night",
+    "name": {
+     "en": "Night",
+     "it": "Notte"
+    },
+    "start": "21:30",
+    "end": "23:30",
+    "icon": "moon",
+    "color": "sky"
+   }
+  ],
+  "overrides": [
+   {
+    "days": [
+     5,
+     6
+    ],
+    "block": "morning",
+    "start": "08:00",
+    "end": "10:30"
+   },
+   {
+    "days": [
+     5,
+     6
+    ],
+    "block": "midday",
+    "start": "10:30",
+    "end": "13:00"
+   }
+  ],
+  "areas": [
+   {
+    "id": "health",
+    "name": {
+     "en": "Health",
+     "it": "Salute"
+    },
+    "color": "sage"
+   },
+   {
+    "id": "home",
+    "name": {
+     "en": "Home",
+     "it": "Casa"
+    },
+    "color": "peach"
+   },
+   {
+    "id": "study",
+    "name": {
+     "en": "Study",
+     "it": "Studio"
+    },
+    "color": "lavender"
+   },
+   {
+    "id": "mind",
+    "name": {
+     "en": "Mind",
+     "it": "Mente"
+    },
+    "color": "sky"
+   }
+  ],
+  "items": [
+   {
+    "id": "water",
+    "name": {
+     "en": "Glass of water",
+     "it": "Bicchiere d'acqua"
+    },
+    "area": "health",
+    "block": null,
+    "minutes": 2,
+    "priority": 2,
+    "repeat": {
+     "rule": "every_n_hours",
+     "n": 3,
+     "from": 420,
+     "until": 1320
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "stretch",
+    "name": {
+     "en": "Morning stretch",
+     "it": "Stretching mattutino"
+    },
+    "area": "health",
+    "block": "morning",
+    "minutes": 15,
+    "priority": 1,
+    "repeat": {
+     "rule": "daily"
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "vitamins",
+    "name": {
+     "en": "Vitamins",
+     "it": "Vitamine"
+    },
+    "area": "health",
+    "block": null,
+    "minutes": 1,
+    "priority": 2,
+    "repeat": {
+     "rule": "times_per_day",
+     "n": 2,
+     "blocks": [
+      "morning",
+      "evening"
+     ]
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "tidy",
+    "name": {
+     "en": "Ten-minute tidy",
+     "it": "Riordino di dieci minuti"
+    },
+    "area": "home",
+    "block": null,
+    "minutes": 10,
+    "priority": 2,
+    "repeat": {
+     "rule": "times_per_day",
+     "n": 3
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "deep-study",
+    "name": {
+     "en": "Deep study session",
+     "it": "Sessione di studio"
+    },
+    "area": "study",
+    "block": "midday",
+    "minutes": 180,
+    "priority": 1,
+    "repeat": {
+     "rule": "weekdays",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "review",
+    "name": {
+     "en": "Flashcard review",
+     "it": "Ripasso flashcard"
+    },
+    "area": "study",
+    "block": "afternoon",
+    "minutes": 30,
+    "priority": 2,
+    "repeat": {
+     "rule": "every_n_days",
+     "n": 2,
+     "anchor": "2026-09-28"
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "run",
+    "name": {
+     "en": "Run",
+     "it": "Corsa"
+    },
+    "area": "health",
+    "block": "afternoon",
+    "minutes": 45,
+    "priority": 2,
+    "repeat": {
+     "rule": "times_per_week",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "n": 3
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "yoga",
+    "name": {
+     "en": "Yoga",
+     "it": "Yoga"
+    },
+    "area": "health",
+    "block": "evening",
+    "minutes": 40,
+    "priority": 2,
+    "repeat": {
+     "rule": "times_per_week",
+     "days": [
+      1,
+      3,
+      5,
+      6
+     ],
+     "n": 2
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "laundry",
+    "name": {
+     "en": "Laundry",
+     "it": "Bucato"
+    },
+    "area": "home",
+    "block": "afternoon",
+    "minutes": 60,
+    "priority": 3,
+    "repeat": {
+     "rule": "every_n_days",
+     "n": 4,
+     "anchor": "2026-09-29"
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "plan-week",
+    "name": {
+     "en": "Plan the week",
+     "it": "Pianificare la settimana"
+    },
+    "area": "mind",
+    "block": "evening",
+    "minutes": 30,
+    "priority": 2,
+    "repeat": {
+     "rule": "weekdays",
+     "days": [
+      6
+     ],
+     "label": "weekly"
+    },
+    "note": {
+     "en": "Rebuild the plan after editing.",
+     "it": "Rigenera il piano dopo le modifiche."
+    },
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "deep-clean",
+    "name": {
+     "en": "Deep clean",
+     "it": "Pulizie a fondo"
+    },
+    "area": "home",
+    "block": "midday",
+    "minutes": 150,
+    "priority": 2,
+    "repeat": {
+     "rule": "every_n_weeks",
+     "n": 2,
+     "anchor": "2026-09-28",
+     "days": [
+      5
+     ]
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "groceries",
+    "name": {
+     "en": "Groceries",
+     "it": "Spesa"
+    },
+    "area": "home",
+    "block": "midday",
+    "minutes": 60,
+    "priority": 2,
+    "repeat": {
+     "rule": "every_n_weeks",
+     "n": 3,
+     "anchor": "2026-10-03",
+     "days": [
+      5
+     ]
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "journal",
+    "name": {
+     "en": "Journal",
+     "it": "Diario"
+    },
+    "area": "mind",
+    "block": "night",
+    "minutes": 15,
+    "priority": 2,
+    "repeat": {
+     "rule": "daily"
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "reading",
+    "name": {
+     "en": "Reading",
+     "it": "Lettura"
+    },
+    "area": "mind",
+    "block": "night",
+    "minutes": 30,
+    "priority": 3,
+    "repeat": {
+     "rule": "weekdays",
+     "days": [
+      0,
+      2,
+      4,
+      6
+     ]
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   },
+   {
+    "id": "call-home",
+    "name": {
+     "en": "Call home",
+     "it": "Chiamare casa"
+    },
+    "area": "mind",
+    "block": null,
+    "minutes": 20,
+    "priority": 2,
+    "repeat": {
+     "rule": "weekdays",
+     "days": [
+      0
+     ],
+     "label": "weekly"
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml",
+    "time": "09:00"
+   },
+   {
+    "id": "dentist",
+    "name": {
+     "en": "Dentist",
+     "it": "Dentista"
+    },
+    "area": "health",
+    "block": null,
+    "minutes": 60,
+    "priority": 1,
+    "repeat": {
+     "rule": "once",
+     "date": "2026-10-01"
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml",
+    "time": "15:30"
+   },
+   {
+    "id": "meds",
+    "name": {
+     "en": "Medication",
+     "it": "Farmaci"
+    },
+    "area": "health",
+    "block": null,
+    "minutes": 1,
+    "priority": 1,
+    "repeat": {
+     "rule": "times_per_day",
+     "n": 2,
+     "times": [
+      510,
+      1200
+     ]
+    },
+    "note": null,
+    "start": null,
+    "end": null,
+    "paused": false,
+    "source": "demo.toml"
+   }
+  ],
+  "edits": [
+   {
+    "id": "e1",
+    "target": "item",
+    "ref": "water",
+    "scope": {
+     "kind": "day",
+     "date": "2026-09-30"
+    },
+    "set": {
+     "repeat": {
+      "from": 480
+     }
+    },
+    "created": "2026-09-29T10:00#0000"
+   }
+  ]
+ },
+ "expected": [
+  {
+   "date": "2026-09-28",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "call-home",
+     "n": 1,
+     "block": "midday",
+     "time": "09:00",
+     "minutes": 20,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-09-29",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "laundry",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 60,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-09-30",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "run",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 45,
+     "tag": {
+      "kind": "week",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "14:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "17:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "11:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "08:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-01",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "dentist",
+     "n": 1,
+     "block": "afternoon",
+     "time": "15:30",
+     "minutes": 60,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "yoga",
+     "n": 1,
+     "block": "evening",
+     "time": null,
+     "minutes": 40,
+     "tag": {
+      "kind": "week",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-02",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "run",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 45,
+     "tag": {
+      "kind": "week",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-03",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "08:00",
+     "end": "10:30"
+    },
+    {
+     "id": "midday",
+     "start": "10:30",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "laundry",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 60,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-clean",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 150,
+     "tag": null
+    },
+    {
+     "id": "groceries",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 60,
+     "tag": null
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "morning",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": [
+    "flag_outside"
+   ]
+  },
+  {
+   "date": "2026-10-04",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "08:00",
+     "end": "10:30"
+    },
+    {
+     "id": "midday",
+     "start": "10:30",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "run",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 45,
+     "tag": {
+      "kind": "week",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "plan-week",
+     "n": 1,
+     "block": "evening",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "yoga",
+     "n": 1,
+     "block": "evening",
+     "time": null,
+     "minutes": 40,
+     "tag": {
+      "kind": "week",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "morning",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": [
+    "flag_outside"
+   ]
+  },
+  {
+   "date": "2026-10-05",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "call-home",
+     "n": 1,
+     "block": "midday",
+     "time": "09:00",
+     "minutes": 20,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-06",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "run",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 45,
+     "tag": {
+      "kind": "week",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "yoga",
+     "n": 1,
+     "block": "evening",
+     "time": null,
+     "minutes": 40,
+     "tag": {
+      "kind": "week",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-07",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "laundry",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 60,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-08",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "run",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 45,
+     "tag": {
+      "kind": "week",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-09",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "06:30",
+     "end": "09:00"
+    },
+    {
+     "id": "midday",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "deep-study",
+     "n": 1,
+     "block": "midday",
+     "time": null,
+     "minutes": 180,
+     "tag": null
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "midday",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 1,
+     "block": "morning",
+     "time": "07:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": []
+  },
+  {
+   "date": "2026-10-10",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "08:00",
+     "end": "10:30"
+    },
+    {
+     "id": "midday",
+     "start": "10:30",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "review",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "run",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 45,
+     "tag": {
+      "kind": "week",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "yoga",
+     "n": 1,
+     "block": "evening",
+     "time": null,
+     "minutes": 40,
+     "tag": {
+      "kind": "week",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "morning",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": [
+    "flag_outside"
+   ]
+  },
+  {
+   "date": "2026-10-11",
+   "blocks": [
+    {
+     "id": "morning",
+     "start": "08:00",
+     "end": "10:30"
+    },
+    {
+     "id": "midday",
+     "start": "10:30",
+     "end": "13:00"
+    },
+    {
+     "id": "afternoon",
+     "start": "13:00",
+     "end": "18:00"
+    },
+    {
+     "id": "evening",
+     "start": "18:00",
+     "end": "21:30"
+    },
+    {
+     "id": "night",
+     "start": "21:30",
+     "end": "23:30"
+    }
+   ],
+   "occurrences": [
+    {
+     "id": "laundry",
+     "n": 1,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 60,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 2,
+     "block": "afternoon",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 3,
+     "block": "afternoon",
+     "time": "13:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "water",
+     "n": 4,
+     "block": "afternoon",
+     "time": "16:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "plan-week",
+     "n": 1,
+     "block": "evening",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "vitamins",
+     "n": 2,
+     "block": "evening",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 5,
+     "block": "evening",
+     "time": "19:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "meds",
+     "n": 2,
+     "block": "evening",
+     "time": "20:00",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 2,
+      "n": 2
+     }
+    },
+    {
+     "id": "stretch",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 3
+     }
+    },
+    {
+     "id": "vitamins",
+     "n": 1,
+     "block": "morning",
+     "time": null,
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "meds",
+     "n": 1,
+     "block": "morning",
+     "time": "08:30",
+     "minutes": 1,
+     "tag": {
+      "kind": "count",
+      "i": 1,
+      "n": 2
+     }
+    },
+    {
+     "id": "water",
+     "n": 2,
+     "block": "morning",
+     "time": "10:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    },
+    {
+     "id": "journal",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 15,
+     "tag": null
+    },
+    {
+     "id": "reading",
+     "n": 1,
+     "block": "night",
+     "time": null,
+     "minutes": 30,
+     "tag": null
+    },
+    {
+     "id": "tidy",
+     "n": 3,
+     "block": "night",
+     "time": null,
+     "minutes": 10,
+     "tag": {
+      "kind": "count",
+      "i": 3,
+      "n": 3
+     }
+    },
+    {
+     "id": "water",
+     "n": 6,
+     "block": "night",
+     "time": "22:00",
+     "minutes": 2,
+     "tag": {
+      "kind": "time"
+     }
+    }
+   ],
+   "flags": [
+    "flag_outside"
+   ]
+  }
+ ]
+}

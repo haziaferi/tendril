@@ -31,6 +31,8 @@ import com.tendril.app.ui.theme.TendrilTheme
 import com.tendril.app.ui.theme.resolveDark
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import com.tendril.app.ui.settings.WithAppLanguage
+import com.tendril.app.ui.nav.WorkbenchNavState
 
 /**
  * `FragmentActivity`, not plain `ComponentActivity` — `BiometricPrompt` (§3.6) needs a
@@ -105,88 +107,93 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch { reconcileAlarms(applicationContext) }
 
         setContent {
-            // 14g·1 — register · mode · typeface · OLED from the shared store; System follows the OS.
-            val theme = container.themeSettings.observe()
-            val dark = theme.mode.resolveDark()
+            // Plan Phase 4 — the app's language around everything, so a change recomposes all of it.
+            // The navigation state sits outside it: a language change must not send the person back to Pages.
+            val navState = remember { WorkbenchNavState() }
+            WithAppLanguage(container.languageSettings) {
+                // 14g·1 — register · mode · typeface · OLED from the shared store; System follows the OS.
+                val theme = container.themeSettings.observe()
+                val dark = theme.mode.resolveDark()
 
-            var isUnlocked by isUnlockedForSession
-            val appLockEnabled by container.appLockPreferences.enabled.collectAsState()
+                var isUnlocked by isUnlockedForSession
+                val appLockEnabled by container.appLockPreferences.enabled.collectAsState()
 
-            // The two permission requests below are chained, not concurrent. Firing two
-            // ActivityResultLaunchers in the same composition races them: the system shows
-            // one dialog and the second request commonly resolves as denied without ever
-            // being seen, which silently cost this app its calendar permission on first run.
-            // `notificationsSettled` is the baton — the calendar request waits for it.
-            var notificationsSettled by remember {
-                mutableStateOf(
-                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                        ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) ==
-                        android.content.pm.PackageManager.PERMISSION_GRANTED
-                )
-            }
-
-            val notificationPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission(),
-            ) { /* reminders simply won't show a notification if declined */ notificationsSettled = true }
-
-            LaunchedEffect(Unit) {
-                // The SDK check is redundant with `notificationsSettled`'s own initializer —
-                // it can only be false on 33+ — but keeping it here means a reader (and lint)
-                // sees why touching POST_NOTIFICATIONS is safe without tracing back upward.
-                if (!notificationsSettled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                // The two permission requests below are chained, not concurrent. Firing two
+                // ActivityResultLaunchers in the same composition races them: the system shows
+                // one dialog and the second request commonly resolves as denied without ever
+                // being seen, which silently cost this app its calendar permission on first run.
+                // `notificationsSettled` is the baton — the calendar request waits for it.
+                var notificationsSettled by remember {
+                    mutableStateOf(
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                            ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) ==
+                            android.content.pm.PackageManager.PERMISSION_GRANTED
+                    )
                 }
-            }
 
-            // System Calendar Provider registration (§3.2, §9.9 item 3) — requested here,
-            // contextually, on first launch (mirroring the POST_NOTIFICATIONS request above)
-            // rather than gated behind a Settings toggle, since Provider registration is
-            // inherent app behavior, not an opt-in integration like Google Calendar sync.
-            val calendarPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestMultiplePermissions(),
-            ) { results ->
-                if (results.values.all { it }) {
-                    lifecycleScope.launch { container.calendarProviderSync.ensureCalendarAndBackfill() }
-                    container.systemCalendarSync.start(applicationContext)
+                val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { /* reminders simply won't show a notification if declined */ notificationsSettled = true }
+
+                LaunchedEffect(Unit) {
+                    // The SDK check is redundant with `notificationsSettled`'s own initializer —
+                    // it can only be false on 33+ — but keeping it here means a reader (and lint)
+                    // sees why touching POST_NOTIFICATIONS is safe without tracing back upward.
+                    if (!notificationsSettled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                 }
-            }
-            // Asked at most once per process. Re-launching on every cold start after a denial
-            // just burns the request against Android's auto-deny with no dialog shown.
-            var calendarAsked by remember { mutableStateOf(false) }
-            LaunchedEffect(notificationsSettled) {
-                if (!notificationsSettled) return@LaunchedEffect
-                when {
-                    container.calendarProviderSync.hasPermission() -> {
-                        container.calendarProviderSync.ensureCalendarAndBackfill()
-                        // §9.12 — read the ticked calendars now, and whenever they change.
+
+                // System Calendar Provider registration (§3.2, §9.9 item 3) — requested here,
+                // contextually, on first launch (mirroring the POST_NOTIFICATIONS request above)
+                // rather than gated behind a Settings toggle, since Provider registration is
+                // inherent app behavior, not an opt-in integration like Google Calendar sync.
+                val calendarPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { results ->
+                    if (results.values.all { it }) {
+                        lifecycleScope.launch { container.calendarProviderSync.ensureCalendarAndBackfill() }
                         container.systemCalendarSync.start(applicationContext)
                     }
-                    !calendarAsked -> {
-                        calendarAsked = true
-                        calendarPermissionLauncher.launch(
-                            arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
-                        )
+                }
+                // Asked at most once per process. Re-launching on every cold start after a denial
+                // just burns the request against Android's auto-deny with no dialog shown.
+                var calendarAsked by remember { mutableStateOf(false) }
+                LaunchedEffect(notificationsSettled) {
+                    if (!notificationsSettled) return@LaunchedEffect
+                    when {
+                        container.calendarProviderSync.hasPermission() -> {
+                            container.calendarProviderSync.ensureCalendarAndBackfill()
+                            // §9.12 — read the ticked calendars now, and whenever they change.
+                            container.systemCalendarSync.start(applicationContext)
+                        }
+                        !calendarAsked -> {
+                            calendarAsked = true
+                            calendarPermissionLauncher.launch(
+                                arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+                            )
+                        }
                     }
                 }
-            }
 
-            fun requestUnlock() {
-                showAppUnlockPrompt(this@MainActivity) { unlocked ->
-                    if (unlocked) isUnlocked = true
+                fun requestUnlock() {
+                    showAppUnlockPrompt(this@MainActivity) { unlocked ->
+                        if (unlocked) isUnlocked = true
+                    }
                 }
-            }
 
-            // Fire the prompt automatically the moment a lock screen appears — a manual
-            // retry button (LockScreen) covers the case where the person dismissed it.
-            LaunchedEffect(isUnlocked) {
-                if (!isUnlocked) requestUnlock()
-            }
+                // Fire the prompt automatically the moment a lock screen appears — a manual
+                // retry button (LockScreen) covers the case where the person dismissed it.
+                LaunchedEffect(isUnlocked) {
+                    if (!isUnlocked) requestUnlock()
+                }
 
-            TendrilTheme(register = theme.register, dark = dark, typeface = theme.typeface, oled = theme.oled) {
-                if (appLockEnabled && !isUnlocked) {
-                    LockScreen(onUnlockClick = ::requestUnlock)
-                } else {
-                    AndroidWorkbenchScaffold(container = container)
+                TendrilTheme(register = theme.register, dark = dark, typeface = theme.typeface, oled = theme.oled) {
+                    if (appLockEnabled && !isUnlocked) {
+                        LockScreen(onUnlockClick = ::requestUnlock)
+                    } else {
+                        AndroidWorkbenchScaffold(container = container, navState = navState)
+                    }
                 }
             }
         }

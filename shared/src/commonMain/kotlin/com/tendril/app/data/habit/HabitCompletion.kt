@@ -46,6 +46,10 @@ data class HabitCompletion(
     val checkedAt: Instant,
     /** §0.10 item 3 (v21) — the amount this check-in logged for a counting habit; null on a plain one. */
     val value: Double? = null,
+    /** §6.3 (v27, P3) — which of the day's occurrences of a calendar habit this check-in is for:
+     * its number within the day, or `x:<edit uid>` for one added by a move. Null for an interval
+     * habit and for every row from before v27, whose reads ask only "is there a live row for the date". */
+    val occurrenceKey: String? = null,
     /** Soft-delete: set by undo, never cleared — see the class comment for why a redo inserts
      * instead. Null means the check-in stands. */
     val deletedAt: Instant? = null,

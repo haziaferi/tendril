@@ -20,6 +20,10 @@ interface HabitCompletionDao {
     suspend fun getLiveForDay(habitId: Long, date: LocalDate): List<HabitCompletion>
 
     /** §0.10 item 3 — every habit's live check-ins on one day, for the rows' *2 cups today*. */
+    /** §6.3 (5d) — a week's live check-ins, every habit's, for the Week view. */
+    @Query("SELECT * FROM habit_completions WHERE date BETWEEN :from AND :until AND deletedAt IS NULL")
+    fun observeLiveBetween(from: LocalDate, until: LocalDate): Flow<List<HabitCompletion>>
+
     @Query("SELECT * FROM habit_completions WHERE date = :date AND deletedAt IS NULL")
     fun observeLiveForDay(date: LocalDate): Flow<List<HabitCompletion>>
 

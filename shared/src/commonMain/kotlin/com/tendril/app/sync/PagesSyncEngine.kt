@@ -66,6 +66,8 @@ data class QuarantinedRecord(val kind: String, val uid: String, val detail: Stri
         const val HABIT_COMPLETION = "habit completion"
         const val CHECK_IN = "check-in"
         const val TIME_LOG = "time log"
+        const val HABIT_BLOCK = "habit block"
+        const val HABIT_SCHEDULE_EDIT = "habit schedule edit"
 
         /**
          * Not a record family at all: the whole-file case, where [uid] is a file name rather than
@@ -301,6 +303,17 @@ class PagesSyncEngine(
             },
         )
     }
+
+    /**
+     * §6.3 (P4) — a habit's Label as it travels, by name, the way a database's does (`labelName`
+     * above). Here rather than in each writer because this class already owns the one rule: a name
+     * found, or a Label created for it. Null in, null out.
+     */
+    suspend fun labelNameOf(labelId: Long?): String? = labelId?.let { labelDao.getById(it)?.name }
+
+    /** [labelNameOf]'s inverse on the way in: the local Label with this name, created if there is none. */
+    suspend fun labelIdFor(labelName: String?): Long? =
+        labelName?.let { name -> labelDao.findByName(name)?.id ?: labelDao.insert(Label(name = name)) }
 
     suspend fun exportRelations(): List<PageRelationSnapshotRecord> {
         val idToUid = pageDao.getAll().associate { it.id to it.uid }

@@ -78,6 +78,8 @@ class ArchiveImageTest {
             habitCompletionDao = FakeHabitCompletionDao(),
             checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
+            habitBlockDao = FakeHabitBlockDao(),
+            habitScheduleEditDao = FakeHabitScheduleEditDao(),
             purgeRegistry = purgeRegistry,
             pagesSyncEngine = engine,
             localImages = localImages,

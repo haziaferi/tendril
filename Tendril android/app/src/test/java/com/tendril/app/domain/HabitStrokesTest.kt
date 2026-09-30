@@ -25,7 +25,7 @@ class HabitStrokesTest {
 
     @Test
     fun `the span is the time and the duration, thirty minutes without one, and a habit with no time is not on the grid`() {
-        val strokes = habitStrokes(listOf(habit(1, "Pages read", LocalTime.of(21, 0), Duration.ofHours(1)), habit(2, "Stretch", LocalTime.of(7, 30)), habit(3, "Water", null)), today, today)
+        val strokes = habitStrokes(listOf(habit(1, "Pages read", LocalTime.of(21, 0), Duration.ofHours(1)), habit(2, "Stretch", LocalTime.of(7, 30)), habit(3, "Water", null)), today, today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList()), emptyList())
         assertEquals(listOf("Stretch", "Pages read"), strokes.map { it.habit.title })
         assertEquals(7 * 60 + 30, strokes[0].startMinute); assertEquals(30, strokes[0].minutes)
         assertEquals(21 * 60, strokes[1].startMinute); assertEquals(60, strokes[1].minutes)
@@ -33,7 +33,7 @@ class HabitStrokesTest {
 
     @Test
     fun `a stroke never runs past midnight and a trashed habit has none`() {
-        val strokes = habitStrokes(listOf(habit(1, "Late", LocalTime.of(23, 30), Duration.ofHours(2)), habit(2, "Gone", LocalTime.of(8, 0), deleted = true)), today, today)
+        val strokes = habitStrokes(listOf(habit(1, "Late", LocalTime.of(23, 30), Duration.ofHours(2)), habit(2, "Gone", LocalTime.of(8, 0), deleted = true)), today, today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList()), emptyList())
         assertEquals(listOf("Late"), strokes.map { it.habit.title })
         assertEquals(30, strokes.single().minutes)
     }
@@ -41,10 +41,10 @@ class HabitStrokesTest {
     @Test
     fun `the check-in marks today's lane only, never a past or a future day`() {
         val h = listOf(habit(1, "Stretch", LocalTime.of(7, 30), last = today))
-        assertTrue(habitStrokes(h, today, today).single().checkedIn)
-        assertFalse(habitStrokes(h, today.minusDays(1), today).single().checkedIn)
-        assertFalse(habitStrokes(h, today.plusDays(1), today).single().checkedIn)
-        assertFalse("checked in yesterday is not today's presence", habitStrokes(listOf(habit(1, "Stretch", LocalTime.of(7, 30), last = today.minusDays(1))), today, today).single().checkedIn)
+        assertTrue(habitStrokes(h, today, today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList()), emptyList()).single().checkedIn)
+        assertFalse(habitStrokes(h, today.minusDays(1), today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList()), emptyList()).single().checkedIn)
+        assertFalse(habitStrokes(h, today.plusDays(1), today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList()), emptyList()).single().checkedIn)
+        assertFalse("checked in yesterday is not today's presence", habitStrokes(listOf(habit(1, "Stretch", LocalTime.of(7, 30), last = today.minusDays(1))), today, today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList()), emptyList()).single().checkedIn)
     }
 
     @Test

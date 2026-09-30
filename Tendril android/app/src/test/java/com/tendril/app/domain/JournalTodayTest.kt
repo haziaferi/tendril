@@ -73,6 +73,6 @@ class JournalTodayTest {
             habit(4, deleted = true),
             habit(5, everyDays = 3, last = today.minusDays(3), time = LocalTime.of(7, 0)),
         )
-        assertEquals(listOf(5L, 1L, 3L), todayHabits(habits, today).map { it.id })
+        assertEquals(listOf(5L, 1L, 3L), todayHabits(habits, today, com.tendril.app.domain.plan.HabitCalendar(emptyList(), emptyList())).map { it.id })
     }
 }

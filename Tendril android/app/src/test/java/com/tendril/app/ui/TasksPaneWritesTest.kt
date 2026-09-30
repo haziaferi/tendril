@@ -50,7 +50,8 @@ class TasksPaneWritesTest {
         return TasksHabitsViewModel(
             entryDao, habitDao, habitCompletionDao,
             ResolveEntryUseCase(entryDao, FakeEntryCompletionDao(), coordinator), coordinator,
-            CheckInHabitUseCase(habitDao, habitCompletionDao), TimeTracker(FakeTimeLogDao()),
+            CheckInHabitUseCase(habitDao, habitCompletionDao, com.tendril.app.domain.plan.HabitCalendarSource(com.tendril.app.sync.FakeHabitBlockDao(), com.tendril.app.sync.FakeHabitScheduleEditDao(), habitCompletionDao)), TimeTracker(FakeTimeLogDao()),
+            com.tendril.app.domain.plan.HabitCalendarSource(com.tendril.app.sync.FakeHabitBlockDao(), com.tendril.app.sync.FakeHabitScheduleEditDao(), habitCompletionDao),
         )
     }
 

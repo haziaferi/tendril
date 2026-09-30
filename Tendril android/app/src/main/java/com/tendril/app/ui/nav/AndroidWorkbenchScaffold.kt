@@ -3,7 +3,6 @@ package com.tendril.app.ui.nav
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
 import androidx.fragment.app.FragmentActivity
 import com.tendril.app.AppContainer
 import com.tendril.app.applock.showAppUnlockPrompt
@@ -31,8 +30,11 @@ import com.tendril.app.ui.taskshabits.TasksHabitsScreen
  *    since 2026-09-11 it is shared code and the scaffold routes to it itself (§0.6.10).
  */
 @Composable
-fun AndroidWorkbenchScaffold(container: AppContainer) {
-    val navState = remember { WorkbenchNavState() }
+fun AndroidWorkbenchScaffold(
+    container: AppContainer,
+    /** Held by the caller above the language wrapper, so a change of language keeps the screen the person is on (plan Phase 4). */
+    navState: WorkbenchNavState,
+) {
     val activity = LocalActivity.current as? FragmentActivity
 
     // The nav stack's back is in the shared scaffold (2026-09-12), so desktop's Escape pops it too.

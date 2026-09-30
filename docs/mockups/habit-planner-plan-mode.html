@@ -1,0 +1,117 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plan Mode Blocks</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+/* Ink, solved by paletteFor / hueColours (2026-09-29); the same tokens as habit-planner.html. */
+.ink-d{--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#A9A9AC;--faint:#87888A;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--border:#35373B;--habit:#BC94D1;--habit-soft:#423A4B;--event:#A9D194;--event-soft:#3D483D;
+ --b1:#CD8653;--b1t:#292525;--b2:#C6A339;--b2t:#292823;--b3:#51C639;--b3t:#1F2B23;--b4:#AA86DC;--b4t:#262530;--b5:#599ECF;--b5t:#20272F;--shadow:rgba(0,0,0,.45)}
+.ink-l{--bg:#FFFFFF;--s2:#F3F3F3;--text:#393936;--dim:#676764;--faint:#848482;--accent:#465163;--on:#FFFFFF;--soft:#E9EAEC;--border:#E9E9E9;--habit:#5D3376;--habit-soft:#E8E2EC;--event:#4C7633;--event-soft:#E6ECE2;
+ --b1:#96582B;--b1t:#F7F2EE;--b2:#7B6523;--b2t:#F4F3ED;--b3:#307522;--b3t:#EEF4ED;--b4:#7439C6;--b4t:#F4EFFA;--b5:#2C6C9A;--b5t:#EEF3F7;--shadow:rgba(0,0,0,.14)}
+*{box-sizing:border-box}
+body{margin:0;background:#EEF0F3;color:#1B1B18;font:14px/1.45 Inter,system-ui,sans-serif;padding:24px}
+h1{font:600 24px/1.2 Inter,sans-serif;margin:0 0 4px}
+h2{font:600 16px/1.25 Inter,sans-serif;margin:32px 0 4px}
+.lead,.note{color:#5B5B58;max-width:100ch;margin:0 0 12px}.note{font-size:13px}
+.compare{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.badge{font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#5B5B58;margin:0 0 8px}
+.tab-num{font-variant-numeric:tabular-nums}
+.frame{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 8px 24px var(--shadow)}
+.hd{height:56px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--border);font-size:18px;font-weight:600}
+.hd .chip{margin-left:auto}
+.chip{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--soft);border-color:var(--soft)}
+.sub{display:flex;gap:16px;padding:8px 16px;font-size:13px;color:var(--dim);border-bottom:1px solid var(--border)}
+/* the hour grid: 48 dp an hour, 06:00–24:00 */
+.grid{position:relative;height:864px;margin-left:52px;border-left:1px solid var(--border)}
+.hr{position:absolute;left:-52px;right:0;height:0;border-top:1px solid var(--border)}
+.hr span{position:absolute;left:8px;top:-8px;font-size:11px;color:var(--dim);background:var(--bg);padding-right:4px}
+/* a habit block: a band behind the grid, its name on the left edge */
+.hb{position:absolute;left:0;right:0;border-left:3px solid}
+.hb .nm{position:absolute;right:8px;top:4px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:6px}
+.hb .nm i{width:4px;height:12px;border-radius:2px}
+.hb .nm small{font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim);margin-left:4px}
+/* entries */
+.ev{position:absolute;left:8px;right:96px;border-radius:6px;padding:4px 8px;font-size:13px;overflow:hidden}
+.ev.event{background:var(--event-soft);border-left:3px solid var(--event)}
+.ev.task{border:1.5px dashed var(--dim);background:var(--bg)}
+.ev.habit{background:var(--habit-soft);border-left:3px solid var(--habit)}
+.ev small{color:var(--dim);margin-left:6px}
+.ev.event small,.ev.habit small{color:var(--text)}
+.anyp{position:absolute;right:8px;height:24px;padding:0 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);font-size:12px;display:inline-flex;align-items:center;gap:4px}
+.fh{height:24px;padding:0 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);font-size:12px;display:inline-flex;align-items:center;gap:4px}
+.fh::before{content:"";width:8px;height:8px;border-radius:50%;border:1.5px solid var(--habit)}
+.fh.done::before{background:var(--habit)}
+.now{position:absolute;left:-6px;right:0;border-top:2px solid var(--accent)}
+.now::before{content:"";position:absolute;left:0;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.railbox{border-top:1px solid var(--border);padding:8px 16px 12px}
+.railbox b{font-size:13px}
+.railbox .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+</style></head><body>
+<h1>Plan mode with habit blocks — mockup only</h1>
+<p class="lead">D6: time blocks hold habits only, and Plan mode gets a mockup, not a build, unless the person says so at the Phase 1 review. Plan mode today (§0.6.5, step 7b): an hour grid, events solid, estimated tasks dashed, the now line, the unplanned rail at the foot. Proposed here: the day's habit blocks drawn <b>behind</b> the grid as neutral bands (alternating <code>surface2</code>), their names at the right edge with the block's hue as a small mark beside each name — the only place a block's colour appears (the person's rule, 2026-09-29); habits with a set time drawn at it in the habit colour; each block's flexible habits as one pill under the block's name — <i>4 any time</i> — which lists them, checked or not, when tapped. Tasks and events are untouched — a block is a habit's container, never a task's, so nothing snaps to it.</p>
+
+<div class="compare">
+<div><div class="badge">Ink dark · phone, Wednesday 1 October</div>
+<div class="frame ink-d" style="width:360px">
+<div class="hd">Wed 1 Oct <span class="chip on">Plan</span></div>
+<div class="sub"><span>Planned 6h 15m</span><span>Logged 1h 40m</span><span style="margin-left:auto">Habit blocks ✓</span></div>
+<div class="grid" style="height:864px">
+<!-- hour lines, 48 dp an hour from 06:00 -->
+<div class="hr" style="top:0"><span class="tab-num">06</span></div><div class="hr" style="top:48px"><span class="tab-num">07</span></div><div class="hr" style="top:96px"><span class="tab-num">08</span></div><div class="hr" style="top:144px"><span class="tab-num">09</span></div><div class="hr" style="top:192px"><span class="tab-num">10</span></div><div class="hr" style="top:240px"><span class="tab-num">11</span></div><div class="hr" style="top:288px"><span class="tab-num">12</span></div><div class="hr" style="top:336px"><span class="tab-num">13</span></div><div class="hr" style="top:384px"><span class="tab-num">14</span></div><div class="hr" style="top:432px"><span class="tab-num">15</span></div><div class="hr" style="top:480px"><span class="tab-num">16</span></div><div class="hr" style="top:528px"><span class="tab-num">17</span></div><div class="hr" style="top:576px"><span class="tab-num">18</span></div><div class="hr" style="top:624px"><span class="tab-num">19</span></div><div class="hr" style="top:672px"><span class="tab-num">20</span></div><div class="hr" style="top:720px"><span class="tab-num">21</span></div><div class="hr" style="top:768px"><span class="tab-num">22</span></div><div class="hr" style="top:816px"><span class="tab-num">23</span></div>
+<!-- blocks: Morning 06:30–09:00, Midday 09:00–13:00, Afternoon 13:00–18:00, Evening 18:00–21:30, Night 21:30–23:30 -->
+<div class="hb" style="top:24px;height:120px;background:var(--s2);border-color:var(--border)"><span class="nm"><i style="background:var(--b1)"></i>Morning</span></div>
+<div class="hb" style="top:144px;height:192px;background:transparent;border-color:var(--border)"><span class="nm"><i style="background:var(--b2)"></i>Midday</span></div>
+<div class="hb" style="top:336px;height:240px;background:var(--s2);border-color:var(--border)"><span class="nm"><i style="background:var(--b3)"></i>Afternoon</span></div>
+<div class="hb" style="top:576px;height:168px;background:transparent;border-color:var(--border)"><span class="nm"><i style="background:var(--b4)"></i>Evening</span></div>
+<div class="hb" style="top:744px;height:96px;background:var(--s2);border-color:var(--border)"><span class="nm"><i style="background:var(--b5)"></i>Night</span></div>
+<!-- Morning -->
+<span class="anyp" style="top:44px" aria-label="4 any time, tap to list them">4 any time</span>
+<div class="ev habit" style="top:50px;height:20px;padding:1px 8px">07:00 Water</div>
+<div class="ev habit" style="top:120px;height:20px;padding:1px 8px">08:30 Meds</div>
+<!-- Midday -->
+<span class="anyp" style="top:164px" aria-label="1 any time, tap to list them">1 any time</span>
+<div class="ev habit" style="top:194px;height:20px;padding:1px 8px">10:00 Water</div>
+<div class="ev event" style="top:228px;height:48px">Standup call<small>10:45–11:45</small></div>
+<div class="now" style="top:256px"></div>
+<div class="ev task" style="top:288px;height:36px">Reply to landlord<small>est. 45m</small></div>
+<!-- Afternoon -->
+<span class="anyp" style="top:356px" aria-label="2 any time, tap to list them">2 any time</span>
+<div class="ev habit" style="top:364px;height:20px;padding:1px 8px">13:00 Water</div>
+<div class="ev habit" style="top:456px;height:24px">15:30 Dentist<small>30m</small></div>
+<div class="ev habit" style="top:482px;height:20px;padding:1px 8px">16:00 Water</div>
+<!-- Evening -->
+<span class="anyp" style="top:596px" aria-label="1 any time, tap to list them">1 any time</span>
+<div class="ev habit" style="top:626px;height:20px;padding:1px 8px">19:00 Water</div>
+<div class="ev habit" style="top:674px;height:20px;padding:1px 8px">20:00 Meds</div>
+<!-- Night -->
+<span class="anyp" style="top:764px" aria-label="3 any time, tap to list them">3 any time</span>
+<div class="ev habit" style="top:770px;height:20px;padding:1px 8px">22:00 Water</div>
+</div>
+<div class="railbox"><b>Not planned</b><div class="chips"><span class="chip">Tax form</span><span class="chip">Call the bank</span><span class="chip">Water the plants · habit, any time</span></div></div>
+</div></div>
+
+<div style="max-width:440px">
+<div class="badge">What changes, what does not</div>
+<p class="note" style="font-size:14px;line-height:22px">
+<b>New:</b> the bands, their names, the <i>any time</i> pill under each name, and a toggle (<i>Habit blocks</i>) in the Plan header's sub-row, on by default, off to see the grid as it is today.<br><br>
+<b>Unchanged:</b> events, estimated tasks, the now line, the logged strip along the gutter, both long-press drags. Dragging a task over a band does not put it in the block — blocks hold habits only (D6).<br><br>
+<b>Habits with a set time</b> sit at their time in the habit colour, one row high, so a day of Water every three hours reads as a column of short marks rather than six boxes. A habit with a length (Dentist, 30 m) takes its length.<br><br>
+<b>An interval habit with no block</b> (<i>Water the plants</i>) joins the <i>Not planned</i> rail, marked as a habit — the rail is where Plan mode already puts what has no time.<br><br>
+<b>Changed after the first render:</b> the flexible habits were first a row of chips across the top of each band; with four of them the row wrapped onto Morning's 07:00 Water, and a block starting half an hour before a set time has no room for a second line. The pill keeps the grid for what has a time.<br><br><b>Not in the mockup, to decide if this is built:</b> whether a flexible habit can be dragged to a time in Plan mode (it would become a scoped edit, "Apply this change to…"), and whether the band names crowd the grid on the desktop's narrower day columns.</p>
+</div></div>
+
+<h2>Ink light · the same day</h2>
+<div class="frame ink-l" style="width:360px">
+<div class="hd">Wed 1 Oct <span class="chip on">Plan</span></div>
+<div class="grid" style="height:384px">
+<div class="hr" style="top:0"><span class="tab-num">06</span></div><div class="hr" style="top:48px"><span class="tab-num">07</span></div><div class="hr" style="top:96px"><span class="tab-num">08</span></div><div class="hr" style="top:144px"><span class="tab-num">09</span></div><div class="hr" style="top:192px"><span class="tab-num">10</span></div><div class="hr" style="top:240px"><span class="tab-num">11</span></div><div class="hr" style="top:288px"><span class="tab-num">12</span></div><div class="hr" style="top:336px"><span class="tab-num">13</span></div>
+<div class="hb" style="top:24px;height:120px;background:var(--s2);border-color:var(--border)"><span class="nm"><i style="background:var(--b1)"></i>Morning</span></div>
+<div class="hb" style="top:144px;height:192px;background:transparent;border-color:var(--border)"><span class="nm"><i style="background:var(--b2)"></i>Midday</span></div>
+<span class="anyp" style="top:44px" aria-label="4 any time, tap to list them">4 any time</span>
+<div class="ev habit" style="top:50px;height:20px;padding:1px 8px">07:00 Water</div>
+<div class="ev habit" style="top:120px;height:20px;padding:1px 8px">08:30 Meds</div>
+<span class="anyp" style="top:164px" aria-label="1 any time, tap to list them">1 any time</span>
+<div class="ev habit" style="top:194px;height:20px;padding:1px 8px">10:00 Water</div>
+<div class="ev event" style="top:228px;height:48px">Standup call<small>10:45–11:45</small></div>
+<div class="now" style="top:256px"></div>
+<div class="ev task" style="top:288px;height:36px">Reply to landlord<small>est. 45m</small></div>
+</div></div>
+</body></html>

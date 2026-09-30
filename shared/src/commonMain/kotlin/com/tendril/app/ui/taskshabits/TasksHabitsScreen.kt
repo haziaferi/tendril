@@ -107,6 +107,11 @@ import com.tendril.app.generated.resources.taskshabits_filter_month
 import com.tendril.app.generated.resources.taskshabits_filter_today
 import com.tendril.app.generated.resources.taskshabits_filter_week
 import com.tendril.app.generated.resources.taskshabits_tab_habits
+import com.tendril.app.generated.resources.plan_view_day
+import com.tendril.app.generated.resources.plan_view_month
+import com.tendril.app.generated.resources.plan_view_week
+import com.tendril.app.generated.resources.plan_by_time
+import com.tendril.app.generated.resources.plan_by_area
 import com.tendril.app.generated.resources.taskshabits_tab_merged
 import com.tendril.app.generated.resources.taskshabits_tab_tasks
 import com.tendril.app.generated.resources.taskshabits_undated_toggle
@@ -143,6 +148,9 @@ import com.tendril.app.ui.components.keyboardCursorRing
 private enum class TabSelection { TASKS, HABITS, MERGED }
 private enum class TimeFilter { TODAY, WEEK, MONTH }
 
+/** §6.3 (V1) — the Habits tab's range: the Day view, the Week view, or the month's plain list. */
+private enum class HabitRange { DAY, WEEK, MONTH }
+
 /**
  * §3.3, in `shared/` since §0.8 step 7a (as the Calendar since 6a). The Android-only surfaces
  * arrive as slots: [reminderSheet] (§5.4, alarms; null hides the bell), and the two Trash sheets
@@ -174,6 +182,7 @@ fun TasksHabitsScreen(
                     core.entryScheduleCoordinator,
                     core.checkInHabitUseCase,
                     core.timeTracker,
+                    core.habitCalendarSource,
                 )
             }
         }
@@ -212,6 +221,8 @@ private fun TasksHabitsBody(
     onQuickAddConsumed: () -> Unit,
 ) {
     var showUndated by remember { mutableStateOf(false) }
+    var habitRange by remember { mutableStateOf(HabitRange.DAY) }
+    var habitByArea by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     LaunchedEffect(quickAddRequested) {
         if (quickAddRequested) { setTab(TabSelection.TASKS); showAddDialog = true; onQuickAddConsumed() }
@@ -254,6 +265,12 @@ private fun TasksHabitsBody(
 
     val tasks by viewModel.tasks.collectAsState()
     val habits by viewModel.habits.collectAsState()
+    val editSelection by viewModel.editSelection.collectAsState()
+    // §6.3 (5c) — the sheet's Where needs the blocks, its Area the Labels (P4); By area names its groups by them (5d).
+    val habitBlocks by viewModel.blocks.collectAsState()
+    val labels by remember(core) { core.database.labelDao().observeAll() }.collectAsState(initial = emptyList())
+    // 5b — leaving the Day view ends edit mode, as Done without a move would.
+    LaunchedEffect(tab, habitRange) { viewModel.cancelEdit() }
     // §0.6.11 — a dot when the walk has something, and no number: the review says what (§0.5.2).
     // Re-asked whenever the tasks change, which is also every return from the Review route.
     var reviewDue by remember { mutableStateOf(false) }
@@ -281,7 +298,8 @@ private fun TasksHabitsBody(
             )
         },
         floatingActionButton = {
-            if (!wide) FloatingActionButton(onClick = { showAddDialog = true }) {
+            // 5b — while an entry is in edit mode the toolbar holds the foot; the FAB would cover it.
+            if (!wide && editSelection == null) FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = stringResource(
                     if (tab == TabSelection.HABITS) Res.string.taskshabits_add_habit else Res.string.taskshabits_add_task
                 ))
@@ -302,7 +320,30 @@ private fun TasksHabitsBody(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    if (tab != TabSelection.HABITS) {
+                    if (tab == TabSelection.HABITS) {
+                        // §6.3 (V1) — Today became the Day view; Month keeps the list.
+                        var rangeOpen by remember { mutableStateOf(false) }
+                        fun label(r: HabitRange) = when (r) { HabitRange.DAY -> Res.string.plan_view_day; HabitRange.WEEK -> Res.string.plan_view_week; HabitRange.MONTH -> Res.string.plan_view_month }
+                        // V1 — the Day view by time or by area
+                        if (habitRange == HabitRange.DAY) {
+                            var modeOpen by remember { mutableStateOf(false) }
+                            Box {
+                                BarMenuButton(stringResource(if (habitByArea) Res.string.plan_by_area else Res.string.plan_by_time), open = modeOpen, onClick = { modeOpen = true })
+                                TendrilMenu(expanded = modeOpen, onDismissRequest = { modeOpen = false }) {
+                                    TendrilMenuItem(text = { Text(stringResource(Res.string.plan_by_time)) }, trailingIcon = { MenuCheck(!habitByArea) }, onClick = { modeOpen = false; habitByArea = false })
+                                    TendrilMenuItem(text = { Text(stringResource(Res.string.plan_by_area)) }, trailingIcon = { MenuCheck(habitByArea) }, onClick = { modeOpen = false; habitByArea = true })
+                                }
+                            }
+                        }
+                        Box {
+                            BarMenuButton(stringResource(label(habitRange)), open = rangeOpen, onClick = { rangeOpen = true })
+                            TendrilMenu(expanded = rangeOpen, onDismissRequest = { rangeOpen = false }) {
+                                HabitRange.entries.forEach { r ->
+                                    TendrilMenuItem(text = { Text(stringResource(label(r))) }, trailingIcon = { MenuCheck(habitRange == r) }, onClick = { rangeOpen = false; habitRange = r })
+                                }
+                            }
+                        }
+                    } else {
                         var rangeOpen by remember { mutableStateOf(false) }
                         fun label(f: TimeFilter) = when (f) { TimeFilter.TODAY -> Res.string.taskshabits_filter_today; TimeFilter.WEEK -> Res.string.taskshabits_filter_week; TimeFilter.MONTH -> Res.string.taskshabits_filter_month }
                         Box {
@@ -322,7 +363,14 @@ private fun TasksHabitsBody(
                         tasks, filter, showUndated, { showUndated = it }, viewModel, rowActions,
                         onAdd = { showAddDialog = true },
                     ) { reminderTarget = it }
-                    TabSelection.HABITS -> HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = openHabit, onAdd = { showAddDialog = true }, selectedId = (selected as? Selected.Habit)?.id, onEdit = { editHabit = it })
+                    TabSelection.HABITS -> if (habitRange == HabitRange.DAY && habits.isNotEmpty()) {
+                        HabitDayContent(viewModel, wide = wide, onOpen = openHabit, onTrash = { viewModel.trashHabit(it.id); if ((selected as? Selected.Habit)?.id == it.id) selected = null }, selectedHabitId = (selected as? Selected.Habit)?.id, byArea = habitByArea, labels = labels)
+                    } else if (habitRange == HabitRange.WEEK && habits.isNotEmpty()) {
+                        // a tap on a day opens it (the mockup's phone Week)
+                        HabitWeekContent(viewModel, wide = wide, onOpenDay = { viewModel.showDay(it); habitRange = HabitRange.DAY })
+                    } else {
+                        HabitsList(habits, viewModel, showStreaks, runningTarget, loggedToday.second, onOpen = openHabit, onAdd = { showAddDialog = true }, selectedId = (selected as? Selected.Habit)?.id, onEdit = { editHabit = it })
+                    }
                     TabSelection.MERGED -> MergedList(tasks, habits, filter, viewModel, rowActions, { reminderTarget = it }, onOpenHabit = openHabit, selectedHabitId = (selected as? Selected.Habit)?.id)
                 }
             }
@@ -363,13 +411,13 @@ private fun TasksHabitsBody(
     editHabit?.let { habit ->
         AddHabitDialog(
             onDismiss = { editHabit = null },
-            onAdd = { title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount -> viewModel.updateHabit(habit, title, frequency, time, duration, unit, amountPerCheckIn, dailyAmount) },
-            initial = habit,
+            onSave = { viewModel.saveHabit(habit, it) },
+            blocks = habitBlocks, labels = labels, initial = habit, suggest = viewModel::weekSuggestion,
         )
     }
     if (showAddDialog) {
         if (tab == TabSelection.HABITS) {
-            AddHabitDialog(onDismiss = { showAddDialog = false }, onAdd = viewModel::addHabit)
+            AddHabitDialog(onDismiss = { showAddDialog = false }, onSave = { viewModel.saveHabit(null, it) }, blocks = habitBlocks, labels = labels, suggest = viewModel::weekSuggestion)
         } else {
             AddTaskDialog(
                 onDismiss = { showAddDialog = false },
@@ -390,8 +438,11 @@ private fun TasksHabitsBody(
     deadlineTarget?.let { entry ->
         DeadlineDialog(entry.dueDate, onSet = { viewModel.setDeadline(entry.id, it) }, onDismiss = { deadlineTarget = null })
     }
-    habitDetail?.let { habit ->
-        HabitDetailSheet(habit, viewModel, showStreak = showStreaks, onDismiss = { habitDetail = null }, onEdit = { habitDetail = null; editHabit = habit })
+    habitDetail?.let { opened ->
+        // The live row, as the pane reads it: the walk (5c) paused a habit from this sheet and the
+        // sheet, holding the copy it opened with, went on offering Pause… instead of Resume.
+        val habit = habits.firstOrNull { it.id == opened.id } ?: opened
+        HabitDetailSheet(habit, viewModel, showStreak = showStreaks, runningTarget = runningTarget, onDismiss = { habitDetail = null }, onEdit = { habitDetail = null; editHabit = habit })
     }
 
     if (showTrash) {

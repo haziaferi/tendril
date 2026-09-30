@@ -78,6 +78,8 @@ class ImageSyncTest {
             habitCompletionDao = FakeHabitCompletionDao(),
             checkInDao = FakeCheckInDao(),
             timeLogDao = FakeTimeLogDao(),
+            habitBlockDao = FakeHabitBlockDao(),
+            habitScheduleEditDao = FakeHabitScheduleEditDao(),
             localImages = localImages,
         )
 

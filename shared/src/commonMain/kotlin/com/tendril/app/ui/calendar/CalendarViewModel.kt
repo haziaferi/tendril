@@ -6,6 +6,13 @@ import com.tendril.app.data.entry.Entry
 import com.tendril.app.data.entry.EntryDao
 import com.tendril.app.data.habit.Habit
 import com.tendril.app.data.habit.HabitDao
+import com.tendril.app.data.habit.HabitCompletion
+import com.tendril.app.data.habit.HabitScheduleKind
+import com.tendril.app.domain.plan.HabitCalendar
+import com.tendril.app.domain.plan.HabitCalendarSource
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import com.tendril.app.data.pagedatabase.PropertyValueDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,12 +59,15 @@ data class CalendarLayers(
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CalendarViewModel(
     private val entryDao: EntryDao,
     private val resolveEntryUseCase: ResolveEntryUseCase,
     private val entryScheduleCoordinator: EntryScheduleCoordinator,
     private val entryEditor: EntryEditor,
     habitDao: HabitDao,
+    /** §6.3 (H4) — which days, and at which times, a calendar habit is on the grids. */
+    habitCalendarSource: HabitCalendarSource,
     propertyValueDao: PropertyValueDao,
     private val timeTracker: TimeTracker,
     private val keyValueStore: KeyValueStore,
@@ -97,9 +107,19 @@ class CalendarViewModel(
     fun logsOn(day: LocalDate): Flow<Pair<List<TimeLog>, Instant>> =
         combine(timeTracker.logsOn(day), minuteTicker()) { logs, now -> logs to now }
 
-    /** Habits with a time — the only ones a calendar can place. */
+    /** Habits a calendar can place: an interval habit with a time, and every calendar habit —
+     * whose times, and days, are [habitCalendar]'s answer (§6.3, H4). */
     val timedHabits: StateFlow<List<Habit>> = habitDao.observeActive()
-        .map { habits -> habits.filter { it.time != null } }
+        .map { habits -> habits.filter { it.time != null || it.scheduleKind == HabitScheduleKind.CALENDAR } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** §6.3 — the blocks and edits a calendar habit's occurrences are read with. */
+    val habitCalendar: StateFlow<HabitCalendar> = habitCalendarSource.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HabitCalendar(emptyList(), emptyList()))
+
+    /** Today's live check-ins, for the dot on a calendar occurrence's stroke; the day re-read each minute. */
+    val habitCheckInsToday: StateFlow<List<HabitCompletion>> = minuteTicker().map { LocalDate.now() }.distinctUntilChanged()
+        .flatMapLatest { habitCalendarSource.observeLiveOn(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Every stored DATE cell, parsed; a cell that does not parse as a date is not a day. */

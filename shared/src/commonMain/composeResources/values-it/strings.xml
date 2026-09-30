@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Plan Phase 4 (2026-09-30): the Italian for what the habit planner adds, and nothing else (L3).
+         Every key here has its English in values/strings.xml; StringCatalogueTest pins that and the
+         placeholders. A key with no Italian falls back to the English. -->
+
+    <!-- Plan Phase 4 (L1) - the language setting -->
+    <string name="settings_language">Lingua</string>
+    <string name="settings_language_note">Le parole e le date dell’app. Le schermate non ancora tradotte restano in inglese.</string>
+
+    <!-- tendril-spec.md 6.3 (H1) - the five default time blocks, shown in the app’s language until renamed -->
+    <string name="plan_block_morning">Mattina</string>
+    <string name="plan_block_midday">Mezzogiorno</string>
+    <string name="plan_block_afternoon">Pomeriggio</string>
+    <string name="plan_block_evening">Sera</string>
+    <string name="plan_block_night">Notte</string>
+
+    <!-- 6.3 - the Habits tab's views (V1, R1), from the approved mockup -->
+    <string name="plan_view_day">Giorno</string>
+    <string name="plan_view_week">Settimana</string>
+    <string name="plan_by_time">Per fascia</string>
+    <string name="plan_by_area">Per area</string>
+    <string name="plan_no_area">Senza area</string>
+    <string name="plan_any_time_today">In qualsiasi momento di oggi</string>
+    <string name="plan_any_time">In qualsiasi momento</string>
+    <string name="plan_now">ora</string>
+    <string name="plan_week_label">Settimana %1$d · %2$s – %3$s</string>
+    <string name="plan_nothing_planned">Niente in programma</string>
+    <string name="plan_past_read_only">Le settimane passate sono in sola lettura.</string>
+
+    <!-- 6.3 (V3) - the edit toolbar -->
+    <string name="plan_up">Su</string>
+    <string name="plan_down">Giù</string>
+    <string name="plan_move_to">Sposta in…</string>
+    <string name="plan_edit">Modifica</string>
+    <string name="plan_more">Altro…</string>
+    <string name="plan_done">Fatto</string>
+    <string name="plan_skip">Salta questa…</string>
+    <string name="plan_pause">Sospendi…</string>
+    <string name="plan_move_to_trash">Sposta nel Cestino</string>
+
+    <!-- 6.3 - the time and remove-time prompts -->
+    <string name="plan_time_title">Sposti %1$s tra gli orari fissi</string>
+    <string name="plan_time_body">Nessun orario suggerito. %2$s va dalle %3$s alle %4$s; un orario fuori sposta %1$s nella fascia che lo contiene.</string>
+    <string name="plan_time_field">Orario</string>
+    <string name="plan_err_time_format">Scrivi l’orario come HH:MM, per esempio 14:30.</string>
+    <string name="plan_put_back">Rimetti com’era</string>
+    <string name="plan_set_time">Imposta l’orario</string>
+    <string name="plan_remove_time_title">Sposti %1$s fuori dagli orari fissi</string>
+    <string name="plan_remove_time_body">%1$s è fissata alle %2$s. In “In qualsiasi momento” non ha un orario.</string>
+    <string name="plan_remove_time">Rimuovi le %1$s</string>
+
+    <!-- 6.3 (D10) - Apply this change to -->
+    <string name="plan_scope_title">Applica questa modifica a…</string>
+    <string name="plan_scope_occurrence">Solo questa voce</string>
+    <string name="plan_scope_day">Questo giorno</string>
+    <string name="plan_scope_week">Solo questa settimana</string>
+    <string name="plan_scope_weekdays_week">Giorni scelti di questa settimana</string>
+    <string name="plan_scope_from">Ogni settimana da ora in poi</string>
+    <string name="plan_scope_weekdays_from">Giorni scelti da ora in poi</string>
+    <string name="plan_apply">Applica</string>
+    <string name="plan_choose_days">Scegli almeno un giorno.</string>
+
+    <!-- 6.3 - the blocks editor -->
+    <string name="plan_blocks">Fasce</string>
+    <string name="plan_block_from">Dalle</string>
+    <string name="plan_block_to">alle</string>
+    <string name="plan_add_weekday_change">Aggiungi un cambio per alcuni giorni</string>
+    <string name="plan_err_block_order">La fine deve venire dopo l’inizio.</string>
+    <string name="plan_err_block_next">%1$s finisce alle %2$s, quindi %3$s può finire al più tardi alle %4$s. Accorcia prima %1$s, o scegli una fine più presto.</string>
+
+    <!-- 6.3 - the add and edit sheet's calendar schedule (D5, Q1, Q3) -->
+    <string name="plan_schedule">Programma</string>
+    <string name="plan_since_last_check_in">Dall’ultima spunta</string>
+    <string name="plan_on_the_calendar">Sul calendario</string>
+    <string name="plan_rule_daily">Ogni giorno</string>
+    <string name="plan_rule_once">Una volta</string>
+    <string name="plan_rule_weekdays">In giorni scelti</string>
+    <string name="plan_rule_every_n_days">Ogni tot giorni</string>
+    <string name="plan_rule_every_n_weeks">Ogni tot settimane</string>
+    <string name="plan_rule_times_per_day">Più volte al giorno</string>
+    <string name="plan_rule_times_per_week">Più volte a settimana</string>
+    <string name="plan_rule_every_n_hours">Ogni tot ore</string>
+    <string name="plan_how_many">Quante volte</string>
+    <string name="plan_on_any_of">In uno di questi giorni</string>
+    <string name="plan_suggest_note">Questa settimana l’app suggerisce %1$s. Confermi tu i giorni ogni settimana; nulla viene inserito finché non lo fai.</string>
+    <string name="plan_where">Dove</string>
+    <string name="plan_at_set_time">A un orario fisso…</string>
+    <string name="plan_length">Durata</string>
+    <string name="plan_note">Nota</string>
+    <string name="plan_optional">Facoltativa</string>
+    <string name="plan_area">Area</string>
+
+    <!-- 6.3 (D5, Q1) - the week's suggestion line -->
+    <string name="plan_suggested">suggerito</string>
+    <string name="plan_week_suggestion">%1$s, %2$s questa settimana — suggeriti %3$s.</string>
+    <string name="plan_confirm_day">Conferma %1$s</string>
+    <string name="plan_choose_days_button">Scegli i giorni</string>
+
+    <!-- 6.3 - pause -->
+    <string name="plan_pause_title">Sospendi</string>
+    <string name="plan_pause_body">In pausa esce dal programma; le spunte restano.</string>
+    <string name="plan_pause_open">Finché non la riprendo</string>
+    <string name="plan_pause_until">Fino a una data…</string>
+    <string name="plan_dont_pause">Non sospendere</string>
+    <string name="plan_resume">Riprendi</string>
+    <string name="plan_paused">In pausa</string>
+
+    <!-- 6.3 (D4) - the two neutral notes -->
+    <string name="plan_note_outside_before">%1$s, alle %2$s, viene prima che inizi %3$s (%4$s), quindi non è in nessuna fascia. Cambia l’orario, o fai iniziare %3$s prima.</string>
+    <string name="plan_note_outside_after">%1$s, alle %2$s, viene dopo la fine di %3$s (%4$s), quindi non è in nessuna fascia. Cambia l’orario, o fai finire %3$s più tardi.</string>
+    <string name="plan_note_overlap">%1$s (%2$s) e %3$s (%4$s) si sovrappongono di %5$s. Cambia gli orari di una delle due fasce per separarle.</string>
+
+    <plurals name="plan_times_this_week">
+        <item quantity="one">una volta</item>
+        <item quantity="other">%1$d volte</item>
+    </plurals>
+
+    <!-- 6.3 (plan Phase 5a) - the Day view -->
+    <string name="plan_today">Oggi</string>
+    <string name="plan_view_month">Mese</string>
+    <string name="plan_previous_day">Giorno precedente</string>
+    <string name="plan_next_day">Giorno successivo</string>
+    <string name="plan_outside_blocks">Fuori dalle fasce</string>
+    <string name="plan_projected">previsto</string>
+    <plurals name="plan_done_today">
+        <item quantity="one">%1$d fatta oggi</item>
+        <item quantity="other">%1$d fatte oggi</item>
+    </plurals>
+    <plurals name="plan_done_on_day">
+        <item quantity="one">%1$d fatta</item>
+        <item quantity="other">%1$d fatte</item>
+    </plurals>
+
+    <!-- 6.3 (plan Phase 5b) - edit mode's prompts -->
+    <string name="plan_move_title">Sposta %1$s</string>
+    <string name="plan_move_day">Giorno</string>
+    <string name="plan_move_block">Fascia</string>
+    <string name="plan_move_weekday_from">Ogni settimana da ora in poi, di %1$s</string>
+    <string name="plan_err_time_outside">Le %1$s cadono fuori da ogni fascia. Scegli un orario tra le %2$s e le %3$s.</string>
+    <string name="plan_editing">Stai modificando %1$s</string>
+
+    <!-- 6.3 (plan Phase 5c) - the sheet's calendar schedule, the blocks editor, pause -->
+    <string name="plan_edit_blocks">Modifica le fasce</string>
+    <string name="plan_paused_until">In pausa fino al %1$s</string>
+    <string name="plan_paused_open">In pausa finché non la riprendi</string>
+    <string name="plan_block_name">Nome</string>
+    <string name="plan_block_start">Inizia</string>
+    <string name="plan_block_end">Finisce</string>
+    <string name="plan_err_block_prev">%1$s inizia alle %2$s, quindi %3$s può iniziare al più presto alle %4$s. Sposta prima %1$s, o scegli un inizio più tardi.</string>
+    <string name="plan_remove">Rimuovi</string>
+    <string name="plan_save">Salva</string>
+    <string name="plan_more_options">Altre opzioni</string>
+    <string name="plan_active_from">Inizia il</string>
+    <string name="plan_active_until">Finisce il</string>
+    <string name="plan_none">Nessuna</string>
+    <string name="plan_err_n">Scegli un numero da %1$d a %2$d.</string>
+    <string name="plan_err_times_count">Indica %1$d orari, oppure lascia vuoto.</string>
+    <string name="plan_err_until">L’ultimo orario deve venire dopo il primo.</string>
+    <string name="plan_times_optional">Orari (facoltativi, per esempio 08:00, 20:00)</string>
+    <string name="plan_every_how_many">Ogni quanti</string>
+    <string name="plan_from">Dalle</string>
+    <string name="plan_until">Alle</string>
+    <string name="plan_date">Data</string>
+    <string name="plan_step_hours">ogni %1$d h, %2$s–%3$s</string>
+    <string name="plan_every_n_days_n">ogni %1$d giorni</string>
+    <string name="plan_every_n_weeks_n">ogni %1$d settimane</string>
+    <string name="plan_times_a_day_n">%1$d volte al giorno</string>
+    <string name="plan_times_a_week_n">%1$d volte a settimana</string>
+    <string name="plan_add_weekday_times">Orari per alcuni giorni</string>
+    <string name="plan_on_calendar_label">Sul calendario</string>
+
+    <!-- 6.3 (plan Phase 5d) - the Week view, by area, the keys -->
+    <string name="plan_today_marker">oggi</string>
+    <string name="plan_previous_week">Settimana precedente</string>
+    <string name="plan_next_week">Settimana successiva</string>
+    <string name="plan_keys_move">↑ ↓</string>
+    <string name="plan_key_move_to">Ctrl+M</string>
+    <string name="plan_key_edit">Invio</string>
+    <string name="plan_key_done">Esc</string>
+    <plurals name="plan_and_more">
+        <item quantity="one">e un’altra oggi</item>
+        <item quantity="other">e altre %1$d oggi</item>
+    </plurals>
+    <plurals name="plan_and_more_day">
+        <item quantity="one">e un’altra</item>
+        <item quantity="other">e altre %1$d</item>
+    </plurals>
+</resources>

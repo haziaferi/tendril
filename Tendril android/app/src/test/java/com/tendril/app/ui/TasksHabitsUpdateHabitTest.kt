@@ -41,7 +41,7 @@ class TasksHabitsUpdateHabitTest {
 
     private val habitDao = FakeHabitDao()
     private val habitCompletionDao = FakeHabitCompletionDao()
-    private val checkIn = CheckInHabitUseCase(habitDao, habitCompletionDao)
+    private val checkIn = CheckInHabitUseCase(habitDao, habitCompletionDao, com.tendril.app.domain.plan.HabitCalendarSource(com.tendril.app.sync.FakeHabitBlockDao(), com.tendril.app.sync.FakeHabitScheduleEditDao(), habitCompletionDao))
     private val coordinator = object : EntryScheduleCoordinator {
         override suspend fun onEntryChanged(entry: Entry) = Unit
         override suspend fun onEntryRemoved(entry: Entry) = Unit
@@ -55,6 +55,7 @@ class TasksHabitsUpdateHabitTest {
         return TasksHabitsViewModel(
             entryDao, habitDao, habitCompletionDao,
             ResolveEntryUseCase(entryDao, FakeEntryCompletionDao(), coordinator), coordinator, checkIn, TimeTracker(FakeTimeLogDao()),
+            com.tendril.app.domain.plan.HabitCalendarSource(com.tendril.app.sync.FakeHabitBlockDao(), com.tendril.app.sync.FakeHabitScheduleEditDao(), habitCompletionDao),
         )
     }
 

@@ -43,6 +43,7 @@ import com.tendril.app.ui.settings.TaskSettingsSection
 import com.tendril.app.ui.settings.ThemeSection
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.heading
+import com.tendril.app.ui.settings.LanguageSection
 
 /**
  * §0.6.15 — the desktop's Settings: the shared Claude section, and a line about the rest. The
@@ -64,6 +65,8 @@ fun DesktopSettingsScreen(core: WorkbenchCore, syncSection: @Composable () -> Un
             HorizontalDivider()
             Text("Theme", style = MaterialTheme.typography.heading, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
             ThemeSection(core.themeSettings, showOled = false)
+            HorizontalDivider()
+            LanguageSection(core.languageSettings)
             HorizontalDivider()
             // 14f·2 — the Calendar's opening view (`calendar_default_view`), shared with the phone's sheet.
             CalendarOpensOnSection(core.keyValueStore)

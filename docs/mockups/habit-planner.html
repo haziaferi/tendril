@@ -1,0 +1,559 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Habit Planner</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+/* Ink, solved by paletteFor(Register.INK, dark) and hueColours(h, palette) on 2026-09-29 — not hand-picked.
+   Block hues on Tendril's wheel: Morning 25, Midday 45, Afternoon 110, Evening 265, Night 205. */
+.ink-d{--bg:#1B1D21;--s2:#26282C;--text:#D8D8DA;--dim:#A9A9AC;--faint:#87888A;--accent:#A7AFBE;--on:#1B1D21;--soft:#3A3D44;--soft-text:#B6BBC6;--border:#35373B;--habit:#BC94D1;--habit-soft:#423A4B;
+ --b1:#CD8653;--b1t:#292525;--b2:#C6A339;--b2t:#292823;--b3:#51C639;--b3t:#1F2B23;--b4:#AA86DC;--b4t:#262530;--b5:#599ECF;--b5t:#20272F;--shadow:rgba(0,0,0,.45)}
+.ink-l{--bg:#FFFFFF;--s2:#F3F3F3;--text:#393936;--dim:#676764;--faint:#848482;--accent:#465163;--on:#FFFFFF;--soft:#E9EAEC;--soft-text:#444D5C;--border:#E9E9E9;--habit:#5D3376;--habit-soft:#E8E2EC;
+ --b1:#96582B;--b1t:#F7F2EE;--b2:#7B6523;--b2t:#F4F3ED;--b3:#307522;--b3t:#EEF4ED;--b4:#7439C6;--b4t:#F4EFFA;--b5:#2C6C9A;--b5t:#EEF3F7;--shadow:rgba(0,0,0,.14)}
+*{box-sizing:border-box}
+body{margin:0;background:#EEF0F3;color:#1B1B18;font:14px/1.45 Inter,system-ui,sans-serif;padding:24px}
+h1{font:600 24px/1.2 Inter,sans-serif;margin:0 0 4px}
+h2{font:600 16px/1.25 Inter,sans-serif;margin:36px 0 4px}
+.lead,.note{color:#5B5B58;max-width:100ch;margin:0 0 12px}
+.note{font-size:13px}
+.compare{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.badge{font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#5B5B58;margin:0 0 8px}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tab-num{font-variant-numeric:tabular-nums}
+
+/* ---------- the phone (1 px = 1 dp) ---------- */
+.phone{width:360px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 8px 24px var(--shadow)}
+.pbar{height:56px;display:flex;align-items:center;padding:0 16px;font-size:20px;font-weight:600;border-bottom:1px solid var(--border);flex:none}
+.ptabs{height:48px;display:flex;align-items:center;gap:4px;padding:0 8px;border-bottom:1px solid var(--border);flex:none}
+.tab{height:40px;padding:0 12px;border-radius:6px;display:inline-flex;align-items:center;font-size:16px;font-weight:600;color:var(--dim)}
+.tab.on{background:var(--soft);color:var(--text)}
+.views{display:flex;align-items:center;gap:6px;padding:8px 12px;flex:none}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.seg span{height:36px;padding:0 10px;white-space:nowrap;display:inline-flex;align-items:center;font-size:14px;font-weight:500;color:var(--dim)}
+.seg span.on{background:var(--soft);color:var(--text)}
+.dayhead{display:flex;align-items:baseline;justify-content:space-between;padding:4px 16px 8px}
+.dayhead b{font-size:18px;font-weight:600}
+.dayhead span{font-size:14px;color:var(--dim)}
+
+/* a block: the hue tick, the name, the range; then the rail of set times, then the rest */
+.block{padding:4px 0 8px}
+.bh{display:flex;align-items:center;gap:8px;height:36px;padding:0 16px;font-size:14px;font-weight:600}
+.bh i{width:4px;height:16px;border-radius:2px;flex:none}
+.bh .rng{font-weight:400;color:var(--dim)}
+.bh .now{font-weight:400;color:var(--dim)}
+.bh .now::before{content:"· "}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;font-size:16px;position:relative}
+.row .t{flex:1;min-width:0}
+.row .t small{display:block;font-size:14px;color:var(--dim)}
+.row .time,.row .meta{flex:none;font-size:14px;color:var(--dim);text-align:right}
+.rail{position:relative}
+.anyl{font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding:8px 16px 0 72px}
+.row.sel{background:var(--soft)}
+/* the check: its own 48 dp target at the row's end, clear of the title */
+.ck{width:48px;height:48px;flex:none;display:inline-flex;align-items:center;justify-content:center;margin:0 -12px}
+.ck span{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--dim);display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--on)}
+.ck.done span{background:var(--accent);border-color:var(--accent)}
+.anytime .bh i{background:var(--faint)}
+.pnote{display:flex;gap:12px;padding:12px 16px;font-size:14px;color:var(--dim);border-top:1px solid var(--border)}
+.pnote i{font-style:normal;width:20px;height:20px;border:1.5px solid var(--dim);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:none;margin-top:1px}
+.suggest{margin:4px 16px 8px;padding:12px;border:1px solid var(--border);border-radius:6px;font-size:14px}
+.suggest p{margin:0 0 8px}
+.btn{height:36px;padding:0 14px;border-radius:6px;font-size:14px;font-weight:500;display:inline-flex;align-items:center;border:1px solid var(--border)}
+.btn.p{background:var(--accent);color:var(--on);border-color:var(--accent)}
+.btn.g{border-color:transparent;color:var(--text)}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+
+/* the edit toolbar, docked at the bottom */
+.tbar{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;height:64px;padding:0 4px;background:var(--s2);border-top:1px solid var(--border)}
+.tbar button{min-width:56px;height:56px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--text);border-radius:6px}
+.tbar button b{font-size:18px;font-weight:500;line-height:1}
+.tbar button.done{color:var(--accent);font-weight:600}
+.menu{position:absolute;right:64px;bottom:72px;width:200px;background:var(--s2);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px var(--shadow);padding:4px 0}
+.menu div{height:48px;display:flex;align-items:center;padding:0 16px;font-size:16px}
+.menu hr{border:0;border-top:1px solid var(--border);margin:4px 0}
+
+/* sheets and prompts */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.24)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:12px 20px 20px}
+.handle{width:32px;height:4px;border-radius:2px;background:var(--faint);margin:0 auto 12px}
+.sheet h3{font:600 20px/1.3 Inter,sans-serif;margin:0 0 4px}
+.sheet .sub{font-size:14px;color:var(--dim);margin:0 0 12px}
+.opt{display:flex;align-items:center;gap:12px;min-height:48px;font-size:16px}
+.opt .rd{width:20px;height:20px;border-radius:50%;border:2px solid var(--dim);flex:none}
+.opt .rd.on{border:6px solid var(--accent)}
+.days{display:flex;gap:6px;padding:0 0 8px 32px}
+.days span{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:var(--dim)}
+.days span.on{background:var(--soft);color:var(--text);border-color:var(--soft);font-weight:600}
+.field{height:48px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;padding:0 12px;font-size:16px;margin:4px 0 12px;gap:12px}
+.field .lab{width:96px;color:var(--dim);font-size:14px;flex:none}
+.field .ph{color:var(--dim)}
+.foot{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.flabel{font-size:14px;font-weight:600;margin:12px 0 4px}
+.chiprow{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}
+.chip{height:36px;padding:0 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--soft);border-color:var(--soft);font-weight:600}
+.chip i{width:4px;height:14px;border-radius:2px}
+.refuse{font-size:14px;color:var(--dim);margin:-4px 0 8px}
+
+/* ---------- the desktop (two panes from 840 dp) ---------- */
+.desk{width:1040px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 8px 24px var(--shadow);display:flex;flex-direction:column;position:relative}
+.dbar{height:52px;display:flex;align-items:center;border-bottom:1px solid var(--border);font-size:18px;font-weight:600;padding-left:100px}
+.dbody{display:flex;min-height:0}
+.drail{width:84px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:6px}
+.ri{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--dim);width:64px;padding:6px 0;border-radius:6px}
+.ri.on{background:var(--soft);color:var(--text)}
+.ri i{width:18px;height:18px;border-radius:4px;border:1.5px solid currentColor;display:block}
+.dlist{width:440px;flex:none;border-right:1px solid var(--border);display:flex;flex-direction:column;position:relative}
+.dtabs{height:44px;display:flex;align-items:center;gap:4px;padding:0 8px;border-bottom:1px solid var(--border)}
+.dtabs .tab{height:28px;font-size:14px;padding:0 10px}
+.dviews{display:flex;align-items:center;gap:8px;padding:8px 12px}
+.dviews .seg span{height:28px;font-size:13px;padding:0 10px}
+.dviews .date{margin-left:auto;font-size:13px;color:var(--dim)}
+.desk .bh{height:30px;padding:0 12px;font-size:13px}
+.desk .row{min-height:29px;font-size:14px;padding:0 12px;gap:8px}
+.desk .row .time,.desk .row .meta{font-size:12.5px}
+.desk .row .t small{display:inline;font-size:12.5px;margin-left:8px}
+.desk .anyl{padding:4px 12px 0 60px;font-size:11px}
+.desk .ck{width:28px;height:28px;margin:0 -4px}
+.desk .ck span{width:16px;height:16px;border-width:1.5px;font-size:10px}
+.desk .dayhead{padding:0 12px 4px}.desk .dayhead b{font-size:15px}.desk .dayhead span{font-size:12.5px}
+.desk .tbar{height:44px;padding:0 6px}
+.desk .tbar button{min-width:0;height:32px;flex-direction:row;gap:6px;padding:0 10px;font-size:13px;white-space:nowrap}
+.desk .tbar button b{font-size:14px}
+.desk kbd{font:500 11px Inter,sans-serif;color:var(--dim);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+.dpane{flex:1;padding:20px;min-width:0}
+.dpane h3{font:600 18px/1.3 Inter,sans-serif;margin:0 0 10px}
+.dr{display:flex;gap:16px;min-height:29px;align-items:center;font-size:14px}
+.dr .k{width:110px;color:var(--dim);flex:none}
+.eyebrow{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:16px 0 6px}
+.dpane .chip{height:28px;font-size:12.5px;padding:0 10px}
+
+.mono{--b1:var(--faint);--b2:var(--faint);--b3:var(--faint);--b4:var(--faint);--b5:var(--faint);--b1t:var(--s2);--b2t:transparent;--b3t:var(--s2);--b4t:transparent;--b5t:var(--s2)}
+/* ---------- direction B: the day as a timeline of bands ---------- */
+.tl{position:relative;margin:0 12px 12px 0}
+.band{display:flex;border-radius:6px;margin:0 0 4px 0}
+.band .gut{width:56px;flex:none;padding:8px 0 0 12px;font-size:12px;color:var(--dim)}
+.band .gut b{display:block;font-size:13px;font-weight:600;color:var(--text)}
+.band .in{flex:1;padding:6px 8px 8px;border-left:3px solid}
+.pin{display:flex;align-items:center;gap:8px;min-height:44px;font-size:16px}
+.pin .time{width:48px;font-size:14px;color:var(--dim)}
+.pin .t{flex:1}
+.flow{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0}
+.fchip{height:44px;padding:0 6px 0 12px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;font-size:15px}
+.fchip .ck{width:44px;height:44px;margin:0}
+.fchip .ck span{width:20px;height:20px}
+.nowline{position:relative;height:0;border-top:2px solid var(--accent);margin:2px 0 6px 56px}
+.nowline span{position:absolute;left:-52px;top:-9px;font-size:11px;font-weight:600;color:var(--accent);background:var(--bg);padding:0 2px}
+.desk .pin{min-height:29px;font-size:14px}.desk .pin .time{font-size:12.5px;width:44px}
+.desk .fchip{height:28px;font-size:13px;padding:0 4px 0 10px}.desk .fchip .ck{width:24px;height:24px}.desk .fchip .ck span{width:14px;height:14px}
+
+/* ---------- the week ---------- */
+.wgrid{display:grid;grid-template-columns:92px repeat(7,1fr);border-top:1px solid var(--border)}
+.wgrid>div{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;font-size:12.5px;min-height:28px}
+.wgrid .wh{font-weight:600;font-size:13px;text-align:left}
+.wgrid .wh.today{background:var(--soft)}
+.wgrid .wh.past{color:var(--dim);font-weight:500}
+.wgrid .wb{font-weight:600;font-size:12.5px;display:flex;flex-direction:column;gap:2px}
+.wgrid .wb small{font-weight:400;color:var(--dim)}
+.wn{display:flex;align-items:center;gap:6px}.wn i{width:4px;height:14px;border-radius:2px;flex:none}
+.we{display:block;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.we .tm{color:var(--dim);font-variant-numeric:tabular-nums}
+.we.done::before{content:"✓ ";color:var(--dim)}
+.we.sug{color:var(--dim);font-style:italic}
+.pweek .wd{padding:8px 16px;border-bottom:1px solid var(--border)}
+.pweek .wd b{display:block;font-size:16px;margin-bottom:2px}
+.pweek .wd b.past{color:var(--dim);font-weight:500}
+.pweek .wl{font-size:14px;line-height:22px;color:var(--text)}
+.pweek .wl em{font-style:normal;color:var(--dim)}
+</style></head><body>
+
+<h1>Habit Planner — the Habits tab</h1>
+<p class="lead">Phase 1 of <code>docs/plans/2026-09-29-habit-planner.md</code>. The planner's Day and Week views replace the Habits tab's Today and Week (V1); an interval habit sits in its block or under <i>Any time today</i> (V2); a tap selects an entry and docks the edit toolbar at the bottom (V3). Two directions for the Day view by time (V4), one for everything else. Colours are Ink's own, solved by <code>paletteFor</code> and <code>hueColours</code>; the five block hues come from Tendril's hue wheel, the planner's peach, gold, sage, lavender and sky mapped onto it (Q2). §0.5.2 holds everywhere: a done entry is marked; an entry not done is plain — never red, never "missed", never a fraction. Sample: the golden <code>base-rules</code> habits on Wednesday 1 October 2026, plus two interval habits. 1 px = 1 dp; the phone is drawn at full length rather than cropped to a screen.</p>
+
+<!-- ======================================================= A -->
+<h2>Day by time — direction A, <i>chosen</i> (2026-09-29): blocks as sections, one line per entry</h2>
+<p class="note"><b>Revised after the first review</b> (too much colour; the entries scattered). Each block is a heading — its hue as a small mark beside the name (the one place a block's colour appears, the person's rule), its name, its range, and <i>· now</i> on the current one. Every entry is the app's own habit row: the check leading (<code>HabitCheck</code>, filled in the accent when done, not the habit hue), the title, and a set time as a dim number at the row's end; one line each, at the timed-habit row's 48 dp (<code>rowHeightDp - 8</code>). Set times still come first in a block, in time order; the entries without one follow. No sub-labels, no cadence lines — the cadence is in the habit's sheet. So one left edge for every check, one for every title, one right edge for every time. Besides those marks, the only colour on the screen is the accent in the done checks.</p>
+<div class="compare">
+<div><div class="badge">Ink dark · phone</div>
+<div class="phone ink-d">
+<div class="pbar">Tasks</div>
+<div class="ptabs"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div>
+<div class="views"><span class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></span><span class="seg"><span class="on">By time</span><span>By area</span></span></div>
+<div class="dayhead"><b>Wednesday 1 October</b><span>5 done today</span></div>
+
+<section class="block"><div class="bh"><i style="background:var(--b1)"></i>Morning <span class="rng tab-num">06:30–09:00</span></div>
+<div class="rail">
+<div class="row"><button class="ck done" aria-label="Water at 07:00, done"><span>✓</span></button><span class="t">Water</span><span class="time tab-num">07:00</span></div>
+<div class="row"><button class="ck done" aria-label="Meds at 08:30, done"><span>✓</span></button><span class="t">Meds</span><span class="time tab-num">08:30</span></div>
+<div class="row"><button class="ck done" aria-label="Make the bed, done"><span>✓</span></button><span class="t">Make the bed</span></div>
+<div class="row"><button class="ck done" aria-label="Stretch, done"><span>✓</span></button><span class="t">Stretch</span></div>
+<div class="row"><button class="ck done" aria-label="Vitamins, done"><span>✓</span></button><span class="t">Vitamins</span></div>
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div>
+</div></section>
+
+<section class="block"><div class="bh"><i style="background:var(--b2)"></i>Midday <span class="rng tab-num">09:00–13:00</span><span class="now">now</span></div>
+<div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 10:00"><span></span></button><span class="t">Water</span><span class="time tab-num">10:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Deep study"><span></span></button><span class="t">Deep study</span></div>
+</div></section>
+
+<section class="block"><div class="bh"><i style="background:var(--b3)"></i>Afternoon <span class="rng tab-num">13:00–18:00</span></div>
+<div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 13:00"><span></span></button><span class="t">Water</span><span class="time tab-num">13:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Dentist"><span></span></button><span class="t">Dentist</span><span class="time tab-num">15:30</span></div>
+<div class="row"><button class="ck" aria-label="Check in Water at 16:00"><span></span></button><span class="t">Water</span><span class="time tab-num">16:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Run"><span></span></button><span class="t">Run</span></div>
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div>
+</div></section>
+
+<section class="block"><div class="bh"><i style="background:var(--b4)"></i>Evening <span class="rng tab-num">18:00–21:30</span></div>
+<div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 19:00"><span></span></button><span class="t">Water</span><span class="time tab-num">19:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Meds at 20:00"><span></span></button><span class="t">Meds</span><span class="time tab-num">20:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Vitamins"><span></span></button><span class="t">Vitamins</span></div>
+</div></section>
+
+<section class="block"><div class="bh"><i style="background:var(--b5)"></i>Night <span class="rng tab-num">21:30–23:30</span></div>
+<div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 22:00"><span></span></button><span class="t">Water</span><span class="time tab-num">22:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Journal"><span></span></button><span class="t">Journal</span></div>
+<div class="row"><button class="ck" aria-label="Check in Reading"><span></span></button><span class="t">Reading</span></div>
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div>
+</div></section>
+
+<section class="block anytime"><div class="bh">Any time today</div>
+<div class="row"><button class="ck" aria-label="Check in Water the plants"><span></span></button><span class="t">Water the plants</span></div>
+</section>
+</div></div>
+
+<div><div class="badge">Ink light · phone, edit mode on <i>Deep study</i></div>
+<div class="phone ink-l">
+<div class="pbar">Tasks</div>
+<div class="ptabs"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div>
+<div class="views"><span class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></span><span class="seg"><span class="on">By time</span><span>By area</span></span></div>
+<div class="dayhead"><b>Wednesday 1 October</b><span>5 done today</span></div>
+<section class="block"><div class="bh"><i style="background:var(--b1)"></i>Morning <span class="rng tab-num">06:30–09:00</span></div>
+<div class="rail">
+<div class="row"><button class="ck done" aria-label="Water at 07:00, done"><span>✓</span></button><span class="t">Water</span><span class="time tab-num">07:00</span></div>
+<div class="row"><button class="ck done" aria-label="Meds at 08:30, done"><span>✓</span></button><span class="t">Meds</span><span class="time tab-num">08:30</span></div>
+<div class="row"><button class="ck done" aria-label="Make the bed, done"><span>✓</span></button><span class="t">Make the bed</span></div>
+<div class="row"><button class="ck done" aria-label="Stretch, done"><span>✓</span></button><span class="t">Stretch</span></div>
+<div class="row"><button class="ck done" aria-label="Vitamins, done"><span>✓</span></button><span class="t">Vitamins</span></div>
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div>
+</div></section>
+<section class="block"><div class="bh"><i style="background:var(--b2)"></i>Midday <span class="rng tab-num">09:00–13:00</span><span class="now">now</span></div>
+<div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 10:00"><span></span></button><span class="t">Water</span><span class="time tab-num">10:00</span></div>
+<div class="row sel" aria-selected="true"><button class="ck" aria-label="Check in Deep study"><span></span></button><span class="t">Deep study</span></div>
+</div></section>
+<section class="block"><div class="bh"><i style="background:var(--b3)"></i>Afternoon <span class="rng tab-num">13:00–18:00</span></div>
+<div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 13:00"><span></span></button><span class="t">Water</span><span class="time tab-num">13:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Dentist"><span></span></button><span class="t">Dentist</span><span class="time tab-num">15:30</span></div>
+</div></section>
+<div class="menu" role="menu" aria-label="More"><div role="menuitem">Skip this one…</div><div role="menuitem">Pause…</div><hr><div role="menuitem">Move to Trash</div></div>
+<div class="tbar" role="toolbar" aria-label="Edit Deep study">
+<button aria-label="Move up"><b>↑</b>Up</button><button aria-label="Move down"><b>↓</b>Down</button><button><b>⇄</b>Move to…</button><button><b>✎</b>Edit</button><button aria-expanded="true"><b>⋯</b>More</button><button class="done"><b>✓</b>Done</button>
+</div>
+</div></div>
+</div>
+<p class="note">Edit mode, per V3: a tap on a title selects the entry (a soft band, no border) and the toolbar docks at the bottom, 56 dp targets on a 64 dp bar, above the thumb and away from the rows. ↑ at the top of Midday goes to the bottom of Morning; ↓ at the bottom goes to the top of Afternoon. <i>Skip</i>, <i>Pause</i> and <i>Move to Trash</i> live under <i>More</i>, so none of the bar's one-tap buttons can remove anything. <i>Done</i> — or Back, or a tap on empty space — closes it. Counted: a move within the day is two taps, a move to another block or day three, a title change two.</p>
+
+<h2>Direction A on the desktop — two panes, the selected habit on the right</h2>
+<p class="note">Same structure at the desktop's 29 px rows. The detail pane is the habit's, as it is today; the toolbar docks along the list pane's foot with its keys shown — ↑/↓ move, <kbd>Ctrl+M</kbd> Move to… (a bare letter is the list's type-ahead), <kbd>Enter</kbd> Edit, <kbd>Esc</kbd> Done — the 14e keyboard model extended, not replaced.</p>
+<div class="desk ink-d">
+<div class="dbar">Tasks</div>
+<div class="dbody">
+<div class="drail"><div class="ri"><i></i>Pages</div><div class="ri"><i></i>Calendar</div><div class="ri on"><i></i>Tasks</div><div class="ri"><i></i>Road Map</div><div class="ri"><i></i>Settings</div></div>
+<div class="dlist">
+<div class="dtabs"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div>
+<div class="dviews"><span class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></span><span class="seg"><span class="on">By time</span><span>By area</span></span><span class="date">‹ Wed 1 Oct ›</span></div>
+<div class="dayhead"><b>Wednesday 1 October</b><span>5 done today</span></div>
+<section class="block"><div class="bh"><i style="background:var(--b1)"></i>Morning <span class="rng tab-num">06:30–09:00</span></div><div class="rail">
+<div class="row"><button class="ck done" aria-label="Water at 07:00, done"><span>✓</span></button><span class="t">Water</span><span class="time tab-num">07:00</span></div>
+<div class="row"><button class="ck done" aria-label="Meds at 08:30, done"><span>✓</span></button><span class="t">Meds</span><span class="time tab-num">08:30</span></div>
+<div class="row"><button class="ck done" aria-label="Make the bed, done"><span>✓</span></button><span class="t">Make the bed</span></div>
+<div class="row"><button class="ck done" aria-label="Stretch, done"><span>✓</span></button><span class="t">Stretch</span></div>
+<div class="row"><button class="ck done" aria-label="Vitamins, done"><span>✓</span></button><span class="t">Vitamins</span></div>
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div></div></section>
+<section class="block"><div class="bh"><i style="background:var(--b2)"></i>Midday <span class="rng tab-num">09:00–13:00</span><span class="now">now</span></div><div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 10:00"><span></span></button><span class="t">Water</span><span class="time tab-num">10:00</span></div>
+<div class="row sel"><button class="ck" aria-label="Check in Deep study"><span></span></button><span class="t">Deep study</span></div></div></section>
+<section class="block"><div class="bh"><i style="background:var(--b3)"></i>Afternoon <span class="rng tab-num">13:00–18:00</span></div><div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Water at 13:00"><span></span></button><span class="t">Water</span><span class="time tab-num">13:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Dentist"><span></span></button><span class="t">Dentist</span><span class="time tab-num">15:30</span></div>
+<div class="row"><button class="ck" aria-label="Check in Water at 16:00"><span></span></button><span class="t">Water</span><span class="time tab-num">16:00</span></div>
+<div class="row"><button class="ck" aria-label="Check in Run"><span></span></button><span class="t">Run</span></div>
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div></div></section>
+<div class="tbar" role="toolbar" aria-label="Edit Deep study"><button><b>↑</b>Up</button><button><b>↓</b>Down</button><button>Move to… <kbd>Ctrl+M</kbd></button><button>Edit <kbd>Enter</kbd></button><button>More…</button><button class="done">Done <kbd>Esc</kbd></button></div>
+</div>
+<div class="dpane"><h3>Deep study</h3>
+<div class="dr"><span class="k">Repeats</span><span>On weekdays</span></div>
+<div class="dr"><span class="k">In</span><span>Midday, any time</span></div>
+<div class="dr"><span class="k">For</span><span>2h</span></div>
+<div class="dr"><span class="k">Area</span><span>Study</span></div>
+<div class="eyebrow">Presence</div>
+<div style="font-size:14px;line-height:22px">Twelve times this month<br>Usually late morning<br>Last: Tuesday, 30 Sep</div>
+<div class="chiprow" style="margin-top:14px"><span class="chip">Edit</span><span class="chip">▶ Start timer</span><span class="chip">Move to Trash</span></div></div>
+</div></div>
+
+<!-- ======================================================= B -->
+<h2>Day by time — direction B, <i>not taken</i> (2026-09-29): the day as bands, set times pinned, the rest as chips</h2>
+<p class="note">The blocks become bands (neutral since the review: alternate bands on <code>surface2</code>, a faint 3 dp edge), their names in a gutter where Plan mode keeps its hours. Set times read as a short timetable; <i>Any time</i> entries wrap as chips, so a block with five flexible habits costs two lines instead of five rows. A now line crosses the current band. More of the day on one screen, and the day's shape is visible — at the cost of a narrower title column and chips that wrap unpredictably with long titles. Chips keep 44 dp; the check inside each is a 44 dp target.</p>
+<div class="compare">
+<div><div class="badge">Ink dark · phone</div>
+<div class="phone ink-d mono">
+<div class="pbar">Tasks</div>
+<div class="ptabs"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div>
+<div class="views"><span class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></span><span class="seg"><span class="on">By time</span><span>By area</span></span></div>
+<div class="dayhead"><b>Wednesday 1 October</b><span>5 done today</span></div>
+<div class="tl">
+<div class="band" style="background:var(--b1t)"><div class="gut"><b>Morning</b><span class="tab-num">06:30</span></div><div class="in" style="border-color:var(--b1)">
+<div class="pin"><span class="time tab-num">07:00</span><span class="t">Water</span><button class="ck done" aria-label="Water at 07:00, done"><span>✓</span></button></div>
+<div class="pin"><span class="time tab-num">08:30</span><span class="t">Meds</span><button class="ck done" aria-label="Meds at 08:30, done"><span>✓</span></button></div>
+<div class="flow"><span class="fchip">Make the bed<button class="ck done" aria-label="Make the bed, done"><span>✓</span></button></span><span class="fchip">Stretch<button class="ck done" aria-label="Stretch, done"><span>✓</span></button></span><span class="fchip">Vitamins<button class="ck done" aria-label="Vitamins, done"><span>✓</span></button></span><span class="fchip">Tidy<button class="ck" aria-label="Check in Tidy"><span></span></button></span></div>
+</div></div>
+<div class="band" style="background:var(--b2t)"><div class="gut"><b>Midday</b><span class="tab-num">09:00</span></div><div class="in" style="border-color:var(--b2)">
+<div class="pin"><span class="time tab-num">10:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 10:00"><span></span></button></div>
+<div class="nowline" style="margin-left:0"><span style="left:-4px;top:-18px">Now 11:20</span></div>
+<div class="flow"><span class="fchip">Deep study<button class="ck" aria-label="Check in Deep study"><span></span></button></span></div>
+</div></div>
+<div class="band" style="background:var(--b3t)"><div class="gut"><b>After&shy;noon</b><span class="tab-num">13:00</span></div><div class="in" style="border-color:var(--b3)">
+<div class="pin"><span class="time tab-num">13:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 13:00"><span></span></button></div>
+<div class="pin"><span class="time tab-num">15:30</span><span class="t">Dentist</span><button class="ck" aria-label="Check in Dentist"><span></span></button></div>
+<div class="pin"><span class="time tab-num">16:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 16:00"><span></span></button></div>
+<div class="flow"><span class="fchip">Run<button class="ck" aria-label="Check in Run"><span></span></button></span><span class="fchip">Tidy<button class="ck" aria-label="Check in Tidy"><span></span></button></span></div>
+</div></div>
+<div class="band" style="background:var(--b4t)"><div class="gut"><b>Evening</b><span class="tab-num">18:00</span></div><div class="in" style="border-color:var(--b4)">
+<div class="pin"><span class="time tab-num">19:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 19:00"><span></span></button></div>
+<div class="pin"><span class="time tab-num">20:00</span><span class="t">Meds</span><button class="ck" aria-label="Check in Meds at 20:00"><span></span></button></div>
+<div class="flow"><span class="fchip">Vitamins<button class="ck" aria-label="Check in Vitamins"><span></span></button></span></div>
+</div></div>
+<div class="band" style="background:var(--b5t)"><div class="gut"><b>Night</b><span class="tab-num">21:30</span></div><div class="in" style="border-color:var(--b5)">
+<div class="pin"><span class="time tab-num">22:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 22:00"><span></span></button></div>
+<div class="flow"><span class="fchip">Journal<button class="ck" aria-label="Check in Journal"><span></span></button></span><span class="fchip">Reading<button class="ck" aria-label="Check in Reading"><span></span></button></span><span class="fchip">Tidy<button class="ck" aria-label="Check in Tidy"><span></span></button></span></div>
+</div></div>
+<div class="band" style="background:var(--s2)"><div class="gut"><b>Any time</b></div><div class="in" style="border-color:var(--faint)">
+<div class="flow"><span class="fchip">Water the plants<button class="ck" aria-label="Check in Water the plants"><span></span></button></span></div>
+</div></div>
+</div>
+</div></div>
+
+<div><div class="badge">Ink light · desktop list pane</div>
+<div class="desk ink-l mono" style="width:460px">
+<div class="dtabs"><span class="tab">Tasks</span><span class="tab on">Habits</span><span class="tab">Merged</span></div>
+<div class="dviews"><span class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></span><span class="seg"><span class="on">By time</span><span>By area</span></span></div>
+<div class="dayhead"><b>Wednesday 1 October</b><span>5 done today</span></div>
+<div class="tl">
+<div class="band" style="background:var(--b1t)"><div class="gut"><b>Morning</b><span class="tab-num">06:30</span></div><div class="in" style="border-color:var(--b1)">
+<div class="pin"><span class="time tab-num">07:00</span><span class="t">Water</span><button class="ck done" aria-label="Water at 07:00, done"><span>✓</span></button></div>
+<div class="pin"><span class="time tab-num">08:30</span><span class="t">Meds</span><button class="ck done" aria-label="Meds at 08:30, done"><span>✓</span></button></div>
+<div class="flow"><span class="fchip">Make the bed<button class="ck done" aria-label="Make the bed, done"><span>✓</span></button></span><span class="fchip">Stretch<button class="ck done" aria-label="Stretch, done"><span>✓</span></button></span><span class="fchip">Vitamins<button class="ck done" aria-label="Vitamins, done"><span>✓</span></button></span><span class="fchip">Tidy<button class="ck" aria-label="Check in Tidy"><span></span></button></span></div></div></div>
+<div class="band" style="background:var(--b2t)"><div class="gut"><b>Midday</b><span class="tab-num">09:00</span></div><div class="in" style="border-color:var(--b2)">
+<div class="pin"><span class="time tab-num">10:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 10:00"><span></span></button></div>
+<div class="flow"><span class="fchip">Deep study<button class="ck" aria-label="Check in Deep study"><span></span></button></span></div></div></div>
+<div class="band" style="background:var(--b3t)"><div class="gut"><b>After&shy;noon</b><span class="tab-num">13:00</span></div><div class="in" style="border-color:var(--b3)">
+<div class="pin"><span class="time tab-num">13:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 13:00"><span></span></button></div>
+<div class="pin"><span class="time tab-num">15:30</span><span class="t">Dentist</span><button class="ck" aria-label="Check in Dentist"><span></span></button></div>
+<div class="pin"><span class="time tab-num">16:00</span><span class="t">Water</span><button class="ck" aria-label="Check in Water at 16:00"><span></span></button></div>
+<div class="flow"><span class="fchip">Run<button class="ck" aria-label="Check in Run"><span></span></button></span><span class="fchip">Tidy<button class="ck" aria-label="Check in Tidy"><span></span></button></span></div></div></div>
+</div></div></div>
+</div>
+
+<!-- ======================================================= by area -->
+<h2>Day by area — Labels as areas (D8), direction A's rows</h2>
+<p class="note">The same entries grouped by Label, each group in time order: set times first with their time, then the rest with their block as the meta. A habit with no Label gathers under <i>No area</i>, last. Labels are headings in text, as the blocks are; their hues are left to the Pages filter row.</p>
+<div class="compare"><div><div class="badge">Ink dark · phone</div>
+<div class="phone ink-d">
+<div class="views"><span class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></span><span class="seg"><span>By time</span><span class="on">By area</span></span></div>
+<div class="dayhead"><b>Wednesday 1 October</b><span>5 done today</span></div>
+<section class="block"><div class="bh">Health</div><div class="rail">
+<div class="row"><button class="ck done" aria-label="Water at 07:00, done"><span>✓</span></button><span class="t">Water</span><span class="time tab-num">07:00</span></div>
+<div class="row"><button class="ck done" aria-label="Meds at 08:30, done"><span>✓</span></button><span class="t">Meds</span><span class="time tab-num">08:30</span></div>
+<div class="row"><button class="ck" aria-label="Check in Dentist"><span></span></button><span class="t">Dentist</span><span class="time tab-num">15:30</span></div>
+<div class="row"><button class="ck done" aria-label="Stretch, done"><span>✓</span></button><span class="t">Stretch</span></div>
+<div class="row"><button class="ck" aria-label="Check in Run"><span></span></button><span class="t">Run</span></div></div></section>
+<section class="block"><div class="bh">Home</div><div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Tidy"><span></span></button><span class="t">Tidy</span></div>
+<div class="row"><button class="ck" aria-label="Check in Water the plants"><span></span></button><span class="t">Water the plants</span></div></div></section>
+<section class="block"><div class="bh">Study</div><div class="rail">
+<div class="row"><button class="ck" aria-label="Check in Deep study"><span></span></button><span class="t">Deep study</span></div></div></section>
+<section class="block anytime"><div class="bh">No area</div><div class="rail">
+<div class="row"><button class="ck done" aria-label="Make the bed, done"><span>✓</span></button><span class="t">Make the bed</span></div></div></section>
+</div></div>
+<div style="max-width:420px"><p class="note" style="margin-top:28px">A habit several times a day collapses to one row in <i>By area</i> — its next occurrence's time, and <i>and 5 more today</i> — with each occurrence still checkable from <i>By time</i>. <b>Open:</b> whether By area should list every occurrence instead; the collapsed row is proposed because Water alone would otherwise fill the Health group.</p></div>
+</div>
+
+<!-- ======================================================= week -->
+<h2>Week by time — the desktop grid, the phone's day list</h2>
+<p class="note">Desktop: blocks down, days across, set times with their time. Past days are read-only and a little quieter — their heading dimmed, never their entries; a done entry is ticked in the habit hue, an entry not done is simply listed. Today's column is marked with the soft band. <i>X times a week</i> before confirmation shows its suggested days in italics, placing nothing (Q1). Phone: one block of text per day, blocks as run-in labels; a tap on a day opens its Day view.</p>
+<div class="desk ink-d" style="width:1040px"><div class="dbar" style="padding-left:16px">Week 40 · 29 Sep – 5 Oct</div>
+<div class="wgrid">
+<div></div><div class="wh past">Mon 29</div><div class="wh past">Tue 30</div><div class="wh today">Wed 1</div><div class="wh">Thu 2</div><div class="wh">Fri 3</div><div class="wh">Sat 4</div><div class="wh">Sun 5</div>
+<div class="wb"><span class="wn"><i style="background:var(--b1)"></i>Morning</span><small class="tab-num">06:30–09:00</small><small class="tab-num">Sat, Sun 08:00–10:30</small></div><!-- the Saturday note below is illustrative: Midday's weekend override is drawn as 10:00, not the golden 10:30, to show the flag -->
+
+<div><span class="we done"><span class="tm">07:00</span> Water</span><span class="we done"><span class="tm">08:30</span> Meds</span><span class="we done">Stretch</span><span class="we">Tidy</span></div>
+<div><span class="we done"><span class="tm">07:00</span> Water</span><span class="we done"><span class="tm">08:30</span> Meds</span><span class="we done">Stretch</span><span class="we done">Vitamins</span></div>
+<div><span class="we done"><span class="tm">07:00</span> Water</span><span class="we done"><span class="tm">08:30</span> Meds</span><span class="we done">Stretch</span><span class="we">Tidy</span></div>
+<div><span class="we"><span class="tm">07:00</span> Water</span><span class="we"><span class="tm">08:30</span> Meds</span><span class="we">Stretch</span><span class="we">Tidy</span></div>
+<div><span class="we"><span class="tm">07:00</span> Water</span><span class="we"><span class="tm">08:30</span> Meds</span><span class="we">Stretch</span><span class="we">Tidy</span></div>
+<div><span class="we"><span class="tm">08:30</span> Meds</span><span class="we"><span class="tm">10:00</span> Water</span><span class="we">Stretch</span></div>
+<div><span class="we"><span class="tm">08:30</span> Meds</span><span class="we"><span class="tm">10:00</span> Water</span><span class="we">Stretch</span></div>
+<div class="wb"><span class="wn"><i style="background:var(--b2)"></i>Midday</span><small class="tab-num">09:00–13:00</small></div>
+<div><span class="we done"><span class="tm">09:00</span> Call home</span><span class="we done">Deep study</span></div>
+<div><span class="we done"><span class="tm">10:00</span> Water</span><span class="we">Deep study</span></div>
+<div><span class="we"><span class="tm">10:00</span> Water</span><span class="we">Deep study</span></div>
+<div><span class="we"><span class="tm">10:00</span> Water</span><span class="we">Deep study</span></div>
+<div><span class="we"><span class="tm">10:00</span> Water</span><span class="we">Deep study</span></div>
+<div><span class="we">Deep clean</span><span class="we">Groceries</span></div>
+<div><span class="we">—</span></div>
+<div class="wb"><span class="wn"><i style="background:var(--b3)"></i>Afternoon</span><small class="tab-num">13:00–18:00</small></div>
+<div><span class="we done">Run</span><span class="we done">Review</span></div>
+<div><span class="we">Laundry</span></div>
+<div><span class="we"><span class="tm">15:30</span> Dentist</span><span class="we">Run</span><span class="we">Review</span></div>
+<div><span class="we"><span class="tm">13:00</span> Water</span></div>
+<div><span class="we">Run</span><span class="we">Review</span></div>
+<div><span class="we"><span class="tm">13:00</span> Water</span><span class="we">Laundry</span></div>
+<div><span class="we">Review</span></div>
+<div class="wb"><span class="wn"><i style="background:var(--b4)"></i>Evening</span><small class="tab-num">18:00–21:30</small></div>
+<div><span class="we done"><span class="tm">20:00</span> Meds</span></div>
+<div><span class="we done"><span class="tm">20:00</span> Meds</span><span class="we done">Yoga</span></div>
+<div><span class="we"><span class="tm">20:00</span> Meds</span><span class="we">Vitamins</span></div>
+<div><span class="we"><span class="tm">20:00</span> Meds</span><span class="we sug">Yoga, suggested</span></div>
+<div><span class="we"><span class="tm">20:00</span> Meds</span></div>
+<div><span class="we"><span class="tm">20:00</span> Meds</span></div>
+<div><span class="we"><span class="tm">20:00</span> Meds</span><span class="we">Plan the week</span></div>
+<div class="wb"><span class="wn"><i style="background:var(--b5)"></i>Night</span><small class="tab-num">21:30–23:30</small></div>
+<div><span class="we done">Journal</span><span class="we done">Reading</span></div>
+<div><span class="we done">Journal</span></div>
+<div><span class="we">Journal</span><span class="we">Reading</span></div>
+<div><span class="we">Journal</span></div>
+<div><span class="we">Journal</span><span class="we">Reading</span></div>
+<div><span class="we">Journal</span></div>
+<div><span class="we">Journal</span><span class="we">Reading</span></div>
+</div>
+<div class="pnote"><i>i</i><span><b>Saturday:</b> Morning (08:00–10:30) and Midday (10:00–13:00) overlap by 30 minutes. Change either block's times to separate them.</span></div>
+</div>
+<p class="note">The grid is abridged (every-3-hours Water is shown once a cell). The note at the foot is the <i>blocks overlapping</i> flag in its neutral form (D4): an information glyph, the dim text colour, what overlaps, and what would separate them — no red, no warning triangle.</p>
+
+<div class="compare"><div><div class="badge">Ink light · phone week</div>
+<div class="phone ink-l pweek">
+<div class="views"><span class="seg"><span>Day</span><span class="on">Week</span><span>Month</span></span><span class="seg"><span class="on">By time</span><span>By area</span></span></div>
+<div class="wd"><b class="past">Monday 29</b><div class="wl"><em>Morning</em> Stretch ✓, Meds ✓, Water ✓ · <em>Midday</em> 09:00 Call home ✓, Deep study ✓ · <em>Afternoon</em> Run ✓, Review ✓ · <em>Night</em> Journal ✓, Reading ✓</div></div>
+<div class="wd"><b class="past">Tuesday 30</b><div class="wl"><em>Morning</em> Stretch ✓, Vitamins ✓ · <em>Midday</em> Deep study · <em>Afternoon</em> Laundry · <em>Evening</em> Yoga ✓ · <em>Night</em> Journal ✓</div></div>
+<div class="wd" style="background:var(--soft)"><b>Wednesday 1 · today</b><div class="wl"><em>Morning</em> 07:00 Water ✓, 08:30 Meds ✓, Stretch ✓, Tidy · <em>Midday</em> Deep study · <em>Afternoon</em> 15:30 Dentist, Run · <em>Night</em> Journal, Reading</div></div>
+<div class="wd"><b>Thursday 2</b><div class="wl"><em>Morning</em> Stretch, Tidy · <em>Midday</em> Deep study · <em>Evening</em> <span style="font-style:italic;color:var(--dim)">Yoga, suggested</span> · <em>Night</em> Journal</div></div>
+<div class="suggest"><p><b>Yoga</b>, twice this week — suggested Tuesday and Thursday. Tuesday is done.</p><div class="acts"><span class="btn p">Confirm Thursday</span><span class="btn">Choose days</span></div></div>
+</div></div>
+<div style="max-width:440px"><p class="note" style="margin-top:28px"><b>Q1 in place.</b> An unconfirmed <i>X times a week</i> puts nothing on any day: it shows as one neutral card at the first day it would touch, naming the suggestion (the engine's evenly spaced, least-loaded rotation). <i>Confirm</i> writes a one-week schedule edit; <i>Choose days</i> opens the weekday row. The days it suggests appear in italics with <i>suggested</i>, which a screen reader reads out, so the difference is never colour alone.</p></div></div>
+
+<!-- ======================================================= prompts -->
+<h2>The prompts — time, remove time, and "Apply this change to…"</h2>
+<p class="note">Bottom sheets on the phone, the same content in a dialog on the desktop. Every prompt has a way out that puts the entry back where it was, worded as that, not as <i>Cancel</i>.</p>
+<div class="compare">
+<div><div class="badge">Moving Stretch among set times</div>
+<div class="phone ink-d" style="height:420px"><div class="scrim"></div>
+<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="p1"><div class="handle"></div><h3 id="p1">At what time?</h3><p class="sub">Stretch is moving among Morning's set times.</p>
+<div class="field"><span class="lab">Time</span><span class="ph">HH:MM</span></div>
+<p class="refuse">No time is suggested. Morning runs 06:30–09:00; a time outside it moves Stretch to the block that holds it.</p>
+<div class="foot"><span class="btn g">Put it back</span><span class="btn p">Set time</span></div></div></div></div>
+
+<div><div class="badge">Moving Meds out of set times</div>
+<div class="phone ink-d" style="height:420px"><div class="scrim"></div>
+<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="p2"><div class="handle"></div><h3 id="p2">Remove the time?</h3><p class="sub">Meds is set for 08:30. In <i>Any time</i> it has no time.</p>
+<div class="foot"><span class="btn g">Put it back</span><span class="btn p">Remove 08:30</span></div></div></div></div>
+
+<div><div class="badge">Apply this change to…</div>
+<div class="phone ink-d" style="height:640px"><div class="scrim"></div>
+<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="p3"><div class="handle"></div><h3 id="p3">Apply this change to…</h3><p class="sub">Deep study moves from Midday to Afternoon.</p>
+<div role="radiogroup">
+<div class="opt" role="radio" aria-checked="false"><span class="rd"></span>Only this entry</div>
+<div class="opt" role="radio" aria-checked="false"><span class="rd"></span>This week only</div>
+<div class="opt" role="radio" aria-checked="true"><span class="rd on"></span>Chosen weekdays this week</div>
+<div class="days" aria-label="Weekdays this week"><span>M</span><span>T</span><span class="on">W</span><span>T</span><span class="on">F</span><span>S</span><span>S</span></div>
+<div class="opt" role="radio" aria-checked="false"><span class="rd"></span>Every week from now on</div>
+<div class="opt" role="radio" aria-checked="false"><span class="rd"></span>Chosen weekdays from now on</div>
+</div>
+<div class="foot"><span class="btn g">Put it back</span><span class="btn p">Apply</span></div></div></div>
+<p class="note" style="max-width:360px">Five of the six scopes here: <i>This day</i> is hidden because for a habit once a day it is the same as <i>Only this entry</i> (identical choices hidden, D10). Past days in the weekday row are not offered; Monday and Tuesday are shown but inert.</p></div>
+</div>
+
+<!-- ======================================================= blocks -->
+<h2>Editing the blocks</h2>
+<p class="note">From the Day view's overflow, <i>Edit blocks</i>. A block runs from its start up to, not including, its end. Changing an end moves the next block's start with it; pushing past the next block's end is refused with the reason and the limit. The first start and the last end are free; times stop at 24:00. Weekday overrides sit under the block they change.</p>
+<div class="compare">
+<div><div class="badge">Ink dark · phone</div>
+<div class="phone ink-d"><div class="pbar">Blocks</div>
+<div style="padding:8px 16px">
+<div class="flabel"><span style="display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--b1);margin-right:8px"></span>Morning</div>
+<div class="field"><span class="lab">From</span><span class="tab-num">06:30</span><span style="color:var(--dim)">to</span><span class="tab-num" style="border-bottom:2px solid var(--accent)">09:30</span></div>
+<p class="refuse">Midday now starts at 09:30.</p>
+<div class="chip" style="margin-bottom:12px">Sat, Sun · 08:00–10:30</div>
+<div class="flabel"><span style="display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--b2);margin-right:8px"></span>Midday</div>
+<div class="field"><span class="lab">From</span><span class="tab-num">09:30</span><span style="color:var(--dim)">to</span><span class="tab-num">13:00</span></div>
+<div class="flabel"><span style="display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--b3);margin-right:8px"></span>Afternoon</div>
+<div class="field"><span class="lab">From</span><span class="tab-num">13:00</span><span style="color:var(--dim)">to</span><span class="tab-num">18:00</span></div>
+<div class="flabel"><span style="display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--b4);margin-right:8px"></span>Evening</div>
+<div class="field"><span class="lab">From</span><span class="tab-num">18:00</span><span style="color:var(--dim)">to</span><span class="tab-num">21:30</span></div>
+<div class="flabel"><span style="display:inline-block;width:4px;height:14px;border-radius:2px;background:var(--b5);margin-right:8px"></span>Night</div>
+<div class="field"><span class="lab">From</span><span class="tab-num">21:30</span><span style="color:var(--dim)">to</span><span class="tab-num">23:30</span></div>
+<div class="foot"><span class="btn g">Add a weekday change</span><span class="btn p">Done</span></div>
+</div></div></div>
+<div><div class="badge">Refused — Morning's end past Midday's</div>
+<div class="phone ink-d" style="height:300px"><div style="padding:16px">
+<div class="flabel">Morning</div>
+<div class="field"><span class="lab">From</span><span class="tab-num">06:30</span><span style="color:var(--dim)">to</span><span class="tab-num" style="border-bottom:2px solid var(--dim)">13:30</span></div>
+<p class="refuse" role="alert">Midday ends at 13:00, so Morning can end at 12:59 at the latest. Shorten Midday first, or choose an earlier end.</p>
+<div class="foot"><span class="btn g">Put it back</span></div></div></div>
+<p class="note" style="max-width:360px">The refusal is the dim text colour with the reason and the way forward, announced as an alert — the limit is a rule of the blocks, not a mistake by the person.</p></div>
+</div>
+
+<!-- ======================================================= add / edit -->
+<h2>New habit — the calendar schedule</h2>
+<p class="note">The Add sheet gains one choice before <i>Repeats</i>: <i>Since last check-in</i> (today's habits, unchanged) or <i>On the calendar</i>. <i>Where</i> offers the blocks or a set time — never both. <i>X times a week</i> shows its suggestion for this week and says the person confirms each week (D5).</p>
+<div class="compare">
+<div><div class="badge">Ink dark · phone, 3 times a week</div>
+<div class="phone ink-d"><div class="pbar">New habit</div>
+<div style="padding:8px 16px 16px">
+<div class="field"><span class="lab">Title</span>Run</div>
+<div class="flabel">Schedule</div>
+<span class="seg" style="margin-bottom:8px"><span>Since last check-in</span><span class="on">On the calendar</span></span>
+<div class="field"><span class="lab">Repeats</span>Times a week ▾</div>
+<div class="field"><span class="lab">How many</span><span class="tab-num">3</span></div>
+<div class="flabel">On any of</div>
+<div class="days" style="padding-left:0"><span class="on">M</span><span class="on">T</span><span class="on">W</span><span class="on">T</span><span class="on">F</span><span class="on">S</span><span class="on">S</span></div>
+<p class="refuse">This week the app suggests Monday, Wednesday and Friday. You confirm the days each week; nothing is placed until you do.</p>
+<div class="flabel">Where</div>
+<div class="chiprow"><span class="chip"><i style="background:var(--b1)"></i>Morning</span><span class="chip"><i style="background:var(--b2)"></i>Midday</span><span class="chip on"><i style="background:var(--b3)"></i>Afternoon</span><span class="chip"><i style="background:var(--b4)"></i>Evening</span><span class="chip"><i style="background:var(--b5)"></i>Night</span><span class="chip">At a set time…</span></div>
+<div class="field"><span class="lab">Length</span>45m</div>
+<div class="field"><span class="lab">Area</span>Health</div>
+<div class="field"><span class="lab">Note</span><span class="ph">Optional</span></div>
+<div class="foot"><span class="btn g">Cancel</span><span class="btn p">Add habit</span></div>
+</div></div></div>
+<div style="max-width:380px"><div class="badge">What <i>Repeats</i> offers</div>
+<p class="note" style="font-size:14px;line-height:22px">Every day · On some weekdays · Every few days · Every few weeks · Times a day · Times a week · Every few hours · Once<br><br>
+<b>Times a day</b> asks how many and, for each, a block or a set time (<i>spread over the blocks</i> is the default).<br>
+<b>Every few hours</b> asks the step, from and until; each time lands in the block that holds it, so <i>Where</i> is hidden.<br>
+<b>Once</b> asks the date.<br>
+<b>Starts</b> and <b>Ends</b> sit under <i>More options</i>, closed by default.<br><br>
+The planner's aliases — weekly, alternate days, alternate weeks — are not separate choices: they are <i>On some weekdays</i>, <i>Every few days</i> with 2, <i>Every few weeks</i> with 2.</p>
+<div class="badge" style="margin-top:20px">Pause</div>
+<div class="phone ink-d" style="height:330px"><div class="scrim"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="p4"><div class="handle"></div><h3 id="p4">Pause Run</h3><p class="sub">Paused, it leaves the plan; its check-ins stay.</p>
+<div role="radiogroup"><div class="opt" role="radio" aria-checked="true"><span class="rd on"></span>Until I resume it</div><div class="opt" role="radio" aria-checked="false"><span class="rd"></span>Until a date…</div></div>
+<div class="foot"><span class="btn g">Don't pause</span><span class="btn p">Pause</span></div></div></div></div>
+</div>
+
+<!-- ======================================================= notes -->
+<h2>The two neutral notes</h2>
+<p class="note">D4 keeps only the structural flags. Both read the same way: an information glyph, the dim colour, what is true, and what would change it. The entry that would be lost is kept visible in the note itself rather than dropped (the reference engine drops an entry outside every block).</p>
+<div class="compare"><div class="phone ink-d" style="height:auto">
+<div class="dayhead" style="padding-top:12px"><b>Monday 6 October</b><span>nothing done yet</span></div>
+<div class="pnote"><i>i</i><span><b style="color:var(--text);font-weight:500">Call home, 05:30</b> is before Morning starts (06:30), so it is in no block. Change its time, or start Morning earlier.</span></div>
+<div class="pnote"><i>i</i><span>Morning (06:30–10:00) and Midday (09:00–13:00) overlap by an hour today. Change either block's times to separate them.</span></div>
+</div>
+<div class="phone ink-l" style="height:auto">
+<div class="dayhead" style="padding-top:12px"><b>Monday 6 October</b><span>nothing done yet</span></div>
+<div class="pnote"><i>i</i><span><b style="color:var(--text);font-weight:500">Call home, 05:30</b> is before Morning starts (06:30), so it is in no block. Change its time, or start Morning earlier.</span></div>
+<div class="pnote"><i>i</i><span>Morning (06:30–10:00) and Midday (09:00–13:00) overlap by an hour today. Change either block's times to separate them.</span></div>
+</div></div>
+
+<h2>Open for the Phase 1 review</h2>
+<p class="lead">1 · Direction A or B for Day by time (or A's structure with B's bands on the desktop only). 2 · Whether <i>By area</i> collapses a several-a-day habit to one row. 3 · <i>N done today</i> in the day header — presence, counted up, never <i>N of M</i>; keep it or drop it. 4 · V3 as drawn: tap selects, the toolbar docks, <i>More</i> holds Skip, Pause and Move to Trash. The Plan mode mockup is <code>habit-planner-plan-mode.html</code>.</p>
+</body></html>

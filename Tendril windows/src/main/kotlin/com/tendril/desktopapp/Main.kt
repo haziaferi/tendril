@@ -105,6 +105,8 @@ import javax.swing.JFileChooser
 import com.tendril.app.ui.theme.body
 import com.tendril.app.ui.theme.description
 import com.tendril.app.ui.theme.label
+import com.tendril.app.ui.settings.WithAppLanguage
+import com.tendril.app.ui.settings.applyAppLanguage
 
 /**
  * Milestone 3 (tendril-windows-spec.md §6 step 3) — replaces Milestone 1/2's throwaway flat
@@ -142,6 +144,8 @@ fun main() {
     }
     val container = DesktopAppContainer(database, scheduler)
     val core = container.workbenchCore
+    // Plan Phase 4 — the app's language before the first window; pop-outs and Quick Add share the process's locale.
+    applyAppLanguage(core.languageSettings.current())
     scheduler.replan()
     // §3.1.1 — index any page without an FTS row (all of them, once, after v16 emptied the table).
     kotlinx.coroutines.runBlocking(Dispatchers.IO) { core.pageContentRepository.healIndex() }
@@ -154,7 +158,7 @@ fun main() {
     )
     val orchestrator = SnapshotSyncOrchestrator(
         database.entryDao(), database.habitDao(), database.pageDao(),
-        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(), pagesSyncEngine, container.purgeRegistry,
+        database.reminderDao(), database.entryCompletionDao(), database.habitCompletionDao(), database.checkInDao(), database.timeLogDao(), database.habitBlockDao(), database.habitScheduleEditDao(), pagesSyncEngine, container.purgeRegistry,
         DesktopLocalImageStore(File(dbFile.parentFile, "images")),
     )
     val folderManager = DesktopSyncFolderManager()
@@ -250,6 +254,8 @@ fun main() {
             val theme = core.themeSettings.observe()
             // L5 — the bar is the title bar; the scaffold installs it once it knows its scale.
             val titleBarInstaller = remember(window) { DesktopTitleBarInstaller(window) }
+            // Plan Phase 4 — the app's language around the window's content.
+            WithAppLanguage(core.languageSettings) {
             CompositionLocalProvider(LocalTitleBarInstaller provides titleBarInstaller) {
             TendrilTheme(register = theme.register, dark = theme.mode.resolveDark(), typeface = theme.typeface) {
                 CompositionLocalProvider(LocalSystemTextScale provides mainWindow.systemTextScale) {
@@ -258,6 +264,7 @@ fun main() {
                         // pass the EntryScheduleCoordinator, so it re-plans explicitly.
                         rearmReminders = { scheduler.replan() })
                 }
+            }
             }
             }
         }
