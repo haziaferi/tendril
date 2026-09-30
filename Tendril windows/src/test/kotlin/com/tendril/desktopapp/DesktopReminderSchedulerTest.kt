@@ -76,10 +76,20 @@ class DesktopReminderSchedulerTest {
         updatedAt = Instant.now(),
     )
 
-    /** A database whose only content is [entries] — no reminders, no habits, no exceptions. */
-    private fun databaseOf(entries: List<Entry>): TendrilDatabase {
+    /**
+     * A database whose only content is [entries] — no reminders, no habits, no exceptions.
+     *
+     * [entries] is built on the scheduler's first read, not by the caller, because a task's due
+     * moment is fixed when it is built (`taskDueIn`) and a moment already past produces no firing
+     * at all. Built by the caller, it was fixed *before* these mocks: on 2026-09-30 a cold CI JVM
+     * spent the 400 ms class-loading mockk, the task was past by the first plan, and the test saw
+     * `[]`. A 500 ms pause here turned four tests red with exactly that output; building on first
+     * read makes the setup cost irrelevant. Once, then held, so every re-plan sees the same moment.
+     */
+    private fun databaseOf(entries: () -> List<Entry>): TendrilDatabase {
+        val fixed by lazy(entries)
         val entryDao = mockk<EntryDao>()
-        coEvery { entryDao.getAllSchedulable() } returns entries
+        coEvery { entryDao.getAllSchedulable() } answers { fixed }
         coEvery { entryDao.getAllExceptions() } returns emptyList()
         val reminderDao = mockk<ReminderDao>()
         coEvery { reminderDao.getAll() } returns emptyList()
@@ -109,7 +119,7 @@ class DesktopReminderSchedulerTest {
      * cannot be waited for — there is nothing to wait until.
      */
     private fun shownDuring(
-        entries: List<Entry>,
+        entries: () -> List<Entry>,
         waitMs: Long,
         awaitCount: Int = 0,
         settleMs: Long = 0,
@@ -138,7 +148,7 @@ class DesktopReminderSchedulerTest {
     @Test
     fun `a task reaching its moment is shown once`() {
         val shown = shownDuring(
-            listOf(taskDueIn(1, "Call the plumber", 400)),
+            { listOf(taskDueIn(1, "Call the plumber", 400)) },
             waitMs = 5_000, awaitCount = 1, settleMs = 400,
         )
 
@@ -154,7 +164,7 @@ class DesktopReminderSchedulerTest {
         // after something has fired is the ordinary case rather than an edge one — a second toast
         // for the same reminder is exactly what the `fired` keys exist to prevent.
         val shown = shownDuring(
-            listOf(taskDueIn(1, "Call the plumber", 400)),
+            { listOf(taskDueIn(1, "Call the plumber", 400)) },
             waitMs = 5_000, awaitCount = 1, settleMs = 600,
         ) { scheduler ->
             scheduler.replan()
@@ -167,7 +177,7 @@ class DesktopReminderSchedulerTest {
 
     @Test
     fun `nothing is shown before its moment`() {
-        val shown = shownDuring(listOf(taskDueIn(1, "Later", 60_000)), waitMs = 700)  // absence: no awaitCount
+        val shown = shownDuring({ listOf(taskDueIn(1, "Later", 60_000)) }, waitMs = 700)  // absence: no awaitCount
 
         assertEquals("a firing a minute away was shown early", emptyList<Firing>(), shown)
     }
@@ -177,7 +187,7 @@ class DesktopReminderSchedulerTest {
         // The contrast that makes the two tests above mean anything: the scheduler is not simply
         // notifying once and stopping. Two entries owe two toasts.
         val shown = shownDuring(
-            listOf(taskDueIn(1, "First", 400), taskDueIn(2, "Second", 400)),
+            { listOf(taskDueIn(1, "First", 400), taskDueIn(2, "Second", 400)) },
             waitMs = 5_000, awaitCount = 2, settleMs = 400,
         )
 
@@ -204,7 +214,7 @@ class DesktopReminderSchedulerTest {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             try {
                 val scheduler = DesktopReminderScheduler(
-                    databaseOf(listOf(taskDueIn(1, "Contested", 250))), scope
+                    databaseOf { listOf(taskDueIn(1, "Contested", 250)) }, scope
                 ) { shown.incrementAndGet() }
                 val t1 = Thread { scheduler.replan() }
                 val t2 = Thread { scheduler.replan() }
